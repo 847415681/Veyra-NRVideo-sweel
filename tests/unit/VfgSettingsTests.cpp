@@ -1,16 +1,26 @@
 #include "veyra/engine/PresetStore.h"
 #include "veyra/engine/PresetLibrary.h"
+#include "veyra/engine/VfgQueueBudget.h"
 #include "veyra/pipeline/FrameBatch.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <limits>
 using namespace veyra::engine;
 namespace {unsigned checks=0,failures=0;void check(bool ok,const char* why){++checks;if(!ok){++failures;std::cout<<"FAIL "<<why<<'\n';}}
 std::string bytes(const std::filesystem::path& p){std::ifstream f(p,std::ios::binary);return {(std::istreambuf_iterator<char>(f)),{}};}}
 int wmain(int argc,wchar_t** argv){
     if(argc!=2||!std::filesystem::path(argv[1]).is_absolute())return 2;
     const std::filesystem::path root=argv[1];if(!std::filesystem::create_directories(root))return 2;
+    check(vfgQueuedGroupCost(38.,7.,12.,true,1,false)==19.,"queued reduced group charges one interpolation instead of seven");
+    check(vfgQueuedGroupCost(38.,7.,12.,false,7,false)==38.,"full group keeps its measured full cost");
+    check(vfgQueuedGroupCost(38.,7.,12.,true,1,true)==38.,"history recovery retains conservative full cost");
+    check(vfgQueuedGroupCost(38.,7.,{},true,1,false)==38.&&vfgQueuedGroupCost(38.,{},12.,true,1,false)==38.,"missing measurements preserve full estimate");
+    check(!vfgQueuedGroupCost({},7.,12.,true,1,false),"unknown full cost stays unknown");
+    check(vfgQueuedGroupCost(38.,7.,12.,true,2,false)==38.,"unexpected multi-evaluation reduced group is not undercharged");
+    check(vfgQueuedGroupCost(38.,7.,std::numeric_limits<double>::quiet_NaN(),true,1,false)==38.&&vfgQueuedGroupCost(38.,7.,-1.,true,1,false)==38.,"invalid first timing cannot lower queue budget");
+    check(vfgQueuedGroupCost(15.,7.,12.,true,1,false)==15.,"reduced estimate never exceeds existing full cost");
     check(!motionUsesFlow(MotionSource::OpticalFlow,FrameGenerationBackend::Vfg)&&
           !motionUsesFlow(MotionSource::Automatic,FrameGenerationBackend::Vfg),"VFG uses its own motion even after a DLSS flow preset");
     check(motionUsesFlow(MotionSource::OpticalFlow)&&motionUsesFlow(MotionSource::Automatic),"SR/NR external motion remains enabled");

@@ -1,6 +1,7 @@
 """Serial production VFG measurements; private profile/staging, normal playback only."""
 from pathlib import Path
 import argparse, ctypes, hashlib, json, os, re, shutil, statistics, subprocess, sys, time
+from datetime import datetime
 from ctypes import wintypes
 import psutil
 
@@ -41,7 +42,7 @@ def run(args):
  for proc in psutil.process_iter(['pid','name']):
   assert proc.info['name'].lower() not in ('veyra.exe','veyra_qml_ui.exe'),f'Existing player PID {proc.pid}; no concurrent GPU runs'
  global EXPECTED_EXE
- selected=PACKAGE/'veyra_qml_ui.exe' if args.original else BASE/'build'/TASK/'veyra_qml_ui.exe'
+ selected=PACKAGE/'veyra_qml_ui.exe' if args.original else BASE/'tests'/TASK/'bin/producer-v1/veyra_qml_ui.exe' if args.producer_experiment else BASE/'build'/TASK/'veyra_qml_ui.exe'
  EXPECTED_EXE=sha(selected);shutil.copy2(selected,APP/'veyra_qml_ui.exe')
  assert sha(APP/'veyra_qml_ui.exe')==EXPECTED_EXE
  out=BASE/'logs'/TASK/args.label;profile=BASE/'tests'/TASK/args.label/'profile';tmp=BASE/'tmp'/TASK/args.label
@@ -58,10 +59,12 @@ def run(args):
  if not args.no_verbose:env['VEYRA_VERBOSE_FRAME_LOGS']='1'
  if args.cpu_profile:env['VEYRA_TEST_VFG_CPU_PROFILE']='1'
  if args.sync_submit:env['VEYRA_TEST_VFG_SYNC_SUBMIT']='1'
+ if args.full_reduced_queue_cost:env['VEYRA_TEST_VFG_FULL_REDUCED_QUEUE_COST']='1'
  if args.per_frame_producer:env['VEYRA_TEST_VFG_PER_FRAME_PRODUCER']='1'
  if args.no_reduced:env['VEYRA_TEST_FG_NO_REDUCED']='1'
  if args.software:env['QT_QUICK_BACKEND']='software'
- receipt={'config':config,'exeSha256':EXPECTED_EXE,'gpuBefore':gpu(),'noReduced':args.no_reduced,'softwareUi':args.software,'verboseFrameLogs':not args.no_verbose,'cpuProfile':args.cpu_profile,'syncSubmit':args.sync_submit,'perFrameProducer':args.per_frame_producer,'selectedBinary':str(selected)}
+ receipt={'config':config,'exeSha256':EXPECTED_EXE,'gpuBefore':gpu(),'noReduced':args.no_reduced,'softwareUi':args.software,'verboseFrameLogs':not args.no_verbose,'cpuProfile':args.cpu_profile,'syncSubmit':args.sync_submit,'perFrameProducer':args.per_frame_producer,'fullReducedQueueCost':args.full_reduced_queue_cost,'selectedBinary':str(selected)}
+ save(out/'launch.json',receipt)
  started=time.monotonic();meters=[]
  with (out/'console.log').open('xb') as stream:
   proc=subprocess.Popen([str(APP/'veyra_qml_ui.exe'),'--data-dir',str(profile),'--page','pro','--size','1280x800','--exit-after','135000'],cwd=APP,env=env,stdout=stream,stderr=subprocess.STDOUT)
@@ -73,6 +76,9 @@ def run(args):
    else:rc=proc.returncode
   finally:
    if proc.poll() is None:proc.kill();proc.wait(timeout=10)
+ receipt.update(exitCode=rc,wallSeconds=time.monotonic()-started)
+ save(out/'process-exit.json',receipt)
+ save(out/'meters.json',meters)
  text=(out/'player.log').read_text(encoding='utf8',errors='replace');rows=[]
  for line in text.splitlines():
   if 'VFG_DIAG_SAMPLE ' in line:
@@ -85,6 +91,19 @@ def run(args):
  median=lambda key:statistics.median([r[key] for r in rows]) if rows else None
  receipt.update(exitCode=rc,wallSeconds=time.monotonic()-started,passed=rc==0 and 'VFG_DIAG_PASS' in text and 'VFG_DIAG_FAIL' not in text and len(rows)>=args.seconds-3,observations=len(rows),fps=median('fps'),totalMs=median('total'),budgetMs=median('budget'),gpuPercent=median('gpu'),status=sorted({r['status'] for r in rows}),detail=sorted({r['detail'] for r in rows}),stages=stages,errors=[line for line in text.splitlines() if any(x in line for x in ('[ERROR]','[FATAL]','TypeError:','ReferenceError:'))])
  receipt['normalSchedulingClass']=[line for line in text.splitlines() if 'priority' in line.lower()][:5]
+ counters=[line for line in text.splitlines() if '[frame-flow] state=closed ' in line]
+ receipt['closedCounters']={k:float(v) for k,v in re.findall(r'([A-Za-z][A-Za-z0-9]*)=(-?\d+(?:\.\d+)?)',counters[-1])} if counters else {}
+ timing=[]
+ for line in text.splitlines():
+  if '[player-timing]' not in line:continue
+  wall=datetime.fromisoformat(line.split()[0].replace('Z','+00:00')).timestamp()*1000
+  if rows and rows[0]['wall']<=wall<=rows[-1]['wall']:
+   timing.append({k:float(v) for k,v in re.findall(r'([A-Za-z][A-Za-z0-9]*)=(-?\d+(?:\.\d+)?)',line)})
+ if timing:
+  receipt['observationTiming']={'samples':len(timing),'expiredGenerated':timing[-1]['expiredGenerated']-timing[0]['expiredGenerated'],'previewSkipped':timing[-1]['previewSkipped']-timing[0]['previewSkipped'],
+   'playbackSpeedMin':min(t['playbackSpeed'] for t in timing),'playbackSpeedMax':max(t['playbackSpeed'] for t in timing),
+   'entryAbsP95MsMedian':statistics.median(t['entryAbsP95Ms'] for t in timing),'entryAbsP95MsMax':max(t['entryAbsP95Ms'] for t in timing),'returnAbsP95MsMedian':statistics.median(t['returnAbsP95Ms'] for t in timing),
+   'gpuFgBatchP95MsMedian':statistics.median(t['gpuFgBatchP95Ms'] for t in timing),'gpuReadyP95MsMedian':statistics.median(t['gpuReadyP95Ms'] for t in timing)}
  for name,data in [('result',receipt),('samples',rows),('meters',meters)]:save(out/(name+'.json'),data)
  print(json.dumps(receipt,ensure_ascii=False),flush=True)
  if not receipt['passed']:
@@ -95,6 +114,7 @@ parser.add_argument('--multiplier',type=int,choices=range(2,9),default=2);parser
 parser.add_argument('--no-nr',action='store_true');parser.add_argument('--strict',action='store_true');parser.add_argument('--flow',action='store_true');parser.add_argument('--tearing',action='store_true');parser.add_argument('--no-reduced',action='store_true');parser.add_argument('--software',action='store_true');parser.add_argument('--no-verbose',action='store_true');parser.add_argument('--seconds',type=int,default=20)
 parser.add_argument('--original',action='store_true');parser.add_argument('--cpu-profile',action='store_true')
 parser.add_argument('--sync-submit',action='store_true');parser.add_argument('--per-frame-producer',action='store_true')
+parser.add_argument('--full-reduced-queue-cost',action='store_true');parser.add_argument('--producer-experiment',action='store_true')
 args=parser.parse_args()
 
 subprocess.run([sys.executable,'-B',str(ROOT/'scripts/acceptance/vfg-next-control.py')],check=True)

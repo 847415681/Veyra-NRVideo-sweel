@@ -1,5 +1,13 @@
 # WORKLOG
 
+## 2026-10-07 VFG第二节点：排队预算实验
+
+- 同EXE同步减量High3 68/68.5、Medium8 210/210、Medium6 180/180fps：无明确收益，已将VfgBackend.cpp恢复96a7c8de原字节；ff8fdf4及EXE在tests/vfg-next-20261007/bin/producer-v1存档。SDK1.3 CudaGraph selector get/set=-5，未实施；能力探针首次未建CUDA context创建失败，补齐产品初始化后成功，sdk-capabilities.json保留正确返回码。
+- VFG降档2X（fgReduced=true且一次evaluate）在文件pendingCompletions仍按请求完整倍率计费。只为VFG改用baseCost+Fg1 GPU P95，并以完整成本为上界；缺失/非法测量、历史恢复、多次evaluate保持原估算。其它后端和截止时间/宽限/画质/时钟/导出不变。回退开关VEYRA_TEST_VFG_FULL_REDUCED_QUEUE_COST只用于同EXE对照。
+- queue-budget-v1构建通过，VFG设置/预算339检查0失败。High3修正a/b=73/74.5fps，对照b=69fps（a原始日志也是69）；b观察段过期插帧1比4，跳源0，播放速率0.997–1.005；软件呈现entry P95中位2.326ms比3.500ms。仍低于完整90fps，不冒充GPU模型加速或屏幕延迟。
+- 新增日志解析最初正则遗漏P95中的数字，queue-control-high3-a与queue-medium8-a GUI均PASS但驱动收尾KeyError，无持久化退出回执，不纳入正式对照；raw/recovered-analysis留证，修正解析并在启动及退出提前落盘，重新跑b。单独离线分析首次忽略SDK日志非UTF8字节而解码失败，改errors=replace后成功，不改原始日志。
+- 后续：串行档位对照及必要像素/GUI生命周期/完整导出回归，全部任务目录E:/项目/Veyra/{build,logs,tests,tmp,verify,test-packages}/vfg-next-20261007。尚未交付或合入main。
+
 ## 2026-10-07 VFG继续优化实验v1
 
 - 首次构建目标veyra_settings_tests不存在，Ninja未编译；改为已存在的veyra_fg_settings_tests，candidate-v1-retry构建成功。日志logs/vfg-next-20261007/candidate-v1*.log/json保留失败，不掩盖。

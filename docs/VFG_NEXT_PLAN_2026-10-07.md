@@ -9,3 +9,10 @@
 5. 只有证据支持才处理额外VFG专属瓶颈；禁止靠放宽过期门槛、丢更多帧、降低画质或放慢时钟伪造收益。所有产物E:/项目/Veyra下同名任务目录，测试每进程≤300秒、构建≤900秒。正常GPU串行；已有SDK/DLL/模型原字节保持且不进源码Git。
 
 当前：开工保护完成，优化尚未实现，收益待测。NVIDIA显存增长及其它硬件长稳不由本轮短测视为解决。
+
+
+## 第二节点：VFG排队预算修正
+
+同步减量实验已测：同EXE High3 68/68.5fps、Medium8 210/210fps、Medium6 180/180fps，未证明收益，撤回VfgBackend.cpp；实验ff8fdf4及独立EXE保留在tests/vfg-next-20261007/bin/producer-v1。SDK1.3官方CudaGraph selector实查get/set均-5，不实施CUDA图假说。能力探针首次未建CUDA context创建失败，补齐产品相同初始化后成功，原失败记录不作SDK不支持证据。
+
+具体发现：EngineController文件来源pendingCompletions的GPU成本，对fgReduced=true且fgEvaluated=1的VFG组仍用fgBudget.predicted的请求倍率完整成本。只在VFG这一分支按baseCost + Fg1 GPU P95核算一张插帧，并以完整成本为上界；无测量/非1次/历史恢复沿用原估计。其它补帧、admitFile、截止时间/宽限/倍率/reset/画质不改。必要接点扩展到src/engine/EngineController.cpp、独立include/veyra/engine/VfgQueueBudget.h和tests/unit/VfgSettingsTests.cpp，guard独立范围同步扩展，不改start或旧保护。环境VEYRA_TEST_VFG_FULL_REDUCED_QUEUE_COST仅作旧估计对照。先相邻High3、Medium8/7，若无收益或增加过期/跳源帧则撤回；已有全像素合同和生命周期/导出在保留候选后验收。

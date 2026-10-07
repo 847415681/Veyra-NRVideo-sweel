@@ -16,6 +16,7 @@
 #include "veyra/engine/AutoNrController.h"
 #include "veyra/engine/LiveFgAdmission.h"
 #include "veyra/engine/FgRecoveryBudget.h"
+#include "veyra/engine/VfgQueueBudget.h"
 #include "veyra/engine/LivePairLatency.h"
 #include "veyra/engine/RealtimePreviewScheduling.h"
 #include "veyra/engine/CaptureHalfRate.h"
@@ -905,6 +906,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             TimingWindow livePresent{std::chrono::seconds(1)};
             TimingWindow livePresentGpu{std::chrono::seconds(1)};
             FgRecoveryBudget fgBudget;uint64_t fgBudgetRevision=options.settings.revision;
+            const bool vfgMeasuredReducedQueue=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_FULL_REDUCED_QUEUE_COST",nullptr,0)==0;
+            int64_t nextVfgQueueLog=0;
             unsigned previewFgMultiplier=options.fgMultiplier;
             LivePairLatency pairLatency;
             const bool adaptiveCapturePhase=physicalCapture&&GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_CAPTURE_PHASE",nullptr,0)==0;
@@ -1798,7 +1801,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         for(const auto& previous:pendingCompletions){
                             if(previous->output.gpuComplete())continue;
                             const auto began=std::chrono::duration_cast<std::chrono::nanoseconds>(previous->processStart.time_since_epoch()).count()/100;
-                            const auto cost=previous->output.fgEvaluated?fgBudget.predicted(start,previous->output.historyReset||previous->output.fgRecovery):fgBudget.baseCost(start);
+                            auto cost=previous->output.fgEvaluated?fgBudget.predicted(start,previous->output.historyReset||previous->output.fgRecovery):fgBudget.baseCost(start);
+                            if(vfgMeasuredReducedQueue&&options.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&previous->output.fgReduced){
+                                const auto first=frameFlow->snapshot(start).gpuTiming[size_t(diagnostics::GpuStage::Fg1)].p95;
+                                const auto measured=vfgQueuedGroupCost(cost,fgBudget.baseCost(start),first,true,previous->output.fgEvaluated,previous->output.historyReset||previous->output.fgRecovery);
+                                if(cost&&measured&&*measured<*cost&&start>=nextVfgQueueLog){nextVfgQueueLog=start+10000000;
+                                    veyra::log::info("vfg-queue-budget",std::format("source={} queuedReduced=2X requested={} fullEstimateMs={:.3f} singleEstimateMs={:.3f} (base plus measured first interpolation; deadlines unchanged)",previous->output.batch.identity.sourceFrameId,options.fgMultiplier,*cost,*measured));}
+                                cost=measured;
+                            }
                             finish=std::max({finish,began,previous->predictedGpuStart100ns})+int64_t(cost.value_or(0)*10000);
                         }
                         queuedGpuMs=double(std::max<int64_t>(0,finish-start))/10000;

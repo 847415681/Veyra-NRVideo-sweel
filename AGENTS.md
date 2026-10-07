@@ -1,6 +1,6 @@
 # Veyra 项目 Agent 执行规则
 
-> **2026-10-07 VFG继续优化授权**：用户要求继续尝试VFG优化。按docs/VFG_NEXT_PLAN_2026-10-07.md从正式2.0.6后main 96a7c8de在E盘codex/vfg-next-20261007隔离实施VFG必要互操作/提交及定向测试、本地候选；覆盖对应旧冻结。先运行vfg-next-control.py，独立start/bundle保护34工作树、495脏文件和3691项原件，不改旧guard。其它补帧/NR/时钟/显示策略不动，DLL/模型原字节；不派Agent/压力竞争、不改用户配置/驱动，不merge/push/Release/关机。测试≤300秒、构建≤900秒、产物全E盘。
+> **2026-10-07 VFG继续优化授权**：用户要求继续尝试VFG优化。按docs/VFG_NEXT_PLAN_2026-10-07.md从正式2.0.6后main 96a7c8de在E盘codex/vfg-next-20261007隔离实施VFG必要互操作/提交/专属排队预算及定向测试、本地候选；覆盖对应旧冻结。先运行vfg-next-control.py，独立start/bundle保护34工作树、495脏文件和3691项原件，不改旧guard。其它补帧/NR/时钟/显示策略不动，DLL/模型原字节；不派Agent/压力竞争、不改用户配置/驱动，不merge/push/Release/关机。测试≤300秒、构建≤900秒、产物全E盘。
 
 > **2026-10-07 2.0.6正式发布授权**：用户明确构建2.0.6并发布GitHub，替换满员4群为所附5群二维码，发布后交付群公告。按docs/RELEASE_2.0.6_PLAN_2026-10-07.md从已验bf6e651在E盘codex/release-2.0.6-20261007整合VFG/Blackmagic/AMD NR-FSR修复，允许版本/双语README/新二维码/构建定向验收/同源码双显卡包及本轮commit/tag/main合并/普通push/v2.0.6正式Release与5资产上传。覆盖历史no-merge/no-push/no-Release；不扩改已验算法或运行组件，不改用户配置/驱动/其它工作树，不派Agent/竞争压力，不关机，群公告只交用户不代发。先运行release-2.0.6-control.py，独立start/bundle保护33工作树、495脏文件与3678项原件；仅main允许按合并回执推进，旧guard/baseline不改。测试≤300秒、构建≤900秒、产物全E盘。保留赞助QR/Discord/Ko-fi、双QR各width220，AMD/Blackmagic实卡与NV显存增长边界如实说明。
 

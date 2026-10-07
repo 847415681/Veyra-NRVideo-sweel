@@ -3,7 +3,7 @@ from pathlib import Path
 import hashlib,json,subprocess
 ROOT=Path(__file__).resolve().parents[2];BASE=Path('E:/项目/Veyra');TASK='vfg-next-20261007'
 START=BASE/'archives'/TASK/'start.json'
-ALLOWED={'AGENTS.md','docs/WORKLOG.md','src/pipeline/VfgBackend.cpp','tests/integration/VfgGpuTests.cpp'}
+ALLOWED={'AGENTS.md','docs/WORKLOG.md','src/pipeline/VfgBackend.cpp','tests/integration/VfgGpuTests.cpp','src/engine/EngineController.cpp','include/veyra/engine/VfgQueueBudget.h','tests/unit/VfgSettingsTests.cpp'}
 def sha(p):
  with p.open('rb') as f:return hashlib.file_digest(f,'sha256').hexdigest()
 def git(*args,cwd=ROOT):return subprocess.check_output(['git',*args],cwd=cwd)

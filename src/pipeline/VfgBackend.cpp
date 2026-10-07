@@ -114,12 +114,7 @@ struct VfgBackend::Impl {
     uint64_t inputRevision=0,boundInputRevision=0;
     unsigned boundParity=2,boundMultiplier=0;
     bool boundReset=false;
-    struct Job {unsigned parity,sub,multiplier;bool reset;uint64_t revision,value,producerValue;};
-    // Owner-thread state is separate from the worker's SDK input binding. A
-    // monotonic subframe sequence reads one immutable pair and writes distinct
-    // outputs; new/repeated sequences must first drain the previous consumers.
-    Job submitted{};
-    bool haveSubmitted=false,perFrameProducer=false;
+    struct Job {unsigned parity,sub,multiplier;bool reset;uint64_t revision,value;};
     std::array<std::atomic<SubmissionState>,kOutputs> states{};
     std::atomic<bool> failed=false;
     std::mutex jobsMutex,profileMutex;
@@ -201,13 +196,10 @@ struct VfgBackend::Impl {
         buffer.resource.Reset();
     }
     bool cudaJob(const Job& job){
-        const auto [parity,sub,multiplier,reset,revision,value,producerValue]=job;
+        const auto [parity,sub,multiplier,reset,revision,value]=job;
         Current current(*this);if(!current.active)return false;
-        bool ok=!failed.load();
-        if(producerValue){
-            CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS wait{};wait.params.fence.value=producerValue;
-            ok=cu(cpuCall(2,[&]{return cuWaitExternalSemaphoresAsyncFn(&inputSemaphore,&wait,1,stream);}),"cuWaitExternalSemaphoresAsync")&&ok;
-        }
+        CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS wait{};wait.params.fence.value=value;
+        bool ok=cu(cpuCall(2,[&]{return cuWaitExternalSemaphoresAsyncFn(&inputSemaphore,&wait,1,stream);}),"cuWaitExternalSemaphoresAsync")&&!failed.load();
         // NVIDIA MIT sample, commit 52011f89c1741d06b40ea312af1f20be8be9ec62,
         // VideoFrameGenerationEffectApp: both input images must be rebound for
         // each NEW pair, even when their pointers are unchanged. Rebinding for
@@ -267,18 +259,10 @@ struct VfgBackend::Impl {
     }
     bool handoff(unsigned parity,unsigned sub,unsigned multiplier,bool reset){
         const unsigned slot=parity+2*(sub-1);
-        const bool newDependency=perFrameProducer||!haveSubmitted||inputRevision!=submitted.revision||
-            parity!=submitted.parity||reset!=submitted.reset||multiplier!=submitted.multiplier||sub<=submitted.sub;
-        // The producer signal for a NEW pair follows capture and the preceding
-        // pair's output copies on the direct queue. Later subframes use distinct
-        // output buffers on the same serial CUDA stream, so waiting for each
-        // preceding D3D copy would unnecessarily serialize the two queues.
-        // Repeated/backward indices retain that dependency for safe slot reuse.
         if(!asynchronous){
             const uint64_t value=++signalValue;
-            if(newDependency&&!hr(cpuCall(1,[&]{return context->directQueue()->Signal(producer.Get(),value);}),"signal VFG producer"))return false;
-            const Job job{parity,sub,multiplier,reset,inputRevision,value,newDependency?value:0};
-            const bool ok=cudaJob(job);
+            if(!hr(cpuCall(1,[&]{return context->directQueue()->Signal(producer.Get(),value);}),"signal VFG producer"))return false;
+            const bool ok=cudaJob({parity,sub,multiplier,reset,inputRevision,value});
             if(!ok){
                 failed.store(true);Current current(*this);
                 if(current.active&&stream)cu(cuStreamSynchronizeFn(stream),"rejected synchronous job drain");
@@ -286,7 +270,6 @@ struct VfgBackend::Impl {
             }
             states[slot].store(ok?SubmissionState::Succeeded:SubmissionState::Failed);
             if(!hr(cpuCall(11,[&]{return context->directQueue()->Wait(completion.Get(),value);}),"queue wait VFG completion"))return false;
-            if(ok){submitted=job;haveSubmitted=true;}
             logCpu();return ok;
         }
         std::lock_guard lock(jobsMutex);
@@ -294,15 +277,13 @@ struct VfgBackend::Impl {
             log::error("vfg","bounded VFG submission rejected; no GPU wait queued");return false;
         }
         const uint64_t value=++signalValue;
-        if(newDependency&&!hr(cpuCall(1,[&]{return context->directQueue()->Signal(producer.Get(),value);}),"signal VFG producer"))return false;
+        if(!hr(cpuCall(1,[&]{return context->directQueue()->Signal(producer.Get(),value);}),"signal VFG producer"))return false;
         // Allocate the queue entry before adding a GPU dependency. Even a host
         // allocation exception cannot leave a wait with no job to signal it.
-        const Job job{parity,sub,multiplier,reset,inputRevision,value,newDependency?value:0};
-        jobs.push_back(job);
+        jobs.push_back({parity,sub,multiplier,reset,inputRevision,value});
         if(!hr(cpuCall(11,[&]{return context->directQueue()->Wait(completion.Get(),value);}),"queue wait VFG completion")){
             jobs.pop_back();return false;
         }
-        submitted=job;haveSubmitted=true;
         states[slot].store(SubmissionState::Pending);++outstanding;jobsChanged.notify_one();return true;
     }
     void stopWorker(){
@@ -324,7 +305,6 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
     }
     p.context=&context;p.width=width;p.height=height;p.format=format;p.maxMultiplier=multiplier;
     p.profileCpu=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_CPU_PROFILE",nullptr,0)>0;
-    p.perFrameProducer=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_PER_FRAME_PRODUCER",nullptr,0)>0;
     wchar_t reject[16]{};
     const auto rejectLength=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_REJECT_RUN",reject,16);
     if(rejectLength&&rejectLength<16)p.rejectRun=unsigned(std::clamp(_wtoi(reject),0,1000000));
@@ -400,7 +380,6 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
        !p.cv(p.loadEffect(p.effect),"NvVFX_Load")||!p.cv(p.setImage(p.effect,"DstImage0",p.outputs[0].image),"initial output")||
        !p.cv(p.setU32(p.effect,"FrameMultiplier",multiplier),"initial multiplier"))return false;
     p.boundMultiplier=multiplier;
-    log::info("vfg",std::format("input dependency={}; completion remains per output",p.perFrameProducer?"per output (test control)":"per input pair"));
     p.asynchronous=asynchronousSubmission;
     if(p.asynchronous){
         try{p.worker=std::thread([&p]{p.work();});}
