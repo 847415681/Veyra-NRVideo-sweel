@@ -160,6 +160,58 @@ int wmain(int argc,wchar_t** argv){
                 }
                 std::puts("");readback->Unmap(0,&written);
             }
+            // Queue fresh contents and begin at index 2, then repeat/backtrack
+            // without a CPU drain. A pair-only producer dependency must still
+            // protect reused output slots and input-address refreshes.
+            const auto refresh=[&](bool reverse){
+                for(unsigned p=0;p<2;++p){
+                    auto* l=ring.acquireNext(slot,st);if(!l)return false;
+                    auto* texture=textures[reverse?1-p:p].Get();
+                    transition(l,texture,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE);
+                    if(!vfg.capture(l,texture,p))return false;
+                    transition(l,texture,D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_COMMON);
+                    if(!ring.submitAndSignal(slot))return false;
+                }return true;
+            };
+            const auto consume=[&](unsigned sub,unsigned readbackSlot){
+                if(!vfg.generate(1,sub,4,false))return false;
+                auto* l=ring.acquireNext(slot,st);if(!l)return false;
+                transition(l,output.Get(),D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_DEST);
+                if(!vfg.copyOutput(l,output.Get(),1+2*(sub-1)))return false;
+                transition(l,output.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_COPY_SOURCE);
+                D3D12_TEXTURE_COPY_LOCATION from{};from.pResource=output.Get();from.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+                D3D12_TEXTURE_COPY_LOCATION to{};to.pResource=readback.Get();to.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;to.PlacedFootprint=fp;to.PlacedFootprint.Offset=readbackSlot*bytes;
+                l->CopyTextureRegion(&to,0,0,0,&from,nullptr);
+                transition(l,output.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_COMMON);
+                return ring.submitAndSignal(slot);
+            };
+            check(refresh(false),"fresh pair before non-first subframe");
+            const std::array<unsigned,5> sequence={2,3,2,1,2};
+            for(unsigned i=0;i<sequence.size();++i)check(consume(sequence[i],i),"non-first/repeated/backward subframe queued");
+            check(refresh(true),"input pair refreshed while earlier outputs pending");
+            check(consume(3,5)&&consume(2,6),"refreshed input starts at index 3 and reuses output slot");
+            check(ring.waitIdle(),"edge sequence GPU completion");
+            range={0,size_t(bytes*7)};if(FAILED(readback->Map(0,&range,&pixels)))return 2;
+            const auto equalPixels=[&](unsigned a,unsigned b){
+                for(unsigned y=0;y<h;++y)
+                    if(std::memcmp(static_cast<uint8_t*>(pixels)+a*bytes+y*fp.Footprint.RowPitch,static_cast<uint8_t*>(pixels)+b*bytes+y*fp.Footprint.RowPitch,w*4))return false;
+                return true;
+            };
+            check(equalPixels(0,2)&&equalPixels(0,4),"repeated index preserves every pixel despite queued slot reuse");
+            check(!equalPixels(0,1)&&!equalPixels(0,3),"non-first group still produces distinct intermediate frames");
+            std::array<double,7> centers{};
+            for(unsigned i=0;i<centers.size();++i){double sum=0,weight=0;
+                for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){
+                    const auto* pixel=static_cast<uint8_t*>(pixels)+i*bytes+y*fp.Footprint.RowPitch+x*4;
+                    unsigned red=pixel[0];if(format!=DXGI_FORMAT_R8G8B8A8_UNORM){uint32_t packed=0;std::memcpy(&packed,pixel,4);red=(packed&1023)*255/1023;}
+                    const double v=red>40?red-16:0;sum+=v;weight+=v*x;
+                }centers[i]=sum?weight/sum:-1;
+                check(centers[i]>inputCentroid[0]-1&&centers[i]<inputCentroid[1]+1,"edge sequence remains inside current A/B pair");
+            }
+            check(centers[3]<centers[0]&&centers[0]<centers[1],"non-first input follows forward motion");
+            check(centers[5]<centers[6],"mid-sequence refreshed input follows reversed motion");
+            std::printf("VFG_EDGE format=%u quality=%u centers=",unsigned(format),quality);for(double center:centers)std::printf("%.3f,",center);std::puts("");
+            readback->Unmap(0,&written);
             check(!vfg.generate(1,8,8,false)&&!vfg.generate(2,1,2,false)&&!vfg.generate(0,1,9,false),"invalid slot/multiplier rejected");
             vfg.shutdown();
         }

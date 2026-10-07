@@ -1,4 +1,16 @@
-# Veyra 工作记录
+# WORKLOG
+
+## 2026-10-07 VFG继续优化实验v1
+
+- 首次构建目标veyra_settings_tests不存在，Ninja未编译；改为已存在的veyra_fg_settings_tests，candidate-v1-retry构建成功。日志logs/vfg-next-20261007/candidate-v1*.log/json保留失败，不掩盖。
+- 正式2.0.6原EXE/GTA/1080原版NR/普通GPU/Auto同步20秒观察：Medium6=180fps、FG20.848ms；High3=69fps、FG22.627ms且调度降档。仅本轮基线，不沿用旧波动值计算收益。baseline-medium6、baseline-high3回执errors=[]，实际GPU类2/队列优先级0。
+- 每对输入一次producer依赖实验已实现，仍逐输出completion；重复/回退索引、新输入revision/parity/reset/倍率更新强制新依赖。同EXE测试开关VEYRA_TEST_VFG_PER_FRAME_PRODUCER恢复旧同步。
+- baseline-native-720与candidate-native-720各913检查0失败；42组/168张8或10-bit、3质量×2X–8X输出逐位相同，pixels-v1.json。新增不排空CPU的中途索引/重复槽/输入更新测试，待下一构建验证；性能尚待同EXE对照。
+
+## 2026-10-07 VFG继续优化开工
+
+- 基线96a7c8de；隔离工作树E:/项目/Veyra/worktrees/vfg-next-20261007。独立archives/vfg-next-20261007/start.json SHA256 13b729312a19c06f41642d4451dd4f5d042a795937e934a3f70b715b9995091a，source-before.bundle；34其他工作树/495脏文件/3691原件保护。
+- 正在验证同一输入对重复跨队列依赖是否造成多余GPU串行；尚无优化收益结论。正常GTA播放/像素与导出定向验收，不改变其它补帧/NR/配置/时钟。方案VFG_NEXT_PLAN_2026-10-07.md，产物E:/项目/Veyra/{logs,tests,build,tmp,verify,test-packages}/vfg-next-20261007。
 
 ## 2026-10-07 2.0.6 正式发布完成
 
