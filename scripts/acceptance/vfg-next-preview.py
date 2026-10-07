@@ -59,11 +59,12 @@ def run(args):
  if not args.no_verbose:env['VEYRA_VERBOSE_FRAME_LOGS']='1'
  if args.cpu_profile:env['VEYRA_TEST_VFG_CPU_PROFILE']='1'
  if args.sync_submit:env['VEYRA_TEST_VFG_SYNC_SUBMIT']='1'
+ if args.no_overload_estimate:env['VEYRA_TEST_VFG_NO_OVERLOAD_ESTIMATE']='1'
  if args.full_reduced_queue_cost:env['VEYRA_TEST_VFG_FULL_REDUCED_QUEUE_COST']='1'
  if args.per_frame_producer:env['VEYRA_TEST_VFG_PER_FRAME_PRODUCER']='1'
  if args.no_reduced:env['VEYRA_TEST_FG_NO_REDUCED']='1'
  if args.software:env['QT_QUICK_BACKEND']='software'
- receipt={'config':config,'exeSha256':EXPECTED_EXE,'gpuBefore':gpu(),'noReduced':args.no_reduced,'softwareUi':args.software,'verboseFrameLogs':not args.no_verbose,'cpuProfile':args.cpu_profile,'syncSubmit':args.sync_submit,'perFrameProducer':args.per_frame_producer,'fullReducedQueueCost':args.full_reduced_queue_cost,'selectedBinary':str(selected)}
+ receipt={'config':config,'exeSha256':EXPECTED_EXE,'gpuBefore':gpu(),'noReduced':args.no_reduced,'softwareUi':args.software,'verboseFrameLogs':not args.no_verbose,'cpuProfile':args.cpu_profile,'syncSubmit':args.sync_submit,'perFrameProducer':args.per_frame_producer,'fullReducedQueueCost':args.full_reduced_queue_cost,'noOverloadEstimate':args.no_overload_estimate,'selectedBinary':str(selected)}
  save(out/'launch.json',receipt)
  started=time.monotonic();meters=[]
  with (out/'console.log').open('xb') as stream:
@@ -115,6 +116,7 @@ parser.add_argument('--no-nr',action='store_true');parser.add_argument('--strict
 parser.add_argument('--original',action='store_true');parser.add_argument('--cpu-profile',action='store_true')
 parser.add_argument('--sync-submit',action='store_true');parser.add_argument('--per-frame-producer',action='store_true')
 parser.add_argument('--full-reduced-queue-cost',action='store_true');parser.add_argument('--producer-experiment',action='store_true')
+parser.add_argument('--no-overload-estimate',action='store_true')
 args=parser.parse_args()
 
 subprocess.run([sys.executable,'-B',str(ROOT/'scripts/acceptance/vfg-next-control.py')],check=True)

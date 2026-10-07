@@ -1,6 +1,7 @@
 #include "veyra/engine/PresetStore.h"
 #include "veyra/engine/PresetLibrary.h"
 #include "veyra/engine/VfgQueueBudget.h"
+#include "veyra/engine/VfgOverloadEstimate.h"
 #include "veyra/pipeline/FrameBatch.h"
 #include <filesystem>
 #include <fstream>
@@ -21,6 +22,22 @@ int wmain(int argc,wchar_t** argv){
     check(vfgQueuedGroupCost(38.,7.,12.,true,2,false)==38.,"unexpected multi-evaluation reduced group is not undercharged");
     check(vfgQueuedGroupCost(38.,7.,std::numeric_limits<double>::quiet_NaN(),true,1,false)==38.&&vfgQueuedGroupCost(38.,7.,-1.,true,1,false)==38.,"invalid first timing cannot lower queue budget");
     check(vfgQueuedGroupCost(15.,7.,12.,true,1,false)==15.,"reduced estimate never exceeds existing full cost");
+    VfgOverloadEstimate overload;
+    check(!overload.severeTotal(7.,20.,33.),"unknown full group is not invented");
+    check(!overload.allowProbe(300000000),"unknown work does not invent a probe");
+    overload.observe(114.,20.,0);
+    check(overload.severeTotal(7.,20.,33.)==121.,"expired severe cost remains an estimate instead of free work");
+    check(!overload.severeTotal(7.,15.,33.),"a meaningfully faster first interpolation reopens full probing");
+    check(overload.severeTotal(7.,25.,33.)==149.5,"slower current work cannot lower retained full estimate");
+    check(!overload.severeTotal({},20.,33.)&&!overload.severeTotal(7.,{},33.)&&!overload.severeTotal(7.,20.,0.),"missing measurements or cadence preserve legacy admission");
+    overload.observe(0.,0.,0);check(overload.severeTotal(7.,20.,33.)==121.,"invalid observation does not erase known severe work");
+    check(!overload.allowProbe(299999999)&&overload.allowProbe(300000000),"unchanged first cost still permits eventual full recovery probing");
+    check(!overload.allowProbe(300000000)&&!overload.allowProbe(599999999),"pending probes do not form a burst of full groups");
+    overload.observe(114.,20.,400000000);check(!overload.allowProbe(699999999)&&overload.allowProbe(700000000),"a fresh full measurement restarts the low-frequency probe interval");
+    overload.reset();check(!overload.severeTotal(7.,20.,33.),"source and revision reset discard retained relationship");
+    overload.observe(38.,20.,0);check(!overload.severeTotal(7.,20.,33.),"mildly overloaded 3X groups retain existing recovery");
+    check(VfgOverloadEstimate::fits(100.,7.,96.,4.,0.,0.,0.)&&!VfgOverloadEstimate::fits(100.,7.,95.9,4.,0.,0.,0.),"retained admission uses the original deadline and grace boundary");
+    check(!VfgOverloadEstimate::fits(121.,7.,113.,0.,1000.,0.,0.),"elapsed CPU time cannot erase unsubmitted interpolation cost");
     check(!motionUsesFlow(MotionSource::OpticalFlow,FrameGenerationBackend::Vfg)&&
           !motionUsesFlow(MotionSource::Automatic,FrameGenerationBackend::Vfg),"VFG uses its own motion even after a DLSS flow preset");
     check(motionUsesFlow(MotionSource::OpticalFlow)&&motionUsesFlow(MotionSource::Automatic),"SR/NR external motion remains enabled");

@@ -17,6 +17,7 @@
 #include "veyra/engine/LiveFgAdmission.h"
 #include "veyra/engine/FgRecoveryBudget.h"
 #include "veyra/engine/VfgQueueBudget.h"
+#include "veyra/engine/VfgOverloadEstimate.h"
 #include "veyra/engine/LivePairLatency.h"
 #include "veyra/engine/RealtimePreviewScheduling.h"
 #include "veyra/engine/CaptureHalfRate.h"
@@ -908,6 +909,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             FgRecoveryBudget fgBudget;uint64_t fgBudgetRevision=options.settings.revision;
             const bool vfgMeasuredReducedQueue=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_FULL_REDUCED_QUEUE_COST",nullptr,0)==0;
             int64_t nextVfgQueueLog=0;
+            VfgOverloadEstimate vfgOverload;
+            const bool vfgRetainOverload=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_NO_OVERLOAD_ESTIMATE",nullptr,0)==0;
+            int64_t nextVfgOverloadLog=0;
             unsigned previewFgMultiplier=options.fgMultiplier;
             LivePairLatency pairLatency;
             const bool adaptiveCapturePhase=physicalCapture&&GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_CAPTURE_PHASE",nullptr,0)==0;
@@ -924,7 +928,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 std::shared_ptr<FrameFlowWindow> flow;
                 Clock::time_point processStart;
                 int64_t predictedGpuStart100ns=0;
-                std::optional<double> gpuExecutionMs,fgExecutionMs;
+                std::optional<double> gpuExecutionMs,fgExecutionMs,firstFgExecutionMs;
                 bool real=false;
                 std::atomic<bool> ready=false;
                 Clock::time_point readyObserved{};
@@ -973,6 +977,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         if(id.epoch==sample.identity.epoch&&id.settingsRevision==sample.identity.settingsRevision&&id.sourceFrameId==sample.identity.sourceFrameId){
                             if(const auto span=diagnostics::graphExecutionSpanMs(sample))watch->gpuExecutionMs=span;
                             if(fgCost.state==diagnostics::SampleState::Measured)watch->fgExecutionMs=fgCost.milliseconds;
+                            const auto& first=sample.gpu[size_t(diagnostics::GpuStage::Fg1)];
+                            if(first.state==diagnostics::SampleState::Measured)watch->firstFgExecutionMs=first.milliseconds;
                         }
                     }
                     const auto& blit=sample.gpu[size_t(diagnostics::GpuStage::Blit)];
@@ -1023,6 +1029,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     // see FgRecoveryBudget::complete. Only a history reset or
                     // an FG recovery is a warmup sample.
                     if(batch.batch.identity.settingsRevision==fgBudgetRevision)fgBudget.complete(watch.gpuExecutionMs,batch.fgEvaluated>0,batch.historyReset||batch.fgRecovery,host100ns(),watch.fgExecutionMs,!batch.fgReduced);
+                    if(options.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&batch.batch.identity.settingsRevision==fgBudgetRevision){
+                        if(batch.historyReset)vfgOverload.reset();
+                        if(!batch.historyReset&&!batch.fgRecovery&&!batch.fgReduced&&batch.fgEvaluated+1==options.fgMultiplier)
+                            vfgOverload.observe(watch.fgExecutionMs,watch.firstFgExecutionMs,host100ns());
+                    }
                     if(adaptiveCapturePhase&&watch.captureArrival>0&&valid==batch.fgCandidates&&
                        batch.hasGenerated&&!batch.historyReset&&!batch.fgRecovery&&
                        batch.batch.identity.settingsRevision==fgBudgetRevision&&watch.presentationGeneration==presentationGeneration.load()){
@@ -1734,7 +1745,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     nextFgAdmissionLog=now+10000000;if(!admitted)nextFgRejectionLog=now+10000000;
                     veyra::log::info("live-fg-admission",std::format("timeline={} revision={} source={} multiplier={} requestedMultiplier={} admitted={} admittedPairs={} rejectedPairs={} remainingDeadlineMs={:.3f} firstDeadlineMs={:.3f} queuedGpuMs={:.3f} predictedMs={:.3f} elapsedMs={:.3f} blitGpuP95Ms={:.3f} presentCpuP95Ms={:.3f} warmingHistory={} (CPU Present is backpressure, not added GPU cost; firstDeadlineMs=-1 when unused)",timeline,batch.identity.settingsRevision,batch.identity.sourceFrameId,previewFgMultiplier,options.fgMultiplier,admitted,fgAdmittedPairs,fgRejectedPairs,double(deadline-now)/10000,firstDeadline?double(firstDeadline-now)/10000:-1,queuedMs,fgBudget.predicted(now,warmingHistory).value_or(-1),elapsed,blit,livePresent.p95(),warmingHistory));
                 };
-                if(fgBudgetRevision!=options.settings.revision){fgBudget.reset();pairLatency.reset();fgBudgetRevision=options.settings.revision;}
+                if(fgBudgetRevision!=options.settings.revision){fgBudget.reset();vfgOverload.reset();pairLatency.reset();fgBudgetRevision=options.settings.revision;}
                 previewFgMultiplier=options.fgMultiplier;
                 // An output cap used to only drop candidates at present time, so
                 // the GPU still generated frames that were thrown away: at 6X on
@@ -1824,7 +1835,25 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         const auto firstDeadline=now+int64_t((firstPts-media)/playbackRate),deadline=now+int64_t((lastGenerated-media)/playbackRate);
                         const auto first=frameFlow->snapshot(now).gpuTiming[size_t(diagnostics::GpuStage::Fg1)].p95;
                         const auto elapsed=elapsedMs(processStart),blit=livePresentGpu.p95();
-                        const auto admitted=fgBudget.admitFile(now,firstDeadline,deadline,int64_t(interval/playbackRate)/previewFgMultiplier,elapsed,blit,first,warmingHistory,queuedGpuMs,options.settings.fgStrictAdmission);
+                        const auto outputInterval=int64_t(interval/playbackRate)/previewFgMultiplier;
+                        bool retainedFits=true;
+                        if(vfgRetainOverload&&options.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&!warmingHistory){
+                            const auto base=fgBudget.baseCost(now),whole=fgBudget.predicted(now,false);
+                            // Only replace the missing FG component; a fresh full
+                            // sample still uses the original shared admission.
+                            if(base&&whole&&*whole<=*base+0.000001){
+                                const auto retained=vfgOverload.severeTotal(base,first,double(interval)/10000/playbackRate);
+                                if(retained){
+                                    retainedFits=VfgOverloadEstimate::fits(*retained,*base,double(deadline-now)/10000,double(outputInterval)/10000,elapsed,queuedGpuMs,blit);
+                                    if(!retainedFits&&now>=nextVfgOverloadLog){nextVfgOverloadLog=now+10000000;
+                                        veyra::log::info("vfg-overload-budget",std::format("source={} requested={} fullCostExpired=1 retainedTotalEstimateMs={:.3f} currentFirstGpuP95Ms={:.3f} (retained estimate, not new GPU sample; deadlines unchanged)",batch.identity.sourceFrameId,options.fgMultiplier,*retained,*first));}
+                                }
+                            }
+                        }
+                        const auto originalAdmission=fgBudget.admitFile(now,firstDeadline,deadline,outputInterval,elapsed,blit,first,warmingHistory,queuedGpuMs,options.settings.fgStrictAdmission);
+                        const bool overloadProbe=originalAdmission&&!retainedFits&&vfgOverload.allowProbe(now);
+                        if(overloadProbe)veyra::log::info("vfg-overload-probe",std::format("source={} requested={} probeIntervalMs=30000 (one full group using original admission; no deadline extension)",batch.identity.sourceFrameId,options.fgMultiplier));
+                        const auto admitted=originalAdmission&&(retainedFits||overloadProbe);
                         logAdmission(batch,now,deadline,elapsed,blit,admitted,warmingHistory,"file-audio",firstDeadline,queuedGpuMs);
                         if(admitted)return pipeline::EnhanceGraph::FgDecision::Evaluate;
                         // Over budget for the full group: emit a presentable 2X

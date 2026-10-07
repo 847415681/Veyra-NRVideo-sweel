@@ -1,4 +1,4 @@
-"""Build the isolated routing fix with the accepted 2.0.5 dependencies."""
+"""Build the isolated VFG continuation with the accepted dependency cache."""
 from pathlib import Path
 import hashlib,json,os,subprocess,sys,time
 ROOT=Path(__file__).resolve().parents[2];BASE=Path('E:/项目/Veyra');TASK='vfg-next-20261007'
@@ -13,9 +13,9 @@ for line in cache.read_text(encoding='utf8').splitlines():
  if kind in ('INTERNAL','STATIC') or key in ('VEYRA_DISPLAY_VERSION','VEYRA_AMD_NR_TEST_GRAPH_SOURCE'):continue
  if key.startswith('VEYRA_') or key in ('CMAKE_PREFIX_PATH','CMAKE_MAKE_PROGRAM','PROTOC','PKG_CONFIG_EXECUTABLE'):
   settings.append(f'set({key} [[{value}]] CACHE {kind} "Accepted dependencies" FORCE)')
-settings.append('set(VEYRA_DISPLAY_VERSION [[2.0.6-vfg-next]] CACHE STRING "Local AMD NR/FSR repair" FORCE)')
+settings.append('set(VEYRA_DISPLAY_VERSION [[2.0.6-vfg-next]] CACHE STRING "Local VFG continuation" FORCE)')
 (TMP/'dependencies.cmake').write_text('\n'.join(settings),encoding='utf8')
-targets=sys.argv[2:] or ['veyra_qml_ui','veyra_amd_nr_graph_tests','veyra_lmxxf_nr_tests','veyra_effect_chain_tests']
+targets=sys.argv[2:] or ['veyra_qml_ui','veyra_vfg_gpu_tests','veyra_vfg_export_probe','veyra_vfg_settings_tests']
 assert all(t.replace('_','').isalnum() for t in targets)
 cmd=TMP/'build.cmd';cmd.write_text('@echo off\nchcp 65001 >nul\ncall "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvars64.bat" >nul 2>&1\nif errorlevel 1 exit /b 4\n"%TASK_CMAKE%" --preset x64-release -S "%TASK_ROOT%" -B "%TASK_BUILD%" -C "%TASK_TMP%\\dependencies.cmake"\nif errorlevel 1 exit /b 5\n"%TASK_CMAKE%" --build "%TASK_BUILD%" --parallel 6 --target '+' '.join(targets)+'\nexit /b %errorlevel%\n',encoding='ascii')
 env=os.environ.copy();env.update(TEMP=str(TMP),TMP=str(TMP),VSLANG='1033',TASK_ROOT=str(ROOT),TASK_BUILD=str(BUILD),TASK_TMP=str(TMP),TASK_CMAKE='C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe')
