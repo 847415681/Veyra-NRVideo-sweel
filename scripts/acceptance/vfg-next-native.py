@@ -21,4 +21,4 @@ with log.open('x',encoding='utf8') as f:
  except subprocess.TimeoutExpired:rc=124
 receipt={'command':cmd,'exit':rc,'seconds':time.monotonic()-start,'log':str(log)}
 log.with_suffix('.json').write_text(json.dumps(receipt,ensure_ascii=False,indent=2),encoding='utf8')
-print(receipt);print('\n'.join(log.read_text(encoding='utf8',errors='replace').splitlines()[-15:]));raise SystemExit(rc)
+print(receipt);print('\n'.join(log.read_text(encoding='utf8',errors='replace').splitlines()[-15:]));subprocess.run(['python','-B',str(ROOT/'scripts/acceptance/vfg-next-control.py')],cwd=ROOT,check=True);raise SystemExit(rc)

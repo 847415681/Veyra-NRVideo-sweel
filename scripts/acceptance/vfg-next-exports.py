@@ -1,6 +1,6 @@
 """Serial real graph/NVENC export checks, including frame counts and PTS."""
 from pathlib import Path
-import argparse,json,os,re,shutil,subprocess,psutil
+import argparse,json,os,re,shutil,subprocess,time,psutil
 ROOT=Path(__file__).resolve().parents[2];BASE=Path('E:/项目/Veyra');TASK='vfg-next-20261007';APP=BASE/'tests'/TASK/'app'
 p=argparse.ArgumentParser();p.add_argument('label');a=p.parse_args();assert a.label.replace('-','').isalnum()
 subprocess.run(['python','-B',str(ROOT/'scripts/acceptance/vfg-next-control.py')],cwd=ROOT,check=True)
@@ -14,6 +14,7 @@ env.update(TEMP=str(tmp),TMP=str(tmp),CUDA_CACHE_PATH=str(tmp/'cuda-cache'),VEYR
 env['PATH']=os.pathsep.join((env['WINDIR']+'/System32',env['WINDIR'],env['WINDIR']+'/System32/Wbem'))
 source=BASE/'tests/runtime-size-20261004/export-basic-v2/input.mp4';assert source.is_file();results=[]
 def run(name,media,m,q,flags=(),expected='success'):
+ start=time.monotonic()
  file=out/(name+'.mp4');child=env.copy()
  if expected=='missing':child['VEYRA_VFG_RUNTIME']=str(tmp/'missing-runtime')
  log=logs/(name+'.log');cmd=[str(APP/'veyra_vfg_export_probe.exe'),str(media),str(file),str(m),str(q),*flags]
@@ -42,6 +43,7 @@ def run(name,media,m,q,flags=(),expected='success'):
   pts=[float(x['pts_time']) for x in packets];assert len(pts)==8*m and all(b>a and abs(b-a-1/(30*m))<=2*tick+1e-9 for a,b in zip(pts,pts[1:])),pts
   if '--nr' in flags:assert 'nr=1' in text and (v['width'],v['height'])==(3840,2160),text[-5000:]
   item.update(frames=8*m,probe=data,pts=pts)
+ item['seconds']=time.monotonic()-start;assert item['seconds']<300,item
  results.append(item);(logs/'summary.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf8');print('VFG EXPORT PASS',name,flush=True)
 for quality in range(3):
  for multiplier in range(2,9):run(f'720p30-quality{quality}-vfg{multiplier}',source,multiplier,quality)

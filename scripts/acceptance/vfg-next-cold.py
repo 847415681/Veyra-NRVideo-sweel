@@ -27,7 +27,7 @@ verify_payload();assert sha(APP/'veyra_qml_ui.exe')==receipt['exeSha256']
 subprocess.run([sys.executable,'-B',str(ROOT/'scripts/acceptance/vfg-next-audit.py'),str(APP),'NVIDIA','candidate-zip-audit'],cwd=ROOT,check=True,timeout=90)
 out,logs,tmp=(BASE/k/TASK/'candidate-cold' for k in ('tests','logs','tmp'))
 for p in (out,logs,tmp):p.mkdir(parents=True,exist_ok=False)
-profile=out/'profile';shutil.copytree(BASE/'tests'/TASK/'overload-medium4/profile',profile)
+profile=out/'profile';shutil.copytree(BASE/'tests'/TASK/'final-medium4/profile',profile)
 env={k:v for k,v in os.environ.items() if not k.upper().startswith(('VEYRA_','QT_','QSG_'))}
 windows=Path(env['WINDIR']);engine=logs/'engine.log';console=logs/'console.log'
 env.update(TEMP=str(tmp),TMP=str(tmp),CUDA_CACHE_PATH=str(tmp/'cuda-cache'),VEYRA_LOG_FILE=str(engine),QML_DISABLE_DISK_CACHE='1',QT_FORCE_STDERR_LOGGING='1',PATH=os.pathsep.join(map(str,(windows/'System32',windows,windows/'System32/Wbem'))))
