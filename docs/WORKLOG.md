@@ -8779,3 +8779,26 @@ post-cleanup-smoke.py 从现有完整候选直接启动，独立profile/log/cach
 ## 2026-10-08 桌面项目追加清理
 
 用户要求清理桌面 Veyra 项目。独立 start/dirty 备份及 scan before→prepare→PowerShell 预检/-Execute→verify→scan after；8 旧构建 + 旧 1.2.0 解压目录、14,841 历史 logs 先 lossless 去重归档 E 盘，合计移除 17,395 文件路径/9 目录，零失败。C 卷实际增加 7.328 GiB，E 归档/扫描等约成本 2.105 GiB，两卷整轮净增约 5.046 GiB；桌面项目 19.631→12.267 GiB。35 工作树/495 脏文件、66,680 保留文件 SHA/ID/mtime、57 归档/二进制、587 编译输入及上轮 658 donor 通过，当前 VFG Ninja -n exit0；没有重编译或新 GPU 性能/播放测试。旧 ZIP 新增启动日志导致第一次准备停下，无删除；另行 lossless 保存后核对。新产物 E:/项目/Veyra/{archives,reports,logs}/desktop-cleanup-20261008，报告 docs/DESKTOP_STORAGE_CLEANUP_2026-10-08.md。不改产品或其它桌面文件，不 push/Release/关机，未重试上轮被拒绝的 E temp 删除。
+
+
+## 2026-10-08 补帧＋源时间戳黑闪与手机录像排查
+
+用户提供veyra-qml(41).log和ebdc538711ace23c8edc69cc11a57bfc.mp4，报告只有补帧＋源时间戳闪黑，FG关/60→30不闪。本轮诊断结论：录像确认3.467/4.300秒整幅近黑，下一录像帧恢复；根因仍未知，未改产品/驱动/DLL/用户配置、未合并/推送/发布/关机，无子Agent或压力/竞争GPU负载。旧UI冻结不用于阻塞本次用户明确要求的诊断，产品基底71723e0和main dbfceab保持。
+
+先只读分析42,664,677字节/141,315行日志，SHA4714f8ee048f12965bd8ccd8c546191c5659cc7d40f40702d816faf670bd7d96；视频612,092字节/146帧，SHA9481aaddfe254ad46e8c8a53caf650b9702c4841f7af4846bff5771c09ad5ee6。现场5090/617.42/Magewell4K59.94 P010 PQ/LG144Hz，切换DLSS/VFG/XeSS，AMD光流常用。18 ERROR为17 QML几何＋1配置，未见provider/device/Present失败；末段927秒稳定DLSS transport源60/提交120中位数、valid55399/invalid0，只有一处场景边界及开段设置重建。FPS不是像素证据；60→30减半工作并扩窗口，不能直接推断PTS错误。手机时间未校准，未硬对齐应用事件。
+
+实际脚本全部E:/项目/Veyra/reports/fg-source-flash-20261008：analyze-log.py、segment-log.py、analyze-video.py仅读原输入，输出JSON/亮度CSV/检视PNG。视频检视用本机FFmpeg8.1.1，不替换产品patched FFmpeg9.0.1。build-probe.py采用原有Ninja编译/链接argv，给外部VideoPresenter副本加入GPU九点取样，静态库/产品源码逐SHA保持；run-probe.py依次运行HDR FG关、DLSS源60、half、AMD静止、Lecram两层、NVIDIA原版两层六组，全部无黑样本/无GPU错误，见test-summary.json。末组完整命令：python E:/项目/Veyra/reports/fg-source-flash-20261008/run-probe.py hdr-dlss-amd-static-original-nr2 dlss transport hdr 2 20 3840 2160 amd static；20秒取得628原帧/242生成帧，runtimeUnchanged=true。先前枚举0为Lecram，纠正为NvidiaOriginal=3后独立补测，不混称原版。原生诊断有跳过/过期，不作为性能验收。
+
+build-field.py只重编译外部presenter并重链接原QML对象和产品库，四个插点为Draw后双资源取样、提交fence、Present结果及close后一次map。没有逐帧CPU readback/wait，没有正常产品链路修改。最终GUI SHA4c38d320585ff545dac231910fe7f64b71a2930af5e164f6c40fb32fce9804a1；run-field.py最终DLSS源60/已知黑场480原帧479生成帧，检测13/12张黑图，两阶段一致、exit0/无ERROR。GTA6原片＋NR1080＋VFG4最终EXE入口203/608帧均非黑。最后实际入口命令：powershell.exe -NoProfile -ExecutionPolicy Bypass -File E:/项目/Veyra/worktrees/fg-source-flash-20261008/scripts/diagnostics/start-fg-flash-diagnostic.ps1 -AppDirectory E:/项目/Veyra/tests/fg-source-flash-20261008/field/app -ProfileSource E:/项目/Veyra/tests/vfg-next-20261007/candidate-cold/profile -OutputDirectory E:/项目/Veyra/logs/fg-source-flash-20261008/launcher-powershell51-handle -DurationSeconds 15 -Source E:/项目/Veyra/tests/fg-source-flash-20261008/field/known-black-input.mp4；最终WinPS5.1 exit0/forcedStop=false，449/1345帧检测13/36黑图，原配置源SHA保持，自动日志ZIP无profile/凭据且CRC通过。已知黑场是检测正例，不是现场故障复现；本机5070/616.56/约320Hz不能替代现场5090/HDR电视。XeSS内部帧和物理显示未测。
+
+失败/纠偏保留：早期vcvars引号/输出编码获取失败修正后编译；首次原生EXE缺旁边shaders初始化失败，之后仅在自有目录补shaders；测试QML注入LF/CRLF断言发生于写文件/启动前，独立v2通过；旧原生早期EXE未逐次完整封存，末组原版NR及最终GUI有对应源/EXE/输入库SHA归档，早期结果仅作辅助。首次WinPS5.1取到了CSV但ExitCode=null，不记完整退出码通过；保活Process.Handle后另组15秒验证0。原收据不改。
+
+诊断文档工作树从dbfceab新建codex/fg-source-flash-20261008；pre-document-state.json在建树前固定35原树/495脏文件，只证明此节点之后保全，未冒称整个排查前快照。当前只新增方案/报告、两个诊断header、README和隔离启动器及本WORKLOG，产品源码无改动。build字段原静态库、71723产品源、候选完整package-manifest再次核验；audit-state.py check核对35原树/495脏文件，最终回执在reports/.../preservation-check.json。
+
+package-field.py交付test-packages/fg-source-flash-20261008/Veyra-2.0.6-black-flash-diagnostic.zip，78,553,916字节，SHA420a461dd93d16d42821d2829c801077a8855b06dfeb6e773387659a105e1e9e；ZIP CRC/逐文件SHA、最终EXE身份及嵌套基础源码无DLL/SDK二进制通过。附完整71723基础源码、补充源、GPL许可证，不携带或替换任何运行时/模型，不是修复版。放到原NVIDIA2.0.6目录另名启动，独立配置；复现15–20秒后正常关闭，90秒自动退出，回传logs/flash-diagnostic-时间.zip。下一步必须取得实际黑闪时的双阶段像素/事件CSV，再确定graph/provider/blit或提交后窗口/合成/驱动/显示归属。
+
+本轮只有一份共享诊断app，运行文件硬链接原候选、配置/log/cache独立，无每用例完整payload副本。新增占用按storage.json排除原包硬链接ID，不将逻辑副本字节冒充新增磁盘占用。收尾删除四个本轮独立TEMP/cache的原生PowerShell命令在CreateProcess前被自动审批拒绝，只返回blocked by policy，无其它理由；未执行、未重试或换shell删除。保留344个文件/42,277,435字节（约40.32MiB），cache-cleanup.json记removed=0，不影响诊断交付，旧被拒project-cleanup temp未触碰。
+
+末组原生原版NR仍有572/1200源机会跳过、385生成帧过期，不能冒充现场稳定60/120负载；这是额外明确的负结果边界。实际日志两层Feature18 Create均result=0x1、handle=non-null、seh=0；Evaluate/FG运行计数与NGX收尾结果留在对应engine.log，不由Create成功推断画面正常。
+
+收尾核验：原候选package-manifest实际1614项全部SHA保持，两个构建回执的原库/对象/原EXE输入保持，外部Python AST通过；audit-state.py check为35原工作树/495脏文件changed=[]。storage.json本节点新增唯一文件内容326,994,164字节（约311.85MiB），已排除原候选硬链接且不冒充卷空闲变化；包含最终包/对应源/日志与约40.32MiB被拒清理缓存。最终仅7份诊断/文档文件本地存档，不修改产品、不合入main。
