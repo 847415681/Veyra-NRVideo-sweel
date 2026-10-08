@@ -8765,6 +8765,8 @@ High5总18.74ms/GPU67.8%同样绿但仅33fps，已大量reduced/seed/skip；完�
 
 用户要求先把当前修复合入 main，再排查/清理项目磁盘占用。先完整核对当前规则/规格/对应 VFG 方案及交付回执，执行 vfg-next-control.py：26 scope/34 其它工作树/3691 原件通过；main 干净且为 96a7c8de。独立 audit.py snapshot 固定35工作树/495脏文件/原引用/磁盘，dirty-files.zip 56,409,855字节，start SHA258ad5e5c4ff7fb67d2fceb73a744cce3bc1c9737a2d6d68f20190b783fa8834。保留前后checkpoint，git merge --ff-only codex/vfg-next-20261007 成功到71723e0；Git产品树无差异。当前构建重新运行VFG设置353检查0失败，不宣称重新编译。
 
+主要清理/短测/保全核对通过并提交5dc256b后，附加删除本轮TEMP目录的原生PowerShell命令在CreateProcess前被自动审批拒绝，理由仅blocked by policy；未执行，未重试或换shell/包装脚本绕过。只读核实E:/项目/Veyra/tmp/project-cleanup-20261008为70文件/10015907字节，保留约10MB缓存。此限制单独记录，不把主要清理56889文件/48目录成功、0失败与附加被拒混为一谈。补充两份文档后另作最终源码bundle和closure，main保持干净。
+
 产物统一 E:/项目/Veyra/{archives,reports,logs,tests,tmp}/project-cleanup-20261008。audit.py scan before-fixed/after 按os.stat真实ID/硬链接与GetCompressedFileSize核对，均0读取错误/408 reparse跳过；E项目逻辑572.085→193.111GiB，唯一文件存储估计367.196→183.249GiB。清单经整文件SHA相等、父链/绝对路径/mtime/大小/进程/CRC预检；原生execute-cleanup.ps1 -Execute 删除56889重复文件和48旧CMake目录，0失败。逻辑删除407252006243字节不冒充实际收益；删除阶段E卷实际空闲753861038080→950880223232，回收197019185152字节/183.488GiB。整轮包含新增归档与扫描后净增约183.084GiB。
 
 先封存2190旧产品EXE/构建参数/源码片段，old-build-inputs-and-binaries.zip 244941265字节，CRC/每文件SHA通过。旧测试私有payload只删完全重复文件，658 donor保留并最终全SHA核对；普通日志/配置/唯一EXE/QML/脚本/媒体保持，性能RGBA重复抓帧有原路径→donor/SHA映射。保留2.0.6双显卡完整包、最新VFG候选/对应源码、当前可用构建，57发行归档/二进制身份和587编译输入核对通过。旧临时app不再直接可运行，历史guard复跑须先恢复清单或建立新任务独立基线，未改旧guard/start。
