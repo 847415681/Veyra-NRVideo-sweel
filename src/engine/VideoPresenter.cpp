@@ -88,18 +88,57 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
             pipeline::makeUav(ctx.device(),presentMotion_[i].Get(),DXGI_FORMAT_R16G16_FLOAT,{heap.ptr+size_t(i*2+1)*presentMotionPass_.increment});
         }
     }
-    D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV;hd.NumDescriptors=3;
+    // Field 2026-10-09: HDR application FG flashes on an RTX5090 while the
+    // pixel-copy diagnostic does not. This is a compatibility candidate, not
+    // proof of a driver defect. Compose separately and copy the actual final
+    // image to DXGI; never retain the diagnostic's CPU readback or add sleeps.
+    copyBeforePresent_=ctx.adapter().isNvidia&&graph.hdr10Output()&&graph.fgEnabled()&&bool(presentationQueue_);
+    wchar_t copyOverride[4]{};
+    if(GetEnvironmentVariableW(L"VEYRA_TEST_HDR_PRESENT_COPY",copyOverride,4)&&copyOverride[1]==L'\0'){
+        if(copyOverride[0]==L'0')copyBeforePresent_=false;
+        // A forced path is for bounded regression tests, including SDR.
+        else if(copyOverride[0]==L'1'&&!sink_.xess())copyBeforePresent_=true;
+    }
+    D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV;hd.NumDescriptors=4;
     if(FAILED(ctx.device()->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&rtvs_))))return false;
-    inc_=ctx.device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);refresh(ctx.device());
+    inc_=ctx.device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);if(!refresh(ctx.device()))return false;
+    veyra::log::info("present-copy",std::format("enabled={} format={} extent={}x{} (GPU-only final composition; no pixel readback)",copyBeforePresent_,unsigned(graph.outputFormat()),sink_.bufferWidth(),sink_.bufferHeight()));
     for(unsigned i=0;i<pipeline::kOutputPoolSlots;++i)pipeline::makeSrv(ctx.device(),i<2?graph.videoFrameResource(i):graph.generatedFrameResource(i-2),graph.outputFormat(),{pass_.heap->GetCPUDescriptorHandleForHeapStart().ptr+size_t(i)*pass_.increment});
     for(unsigned i=0;i<4;++i)pipeline::makeSrv(ctx.device(),i<2?graph.sourceReference(i):graph.baseReference(i-2),DXGI_FORMAT_R16G16B16A16_FLOAT,{pass_.heap->GetCPUDescriptorHandleForHeapStart().ptr+size_t(i+pipeline::kOutputPoolSlots)*pass_.increment});
     return true;
 }
-void VideoPresenter::refresh(ID3D12Device* device){
+bool VideoPresenter::refresh(ID3D12Device* device){
     // ResizeBuffers keeps the swapchain object and may retain its metadata.
     // Request a resend without forgetting an active hint that must be cleared
     // if the user disables metadata immediately after a resize.
-    metadataDirty_=true;metadataAttempt_={};for(unsigned i=0;i<3;++i){Microsoft::WRL::ComPtr<ID3D12Resource> bb;if(SUCCEEDED(sink_.swapChain()->GetBuffer(i,IID_PPV_ARGS(&bb))))device->CreateRenderTargetView(bb.Get(),nullptr,{rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(i)*inc_});}}
+    metadataDirty_=true;metadataAttempt_={};
+    Microsoft::WRL::ComPtr<ID3D12Resource> bb;
+    for(unsigned i=0;i<3;++i){
+        bb.Reset();const HRESULT hr=sink_.swapChain()->GetBuffer(i,IID_PPV_ARGS(&bb));
+        if(FAILED(hr)){veyra::log::error("present-copy",std::format("GetBuffer index={} hr=0x{:X}",i,unsigned(hr)));return false;}
+        device->CreateRenderTargetView(bb.Get(),nullptr,{rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(i)*inc_});
+    }
+    if(copyBeforePresent_){
+        auto desc=bb->GetDesc();
+        if(!compositeTarget_||compositeTarget_->GetDesc().Width!=desc.Width||compositeTarget_->GetDesc().Height!=desc.Height||compositeTarget_->GetDesc().Format!=desc.Format){
+            D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
+            desc.Flags=D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+            D3D12_CLEAR_VALUE clear{};clear.Format=desc.Format;clear.Color[3]=1;
+            Microsoft::WRL::ComPtr<ID3D12Resource> target;
+            const HRESULT hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COMMON,&clear,IID_PPV_ARGS(&target));
+            if(FAILED(hr)){
+                veyra::log::warn("present-copy",std::format("composition allocation {}x{} format={} hr=0x{:X}; using direct presentation",desc.Width,desc.Height,unsigned(desc.Format),unsigned(hr)));
+                compositeTarget_.Reset();copyBeforePresent_=false;
+            }else{
+                target->SetName(L"Veyra HDR final composition");compositeTarget_=std::move(target);
+                const auto allocation=device->GetResourceAllocationInfo(0,1,&desc);
+                veyra::log::info("present-copy",std::format("composition allocation {}x{} format={} bytes={} surfaces=1",desc.Width,desc.Height,unsigned(desc.Format),allocation.SizeInBytes));
+            }
+        }
+        if(compositeTarget_)device->CreateRenderTargetView(compositeTarget_.Get(),nullptr,{rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(3)*inc_});
+    }
+    return true;
+}
 bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& sharedRing,pipeline::EnhanceGraph& graph,unsigned slot,bool generated,bool referencesValid,int comparison,bool baseReference,float split,pipeline::FrameIdentity identity,PreviewView view,int64_t sourcePts100ns,bool retainUnchanged) {
     auto& ring=presentationQueue_?presentationRing_:sharedRing;
     auto* fence=presentationFence_?presentationFence_.Get():ctx.fence();
@@ -163,7 +202,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         // A capture hook may temporarily retain a DXGI buffer. Keep the old
         // valid buffers and let DXGI scale them until a later resize succeeds.
         if(!sink_.currentBackBuffer()||FAILED(ctx.device()->GetDeviceRemovedReason()))return false;
-        refresh(ctx.device());lastResize_=now;xessWasEnabled_=false;
+        if(!refresh(ctx.device()))return false;lastResize_=now;xessWasEnabled_=false;
     }
     const auto resizeEnd=std::chrono::steady_clock::now();
     if(auto* xess=sink_.xess()){
@@ -182,11 +221,13 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     gpuTimer_.frame(identity.sourceFrameId?identity:pipeline::FrameIdentity{0,0,submittedCount()+1},fence);gpuTimer_.mark(list,diagnostics::GpuStage::Blit);
     uint32_t backBufferIndex=0;
     auto* source=generated?graph.generatedFrameResource(slot):graph.videoFrameResource(slot);auto* bb=sink_.currentBackBuffer(&backBufferIndex);if(!bb)return false;
+    auto* renderTarget=copyBeforePresent_?compositeTarget_.Get():bb;
+    if(!source||!renderTarget)return false;
     D3D12_RESOURCE_BARRIER barriers[2]{};
     for(auto& b:barriers){b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition.StateBefore=D3D12_RESOURCE_STATE_COMMON;b.Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;}
     barriers[0].Transition.pResource=source;barriers[0].Transition.StateAfter=D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    barriers[1].Transition.pResource=bb;barriers[1].Transition.StateAfter=D3D12_RESOURCE_STATE_RENDER_TARGET;list->ResourceBarrier(2,barriers);
-    D3D12_CPU_DESCRIPTOR_HANDLE rtv{rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(backBufferIndex)*inc_};
+    barriers[1].Transition.pResource=renderTarget;barriers[1].Transition.StateAfter=D3D12_RESOURCE_STATE_RENDER_TARGET;list->ResourceBarrier(2,barriers);
+    D3D12_CPU_DESCRIPTOR_HANDLE rtv{rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(copyBeforePresent_?3:backBufferIndex)*inc_};
     const float black[4]={0,0,0,1};list->ClearRenderTargetView(rtv,black,0,nullptr);list->OMSetRenderTargets(1,&rtv,FALSE,nullptr);
     // DXGI stretches the retained buffer while the native workspace unfolds.
     // Compute contain in CURRENT client coordinates, then map back to buffer
@@ -228,7 +269,18 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(1,&b);
         if(veyra::log::verboseFrameLogs())veyra::log::info("comparison",std::format("real-frame source={} epoch={} revision={} reference={} mode={} split={} (same leased frame)",identity.sourceFrameId,identity.epoch,identity.settingsRevision,baseReference?"base":"input",comparison,split));
     }
-    for(auto& b:barriers)std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(2,barriers);
+    for(auto& b:barriers)std::swap(b.Transition.StateBefore,b.Transition.StateAfter);
+    if(copyBeforePresent_)barriers[1].Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_SOURCE;
+    list->ResourceBarrier(2,barriers);
+    if(copyBeforePresent_){
+        D3D12_RESOURCE_BARRIER copy{};copy.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        copy.Transition.pResource=bb;copy.Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        copy.Transition.StateBefore=D3D12_RESOURCE_STATE_PRESENT;copy.Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_DEST;
+        list->ResourceBarrier(1,&copy);list->CopyResource(bb,renderTarget);
+        copy.Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_DEST;copy.Transition.StateAfter=D3D12_RESOURCE_STATE_PRESENT;
+        barriers[1].Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_SOURCE;barriers[1].Transition.StateAfter=D3D12_RESOURCE_STATE_COMMON;
+        list->ResourceBarrier(1,&barriers[1]);list->ResourceBarrier(1,&copy);
+    }
     // Interpolation region for the XeSS present-sink FG backend.
     // It must follow the PresentBlit view mapping (contain * zoom, view
     // center) rather than assuming the default centered view: the previous
@@ -347,7 +399,7 @@ void VideoPresenter::close(){
     xessInputId_=0;xessWork_={};xessWorkPosition_=0;
     reflex_.close();reflexFrame_=0;
     if(presentationRing_.initialized())presentationRing_.drainQueue();
-    hasPresented_=false;gpuTimer_.close();rtvs_.Reset();pass_={};sink_.shutdown();
+    hasPresented_=false;gpuTimer_.close();compositeTarget_.Reset();copyBeforePresent_=false;rtvs_.Reset();pass_={};sink_.shutdown();
     presentMotionPass_={};presentMotion_={};previousXessWidth_=previousXessHeight_=0;
     presentationRing_.shutdown();presentationFence_.Reset();presentationQueue_.Reset();
     if(presentationEvent_){CloseHandle(presentationEvent_);presentationEvent_=nullptr;}

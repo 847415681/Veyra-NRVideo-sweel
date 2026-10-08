@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-09 补帧闪黑现场续修**：用户提交诊断ZIP与日志44，反馈诊断不闪、原版闪，授权排查修复并收尾关机。按docs/FG_FLASH_FIX_PLAN_2026-10-09.md，从main dbfceab在E盘codex/fg-flash-fix-20261009隔离实现NVIDIA HDR应用FG最终合成GPU复制候选与定向测试/本地可回退包；这些具体presenter/ABI重编译接点覆盖历史冻结。诊断增加GPU拷贝、改名EXE/私有配置/关QML缓存，不能当根因证明；本机5070未复现5090闪黑，候选现场效果未验，禁止宣称根治。先执行fg-flash-fix-control.py，独立不可变pre-document-state保护37工作树/495脏文件，不改旧guard。不派Agent/竞争压力，不改驱动、DLL/模型、用户配置或其它工作树；无新main合并/push/Release。正常链路不加像素回读/CPU逐帧等待。测试≤300秒、构建≤900秒、产物全E盘；源码、候选、回执保存核对后按用户要求关机，不强制丢弃未保存内容。
+
 > **2026-10-08 桌面项目清理追加授权**：用户要求“桌面这个也清一清”，仅处理桌面 Veyra 项目的忽略产物。按 docs/DESKTOP_STORAGE_CLEANUP_2026-10-08.md，历史 logs lossless 去重归档 E 盘后移除桌面副本，8 套旧 CMake 构建保留 EXE/配置/源码片段后清缓存，旧 1.2.0 解压副本与原 ZIP/额外日志归档核对后移除；35 工作树、495 脏文件及 66,680 个保留文件哈希通过。保留 out/remoteplay 当前依赖、out 内工作树、SDK/runtime/素材及 .git，不涉及桌面其它文件。不改历史 guard/start，不改产品、不 push/Release/关机；C 回收与 E 归档成本分别报告。
 
 > **2026-10-08 本地合并与项目清理授权**：用户要求把当前修复合入 main，然后排查并清理项目磁盘占用。已验 VFG 71723e0 从 main 96a7c8de 快进合并；按 docs/PROJECT_STORAGE_CLEANUP_PLAN_2026-10-08.md 盘点并删除经清单核实的过时可重建构建、私有测试 app/缓存、冗余解压副本。此授权覆盖这些产物的历史保留限制，不改历史 guard/start 基线，不删除工作树、源码、未提交修改、依赖/SDK/运行库原件、用户素材或正式发布 ZIP/对应源码。独立 start/495 份脏文件备份在 E:/项目/Veyra/archives/project-cleanup-20261008；按硬链接身份及实际磁盘空间分别报告。保留当前可用构建、2.0.6 两显卡包与最新 VFG 候选、必要日志/验收记录。不派 Agent、不改产品实现或用户配置、不 push/Release/关机。

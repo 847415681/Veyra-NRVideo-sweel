@@ -1,5 +1,17 @@
 # WORKLOG
 
+## 2026-10-09 HDR补帧闪黑现场续修与本地候选
+
+- 授权：用户反馈诊断版不闪、原版闪，提交flash-diagnostic-20261008-205614-027(1).zip与日志44，要求修复后关机。隔离分支codex/fg-flash-fix-20261009，起点main dbfceabee；没有新merge/push/Release。开工独立reports/fg-flash-fix-20261009/pre-document-state.json保护37个原工作树、495份脏文件。
+- 证据：E盘reports/fg-flash-fix-20261009/analyze-field.py流式分析；ZIP CRC/EXE SHA与原诊断一致。约28.6秒实际采集、3278次Present/9点源与输出均无全黑。最终配置与原版末段对齐：5090/617.42、4K HDR59.94、DLSS2X、AMDflow、NR4K+1440p、源PTS。诊断额外18次GPU像素拷贝、改EXE名、私有配置与关QML缓存皆为混杂变量，根因未确认。
+- 实现：只改VideoPresenter.h/.cpp，NVIDIA HDR10应用FG自动采用单张GPU最终合成纹理→交换链完整复制；原帧与生成帧共用。4K33,423,360字节固定复用；分配失败记录并回退。SDR/AMD/关闭FG/XeSS直接呈现，媒体时序/算法/倍率/同步保持；无像素读回、新CPU等待/睡眠。诊断环境变量可同EXE关闭复制。为类布局重编译3个直接使用者，未改EngineController逻辑。
+- 构建：python -B scripts/acceptance/fg-flash-fix-build.py通过，约25秒；GUI3576fce737fd989396c42be15432e82957f8ef6d21e009854f35baf67dd199fa。之后--tests-only仅重编译测试，GUI不变；原库/GUI/manifest及1614项便携包身份前后SHA不变。
+- 验证：fg-flash-fix-test.py串行native hdr-copy-auto-second、hdr-direct-control、hdr-4k-auto/direct、hdr-4k-measured-copy/direct、hdr-vfg-4k-auto及sdr-normal/sdr-forced-copy通过。HDR每组512原帧/620生成帧、67次窗口无损10位对照误差0、D3D12错误0；4K缓冲/resize/rebuild与双销毁顺序通过，非4K物理显示验收。SDR4/6/4X生成114/190/114，误差0。早期一次缺shader测试环境与一次optional计时编译失败已修复，原失败日志保留；计时收集未启用的两组不作为性能数据，随后重跑。
+- GTA6源14,115,273,308字节/SHA93db6129…，只读不复制。原程序名/开启缓存、4K输入1080原版NR、DLSS2X复制与直接各40秒启动窗口通过；跳源0、开场生成帧过期各1、播放速率1.000。稳定1秒窗口P95中位数合成0.039/0.034ms、NR6.599/6.736ms，不把NR波动当收益；VFG2X30秒回归通过，643生成呈现/跳源0。普通日志与回执在logs/fg-flash-fix-20261009，性能汇总reports同任务目录。
+- 现场启动器Start-HDR-Flash-Fix.ps1保持veyra_qml_ui.exe名字/路径，不改缓存开关，Compatible/Direct复制同一原设置到私有目录。Windows PowerShell继承模块路径缺Get-FileHash时首跑失败；改.NET SHA/ZIP后25秒实际运行exit0、无强停、原配置SHA保持，证据ZIP仅log/json无配置/凭据。原生无损回读只在测试代码。
+- 交付：test-packages/fg-flash-fix-20261009的覆盖候选ZIP与完整对应源码；先备份原EXE再覆盖，运行库/模型不变。详细结论与未验边界见docs/FG_FLASH_FIX_REPORT_2026-10-09.md；现场尚未测此候选，不能宣称已根治。收尾控制、ZIP/源码/输入归档哈希及实际清理量由该目录final-check/cleanup回执记录；保存完成后按用户要求安排无强制关机。
+- 收尾：现场输入field-inputs.zip=11,571,275字节，CRC及逐项SHA通过；实际清理本任务URL的49项QML/JS缓存1,695,772字节，其余2207项核对。首次删除停在本轮只读日志副本；随后删除两份重复E盘文件被自动审批拒绝（仅blocked by policy，无具体理由），未绕过，155,115,295字节副本保留。打包脚本一次缩进语法检查失败已修正；对抗复查补齐Windows反斜线路径归一化与4项编译源码集合断言，未改已验产品。
+
 ## 2026-10-07 VFG本地候选交付完成
 
 - 最终归档源码e18942096bb65789a1701f0468acdc64f1be415e，candidate-final构建20.312秒exit0，EXE仍c007c7fc9072a6114eb2479b1880b65f5386a5fd445e6c58513faf3c1328a2b2；仅整理文档/验收脚本，产品与全部已测编译输入一致。
