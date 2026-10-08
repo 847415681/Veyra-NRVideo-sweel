@@ -8759,3 +8759,16 @@ High5总18.74ms/GPU67.8%同样绿但仅33fps，已大量reduced/seed/skip；完�
 分析命令Python -B scripts/acceptance/vfg-diagnosis-report.py，只读原始日志重算analysis.json。prepare早期utf8-sig编码名失败，改utf-8-sig后成功，失败时未建app/基线；分析初次假定所有admission都有admittedPairs而KeyError，后修缺字段及行尾解释重复key覆盖实际值，重算JSON。没有将这些脚本失败当产品错误或通过证据。audit核对全部其他工作树及原发布包/五VFG DLL未变；Python AST、git diff --check及25组最终收据保存verify/vfg-diagnosis-20261007/final.json。自查不冒称独立Reviewer。
 
 本轮产物统一E:/项目/Veyra/{archives,tests,logs,tmp,verify}/vfg-diagnosis-20261007；保留一份私有app、25组配置与必要日志用于后续A/B，未删其他文件、未重复旧被拒清理操作。本轮只完成排查，产品优化尚未实施，未验证全屏/其他GPU驱动/采集串流/全片长稳/物理显示时序。
+
+
+## 2026-10-08 当前 VFG 修复本地合并与项目存储清理
+
+用户要求先把当前修复合入 main，再排查/清理项目磁盘占用。先完整核对当前规则/规格/对应 VFG 方案及交付回执，执行 vfg-next-control.py：26 scope/34 其它工作树/3691 原件通过；main 干净且为 96a7c8de。独立 audit.py snapshot 固定35工作树/495脏文件/原引用/磁盘，dirty-files.zip 56,409,855字节，start SHA258ad5e5c4ff7fb67d2fceb73a744cce3bc1c9737a2d6d68f20190b783fa8834。保留前后checkpoint，git merge --ff-only codex/vfg-next-20261007 成功到71723e0；Git产品树无差异。当前构建重新运行VFG设置353检查0失败，不宣称重新编译。
+
+产物统一 E:/项目/Veyra/{archives,reports,logs,tests,tmp}/project-cleanup-20261008。audit.py scan before-fixed/after 按os.stat真实ID/硬链接与GetCompressedFileSize核对，均0读取错误/408 reparse跳过；E项目逻辑572.085→193.111GiB，唯一文件存储估计367.196→183.249GiB。清单经整文件SHA相等、父链/绝对路径/mtime/大小/进程/CRC预检；原生execute-cleanup.ps1 -Execute 删除56889重复文件和48旧CMake目录，0失败。逻辑删除407252006243字节不冒充实际收益；删除阶段E卷实际空闲753861038080→950880223232，回收197019185152字节/183.488GiB。整轮包含新增归档与扫描后净增约183.084GiB。
+
+先封存2190旧产品EXE/构建参数/源码片段，old-build-inputs-and-binaries.zip 244941265字节，CRC/每文件SHA通过。旧测试私有payload只删完全重复文件，658 donor保留并最终全SHA核对；普通日志/配置/唯一EXE/QML/脚本/媒体保持，性能RGBA重复抓帧有原路径→donor/SHA映射。保留2.0.6双显卡完整包、最新VFG候选/对应源码、当前可用构建，57发行归档/二进制身份和587编译输入核对通过。旧临时app不再直接可运行，历史guard复跑须先恢复清单或建立新任务独立基线，未改旧guard/start。
+
+post-cleanup-smoke.py 从现有完整候选直接启动，独立profile/log/cache，不新复制整app；原GTA4K+原版1080NR+VFG4+普通档，21.485秒exit0，26包内Qt/codec模块、有效NR/VFG、无错误、前后全部manifest通过。只是清理后功能验证，不报新性能收益/AMD实卡/长稳。
+
+失败保留：首次DirEntry.stat返回零身份导致唯一分配无效，重新有效扫描；早期planner目录匹配过慢于任何归档/清单/删除前终止，索引优化后重跑；保护检查发现main十文件CRLF与候选LF，逐字节规范化及Git树核对，仅行尾不同，候选原SHA保持。报告详列。最终只提交AGENTS/方案/报告/WORKLOG；其他工作树/未提交字节与原引用按独立audit核对，源码/运行库隔离保持。没有push/Release/关机，显存增长未在本轮修复。
