@@ -8779,3 +8779,10 @@ post-cleanup-smoke.py 从现有完整候选直接启动，独立profile/log/cach
 ## 2026-10-08 桌面项目追加清理
 
 用户要求清理桌面 Veyra 项目。独立 start/dirty 备份及 scan before→prepare→PowerShell 预检/-Execute→verify→scan after；8 旧构建 + 旧 1.2.0 解压目录、14,841 历史 logs 先 lossless 去重归档 E 盘，合计移除 17,395 文件路径/9 目录，零失败。C 卷实际增加 7.328 GiB，E 归档/扫描等约成本 2.105 GiB，两卷整轮净增约 5.046 GiB；桌面项目 19.631→12.267 GiB。35 工作树/495 脏文件、66,680 保留文件 SHA/ID/mtime、57 归档/二进制、587 编译输入及上轮 658 donor 通过，当前 VFG Ninja -n exit0；没有重编译或新 GPU 性能/播放测试。旧 ZIP 新增启动日志导致第一次准备停下，无删除；另行 lossless 保存后核对。新产物 E:/项目/Veyra/{archives,reports,logs}/desktop-cleanup-20261008，报告 docs/DESKTOP_STORAGE_CLEANUP_2026-10-08.md。不改产品或其它桌面文件，不 push/Release/关机，未重试上轮被拒绝的 E temp 删除。
+# 2026-10-08 NVIDIA 显存现场诊断包
+
+用户要求给显存泄漏用户使用的诊断包。独立 codex/nv-vram-field-20261008 / dbfceab，产品原文件不改；诊断头+构建生成3个覆盖对象，在同2.0.6/VFG基底查询 LOCAL/NON_LOCAL、部分图/NR纹理和上传缓冲最终COM生命周期、窗口/DPI及外部WDDM/进程/实际模块身份。每2/5秒低频，不回读像素、不加压、不改SDK/驱动、不推测driver归属。启动器白名单私有配置、同PID直到用户退出、自动摘要和证据ZIP，异常可恢复打包；凭据/媒体/profile/tmp/dmp不进入返回ZIP。根因未找到/未修复，Qt/decoder/SDK内部未完整覆盖，原显存看门狗保持。
+
+实际命令：build-diagnostic.py 编译三对象+GUI重链接 exit0，原缓存和产品输入SHA不变；run-field.py final-exe-nr-stop-powershell51 97.875秒exit0，RTX5070原版NR1080/NVOF/窗口→全屏→关NR→停止；DXGI92条0失败、27有效WDDM、同PID7012、停止后36条segment记录，135资源创建/135最终销毁ID配对、存活0；原配置和1614母包文件SHA不变，凭据哨兵未复制/入ZIP。只是短测，没有复现长稳泄漏或量化性能开销。check-tools.py PS5.1解析/缺数据/连续标记段/恢复打包/隐私通过；package.py ZIP与内层源码CRC/每文件SHA通过；git diff --check和audit-state.py check保护36原工作树/495脏文件通过。失败：首轮继承PS7模块路径导致PS5.1 Get-FileHash不可用，启动前失败后显式加载宿主模块；初版NVOF验证器频道误匹配修正；补最终释放/DPI采样后重编重测最终EXE，原失败证据保留。
+
+产物 E:/项目/Veyra/{reports,tests,logs,tmp,test-packages}/nv-vram-field-20261008，只保留一共享硬链接app、独立profile和必要证据；未重试旧被拒清理。交付ZIP Veyra-2.0.6-NVIDIA-VRAM-diagnostic.zip 78,606,236字节、SHA92a2a807202489a023a884c9fab998bd1f6d177e056e3b0ae7c04c06d832775d，EXE7519d7e864cfcf7cff9ef27ecff2a584d2a685175bc3cc5c6a18ea68e0c9f04b；包内有对应源码和补充诊断代码，无DLL/模型/SDK。详见docs/NV_VRAM_FIELD_REPORT_2026-10-08.md。不合并main、不push/Release、不代发文件、不关机。下一步受影响用户实际复现后返回同PID原始CSV/JSONL/日志，不能承诺一轮诊断包必然确定所有者。
