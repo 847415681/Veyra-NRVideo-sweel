@@ -8774,3 +8774,8 @@ High5总18.74ms/GPU67.8%同样绿但仅33fps，已大量reduced/seed/skip；完�
 post-cleanup-smoke.py 从现有完整候选直接启动，独立profile/log/cache，不新复制整app；原GTA4K+原版1080NR+VFG4+普通档，21.485秒exit0，26包内Qt/codec模块、有效NR/VFG、无错误、前后全部manifest通过。只是清理后功能验证，不报新性能收益/AMD实卡/长稳。
 
 失败保留：首次DirEntry.stat返回零身份导致唯一分配无效，重新有效扫描；早期planner目录匹配过慢于任何归档/清单/删除前终止，索引优化后重跑；保护检查发现main十文件CRLF与候选LF，逐字节规范化及Git树核对，仅行尾不同，候选原SHA保持。报告详列。最终只提交AGENTS/方案/报告/WORKLOG；其他工作树/未提交字节与原引用按独立audit核对，源码/运行库隔离保持。没有push/Release/关机，显存增长未在本轮修复。
+
+
+## 2026-10-08 桌面项目追加清理
+
+用户要求清理桌面 Veyra 项目。独立 start/dirty 备份及 scan before→prepare→PowerShell 预检/-Execute→verify→scan after；8 旧构建 + 旧 1.2.0 解压目录、14,841 历史 logs 先 lossless 去重归档 E 盘，合计移除 17,395 文件路径/9 目录，零失败。C 卷实际增加 7.328 GiB，E 归档/扫描等约成本 2.105 GiB，两卷整轮净增约 5.046 GiB；桌面项目 19.631→12.267 GiB。35 工作树/495 脏文件、66,680 保留文件 SHA/ID/mtime、57 归档/二进制、587 编译输入及上轮 658 donor 通过，当前 VFG Ninja -n exit0；没有重编译或新 GPU 性能/播放测试。旧 ZIP 新增启动日志导致第一次准备停下，无删除；另行 lossless 保存后核对。新产物 E:/项目/Veyra/{archives,reports,logs}/desktop-cleanup-20261008，报告 docs/DESKTOP_STORAGE_CLEANUP_2026-10-08.md。不改产品或其它桌面文件，不 push/Release/关机，未重试上轮被拒绝的 E temp 删除。

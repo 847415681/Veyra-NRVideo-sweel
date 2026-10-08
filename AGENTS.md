@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-08 桌面项目清理追加授权**：用户要求“桌面这个也清一清”，仅处理桌面 Veyra 项目的忽略产物。按 docs/DESKTOP_STORAGE_CLEANUP_2026-10-08.md，历史 logs lossless 去重归档 E 盘后移除桌面副本，8 套旧 CMake 构建保留 EXE/配置/源码片段后清缓存，旧 1.2.0 解压副本与原 ZIP/额外日志归档核对后移除；35 工作树、495 脏文件及 66,680 个保留文件哈希通过。保留 out/remoteplay 当前依赖、out 内工作树、SDK/runtime/素材及 .git，不涉及桌面其它文件。不改历史 guard/start，不改产品、不 push/Release/关机；C 回收与 E 归档成本分别报告。
+
 > **2026-10-08 本地合并与项目清理授权**：用户要求把当前修复合入 main，然后排查并清理项目磁盘占用。已验 VFG 71723e0 从 main 96a7c8de 快进合并；按 docs/PROJECT_STORAGE_CLEANUP_PLAN_2026-10-08.md 盘点并删除经清单核实的过时可重建构建、私有测试 app/缓存、冗余解压副本。此授权覆盖这些产物的历史保留限制，不改历史 guard/start 基线，不删除工作树、源码、未提交修改、依赖/SDK/运行库原件、用户素材或正式发布 ZIP/对应源码。独立 start/495 份脏文件备份在 E:/项目/Veyra/archives/project-cleanup-20261008；按硬链接身份及实际磁盘空间分别报告。保留当前可用构建、2.0.6 两显卡包与最新 VFG 候选、必要日志/验收记录。不派 Agent、不改产品实现或用户配置、不 push/Release/关机。
 
 > **2026-10-07 VFG继续优化授权**：用户要求继续尝试VFG优化。按docs/VFG_NEXT_PLAN_2026-10-07.md从正式2.0.6后main 96a7c8de在E盘codex/vfg-next-20261007隔离实施VFG必要互操作/提交/专属排队预算及定向测试、本地候选；覆盖对应旧冻结。先运行vfg-next-control.py，独立start/bundle保护34工作树、495脏文件和3691项原件，不改旧guard。其它补帧/NR/时钟/显示策略不动，DLL/模型原字节；不派Agent/压力竞争、不改用户配置/驱动，不merge/push/Release/关机。测试≤300秒、构建≤900秒、产物全E盘。
