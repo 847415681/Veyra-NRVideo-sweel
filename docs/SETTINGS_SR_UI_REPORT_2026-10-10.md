@@ -57,7 +57,7 @@ UI 已说明 RTX Video SR 的原尺寸修复与 DLSS/FSR 放大的区别。视�
 | CMake 原生/no-SDK 配置及实际对象编译 | 同脚本 `cmake-check`；`build-20261010-015524/receipt.json` | 两种驱动对象和新集成测试对象成功 |
 | 定向完整回归 | `settings-sr-ui-test.py sr presenter slider menu components lifecycle video rollback`；`tests-20261010-014713/receipt.json` | 8 组成功；回退/暂停/恢复/停止/4X/来源新鲜度覆盖 |
 | 最终呈现及实际视频 | 同脚本 `presenter video`；`tests-20261010-015303/receipt.json` | 成功，兼容复制开/关、HDR/SDR 中心像素和 8 次真实视频切换 |
-| GTA6 实际画面超分 | 同脚本 `sr-gta`；`tests-20261010-013544/receipt.json` | 原生4K及2K→4K、三后端输出检查通过 |
+| GTA6 实际画面超分 | 同批脚本 `sr-gta video rollback` 中的 `sr-gta`；`tests-20261010-013544/receipt.json` | SR 子用例通过；该批次总结果失败，回退问题修复后在014713通过 |
 | 旧 HDR/采集颜色/格式回归 | 同脚本 `hdr color formats`；`tests-20261010-014401/receipt.json` | 全部 exit 0，无颜色/格式失败 |
 | 真实多语言界面 | `settings-sr-ui-gui-test.py`；`gui-20261010-014928/receipt.json` | 5 组通过，无 QML 错误 |
 | 最终 SR 合同与输出 | 同脚本 `sr`；`tests-20261010-015539/receipt.json` | 12 组合同及实际 GPU 输出通过 |
