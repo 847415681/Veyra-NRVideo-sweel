@@ -20,6 +20,7 @@ Rectangle {
     // Windowed 极简: a drag on the pill's empty space moves the window, like a title bar.
     signal requestMove()
     signal requestHide()
+    signal requestPlaylist()
     // Set on the fullscreen bar: shows the lock button.
     property bool fullscreen: false
     // Set by FullscreenBar so upward menus stop above the playback pill.
@@ -113,6 +114,12 @@ Rectangle {
                     font.pixelSize: 11
                     elide: Text.ElideRight
                 }
+            }
+            VButton {
+                objectName: "cine-playlist"
+                icon: true; iconName: "list"; tip: qsTr("播放列表")
+                implicitWidth: 32; implicitHeight: 32
+                onClicked: bar.requestPlaylist()
             }
         }
 

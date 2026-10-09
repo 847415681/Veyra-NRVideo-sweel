@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-09 PR31 与播放列表授权**：用户要求处理 PR31 / issue21，播放列表采用文件夹导入、极简底栏按钮、可移动缩放浮窗、拖动排序/单项移除/名称排序/追加拖入/正在播放标记。按 docs/PR31_PLAYLIST_PLAN_2026-10-09.md 在 codex/pr31-playlist-20261009 隔离接入 PR31 的采集音频输出切换修复及必要 UI 模型/bridge/QML/构建/翻译/定向验收；这些具体接点覆盖旧冻结。基于已验字幕分支27cf4b4；独立 start/bundle 保护40既有工作树/495脏文件。产物全E盘、不制作测试包、不派Agent、不改驱动/用户配置/运行库原件。只做本次局部修改，不推进其它增强算法；本轮不发布、关机。每项测试≤300秒，构建≤900秒，当前主线及其它工作树不动。
+
 > **2026-10-09 字幕格式修复授权**：用户要求修复PGS/SUP不显示并检查其它字幕格式，确认多位其他用户的内嵌PGS轨道显示不可用。按docs/SUBTITLE_FORMATS_PLAN_2026-10-09.md从main 0e7018ad在E盘codex/subtitle-formats-20261009隔离排查/修复共享字幕解码/加载/字幕层和必要bridge/菜单/翻译及定向验收，这些具体接点覆盖历史冻结。独立start/bundle保护39既有工作树/495脏文件；main与其它工作树保持，不改旧guard。所有产物E盘；原runtime/模型/SDK字节不变、不进Git；允许针对已复现的Matroska压缩PGS缺口，在E盘另行构建同版本patched FFmpeg，仅启用现有静态zlib、保留PS5 slices256/dav1d/原解码能力并记录对应源码/许可证/实际配置，不覆盖原件。此为字幕修复必要接点，不改proprietary运行库。不派Agent/造压，不改用户配置/驱动，无新merge/push/Release/版本更新/关机授权。现场视频未提供，不以公开样本冒充反馈者全部通过。
 
 > **2026-10-09 HDR 补帧开关与 main 整合授权**：用户先要求将目前修复合入 main，再明确 HDR 补帧兼容必须改为设置页开关、默认关闭。按 docs/HDR_FG_COMPAT_TOGGLE_PLAN_2026-10-09.md 在当前 FG 隔离工作树修改必要呈现设置/bridge/QML/翻译及定向验收，覆盖这些接点的历史冻结。通过后允许本地 commit/checkpoint/main 合并 BMD、HDR 开关和对应诊断脚本/记录；不 push/Release/更新版本/关机，不派 Agent、不造压、不改运行库/模型/驱动/用户配置。39 工作树、495 脏文件按 archives/hdr-fg-toggle-20261009/start.json 保护，旧 guard/start 不改，产物全 E 盘；测试≤300秒、构建≤900秒。HDR 现场根因、5090 复测及 BMD 实卡/延迟仍未确认，不把兼容候选或开关测试冒充根治。

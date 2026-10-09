@@ -1,0 +1,137 @@
+#include "veyra/ui/PlaylistModel.h"
+#include <QDir>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QDragMoveEvent>
+#include <QFile>
+#include <QFileInfo>
+#include <QGuiApplication>
+#include <QMimeData>
+#include <QQmlComponent>
+#include <QQmlEngine>
+#include <QQmlContext>
+#include <QQuickItem>
+#include <QQuickWindow>
+#include <QTest>
+#include <QUrl>
+#include <cstdio>
+#include <memory>
+
+namespace {
+int assertions = 0, failures = 0;
+QStringList warnings;
+void messages(QtMsgType type, const QMessageLogContext&, const QString& message) {
+    if (type == QtWarningMsg || type == QtCriticalMsg || type == QtFatalMsg) warnings << message;
+    std::fprintf(stderr, "%s\n", message.toUtf8().constData());
+}
+void check(bool condition, const char* message) {
+    ++assertions; std::printf("%s %s\n", condition ? "PASS" : "FAIL", message);
+    if (!condition) ++failures;
+}
+QQuickItem* find(QQuickItem* item, const QString& name) {
+    if (item->objectName() == name) return item;
+    for (auto* child : item->childItems()) if (auto* found = find(child, name)) return found;
+    return nullptr;
+}
+QPoint point(QQuickItem* item) { return item->mapToScene(QPointF(item->width()/2, item->height()/2)).toPoint(); }
+bool click(QQuickWindow* win, const char* name, bool twice = false) {
+    auto* item = find(win->contentItem(), QString::fromUtf8(name));
+    if (!item) { check(false, name); return false; }
+    if (twice) QTest::mouseDClick(win, Qt::LeftButton, Qt::NoModifier, point(item));
+    else QTest::mouseClick(win, Qt::LeftButton, Qt::NoModifier, point(item));
+    QTest::qWait(80); return true;
+}
+void dropUrls(QQuickWindow* win, const QList<QUrl>& urls) {
+    QMimeData mime; mime.setUrls(urls);
+    QDragEnterEvent enter(QPoint(180, 240), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(win, &enter);
+    check(enter.isAccepted(), "native URL drag accepted");
+    QDragMoveEvent move(QPoint(180, 240), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(win, &move);
+    QDropEvent event(QPointF(180, 240), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(win, &event);
+    check(event.isAccepted(), "native URL drop accepted");
+}
+void drop(QQuickWindow* win, const QString& path) { dropUrls(win, {QUrl::fromLocalFile(path)}); }
+}
+int main(int argc, char** argv) {
+    QGuiApplication app(argc, argv);
+    qInstallMessageHandler(messages);
+    if (argc != 2) return 2;
+    const auto path = QString::fromLocal8Bit(argv[1]);
+    if (!QDir::isAbsolutePath(path) || QFileInfo::exists(path)) return 2;
+    QDir().mkpath(path);
+    for (int i = 1; i <= 12; ++i) { QFile f(path + QString("/file%1.mp4").arg(i)); f.open(QIODevice::WriteOnly); f.write("metadata fixture"); }
+    veyra::ui::PlaylistModel model;
+    model.addPaths({path});
+    for (int i = 0; i < 200 && model.busy(); ++i) QTest::qWait(10);
+    check(model.count() == 12 && !model.busy(), "production model ready");
+    const QString playing = model.pathAt(0);
+    model.setPlayback(playing, "playing");
+    QString requested;
+    QObject::connect(&model, &veyra::ui::PlaylistModel::playRequested, [&](const auto& selected) { requested = selected; });
+    QQmlEngine engine;
+    engine.addImportPath(QString::fromUtf8(VEYRA_QML_DIR));
+    engine.rootContext()->setContextProperty("testPlaylist", &model);
+    QQmlComponent component(&engine);
+    component.setData("import QtQuick\nimport Veyra\nWindow { id: owner; x: 40; y: 40; width: 800; height: 500; visible: true; PlaylistWindow { owner: owner; playlist: testPlaylist } }", QUrl());
+    std::unique_ptr<QObject> object(component.create());
+    if (!object) { std::fprintf(stderr, "%s\n", component.errorString().toUtf8().constData()); return 1; }
+    auto* owner = qobject_cast<QQuickWindow*>(object.get());
+    auto* win = object->findChild<QQuickWindow*>("playlistWindow");
+    check(win && owner && win->transientParent() == owner, "independent window belongs to player");
+    if (!win) return 1;
+    QMetaObject::invokeMethod(win, "open");
+    check(QTest::qWaitForWindowExposed(win), "playlist window opens");
+    QTest::qWait(250);
+    auto* badge = find(win->contentItem(), "playlist-state-0");
+    check(badge && badge->property("text").toString() == QString::fromUtf8("正在播放"), "real model state shown in row");
+    auto* grip = find(win->contentItem(), "playlist-grip-0");
+    auto* row2 = find(win->contentItem(), "playlist-row-2");
+    if (grip && row2) {
+        const auto first = point(grip), destination = QPoint(first.x(), point(row2).y());
+        QTest::mousePress(win, Qt::LeftButton, Qt::NoModifier, first);
+        QTest::mouseMove(win, destination, 100);
+        QTest::mouseRelease(win, Qt::LeftButton, Qt::NoModifier, destination);
+        QTest::qWait(100);
+        check(model.currentIndex() == 2 && model.pathAt(2) == playing, "mouse drag reorders while current file follows");
+    } else check(false, "visible drag handles");
+    model.setPlayback(playing, "paused"); QTest::qWait(50);
+    badge = find(win->contentItem(), "playlist-state-2");
+    check(badge && badge->property("text").toString() == QString::fromUtf8("已暂停"), "paused badge changes without replacing playlist");
+    click(win, "playlist-select-1", true);
+    check(veyra::ui::PlaylistModel::normalizedPath(requested) == model.pathAt(1), "double click emits playback request");
+    const auto removed = model.pathAt(1); click(win, "playlist-remove-1");
+    check(model.count() == 11 && QFileInfo::exists(removed), "remove button only removes list item");
+    requested.clear();
+    QDir().mkpath(path + "/追加"); QFile extra(path + "/追加/added.mkv"); extra.open(QIODevice::WriteOnly); extra.write("new"); extra.close();
+    drop(win, path + "/追加");
+    QTest::qWait(20);
+    for (int i = 0; i < 200 && model.busy(); ++i) QTest::qWait(10);
+    std::printf("DROP count=%d current=%d requested=%s status=%s\n", model.count(), model.currentIndex(), requested.toUtf8().constData(), model.status().toUtf8().constData());
+    check(model.count() == 12 && requested.isEmpty() && model.pathAt(model.currentIndex()) == playing, "folder drop appends while playback selection stays");
+    QDir().mkpath(path + "/outside");
+    for (const auto& name : {"one.mp4", "two.mkv", "three.mp4"}) {
+        QFile file(path + "/outside/" + name); file.open(QIODevice::WriteOnly); file.write("file drop fixture");
+    }
+    dropUrls(win, {QUrl::fromLocalFile(path + "/outside/one.mp4"), QUrl::fromLocalFile(path + "/outside/two.mkv")});
+    QTest::qWait(20); for (int i = 0; i < 200 && model.busy(); ++i) QTest::qWait(10);
+    check(model.count() == 14 && requested.isEmpty(), "multiple files from another folder append without playback");
+    drop(win, path + "/outside/three.mp4");
+    QTest::qWait(20); for (int i = 0; i < 200 && model.busy(); ++i) QTest::qWait(10);
+    check(model.count() == 15 && requested.isEmpty(), "single file drop in playlist appends instead of switching video");
+    auto* list = find(win->contentItem(), "playlist-list");
+    win->resize(620, 480); win->setPosition(win->x() + 25, win->y() + 30); QTest::qWait(100);
+    check(win->width() == 620 && win->height() == 480 && list && list->width() > 560, "resized layout adapts without clipping controls");
+    check(find(win->contentItem(), "playlist-title-drag") && find(win->contentItem(), "playlist-resize-10"), "system move and corner resize input handles exist");
+    click(win, "playlist-close");
+    check(!win->isVisible() && owner->isVisible(), "close hides playlist without closing player");
+    QMetaObject::invokeMethod(win, "open"); QTest::qWait(100);
+    check(win->isVisible() && win->width() == 620 && win->height() == 480, "reopen preserves window size");
+    check(warnings.isEmpty(), "no QML binding/import/runtime warnings");
+    win->grabWindow().save(path + "/playlist.png");
+    owner->close(); QTest::qWait(100);
+    check(!win->isVisible(), "closing owner also hides playlist");
+    std::printf("%s playlist window assertions=%d\n", failures ? "FAIL" : "PASS", assertions);
+    return failures ? 1 : 0;
+}

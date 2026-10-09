@@ -4,6 +4,7 @@
 #include "veyra/ui/EffectAvailability.h"
 #include "veyra/engine/FrameGenerationSelection.h"
 #include "veyra/ui/QmlExportQueueModel.h"
+#include "veyra/ui/PlaylistModel.h"
 #include "veyra/ui/UiLanguage.h"
 #include <QQmlEngine>
 #include <QMetaMethod>
@@ -295,6 +296,9 @@ struct QmlPlayerBridge::Impl {
     QVariantMap anchors;
     // Where the user's own files live (the facade resolves the same default).
     std::filesystem::path dataDir;
+    PlaylistModel* playlist = nullptr;
+    QString playlistPath;
+    uint64_t playlistSession = 0, playlistCompletedSession = 0;
     // --- subtitles (ported from the Win32 shell, same semantics) ---
     std::unique_ptr<engine::SubtitleLoader> subLoader;
     std::unique_ptr<engine::SubtitleLoader> subFileLoader;
@@ -1014,6 +1018,16 @@ QVariantList QmlPlayerBridge::srBackendChoices() const {
 QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesystem::path dataDirectory,
                                 QObject* parent)
     : QObject(parent), impl_(std::make_unique<Impl>(engine, std::move(dataDirectory))) {
+    impl_->playlist = new PlaylistModel(utf8Of((impl_->dataDir / L"playlist.v1.json").wstring()), this);
+    connect(impl_->playlist, &PlaylistModel::playRequested, this, [this](const QString& path) {
+        openPath(path);
+        // Explicit playlist selection starts at the beginning; opening from
+        // recent files retains the existing resume-position preference.
+        impl_->resumeSession = 0;
+    });
+    connect(impl_->playlist, &PlaylistModel::error, this, [this](const QString& text) {
+        veyra::log::warn("playlist", text.toStdString()); emit notice(text, true);
+    });
     connect(this,&QmlPlayerBridge::snapshotChanged,this,
         [this,ceiling=fgMaxMultiplier(),text=fgProviderText()]() mutable {
             const auto nextCeiling=fgMaxMultiplier();const auto nextText=fgProviderText();
@@ -1296,6 +1310,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         // An export in flight needs its own poll; it is a separate job and its
         // snapshot is not part of the player snapshot.
         if (impl_->exportQueue.queue().needsTick()) pollExport();
+        tickPlaylist();
     });
     impl_->timer->start(16);
     startGpuSampler();
@@ -4823,8 +4838,67 @@ void QmlPlayerBridge::openFileDialog() {
 }
 int QmlPlayerBridge::thumbnailGeneration() const { return impl_->thumbnailGeneration; }
 
+QObject* QmlPlayerBridge::playlist() const { return impl_->playlist; }
+void QmlPlayerBridge::showPlaylist() { emit playlistRequested(); }
+void QmlPlayerBridge::addPlaylistFilesDialog() {
+    const auto paths = QFileDialog::getOpenFileNames(nullptr, tr("添加文件到播放列表"), {},
+        tr("媒体文件 (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts *.mts *.m4v *.wmv *.mpg *.mpeg *.vob *.flv *.ogv *.asf *.3gp *.jpg *.jpeg *.png *.bmp *.webp);;所有文件 (*)"));
+    if (!paths.isEmpty()) { impl_->playlist->addPaths(paths); emit playlistRequested(); }
+}
+void QmlPlayerBridge::addPlaylistFolderDialog() {
+    const auto path = QFileDialog::getExistingDirectory(nullptr, tr("导入文件夹到播放列表"));
+    if (!path.isEmpty()) { impl_->playlist->addPaths({path}); emit playlistRequested(); }
+}
+void QmlPlayerBridge::openDroppedUrls(const QList<QUrl>& urls) {
+    // A single file on the video retains drag-to-open. Folder/multi-file drops
+    // append to the playlist; dropping inside PlaylistWindow always appends.
+    if (urls.size() == 1) {
+        const QUrl url = urls.front();
+        if (url.isLocalFile() && !QFileInfo(url.toLocalFile()).isDir()) { openUrl(url); return; }
+    }
+    impl_->playlist->addUrls(urls);
+    emit playlistRequested();
+}
+void QmlPlayerBridge::tickPlaylist() {
+    const auto& s = impl_->snapshot;
+    using T = engine::TransportState;
+    if (!impl_->playlistSession) return;
+    if (!impl_->liveKind.isEmpty() || utf8Of(impl_->sourceLabel) != impl_->playlistPath) {
+        impl_->playlistSession = 0; impl_->playlist->setPlayback({}, {}); return;
+    }
+    if (s.sessionId != impl_->playlistSession) return; // Ignore old session snapshots after open.
+    if (s.capture || s.remotePlay) { impl_->playlistSession = 0; impl_->playlist->setPlayback({}, {}); return; }
+    QString state = QStringLiteral("stopped");
+    switch (s.transport) {
+    case T::Opening: state = QStringLiteral("opening"); break;
+    case T::Playing: state = s.image ? QStringLiteral("image") : QStringLiteral("playing"); break;
+    case T::Paused: state = QStringLiteral("paused"); break;
+    case T::Ended: state = QStringLiteral("ended"); break;
+    case T::Failed: state = QStringLiteral("failed"); break;
+    default: break;
+    }
+    impl_->playlist->setPlayback(impl_->playlistPath, state);
+    if (s.transport != T::Ended || s.failed || s.image || impl_->openingSource ||
+        impl_->playlistCompletedSession == s.sessionId) return;
+    impl_->playlistCompletedSession = s.sessionId;
+    // Wait for this GUI tick to finish, then recheck the engine session. A stop,
+    // new file, or live source selected in between must cancel auto-advance.
+    QTimer::singleShot(0, this, [this, session = s.sessionId] {
+        const auto latest = impl_->engine.snapshot();
+        if (impl_->playlistSession == session && latest.sessionId == session &&
+            latest.transport == T::Ended && !latest.failed && !latest.image && impl_->liveKind.isEmpty())
+            impl_->playlist->advanceAfterEnd();
+    });
+}
+
 void QmlPlayerBridge::openPath(const QString& path) {
     if (path.isEmpty()) return;
+    if (QFileInfo(path).isDir()) {
+        impl_->playlist->addPaths({path}); emit playlistRequested(); return;
+    }
+    if (PlaylistModel::supported(path) && !impl_->playlist->containsPath(path)) impl_->playlist->addPaths({path});
+    impl_->playlistPath = path;
+    impl_->playlist->setPlayback(path, QStringLiteral("opening"));
     rememberPosition(true);
     impl_->exportQueue.setSelectedId(0);
     ++impl_->liveOpenGen; impl_->pendingLiveText.clear();   // a waiting live open is dropped
@@ -4858,6 +4932,7 @@ void QmlPlayerBridge::openPath(const QString& path) {
     options.hardwareDecodeOnly = impl_->prefString("decode") == QLatin1String("hardware");
     impl_->engine.open(impl_->videoWindow, wide, options);
     impl_->openingSessionId = impl_->engine.snapshot().sessionId;
+    impl_->playlistSession = impl_->openingSessionId;
     impl_->resumeSession = 0;
     if ((impl_->prefBool("rememberPosition", true)||impl_->prefBool("autoResume",false))) {
         const auto saved = impl_->prefs.value("positions").toMap().value(path).toMap();
@@ -4893,6 +4968,8 @@ void QmlPlayerBridge::togglePlayPause() {
     veyra::log::info("ui-transport", pause ? "pause" : "resume");
 }
 void QmlPlayerBridge::stopPlayback() {
+    impl_->playlistSession = 0;
+    impl_->playlist->setPlayback(impl_->playlistPath, QStringLiteral("stopped"));
     rememberPosition(true);
     ++impl_->liveOpenGen; impl_->pendingLiveText.clear();
     impl_->openingSource = false;

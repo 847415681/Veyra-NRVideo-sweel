@@ -883,6 +883,7 @@ endif()
 # never depend on Qt being installed.
 if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   add_library(veyra_qml_bridge STATIC src/ui/QmlExportQueueModel.cpp include/veyra/ui/QmlExportQueueModel.h src/ui/QmlPlayerBridge.cpp src/ui/ThumbnailProvider.cpp
+    src/ui/PlaylistModel.cpp include/veyra/ui/PlaylistModel.h
     include/veyra/ui/QmlPlayerBridge.h include/veyra/ui/ThumbnailProvider.h
     # P4-c: the existing subtitle renderer, reused as-is (no second renderer).
     apps/veyra/ui/SubtitleOverlay.cpp)
@@ -936,6 +937,21 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # piece of the old shell worth keeping, and its own dialog is what users
   # expect from a desktop app. No QWidget UI is created.
   target_link_libraries(veyra_qml_bridge PUBLIC veyra_engine Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Widgets)
+  add_executable(veyra_playlist_tests tests/unit/PlaylistModelTests.cpp src/ui/PlaylistModel.cpp include/veyra/ui/PlaylistModel.h)
+  set_target_properties(veyra_playlist_tests PROPERTIES AUTOMOC ON)
+  target_compile_features(veyra_playlist_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_playlist_tests PRIVATE /utf-8)
+  target_include_directories(veyra_playlist_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(veyra_playlist_tests PRIVATE Qt6::Core)
+  find_package(Qt6 COMPONENTS Test)
+  if(TARGET Qt6::Test)
+    add_executable(veyra_playlist_window_tests tests/qml/PlaylistWindowTests.cpp)
+    target_compile_features(veyra_playlist_window_tests PRIVATE cxx_std_20)
+    target_compile_options(veyra_playlist_window_tests PRIVATE /utf-8)
+    target_include_directories(veyra_playlist_window_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_compile_definitions(veyra_playlist_window_tests PRIVATE VEYRA_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml")
+    target_link_libraries(veyra_playlist_window_tests PRIVATE veyra_qml_bridge Qt6::Test)
+  endif()
   # VEYRA_DISPLAY_VERSION is the human-readable version the app reports; it is
   # the same value the resource file uses, so the UI cannot drift from it.
   target_compile_definitions(veyra_qml_bridge PRIVATE VEYRA_DISPLAY_VERSION="${VEYRA_DISPLAY_VERSION}")

@@ -14456,6 +14456,293 @@
    "zh-TW": "文字字幕超過 16 MiB 上限",
    "en": "Text subtitles exceed the 16 MiB limit",
    "ja": "テキスト字幕が 16 MiB の上限を超えています"
+  },
+  {
+   "zh": "%1 项",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "%1 項",
+   "en": "%1 items",
+   "ja": "%1 件"
+  },
+  {
+   "zh": "上一项",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "上一項",
+   "en": "Previous item",
+   "ja": "前の項目"
+  },
+  {
+   "zh": "下一项",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "下一項",
+   "en": "Next item",
+   "ja": "次の項目"
+  },
+  {
+   "zh": "仅清空列表，不删除硬盘文件",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "僅清空清單，不刪除硬碟檔案",
+   "en": "Clear playlist; keep files on disk",
+   "ja": "リストのみクリア。ファイルは削除しません"
+  },
+  {
+   "zh": "从列表移除，不删除文件",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "從清單移除，不刪除檔案",
+   "en": "Remove from playlist; keep file",
+   "ja": "リストから削除。ファイルは保持します"
+  },
+  {
+   "zh": "修改时间：新 → 旧",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "修改時間：新 → 舊",
+   "en": "Modified: newest first",
+   "ja": "更新日時：新しい順"
+  },
+  {
+   "zh": "修改时间：旧 → 新",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "修改時間：舊 → 新",
+   "en": "Modified: oldest first",
+   "ja": "更新日時：古い順"
+  },
+  {
+   "zh": "列表或导入任务已达上限，请稍后重试或移除部分条目",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "清單或匯入工作已達上限，請稍後重試或移除部分項目",
+   "en": "Playlist or import queue is full. Try later or remove some items.",
+   "ja": "リストまたは追加待ちが上限に達しました。後で再試行するか、項目を削除してください。"
+  },
+  {
+   "zh": "名称 A → Z",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "名稱 A → Z",
+   "en": "Name A → Z",
+   "ja": "名前 A → Z"
+  },
+  {
+   "zh": "名称 Z → A",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "名稱 Z → A",
+   "en": "Name Z → A",
+   "ja": "名前 Z → A"
+  },
+  {
+   "zh": "媒体文件 (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts *.mts *.m4v *.wmv *.mpg *.mpeg *.vob *.flv *.ogv *.asf *.3gp *.jpg *.jpeg *.png *.bmp *.webp);;所有文件 (*)",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "媒體檔案 (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts *.mts *.m4v *.wmv *.mpg *.mpeg *.vob *.flv *.ogv *.asf *.3gp *.jpg *.jpeg *.png *.bmp *.webp);;所有檔案 (*)",
+   "en": "Media files (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts *.mts *.m4v *.wmv *.mpg *.mpeg *.vob *.flv *.ogv *.asf *.3gp *.jpg *.jpeg *.png *.bmp *.webp);;All files (*)",
+   "ja": "メディアファイル (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts *.mts *.m4v *.wmv *.mpg *.mpeg *.vob *.flv *.ogv *.asf *.3gp *.jpg *.jpeg *.png *.bmp *.webp);;すべてのファイル (*)"
+  },
+  {
+   "zh": "定位正在播放的文件",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "定位正在播放的檔案",
+   "en": "Show current file",
+   "ja": "再生中のファイルを表示"
+  },
+  {
+   "zh": "导入文件夹",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "匯入資料夾",
+   "en": "Import folder",
+   "ja": "フォルダーを追加"
+  },
+  {
+   "zh": "导入文件夹到播放列表",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "匯入資料夾至播放清單",
+   "en": "Import folder into playlist",
+   "ja": "プレイリストにフォルダーを追加"
+  },
+  {
+   "zh": "导入文件夹，或将文件 / 文件夹拖到这里\n支持子文件夹 · 双击播放 · 拖动左侧手柄调整顺序",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "匯入資料夾，或將檔案 / 資料夾拖到這裡\n支援子資料夾 · 按兩下播放 · 拖曳左側把手調整順序",
+   "en": "Import a folder, or drop files / folders here\nIncludes subfolders · Double-click to play · Drag the left handle to reorder",
+   "ja": "フォルダーを追加するか、ファイル / フォルダーをドロップ\nサブフォルダー対応 · ダブルクリックで再生 · 左のハンドルで並べ替え"
+  },
+  {
+   "zh": "已停止",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "已停止",
+   "en": "Stopped",
+   "ja": "停止中"
+  },
+  {
+   "zh": "已播完",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "已播完",
+   "en": "Finished",
+   "ja": "再生終了"
+  },
+  {
+   "zh": "已添加 %1 项 · 列表共 %2 项",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "已新增 %1 項 · 清單共 %2 項",
+   "en": "Added %1 items · %2 total",
+   "ja": "%1 件追加 · 合計 %2 件"
+  },
+  {
+   "zh": "已达到导入上限（最多10000项），其余文件未添加",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "已達到匯入上限（最多10000項），其餘檔案未新增",
+   "en": "Import limit reached (10,000 items). Remaining files were not added.",
+   "ja": "追加の上限（10,000 件）に達しました。残りのファイルは追加されていません。"
+  },
+  {
+   "zh": "手动顺序",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "手動順序",
+   "en": "Custom order",
+   "ja": "手動の順序"
+  },
+  {
+   "zh": "拖入只追加列表，不打断当前播放",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "拖入僅追加清單，不中斷目前播放",
+   "en": "Drops append without interrupting playback",
+   "ja": "追加しても現在の再生は中断しません"
+  },
+  {
+   "zh": "播完后播放下一项",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "播完後播放下一項",
+   "en": "Play next when finished",
+   "ja": "終了後に次の項目を再生"
+  },
+  {
+   "zh": "播放列表",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "播放清單",
+   "en": "Playlist",
+   "ja": "プレイリスト"
+  },
+  {
+   "zh": "播放列表 · 导入文件夹",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "播放清單 · 匯入資料夾",
+   "en": "Playlist · Import folder",
+   "ja": "プレイリスト · フォルダーを追加"
+  },
+  {
+   "zh": "播放列表保存失败：%1",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "播放清單儲存失敗：%1",
+   "en": "Could not save playlist: %1",
+   "ja": "プレイリストを保存できません：%1"
+  },
+  {
+   "zh": "播放列表文件损坏，已使用空列表",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "播放清單檔案損壞，已使用空清單",
+   "en": "Playlist file is damaged; using an empty list.",
+   "ja": "プレイリストが破損しているため、空のリストを使用します。"
+  },
+  {
+   "zh": "播放列表文件无法读取，已使用空列表",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "播放清單檔案無法讀取，已使用空清單",
+   "en": "Could not read playlist; using an empty list.",
+   "ja": "プレイリストを読み込めないため、空のリストを使用します。"
+  },
+  {
+   "zh": "播放失败",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "播放失敗",
+   "en": "Playback failed",
+   "ja": "再生に失敗"
+  },
+  {
+   "zh": "文件不存在或已移动：%1",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "檔案不存在或已移動：%1",
+   "en": "File missing or moved: %1",
+   "ja": "ファイルが見つからないか移動されています：%1"
+  },
+  {
+   "zh": "文件大小：大 → 小",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "檔案大小：大 → 小",
+   "en": "Size: largest first",
+   "ja": "サイズ：大きい順"
+  },
+  {
+   "zh": "文件大小：小 → 大",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "檔案大小：小 → 大",
+   "en": "Size: smallest first",
+   "ja": "サイズ：小さい順"
+  },
+  {
+   "zh": "未添加新条目：文件已在列表中，或没有支持的媒体文件",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "未新增項目：檔案已在清單中，或沒有支援的媒體檔案",
+   "en": "No new items: files are already listed or no supported media was found.",
+   "ja": "新しい項目はありません。登録済みか、対応するメディアが見つかりませんでした。"
+  },
+  {
+   "zh": "松开以追加到播放列表",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "放開以追加至播放清單",
+   "en": "Drop to append to playlist",
+   "ja": "ドロップしてプレイリストに追加"
+  },
+  {
+   "zh": "正在打开",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "正在開啟",
+   "en": "Opening",
+   "ja": "読み込み中"
+  },
+  {
+   "zh": "正在扫描文件夹…",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "正在掃描資料夾…",
+   "en": "Scanning folders…",
+   "ja": "フォルダーをスキャン中…"
+  },
+  {
+   "zh": "正在播放",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "正在播放",
+   "en": "Playing",
+   "ja": "再生中"
+  },
+  {
+   "zh": "正在查看",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "正在檢視",
+   "en": "Viewing",
+   "ja": "表示中"
+  },
+  {
+   "zh": "添加文件",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "新增檔案",
+   "en": "Add files",
+   "ja": "ファイルを追加"
+  },
+  {
+   "zh": "添加文件到播放列表",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "新增檔案至播放清單",
+   "en": "Add files to playlist",
+   "ja": "プレイリストにファイルを追加"
+  },
+  {
+   "zh": "排序",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "排序",
+   "en": "Sort",
+   "ja": "並べ替え"
+  },
+  {
+   "zh": "关闭窗口",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "關閉視窗",
+   "en": "Close window",
+   "ja": "ウィンドウを閉じる"
   }
  ]
 }

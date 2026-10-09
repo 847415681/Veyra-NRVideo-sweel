@@ -8914,3 +8914,17 @@ documented user-data was migrated, with a separate rollback copy; the
 complete official application remains available. Public contribution is
 source/test/documentation only, with no user data, endpoint IDs, logs,
 media, SDK files or runtime binaries.
+
+## 2026-10-09 PR31 / issue21 播放列表（本机后续实施）
+
+用户要求处理PR31与issue21，追加文件夹导入、极简底栏入口、自由移动缩放浮窗、拖动排序/移除/名称排序/继续拖入与正在播放标记；沿用此前“不用打测试包”。本段是本机执行结果，上面的PR作者历史记录不作为本机硬件证据。
+
+- 工作树 `E:/项目/Veyra/worktrees/pr31-playlist-20261009`，分支 `codex/pr31-playlist-20261009`，基线27cf4b4（含上一轮已验字幕修复）。不可变存档 `E:/项目/Veyra/archives/pr31-playlist-20261009/start.json` 与 `source-before.bundle`，保护40原工作树/495脏文件；main保留0e7018ad。计划与报告：`docs/PR31_PLAYLIST_PLAN_2026-10-09.md` / `docs/PR31_PLAYLIST_REPORT_2026-10-09.md`。
+- PR31原提交a0a3c098d72bb24bb46ffbadaa86fa8c5258e684，保留作者接入为51591bc。WORKLOG仅追加冲突，双方记录均保留。代码观察采集音频renderer端点generation失效并沿原音频线程恢复流程重开。
+- 新生产PlaylistModel负责后台元数据导入、自然名称/时间/大小排序、稳定路径身份、重排/去重/仅移除清单、原子持久化及有界取消。PlaylistWindow为原生owned工具窗口，ListView虚拟化，系统移动/八方向缩放API、双击播放、上/下一项/定位、拖放追加、自动续播开关；首页与极简/全屏底栏接入。共享原openPath与真实TransportState/sessionId，未改解码/NR/补帧/导出算法。
+- `py -3.11 -B scripts/acceptance/pr31-playlist-build.py`：当前GUI与3个测试程序构建成功，28.406秒；回执 `E:/项目/Veyra/logs/pr31-playlist-20261009/build-20261009-143504/receipt.json`。两个Q_OBJECT重新生成；保留全部当前HDR/BMD/字幕对象及已验zlib版同版本FFmpeg，不写旧缓存。GUI SHA256 `5155C55D52B33BC445F5B61F2D872EEA9D41A57614B5DB9CAC1DC26E43123810`。
+- `py -3.11 -B scripts/acceptance/pr31-playlist-test.py`：7项全部exit0；回执 `E:/项目/Veyra/logs/pr31-playlist-20261009/tests-20261009-143640/receipt.json`。生产模型1642断言（含fixture与逐行一致检查），321文件导入提交0ms、后台扫描11ms、导入期间UI计时器继续运行；Qt窗口23检查，包括真实鼠标重排/双击/移除及原生URL文件夹/多文件/单文件追加。真实静音WASAPI A→B→A→默认/重复同设备、端点丢失、慢启动、瞬态及Xbox float/RTP回归均通过；未改Windows默认端点。
+- `py -3.11 -B scripts/acceptance/pr31-playlist-gui-test.py all`：当前GUI actual bridge四用例通过，36项检查。回执在同一logs目录的 `gui-functional-20261009-143727` / `gui-next-20261009-143733` / `gui-english-20261009-143740` / `gui-empty-20261009-143746`。验证追加不改视频/进度/暂停、重排/移除不误标、真实结束只推进一次、手动停止不续播、空片源入口与英文；私有配置/硬链接app，原便携包1614文件每次前后SHA不变。
+- 翻译 `py -3.11 -B scripts/i18n/extract.py --check`：placeholder问题0。新增41个来源键全部有繁中/英文/日文；全项目30个遗留缺译与基线相同，未顺手扩改。
+- 排查修正：Git autocrlf来源只允许在原件回执SHA匹配且规范换行内容完全相等时复用；测试宿主C++/QML Window类型不匹配改为真实QML宿主；拖放QVariantList没有添加条目改为明确QList<QUrl>并原生事件回归；移除后的过期总数摘要清除，异常JSON数值安全读取。初次失败日志保留，均未当成通过。
+- 产物：`E:/项目/Veyra/{build,tests,logs,tmp,reports,archives}/pr31-playlist-20261009`；同名受控目录，无测试包/整工程备份，无运行库字节改动或二进制入Git。实体采集卡换输出、OS持续拖动/多显示器/DPI与全部媒体未实测；不宣称全设备通过。本轮未修改main、推送、关闭远端PR/issue、发布、关机或派Agent。
