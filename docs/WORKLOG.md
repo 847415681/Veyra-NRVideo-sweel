@@ -8869,3 +8869,48 @@ py -3.11 -B E:/项目/Veyra/reports/subtitle-formats-20261009/video-smoke.py：H
 打包与收尾命令 py -3.11 -B E:/项目/Veyra/reports/subtitle-formats-20261009/package-overlay.py、py -3.11 -B scripts/acceptance/subtitle-formats-control.py final。覆盖包/source两个内层ZIP CRC及逐文件SHA核对，源码排除既有两个MP4宣传文件与一个旧pyc，不移除仓库原文件。候选不替换原完整package-manifest，另附subtitle-fix-manifest.json列明变更。单份共享app恢复最终EXE/新FFmpeg/原Main.qml，母包1614文件SHA保持。提交仅本轮23个白名单源码/文档/脚本，main与39原树保持；独立checkpoint与source-after.bundle在archives目录，未冒称独立Reviewer。
 
 用户随后明确“不用打测试包”。立即停止后续打包与测试包交付；此前已经生成的73,394,839字节覆盖ZIP仅为内部中间证据，不作为交付物，未覆盖用户播放器。产品提交 a29243c1753ca75a63ad1d9e7051ff35178f9a11 已完成，之后只修改方案/报告/本记录中的交付决定，不重跑已通过测试或改动产品。当前交付为代码与排查结果；main仍为0e7018ad，未合并/推送/发布。最终保全重新核对并记入reports/.../final.json。
+
+## 2026-10-09 Capture audio output switching
+
+User report: selecting a new output during capture required an application
+restart. Required behavior also includes following Windows output changes
+when system default is selected. Isolated from main 96a7c8d on
+`fix/capture-audio-output-switch`, with original source copies, runtime,
+user-data backup, native dependencies and logs retained outside Git. Scope
+and validation are in CAPTURE_AUDIO_ENDPOINT_SWITCH_PLAN_2026-10-09.md.
+
+The preference setter already advances the endpoint generation; default
+device notifications already invalidate AudioRenderer. CaptureAudioSession
+did not poll lastError(), while event waits and buffer writes could still
+succeed on the old endpoint. Added that poll on the capture audio owner and
+reused its existing bounded recovery. No video graph, SDK or runtime changes.
+
+Added `veyra_capture_audio_tests --endpoint-switch`: continuous muted real
+WASAPI PCM, actual opened A -> B -> A, no reopen for the same preference,
+and selecting system default in the same session. Fewer than two active
+outputs returns explicit skip 77. Unmodified owner failed A -> B; fixed
+product test passed all phases, 221 input blocks, 10 ms buffered at the
+same-endpoint check. Existing --endpoint-loss, --slow-start and --transient
+checks passed. MSVC 14.44 / Windows SDK 10.0.26100 / Qt 6.8.3 Release product
+and integration targets built successfully; git diff --check passed. Each
+test stayed below 300 seconds and each build below 900 seconds. The final
+test's first launch lacked the portable FFmpeg DLL search path and exited
+0xC0000135; rerun with the official package on child-process PATH passed.
+
+Live side-by-side candidate: NS2 3840x2160/60 MJPEG + WASAPI input, explicit
+output changes took 0.526/0.515 seconds without restarting the process or
+capture input. The user selected system default and changed the Windows
+default output; notification-to-open was 0.517 seconds, preference remained
+system default. One capture configuration and one input start across these
+changes; 60 real frames/s and XeSS 240 SDK submissions/s continued. These
+are local API/log observations, not panel scanout or physical speaker
+measurement. User initially reported no USB-speaker sound, then reported
+that a manual retry seemed to work. No claim of measured audible latency.
+
+The local candidate reuses official 2.0.6 runtime files and has only its
+player executable replaced. Its build disables PS5/Moonlight/Xbox source
+modules and libass; those paths and other hardware were not verified. Only
+documented user-data was migrated, with a separate rollback copy; the
+complete official application remains available. Public contribution is
+source/test/documentation only, with no user data, endpoint IDs, logs,
+media, SDK files or runtime binaries.
