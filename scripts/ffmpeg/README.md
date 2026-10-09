@@ -12,3 +12,14 @@ The H.264 D3D12 backend uses `MAX_SLICES` from `libavcodec/h264dec.h` for its fi
 6. Build and run `veyra_hw_import_image_tests <1080p H.264 file> <image-prefix>`, HDR color tests, and the opt-in `veyra_ps5_hw_image_tests --last-paired-ps5 <image-prefix>`. The latter briefly connects the last DPAPI-saved PS5 and compares software/hardware decoding of the **same** compressed AU; never package its images or private logs.
 
 For a later release, pass the actual Veyra-patched source directory to `scripts/package-ffmpeg-source.py`; the stock vcpkg source directory must be rejected when the local-build record is present. Include the resulting corresponding-source archive, original licenses, original vcpkg SPDX (baseline provenance), and the extra Veyra build record. No FFmpeg DLL or copied dependency source is committed to Veyra Git.
+
+For the 2026-10-09 compressed-subtitle repair, additionally pass `--zlib-prefix`
+to `prepare-slice-build.py`. This changes only `--disable-zlib` to
+`--enable-zlib`, using the existing static zlib 1.3.2 built with `/MD` and its
+pkg-config metadata. Preserve dav1d's `PKG_CONFIG_PATH` in the child process.
+The original MinGW pkg-config corrupts non-ASCII include paths on this machine;
+an explicitly supplied E-drive junction alias is preserved by the helper. All
+physical build/install/temp outputs remain under `E:/项目/Veyra/`.
+Supply `--zlib-source` when packaging the corresponding source, and include
+`share/zlib` notices/provenance. The baseline vcpkg FFmpeg SPDX identifies the
+base port; the new `veyra-local-build.json` identifies the actual rebuilt DLLs.

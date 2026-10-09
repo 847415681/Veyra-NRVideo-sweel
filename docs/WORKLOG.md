@@ -8847,3 +8847,23 @@ package-field.py交付test-packages/fg-source-flash-20261008/Veyra-2.0.6-black-f
 实际命令：build-diagnostic.py 编译三对象+GUI重链接 exit0，原缓存和产品输入SHA不变；run-field.py final-exe-nr-stop-powershell51 97.875秒exit0，RTX5070原版NR1080/NVOF/窗口→全屏→关NR→停止；DXGI92条0失败、27有效WDDM、同PID7012、停止后36条segment记录，135资源创建/135最终销毁ID配对、存活0；原配置和1614母包文件SHA不变，凭据哨兵未复制/入ZIP。只是短测，没有复现长稳泄漏或量化性能开销。check-tools.py PS5.1解析/缺数据/连续标记段/恢复打包/隐私通过；package.py ZIP与内层源码CRC/每文件SHA通过；git diff --check和audit-state.py check保护36原工作树/495脏文件通过。失败：首轮继承PS7模块路径导致PS5.1 Get-FileHash不可用，启动前失败后显式加载宿主模块；初版NVOF验证器频道误匹配修正；补最终释放/DPI采样后重编重测最终EXE，原失败证据保留。
 
 产物 E:/项目/Veyra/{reports,tests,logs,tmp,test-packages}/nv-vram-field-20261008，只保留一共享硬链接app、独立profile和必要证据；未重试旧被拒清理。交付ZIP Veyra-2.0.6-NVIDIA-VRAM-diagnostic.zip 78,606,236字节、SHA92a2a807202489a023a884c9fab998bd1f6d177e056e3b0ae7c04c06d832775d，EXE7519d7e864cfcf7cff9ef27ecff2a584d2a685175bc3cc5c6a18ea68e0c9f04b；包内有对应源码和补充诊断代码，无DLL/模型/SDK。详见docs/NV_VRAM_FIELD_REPORT_2026-10-08.md。不合并main、不push/Release、不代发文件、不关机。下一步受影响用户实际复现后返回同PID原始CSV/JSONL/日志，不能承诺一轮诊断包必然确定所有者。
+
+## 2026-10-09 PGS / SUP 与字幕格式修复
+
+用户要求修复内嵌 PGS 标不可用并支持更多字幕格式，确认是其他用户多份片源；本机无失败原片/现场日志。基线 main 0e7018ad，隔离 codex/subtitle-formats-20261009 / E:/项目/Veyra/worktrees/subtitle-formats-20261009。39 既有工作树/495 脏文件先固定，source-before.bundle 通过验证。本轮仅共享字幕/菜单/bridge/翻译、必要 FFmpeg 构建和打包接点，没有子 Agent、main 合并、推送、Release、版本号更新或关机。
+
+实证：原产品 FFmpeg 具备 PGS decoder，却 --disable-zlib；公开 supsample.mkv 在同一旧 probe EXE 上，原 DLL 为 Unsupported encoding type / 轨道存在但 0 cue，独立重建 zlib-enabled DLL 后变 1 cue、1.001–9.009 秒可用，未压缩对照均正常。py -3.11 -B E:/项目/Veyra/reports/subtitle-formats-20261009/pgs-ab.py 保存 logs/.../pgs-ab-20261009-134011/receipt.json 及原始输出/输入 SHA。只证明此类压缩封装缺口，不推断所有反馈者相同。
+
+修复外挂 SUP/PGS 二进制读取、VobSub IDX+SUB 全语言、PGS BlockDuration 截止、加载状态/每轨错误诊断，接通常见 MicroDVD/SubViewer/SBV/SAMI/MPL2/Spruce STL，同名外挂自动发现。手动外挂异步可取消、坏文件保留现有轨道，主副延时/选择与 ASS 样式保持。保留 64MiB/120000 cue 与文本 16MiB 限制；二进制 SUB 先规范化 IDX 再检查，防止绕过索引大小限制。没有增加像素回读/fence 等待或改 NR/FG/导出。
+
+命令 py -3.11 -B E:/项目/Veyra/reports/subtitle-formats-20261009/build-ffmpeg.py，独立新 prefix deps/ffmpeg-subtitle-formats-20261009/installed，仅启用静态 zlib1.3.2 /MD，保留 n9.0.1 slices256/dav1d1.5.4/LGPL。270.48秒 exit0，原 patched 树/输入库/旧 DLL 全 SHA 保持，logs/.../ffmpeg-build-20261009-131500/receipt.json。中文路径首次 configure 失败改显式 junction 后成功，失败保留。prepare-slice-build.py 与 package-ffmpeg-source.py 支持 zlib；QML 打包拒旧无 zlib prefix，新6DLL通过，reports/.../package-ffmpeg-audit.json。对应 FFmpeg/dav1d/zlib 源码 ZIP SHA49db22049f072bd5448faa664aa736074dccfe6e72b4a933f673d8ae954b0bb6，CRC通过，未入 Git。
+
+py -3.11 -B scripts/tests/make-subtitle-format-fixtures.py --output E:/项目/Veyra/tests/subtitle-formats-20261009/formats --dvd-fixture E:/项目/Veyra/tests/5060-presets-subtitles-20260918/bitmap-dvd.mkv；py -3.11 -B scripts/acceptance/subtitle-formats-build.py 最终 logs/.../build-20261009-133206/receipt.json，验证当前 main 覆盖对象与原缓存输入 SHA，GUI+5测试可构建。py -3.11 -B scripts/acceptance/subtitle-formats-test.py 最终 tests-20261009-133424 全部 exit0，322格式+28原生字幕层像素+5文本+21PGS+16DVD+21DVB =413断言，异步加载另外通过。独立五轨 zlib PGS 与未压缩逐像素一致、BlockDuration/clear/seek/缩放/透明度/主副/错误/取消覆盖。首次 MPL2 探测误判和 fixture 期望轨数问题修正后重测，原失败保留。
+
+py -3.11 -B scripts/acceptance/subtitle-formats-gui-test.py 依次 embedded / external / sidecar / english，最终 EXE SHA3be70422720f22272ff39eac6b79ddd837892b5923972ea0b4442ebe30d6f99b；四组 exit0，无错误，记录 gui-embedded-20261009-133438 / gui-external-20261009-133515 / gui-sidecar-20261009-133543 / gui-english-20261009-133622。共享单一硬链接 app/独立 profile/temp，1614母包文件 SHA 每组保持，Main.qml 测试 timer 收尾还原，原偏好不动。QML抓图只证实菜单，真实位图显示由原生产品 overlay DIB 像素断言验证。
+
+py -3.11 -B E:/项目/Veyra/reports/subtitle-formats-20261009/video-smoke.py：H264原GTA6 4K D3D12 350提交/HEVC4K D3D11 180/180到EOS均 exit0/无ERROR；AV1 4K 12秒只提交4帧，不记通过。追加 --case av1-4k --reference-ffmpeg 以及 --reference-app 两组，原 DLL/原 EXE 同样卡住，三组 logs/.../video-20261009-133700 / 133833 / 133918。只排除这是新 FFmpeg 特有回归，未定位/修复该已有 AV1 播放问题。
+
+产物统一 E:/项目/Veyra/{reports,build,tests,logs,tmp,downloads,test-packages,archives}/subtitle-formats-20261009；本地交付 Veyra-2.0.6-subtitle-fix-overlay.zip，含 EXE+FFmpeg+所需QML/许可证/对应源码，需完整覆盖2.0.6，单换EXE无效。详细边界见 docs/SUBTITLE_FORMATS_REPORT_2026-10-09.md；远端原片/全片大量PGS/AMD/Intel/HDR尚未验收，不宣称所有用户根治。不重试被拒的历史清理，保留一共享app、当前构建及必要证据；最终 manifest / 源码提交 / 保全回执见 reports/.../final.json。
+
+打包与收尾命令 py -3.11 -B E:/项目/Veyra/reports/subtitle-formats-20261009/package-overlay.py、py -3.11 -B scripts/acceptance/subtitle-formats-control.py final。覆盖包/source两个内层ZIP CRC及逐文件SHA核对，源码排除既有两个MP4宣传文件与一个旧pyc，不移除仓库原文件。候选不替换原完整package-manifest，另附subtitle-fix-manifest.json列明变更。单份共享app恢复最终EXE/新FFmpeg/原Main.qml，母包1614文件SHA保持。提交仅本轮23个白名单源码/文档/脚本，main与39原树保持；独立checkpoint与source-after.bundle在archives目录，未冒称独立Reviewer。

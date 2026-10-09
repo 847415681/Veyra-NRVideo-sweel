@@ -1284,7 +1284,7 @@ Item {
         DGroup {
             VRow {
                 label: qsTr("主字幕")
-                hint: veyra.subtitleTracks.length === 0 ? (veyra.hasSource ? qsTr("当前片源没有字幕") : qsTr("打开视频后显示可用字幕")) : ""
+                hint: veyra.subtitleTracks.length === 0 ? (veyra.subtitleStatus.length > 0 ? veyra.subtitleStatus : (veyra.hasSource ? qsTr("当前片源没有字幕") : qsTr("打开视频后显示可用字幕"))) : ""
                 VSelect {
                     objectName: "subtitle-primary"
                     implicitWidth: 220
@@ -1306,7 +1306,7 @@ Item {
             }
             VRow {
                 label: qsTr("外挂字幕")
-                hint: "SRT / ASS / SSA / WebVTT"
+                hint: qsTr("文本字幕 · PGS/SUP · VobSub（IDX+SUB）")
                 VButton { objectName: "subtitle-load"; text: qsTr("加载文件…"); onClicked: veyra.loadSubtitleDialog() }
             }
             VRow {

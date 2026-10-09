@@ -297,6 +297,9 @@ struct QmlPlayerBridge::Impl {
     std::filesystem::path dataDir;
     // --- subtitles (ported from the Win32 shell, same semantics) ---
     std::unique_ptr<engine::SubtitleLoader> subLoader;
+    std::unique_ptr<engine::SubtitleLoader> subFileLoader;
+    uint64_t subFileGeneration = 0;
+    std::wstring subFilePath;
     uint64_t subGeneration = 0;
     std::vector<engine::SubtitleTrack> subTracks;   // external files first, then the loader's
     size_t subExternal = 0;                          // user-loaded files at the front
@@ -3514,7 +3517,9 @@ void QmlPlayerBridge::refreshSubtitles(const std::wstring& media) {
     auto& i = *impl_;
     i.subTracks.clear(); i.subExternal = i.subLoaded = 0;
     i.subPrimary = i.subSecondary = -1; i.subPrimaryChosen = i.subSecondaryChosen = false;
-    i.subStatus.clear(); i.subMedia = media;
+    i.subStatus=QFileInfo(QString::fromStdWString(media)).isFile()?tr("正在读取字幕"):QString{}; i.subMedia = media;
+    if(i.subFileLoader)i.subFileGeneration=i.subFileLoader->requestFile(L"");
+    i.subFilePath.clear();
     if (i.subAlignWorker.joinable()) { i.subAlignWorker.request_stop(); i.subAlignWorker = {}; }
     i.subAligning = false; i.subAlignReady = false;
     if (!i.subLoader) i.subLoader = std::make_unique<engine::SubtitleLoader>();
@@ -3535,6 +3540,7 @@ void QmlPlayerBridge::tickSubtitles() {
             i.subTracks.insert(i.subTracks.begin() + std::ptrdiff_t(i.subExternal),
                                std::make_move_iterator(result->tracks.begin()), std::make_move_iterator(result->tracks.end()));
             i.subLoaded = count;
+            if(result->complete&&i.subStatus==tr("正在读取字幕"))i.subStatus.clear();
             int firstUsable = -1, firstChinese = -1;
             for (size_t k = 0; k < i.subTracks.size(); ++k) {
                 if (!i.subTracks[k].usable()) continue;
@@ -3555,6 +3561,30 @@ void QmlPlayerBridge::tickSubtitles() {
                         t.embedded ? 1 : 0, t.cues.size(), t.usable() ? 1 : 0));
             veyra::log::info("subtitle", std::format("tracks={} primary={} secondary={}", i.subTracks.size(), i.subPrimary, i.subSecondary));
             changed = true;
+        }
+    }
+    if(i.subFileLoader){
+        if(auto result=i.subFileLoader->poll();result&&result->generation==i.subFileGeneration&&result->complete&&!i.subFilePath.empty()){
+            const auto file=QFileInfo(QString::fromStdWString(i.subFilePath)).fileName();
+            i.subFilePath.clear();
+            const bool usable=std::any_of(result->tracks.begin(),result->tracks.end(),[](const auto& t){return t.usable();});
+            if(!usable){
+                const auto detail=result->tracks.empty()?tr("文件格式不支持、数据损坏或没有字幕内容"):uiText(result->tracks.front().note);
+                i.subStatus=tr("外部字幕加载失败：%1 · %2").arg(file,detail);
+                emit notice(i.subStatus,true);
+            }else{
+                const int added=int(result->tracks.size());
+                int first=0;
+                while(!result->tracks[size_t(first)].usable())++first;
+                i.subTracks.insert(i.subTracks.begin(),std::make_move_iterator(result->tracks.begin()),std::make_move_iterator(result->tracks.end()));
+                i.subExternal+=size_t(added);
+                if(i.subSecondary>=0)i.subSecondary+=added;
+                if(i.subAlignTrack>=0)i.subAlignTrack+=added;
+                i.subPrimary=first;i.subPrimaryChosen=true;
+                i.subStatus=tr("已加载外部字幕：%1").arg(file);
+                veyra::log::info("subtitle",std::format("external loaded tracks={} file={}",added,file.toStdString()));
+            }
+            changed=true;
         }
     }
     if (i.subAlignReady.exchange(false) && i.subAlignGeneration == i.subGeneration &&
@@ -3656,7 +3686,8 @@ QVariantList QmlPlayerBridge::subtitleTracks() const {
         if (label.isEmpty()) label = tr("字幕 %1").arg(k + 1);
         QString note = t.embedded ? tr("内嵌") : tr("外挂");
         if (!t.codec.empty()) note += QStringLiteral(" · ") + QString::fromStdWString(t.codec).toUpper();
-        if (!t.usable()) note += QStringLiteral(" · ") + (t.note.empty() ? tr("不可用") : QString::fromStdWString(t.note));
+        if (!t.note.empty()) note += QStringLiteral(" · ") + uiText(t.note);
+        else if(!t.usable()) note += QStringLiteral(" · ") + tr("未解码出可显示的字幕");
         out << QVariantMap{{"index", int(k)}, {"label", label}, {"note", note}, {"usable", t.usable()},
                            {"embedded", t.embedded}, {"cues", int(t.cues.size())}, {"offsetMs", t.offsetMs}};
     }
@@ -3711,27 +3742,18 @@ void QmlPlayerBridge::setSubtitleBottomInset(int value) {
 void QmlPlayerBridge::loadSubtitleDialog() {
     const QString start = impl_->subMedia.empty() ? QString() : QFileInfo(QString::fromStdWString(impl_->subMedia)).absolutePath();
     const QString path = QFileDialog::getOpenFileName(nullptr, tr("加载外部字幕"), start,
-        tr("字幕文件 (*.srt *.ass *.ssa *.vtt);;所有文件 (*.*)"));
+        tr("字幕文件 (*.srt *.ass *.ssa *.vtt *.sup *.pgs *.idx *.sub *.smi *.sami *.sbv *.mpl *.stl *.txt);;所有文件 (*.*)"));
     if (!path.isEmpty()) loadSubtitleFile(path);
 }
 bool QmlPlayerBridge::loadSubtitleFile(const QString& path) {
-    engine::SubtitleTrack track;
-    try { track = engine::loadSubtitleFile(wideOf(path)); } catch (...) {}
-    if (!track.usable()) {
-        veyra::log::warn("subtitle", "external file has no usable cues path=" + path.toStdString());
-        emit notice(tr("字幕文件无法读取或没有字幕内容：%1").arg(QFileInfo(path).fileName()), true);
+    if(!QFileInfo(path).isFile()){
+        emit notice(tr("字幕文件不存在或无法读取"),true);
         return false;
     }
-    if (track.name.empty()) track.name = QFileInfo(path).fileName().toStdWString();
-    impl_->subTracks.insert(impl_->subTracks.begin(), std::move(track));
-    ++impl_->subExternal;
-    if (impl_->subPrimary >= 0) ++impl_->subPrimary;
-    if (impl_->subSecondary >= 0) ++impl_->subSecondary;
-    if (impl_->subAlignTrack >= 0) ++impl_->subAlignTrack;
-    impl_->subPrimary = 0; impl_->subPrimaryChosen = true;
-    if (impl_->subSecondary == 0) impl_->subSecondary = -1;
-    impl_->subStatus = tr("已加载外部字幕：%1").arg(QFileInfo(path).fileName());
-    veyra::log::info("subtitle", std::format("external loaded cues={} path={}", impl_->subTracks.front().cues.size(), path.toStdString()));
+    if(!impl_->subFileLoader)impl_->subFileLoader=std::make_unique<engine::SubtitleLoader>();
+    impl_->subFilePath=wideOf(path);
+    impl_->subFileGeneration=impl_->subFileLoader->requestFile(impl_->subFilePath);
+    impl_->subStatus=tr("正在加载外部字幕：%1").arg(QFileInfo(path).fileName());
     emit subtitlesChanged();
     return true;
 }

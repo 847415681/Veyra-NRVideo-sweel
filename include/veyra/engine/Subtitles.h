@@ -1,7 +1,7 @@
 #pragma once
 
-// Subtitle engine: external text formats (SRT/ASS/SSA/WebVTT), subtitle tracks
-// embedded in the media container, including FFmpeg-decoded PGS/DVD/DVB images.
+// Shared text and bitmap subtitle loading, including external SUP/VobSub and
+// container tracks. Bitmap subtitles retain their authored canvas and palette.
 #include <string>
 #include <vector>
 #include <functional>
@@ -77,6 +77,10 @@ struct SubtitleTrack {
 
 // Format is chosen from the file extension first, then sniffed from content.
 SubtitleTrack loadSubtitleFile(const std::wstring& path);
+// External files may contain several languages (VobSub IDX/SUB). Uses the same
+// cancellable FFmpeg path as embedded subtitles; never reads bitmap data as text.
+std::vector<SubtitleTrack> loadExternalSubtitleTracks(const std::wstring& path,std::stop_token stop={},
+    const std::function<void(const std::vector<SubtitleTrack>&)>& metadata={});
 
 // Subtitle tracks inside the container (Matroska/MP4/...).
 std::vector<SubtitleTrack> loadEmbeddedSubtitleTracks(const std::wstring& path,std::stop_token stop={},
@@ -90,8 +94,10 @@ public:
     SubtitleLoader();
     ~SubtitleLoader();
     uint64_t request(std::wstring path);
+    uint64_t requestFile(std::wstring path);
     std::optional<Result> poll();
 private:
+    uint64_t request(std::wstring path,bool external);
     struct Impl;
     std::unique_ptr<Impl> p_;
 };

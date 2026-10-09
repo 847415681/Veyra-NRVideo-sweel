@@ -1,5 +1,17 @@
 # Third-party dependencies
 
+## Compressed Matroska subtitles (2026-10-09)
+
+The subtitle candidate rebuilds the existing LGPL FFmpeg n9.0.1 with zlib
+enabled, retaining the Veyra PS5 H.264 slices256 patch and dav1d 1.5.4.
+It statically links zlib 1.3.2 (zlib license; Jean-loup Gailly, Mark Adler and
+contributors), using the existing external dependency built with the dynamic
+MSVC CRT. FFmpeg handles compressed Matroska PGS/DVD and text subtitle packets;
+Veyra does not implement another decompressor. The original runtime files are
+preserved. Candidate DLL hashes, actual configuration, LGPL/zlib notices and
+the matching FFmpeg/dav1d/zlib source archive accompany the local candidate.
+No dependency source, model, SDK, library or DLL is added to Veyra source Git.
+
 NVIDIA SDKs and runtimes are excluded from source control. The publisher-authorized experimental Release package contains only selected runtime DLLs and applicable notices, as documented in `docs/RUNTIME_COMPONENTS_0.0.2.md`. This is not vendor endorsement or a general redistribution grant. ReShade/RenoDX add-ons are not loaded or distributed by the product.
 
 ## NVIDIA Video Frame Generation (local integration, 2026-10-03)

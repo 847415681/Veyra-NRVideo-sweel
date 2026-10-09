@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-09 字幕格式修复授权**：用户要求修复PGS/SUP不显示并检查其它字幕格式，确认多位其他用户的内嵌PGS轨道显示不可用。按docs/SUBTITLE_FORMATS_PLAN_2026-10-09.md从main 0e7018ad在E盘codex/subtitle-formats-20261009隔离排查/修复共享字幕解码/加载/字幕层和必要bridge/菜单/翻译及定向验收，这些具体接点覆盖历史冻结。独立start/bundle保护39既有工作树/495脏文件；main与其它工作树保持，不改旧guard。所有产物E盘；原runtime/模型/SDK字节不变、不进Git；允许针对已复现的Matroska压缩PGS缺口，在E盘另行构建同版本patched FFmpeg，仅启用现有静态zlib、保留PS5 slices256/dav1d/原解码能力并记录对应源码/许可证/实际配置，不覆盖原件。此为字幕修复必要接点，不改proprietary运行库。不派Agent/造压，不改用户配置/驱动，无新merge/push/Release/版本更新/关机授权。现场视频未提供，不以公开样本冒充反馈者全部通过。
+
 > **2026-10-09 HDR 补帧开关与 main 整合授权**：用户先要求将目前修复合入 main，再明确 HDR 补帧兼容必须改为设置页开关、默认关闭。按 docs/HDR_FG_COMPAT_TOGGLE_PLAN_2026-10-09.md 在当前 FG 隔离工作树修改必要呈现设置/bridge/QML/翻译及定向验收，覆盖这些接点的历史冻结。通过后允许本地 commit/checkpoint/main 合并 BMD、HDR 开关和对应诊断脚本/记录；不 push/Release/更新版本/关机，不派 Agent、不造压、不改运行库/模型/驱动/用户配置。39 工作树、495 脏文件按 archives/hdr-fg-toggle-20261009/start.json 保护，旧 guard/start 不改，产物全 E 盘；测试≤300秒、构建≤900秒。HDR 现场根因、5090 复测及 BMD 实卡/延迟仍未确认，不把兼容候选或开关测试冒充根治。
 
 > **2026-10-09 补帧闪黑现场续修**：用户提交诊断ZIP与日志44，反馈诊断不闪、原版闪，授权排查修复并收尾关机。按docs/FG_FLASH_FIX_PLAN_2026-10-09.md，从main dbfceab在E盘codex/fg-flash-fix-20261009隔离实现NVIDIA HDR应用FG最终合成GPU复制候选与定向测试/本地可回退包；这些具体presenter/ABI重编译接点覆盖历史冻结。诊断增加GPU拷贝、改名EXE/私有配置/关QML缓存，不能当根因证明；本机5070未复现5090闪黑，候选现场效果未验，禁止宣称根治。先执行fg-flash-fix-control.py，独立不可变pre-document-state保护37工作树/495脏文件，不改旧guard。不派Agent/竞争压力，不改驱动、DLL/模型、用户配置或其它工作树；无新main合并/push/Release。正常链路不加像素回读/CPU逐帧等待。测试≤300秒、构建≤900秒、产物全E盘；源码、候选、回执保存核对后按用户要求关机，不强制丢弃未保存内容。

@@ -14365,6 +14365,97 @@
    "zh-TW": "OBS、監控軟體相容需重新啟動；HDR 補幀相容可在播放中切換。",
    "en": "OBS and monitoring compatibility require a restart; HDR frame generation compatibility can be switched during playback.",
    "ja": "OBS とモニタリングソフトの互換設定は再起動が必要です。HDR フレーム生成の互換設定は再生中に切り替えられます。"
+  },
+  {
+   "zh": "正在读取字幕",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "正在讀取字幕",
+   "en": "Reading subtitles",
+   "ja": "字幕を読み込み中"
+  },
+  {
+   "zh": "缺少此字幕格式的解码器",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "缺少此字幕格式的解碼器",
+   "en": "Decoder for this subtitle format is unavailable",
+   "ja": "この字幕形式のデコーダーがありません"
+  },
+  {
+   "zh": "字幕数据解码失败（请查看日志）",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "字幕資料解碼失敗（請查看日誌）",
+   "en": "Subtitle decoding failed (see log)",
+   "ja": "字幕のデコードに失敗しました（ログを確認）"
+  },
+  {
+   "zh": "没有读到字幕数据（请检查封装或压缩支持）",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "未讀到字幕資料（請檢查封裝或壓縮支援）",
+   "en": "No subtitle packets read (check container or compression support)",
+   "ja": "字幕データを読み取れません（コンテナまたは圧縮形式を確認）"
+  },
+  {
+   "zh": "未解码出可显示的字幕",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "未解碼出可顯示的字幕",
+   "en": "No displayable subtitles decoded",
+   "ja": "表示できる字幕がありません"
+  },
+  {
+   "zh": "字幕文件不存在或无法读取",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "字幕檔案不存在或無法讀取",
+   "en": "Subtitle file is missing or unreadable",
+   "ja": "字幕ファイルが存在しないか読み取れません"
+  },
+  {
+   "zh": "VobSub 需要同名 .idx 和 .sub 文件，请加载 .idx",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "VobSub 需要同名 .idx 和 .sub 檔案，請載入 .idx",
+   "en": "VobSub requires matching .idx and .sub files; load the .idx file",
+   "ja": "VobSub には同名の .idx と .sub が必要です。.idx を読み込んでください"
+  },
+  {
+   "zh": "文件格式不支持、数据损坏或没有字幕内容",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "檔案格式不支援、資料損壞或沒有字幕內容",
+   "en": "Unsupported format, damaged data, or no subtitle content",
+   "ja": "未対応の形式、破損したデータ、または字幕なし"
+  },
+  {
+   "zh": "外部字幕加载失败：%1 · %2",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "外部字幕載入失敗：%1 · %2",
+   "en": "External subtitle loading failed: %1 · %2",
+   "ja": "外部字幕の読み込みに失敗：%1 · %2"
+  },
+  {
+   "zh": "正在加载外部字幕：%1",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "正在載入外部字幕：%1",
+   "en": "Loading external subtitles: %1",
+   "ja": "外部字幕を読み込み中：%1"
+  },
+  {
+   "zh": "字幕文件 (*.srt *.ass *.ssa *.vtt *.sup *.pgs *.idx *.sub *.smi *.sami *.sbv *.mpl *.stl *.txt);;所有文件 (*.*)",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "字幕檔案 (*.srt *.ass *.ssa *.vtt *.sup *.pgs *.idx *.sub *.smi *.sami *.sbv *.mpl *.stl *.txt);;所有檔案 (*.*)",
+   "en": "Subtitle files (*.srt *.ass *.ssa *.vtt *.sup *.pgs *.idx *.sub *.smi *.sami *.sbv *.mpl *.stl *.txt);;All files (*.*)",
+   "ja": "字幕ファイル (*.srt *.ass *.ssa *.vtt *.sup *.pgs *.idx *.sub *.smi *.sami *.sbv *.mpl *.stl *.txt);;すべてのファイル (*.*)"
+  },
+  {
+   "zh": "文本字幕 · PGS/SUP · VobSub（IDX+SUB）",
+   "src": "qml/Veyra/DialogHost.qml",
+   "zh-TW": "文字字幕 · PGS/SUP · VobSub（IDX+SUB）",
+   "en": "Text · PGS/SUP · VobSub (IDX+SUB)",
+   "ja": "テキスト字幕 · PGS/SUP · VobSub（IDX+SUB）"
+  },
+  {
+   "zh": "文本字幕超过 16 MiB 上限",
+   "src": "src/engine/Subtitles.cpp",
+   "zh-TW": "文字字幕超過 16 MiB 上限",
+   "en": "Text subtitles exceed the 16 MiB limit",
+   "ja": "テキスト字幕が 16 MiB の上限を超えています"
   }
  ]
 }
