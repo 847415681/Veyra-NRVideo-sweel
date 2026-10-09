@@ -11,12 +11,14 @@ extern "C" {
 #include <libavutil/frame.h>
 #include <libavutil/pixfmt.h>
 }
+#include "HdrCopyPresentationFixture.h"
 
 int wmain(int argc,wchar_t** argv){
     using namespace veyra;
     if((argc<2||argc>4)||FAILED(CoInitializeEx(nullptr,COINIT_MULTITHREADED)))return 2;
     const bool displaySync=argc==4&&std::wstring_view(argv[3])==L"display-sync";
-    const bool temporal=argc==4&&!displaySync;
+    const bool hdrCopy=argc==4&&std::wstring_view(argv[3])==L"hdr-copy";
+    const bool temporal=argc==4&&!displaySync&&!hdrCopy;
     const bool exact=temporal&&std::wstring_view(argv[3])==L"temporal-exact";
     if(temporal&&!exact&&std::wstring_view(argv[3])!=L"temporal")return 2;
     const auto runtimePath=argc>=3?std::filesystem::absolute(argv[2]):std::filesystem::path(VEYRA_PROJECT_ROOT)/"runtime_local/nvidia";
@@ -32,6 +34,7 @@ int wmain(int argc,wchar_t** argv){
     if(frame){frame->format=AV_PIX_FMT_RGBA;frame->width=640;frame->height=360;frame->color_range=AVCOL_RANGE_JPEG;frame->color_trc=AVCOL_TRC_IEC61966_2_1;}
     ok=ok&&frame&&av_frame_get_buffer(frame,32)>=0;
     unsigned cycle=0;
+    if(hdrCopy)ok=ok&&hdrCopyPresentation(ctx,ring,window,runtimePath);
     if(displaySync){
         // Real windowed and borderless-fullscreen swapchains, including both
         // latency-queue settings. The runner checks actual Present flags in
@@ -74,7 +77,7 @@ int wmain(int argc,wchar_t** argv){
         }
     }
     for(unsigned multiplier:{4u,6u,4u}){
-        if(temporal||displaySync)break;
+        if(temporal||displaySync||hdrCopy)break;
         if(!ok)break;
         ++cycle;
         pipeline::EnhanceGraphDesc desc;desc.sourceWidth=desc.workWidth=640;desc.sourceHeight=desc.workHeight=360;

@@ -20,6 +20,8 @@ struct PresentationSettings {
     OutputRateMode outputRate=OutputRateMode::Off;
     double customFps=60.0;
     bool fullscreen=false; // transient UI state, never persisted as a preference
+    // Global opt-in compatibility choice; never part of enhancement presets.
+    bool hdrFgCompatibility=false;
     bool operator==(const PresentationSettings&) const = default;
     bool valid()const{return unsigned(mode)<=2&&unsigned(display)<=2&&unsigned(outputRate)<=2&&std::isfinite(customFps)&&customFps>=1.0&&customFps<=1000.0;}
 };

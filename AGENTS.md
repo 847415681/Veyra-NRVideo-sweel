@@ -1,5 +1,9 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-09 HDR 补帧开关与 main 整合授权**：用户先要求将目前修复合入 main，再明确 HDR 补帧兼容必须改为设置页开关、默认关闭。按 docs/HDR_FG_COMPAT_TOGGLE_PLAN_2026-10-09.md 在当前 FG 隔离工作树修改必要呈现设置/bridge/QML/翻译及定向验收，覆盖这些接点的历史冻结。通过后允许本地 commit/checkpoint/main 合并 BMD、HDR 开关和对应诊断脚本/记录；不 push/Release/更新版本/关机，不派 Agent、不造压、不改运行库/模型/驱动/用户配置。39 工作树、495 脏文件按 archives/hdr-fg-toggle-20261009/start.json 保护，旧 guard/start 不改，产物全 E 盘；测试≤300秒、构建≤900秒。HDR 现场根因、5090 复测及 BMD 实卡/延迟仍未确认，不把兼容候选或开关测试冒充根治。
+
+> **2026-10-09 补帧闪黑现场续修**：用户提交诊断ZIP与日志44，反馈诊断不闪、原版闪，授权排查修复并收尾关机。按docs/FG_FLASH_FIX_PLAN_2026-10-09.md，从main dbfceab在E盘codex/fg-flash-fix-20261009隔离实现NVIDIA HDR应用FG最终合成GPU复制候选与定向测试/本地可回退包；这些具体presenter/ABI重编译接点覆盖历史冻结。诊断增加GPU拷贝、改名EXE/私有配置/关QML缓存，不能当根因证明；本机5070未复现5090闪黑，候选现场效果未验，禁止宣称根治。先执行fg-flash-fix-control.py，独立不可变pre-document-state保护37工作树/495脏文件，不改旧guard。不派Agent/竞争压力，不改驱动、DLL/模型、用户配置或其它工作树；无新main合并/push/Release。正常链路不加像素回读/CPU逐帧等待。测试≤300秒、构建≤900秒、产物全E盘；源码、候选、回执保存核对后按用户要求关机，不强制丢弃未保存内容。
+
 > **2026-10-09 BMD 黑屏跟进**：用户提供 veyra-qml(43).log，要求继续修复 2.0.6 未解决的 BMD 黑屏，确认 OBS 两种来源都可出画。按 docs/BLACKMAGIC_FOLLOWUP_PLAN_2026-10-09.md 从 main dbfceab 在 E 盘 codex/blackmagic-followup-20261009 隔离修复必要 DirectShow 接收协商及定向测试/本地候选；这些具体接点覆盖旧冻结。独立 start/bundle 保护38原工作树和495脏文件；旧 guard/start 不改。普通采集、音频、NR/补帧/显示算法、运行库/模型原字节保持；不派 Agent、不改驱动/用户配置/其它工作树。测试≤300秒、构建≤900秒，产物全E盘。无新合并/push/Release/关机授权；BMD 实卡未验不得声称已修好。
 
 > **2026-10-08 桌面项目清理追加授权**：用户要求“桌面这个也清一清”，仅处理桌面 Veyra 项目的忽略产物。按 docs/DESKTOP_STORAGE_CLEANUP_2026-10-08.md，历史 logs lossless 去重归档 E 盘后移除桌面副本，8 套旧 CMake 构建保留 EXE/配置/源码片段后清缓存，旧 1.2.0 解压副本与原 ZIP/额外日志归档核对后移除；35 工作树、495 脏文件及 66,680 个保留文件哈希通过。保留 out/remoteplay 当前依赖、out 内工作树、SDK/runtime/素材及 .git，不涉及桌面其它文件。不改历史 guard/start，不改产品、不 push/Release/关机；C 回收与 E 归档成本分别报告。

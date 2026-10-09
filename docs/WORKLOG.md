@@ -1,5 +1,24 @@
 # WORKLOG
 
+## 2026-10-09 HDR 补帧兼容开关（默认关闭）与 main 整合准备
+
+- 用户要求先将目前修复合入 main，解释 HDR 闪黑候选原因/代价后，明确要求设置页开关、默认关闭。按 HDR_FG_COMPAT_TOGGLE_PLAN_2026-10-09.md，在原 FG 分支实施；独立 start/bundle 保护39工作树/495脏文件，只有 FG 与后续获授权 main 可变，其余37工作树保持。
+- 新全局偏好 hdrFgCompatibility=false；设置→兼容可保存选择，旧配置缺字段关闭。既有 presentation revision 送到 GPU 线程；仅切换时排空队列再创建/释放单张合成纹理，逐帧不增加CPU等待/回读。仅用户开启且 NVIDIA HDR10 应用 FG 适用时复制，4K固定31.875MiB，不改变算法/PTS/倍率/同步。Compatible/Direct诊断入口设置私有偏好，不改用户原配置。
+- hdr-fg-toggle-build.py 最终重编13个受头文件影响的生产消费者与翻译资源并链接GUI，缓存原件SHA不变。GUI8f697594…，fixture更正后native108e827f…。五次QML真实bridge检查默认/保存/重启/旧配置/英文资源/其它显示设置保持通过；稳定截图已查看。HDR DLSS/VFG各512原帧+620生成/94无损检查误差0/D3D12错误0，含反复开关、4K缓冲/窗口/全屏/resize/reset/销毁；SDR4/6/4X与直接路径通过。
+- 已保留构建包装路径/分隔符错误、测试resize尺寸不匹配失败；仅修测试环境，没有将失败冒充产品根因。详细命令/证据/限制见HDR_FG_COMPAT_TOGGLE_REPORT_2026-10-09.md；所有产物E:/项目/Veyra/{build,logs,tests,tmp,reports}/hdr-fg-toggle-20261009。HDR根因/5090反馈、BMD实卡和延迟、NV显存增长仍未确认。本轮不push/Release/更新版本/关机，不派Agent或造压。
+
+## 2026-10-09 HDR补帧闪黑现场续修与本地候选
+
+- 授权：用户反馈诊断版不闪、原版闪，提交flash-diagnostic-20261008-205614-027(1).zip与日志44，要求修复后关机。隔离分支codex/fg-flash-fix-20261009，起点main dbfceabee；没有新merge/push/Release。开工独立reports/fg-flash-fix-20261009/pre-document-state.json保护37个原工作树、495份脏文件。
+- 证据：E盘reports/fg-flash-fix-20261009/analyze-field.py流式分析；ZIP CRC/EXE SHA与原诊断一致。约28.6秒实际采集、3278次Present/9点源与输出均无全黑。最终配置与原版末段对齐：5090/617.42、4K HDR59.94、DLSS2X、AMDflow、NR4K+1440p、源PTS。诊断额外18次GPU像素拷贝、改EXE名、私有配置与关QML缓存皆为混杂变量，根因未确认。
+- 实现：只改VideoPresenter.h/.cpp，NVIDIA HDR10应用FG自动采用单张GPU最终合成纹理→交换链完整复制；原帧与生成帧共用。4K33,423,360字节固定复用；分配失败记录并回退。SDR/AMD/关闭FG/XeSS直接呈现，媒体时序/算法/倍率/同步保持；无像素读回、新CPU等待/睡眠。诊断环境变量可同EXE关闭复制。为类布局重编译3个直接使用者，未改EngineController逻辑。
+- 构建：python -B scripts/acceptance/fg-flash-fix-build.py通过，约25秒；GUI3576fce737fd989396c42be15432e82957f8ef6d21e009854f35baf67dd199fa。之后--tests-only仅重编译测试，GUI不变；原库/GUI/manifest及1614项便携包身份前后SHA不变。
+- 验证：fg-flash-fix-test.py串行native hdr-copy-auto-second、hdr-direct-control、hdr-4k-auto/direct、hdr-4k-measured-copy/direct、hdr-vfg-4k-auto及sdr-normal/sdr-forced-copy通过。HDR每组512原帧/620生成帧、67次窗口无损10位对照误差0、D3D12错误0；4K缓冲/resize/rebuild与双销毁顺序通过，非4K物理显示验收。SDR4/6/4X生成114/190/114，误差0。早期一次缺shader测试环境与一次optional计时编译失败已修复，原失败日志保留；计时收集未启用的两组不作为性能数据，随后重跑。
+- GTA6源14,115,273,308字节/SHA93db6129…，只读不复制。原程序名/开启缓存、4K输入1080原版NR、DLSS2X复制与直接各40秒启动窗口通过；跳源0、开场生成帧过期各1、播放速率1.000。稳定1秒窗口P95中位数合成0.039/0.034ms、NR6.599/6.736ms，不把NR波动当收益；VFG2X30秒回归通过，643生成呈现/跳源0。普通日志与回执在logs/fg-flash-fix-20261009，性能汇总reports同任务目录。
+- 现场启动器Start-HDR-Flash-Fix.ps1保持veyra_qml_ui.exe名字/路径，不改缓存开关，Compatible/Direct复制同一原设置到私有目录。Windows PowerShell继承模块路径缺Get-FileHash时首跑失败；改.NET SHA/ZIP后25秒实际运行exit0、无强停、原配置SHA保持，证据ZIP仅log/json无配置/凭据。原生无损回读只在测试代码。
+- 交付：test-packages/fg-flash-fix-20261009的覆盖候选ZIP与完整对应源码；先备份原EXE再覆盖，运行库/模型不变。详细结论与未验边界见docs/FG_FLASH_FIX_REPORT_2026-10-09.md；现场尚未测此候选，不能宣称已根治。收尾控制、ZIP/源码/输入归档哈希及实际清理量由该目录final-check/cleanup回执记录；保存完成后按用户要求安排无强制关机。
+- 收尾：现场输入field-inputs.zip=11,571,275字节，CRC及逐项SHA通过；实际清理本任务URL的49项QML/JS缓存1,695,772字节，其余2207项核对。首次删除停在本轮只读日志副本；随后删除两份重复E盘文件被自动审批拒绝（仅blocked by policy，无具体理由），未绕过，155,115,295字节副本保留。打包脚本一次缩进语法检查失败已修正；对抗复查补齐Windows反斜线路径归一化与4项编译源码集合断言，未改已验产品。
+
 ## 2026-10-09 BMD 2.0.6 黑屏跟进候选
 
 用户提供veyra-qml(43).log，确认OBS两种来源可显示，要求继续排查2.0.6未解决的BMD黑屏。从main dbfceab隔离codex/blackmagic-followup-20261009，独立state.py/start/bundle保护38原工作树、495脏文件。七次连接持续出帧，HDYC原生连接已生效但两入口没有crossbar；44次原样本38黑场/6全白，不能证明真实图像或区分制式/路由/缓冲根因。对照原2.0.6文档纠正“本机USB通过”与“BMD未验”边界。

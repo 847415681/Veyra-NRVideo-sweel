@@ -96,6 +96,10 @@ private:
     PreviewView previousXessView_{};
     unsigned previousXessWidth_=0,previousXessHeight_=0;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvs_;
+    // One bounded GPU-only composition surface, shared by sequential lists on
+    // the presentation queue. Recreated only after that queue has drained.
+    Microsoft::WRL::ComPtr<ID3D12Resource> compositeTarget_;
+    bool copyBeforePresent_=false,copyEligible_=false;
     unsigned inc_=0;
     unsigned lastBuffer_=0;bool hasPresented_=false;
     struct RetainedFrame {
@@ -127,6 +131,6 @@ private:
     struct XessWork {pipeline::FrameIdentity identity{};uint32_t id=0;};
     std::array<XessWork,4> xessWork_{};
     size_t xessWorkPosition_=0;
-    void refresh(ID3D12Device*);
+    bool refresh(ID3D12Device*);
 };
 }
