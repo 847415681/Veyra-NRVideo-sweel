@@ -652,7 +652,7 @@ VPage {
                     visible: root.section === "compat"
                     VH1 { text: qsTr("兼容") }
                     Text {
-                        text: qsTr("与 OBS、监控软件（小飞机 / RTSS）同时使用时的设置；修改后需要重启。")
+                        text: qsTr("OBS、监控软件兼容需重启；HDR 补帧兼容可在播放中切换。")
                         color: Theme.t2
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody
@@ -660,6 +660,15 @@ VPage {
                         wrapMode: Text.WordWrap
                     }
                     VGroup {
+                        VRow {
+                            label: qsTr("HDR 补帧闪黑兼容")
+                            hint: qsTr("默认关闭。仅 NVIDIA HDR10 补帧时生效；4K 额外约 32 MiB 显存，可能增加 GPU 开销。切换时画面可能短暂停顿。")
+                            VSwitch {
+                                objectName: "set-hdr-fg-compatibility"
+                                checked: !!veyra.preferences.hdrFgCompatibility
+                                onToggled: v => veyra.setPreference("hdrFgCompatibility", v)
+                            }
+                        }
                         VRow {
                             label: qsTr("OBS 游戏采集兼容")
                             hint: (!!veyra.preferences.obsGameCapture !== veyra.obsGameCaptureActive)

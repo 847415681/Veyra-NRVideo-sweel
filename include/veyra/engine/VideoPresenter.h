@@ -99,7 +99,7 @@ private:
     // One bounded GPU-only composition surface, shared by sequential lists on
     // the presentation queue. Recreated only after that queue has drained.
     Microsoft::WRL::ComPtr<ID3D12Resource> compositeTarget_;
-    bool copyBeforePresent_=false;
+    bool copyBeforePresent_=false,copyEligible_=false;
     unsigned inc_=0;
     unsigned lastBuffer_=0;bool hasPresented_=false;
     struct RetainedFrame {

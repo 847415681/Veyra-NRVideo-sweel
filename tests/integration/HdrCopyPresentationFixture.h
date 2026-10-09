@@ -54,8 +54,20 @@ static bool hdrCopyPresentation(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::
             const auto& blit=sample.gpu[size_t(diagnostics::GpuStage::Blit)];
             if(blit.state==diagnostics::SampleState::Measured&&blit.milliseconds)blitTimes.push_back(*blit.milliseconds);
         }};
-        engine::PresentationSettings requested;requested.fullscreen=full;std::wstring text;presenter.configurePresentation(ctx,requested,desc.enableFg,text);
+        engine::PresentationSettings requested;requested.fullscreen=full;std::wstring text;
+        // No override: exercise the real persisted-choice route, including an
+        // old/missing preference (false) and live off/on/off/on transitions.
+        const bool overridden=GetEnvironmentVariableW(L"VEYRA_TEST_HDR_PRESENT_COPY",nullptr,0)>0;
+        const auto applyCompatibility=[&](bool enabled){
+            requested.hdrFgCompatibility=enabled;
+            const auto effective=presenter.configurePresentation(ctx,requested,desc.enableFg,text);
+            return overridden||effective.hdrFgCompatibility==(enabled&&desc.enableFg);
+        };
+        ok=applyCompatibility(false)&&ok;
+        ok=applyCompatibility(true)&&ok;
         for(unsigned i=0;ok&&i<64;++i){
+            if(i==16)ok=applyCompatibility(false)&&ok;
+            if(i==32)ok=applyCompatibility(true)&&ok;
             if(!full&&(i==24||i==40)){
                 SetWindowPos(window,nullptr,0,0,i==24?800:640,i==24?450:360,SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);Sleep(110);
             }
@@ -72,7 +84,7 @@ static bool hdrCopyPresentation(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::
                 ok=presenter.present(ctx,ring,graph,item.lease->slot,gen,false,0,false,.5f,item.identity,{},item.pts100ns);
                 collect();
                 if(gen)++generated;else ++real;
-                if(ok&&!full&&i<8){
+                if(ok&&!full&&(i<8||i==17||i==41||i==49)){
                     auto shown=presenter.presentedResourceForTest();std::vector<uint32_t> actual,expected;unsigned w=0,h=0,ew=0,eh=0;
                     ok=readHdrWords(ctx,ring,shown.Get(),actual,w,h)&&readHdrWords(ctx,ring,item.lease->texture.Get(),expected,ew,eh)&&w==ew&&h==eh;
                     if(ok){

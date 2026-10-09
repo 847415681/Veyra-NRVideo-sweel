@@ -1,5 +1,12 @@
 # WORKLOG
 
+## 2026-10-09 HDR 补帧兼容开关（默认关闭）与 main 整合准备
+
+- 用户要求先将目前修复合入 main，解释 HDR 闪黑候选原因/代价后，明确要求设置页开关、默认关闭。按 HDR_FG_COMPAT_TOGGLE_PLAN_2026-10-09.md，在原 FG 分支实施；独立 start/bundle 保护39工作树/495脏文件，只有 FG 与后续获授权 main 可变，其余37工作树保持。
+- 新全局偏好 hdrFgCompatibility=false；设置→兼容可保存选择，旧配置缺字段关闭。既有 presentation revision 送到 GPU 线程；仅切换时排空队列再创建/释放单张合成纹理，逐帧不增加CPU等待/回读。仅用户开启且 NVIDIA HDR10 应用 FG 适用时复制，4K固定31.875MiB，不改变算法/PTS/倍率/同步。Compatible/Direct诊断入口设置私有偏好，不改用户原配置。
+- hdr-fg-toggle-build.py 最终重编13个受头文件影响的生产消费者与翻译资源并链接GUI，缓存原件SHA不变。GUI8f697594…，fixture更正后native108e827f…。五次QML真实bridge检查默认/保存/重启/旧配置/英文资源/其它显示设置保持通过；稳定截图已查看。HDR DLSS/VFG各512原帧+620生成/94无损检查误差0/D3D12错误0，含反复开关、4K缓冲/窗口/全屏/resize/reset/销毁；SDR4/6/4X与直接路径通过。
+- 已保留构建包装路径/分隔符错误、测试resize尺寸不匹配失败；仅修测试环境，没有将失败冒充产品根因。详细命令/证据/限制见HDR_FG_COMPAT_TOGGLE_REPORT_2026-10-09.md；所有产物E:/项目/Veyra/{build,logs,tests,tmp,reports}/hdr-fg-toggle-20261009。HDR根因/5090反馈、BMD实卡和延迟、NV显存增长仍未确认。本轮不push/Release/更新版本/关机，不派Agent或造压。
+
 ## 2026-10-09 HDR补帧闪黑现场续修与本地候选
 
 - 授权：用户反馈诊断版不闪、原版闪，提交flash-diagnostic-20261008-205614-027(1).zip与日志44，要求修复后关机。隔离分支codex/fg-flash-fix-20261009，起点main dbfceabee；没有新merge/push/Release。开工独立reports/fg-flash-fix-20261009/pre-document-state.json保护37个原工作树、495份脏文件。

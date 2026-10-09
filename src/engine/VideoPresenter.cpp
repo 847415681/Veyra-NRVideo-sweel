@@ -92,13 +92,10 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
     // pixel-copy diagnostic does not. This is a compatibility candidate, not
     // proof of a driver defect. Compose separately and copy the actual final
     // image to DXGI; never retain the diagnostic's CPU readback or add sleeps.
-    copyBeforePresent_=ctx.adapter().isNvidia&&graph.hdr10Output()&&graph.fgEnabled()&&bool(presentationQueue_);
-    wchar_t copyOverride[4]{};
-    if(GetEnvironmentVariableW(L"VEYRA_TEST_HDR_PRESENT_COPY",copyOverride,4)&&copyOverride[1]==L'\0'){
-        if(copyOverride[0]==L'0')copyBeforePresent_=false;
-        // A forced path is for bounded regression tests, including SDR.
-        else if(copyOverride[0]==L'1'&&!sink_.xess())copyBeforePresent_=true;
-    }
+    copyEligible_=ctx.adapter().isNvidia&&graph.hdr10Output()&&graph.fgEnabled()&&bool(presentationQueue_);
+    // Opening a source never opts the user in or allocates the copy surface.
+    // configurePresentation applies the saved global choice on the GPU owner.
+    copyBeforePresent_=false;
     D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV;hd.NumDescriptors=4;
     if(FAILED(ctx.device()->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&rtvs_))))return false;
     inc_=ctx.device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);if(!refresh(ctx.device()))return false;
@@ -399,12 +396,34 @@ void VideoPresenter::close(){
     xessInputId_=0;xessWork_={};xessWorkPosition_=0;
     reflex_.close();reflexFrame_=0;
     if(presentationRing_.initialized())presentationRing_.drainQueue();
-    hasPresented_=false;gpuTimer_.close();compositeTarget_.Reset();copyBeforePresent_=false;rtvs_.Reset();pass_={};sink_.shutdown();
+    hasPresented_=false;gpuTimer_.close();compositeTarget_.Reset();copyBeforePresent_=copyEligible_=false;rtvs_.Reset();pass_={};sink_.shutdown();
     presentMotionPass_={};presentMotion_={};previousXessWidth_=previousXessHeight_=0;
     presentationRing_.shutdown();presentationFence_.Reset();presentationQueue_.Reset();
     if(presentationEvent_){CloseHandle(presentationEvent_);presentationEvent_=nullptr;}
 }
 PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceContext& ctx,PresentationSettings requested,bool fg,std::wstring& status){
+    bool wanted=requested.hdrFgCompatibility&&copyEligible_;
+    wchar_t copyOverride[4]{};
+    if(GetEnvironmentVariableW(L"VEYRA_TEST_HDR_PRESENT_COPY",copyOverride,4)&&copyOverride[1]==L'\0'){
+        if(copyOverride[0]==L'0')wanted=false;
+        // Only bounded regression tests may force the copy path on SDR.
+        else if(copyOverride[0]==L'1'&&!sink_.xess())wanted=true;
+    }
+    if(wanted!=copyBeforePresent_){
+        // Switching is infrequent and runs on the presentation owner thread.
+        // Drain once before changing the target, never in the per-frame path.
+        if(presentationRing_.initialized()&&!presentationRing_.drainQueue()){
+            veyra::log::warn("present-copy","compatibility switch deferred: presentation queue drain failed");
+        }else{
+            copyBeforePresent_=wanted;
+            if(wanted&&!refresh(ctx.device())){
+                copyBeforePresent_=false;
+                veyra::log::warn("present-copy","compatibility target setup failed; retaining direct presentation");
+            }
+            if(!copyBeforePresent_)compositeTarget_.Reset();
+            veyra::log::info("present-copy",std::format("requested={} eligible={} enabled={} (user preference; switch drains once)",requested.hdrFgCompatibility,copyEligible_,copyBeforePresent_));
+        }
+    }
     const bool reflexDisabled=reflex_.disable();reflexFrame_=0;
     const bool followDisplay=requested.outputRate==OutputRateMode::FollowDisplay;
     if(followDisplay){
@@ -413,6 +432,7 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
         else requested.outputRate=OutputRateMode::Off;
     }
     auto effective=requested;
+    effective.hdrFgCompatibility=copyBeforePresent_;
     std::wstring capNotice;
     if((xessActive())&&requested.outputRate!=OutputRateMode::Off){
         // Provider owns generated Present calls. Capping our real-frame input

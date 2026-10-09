@@ -14344,6 +14344,27 @@
    "zh-TW": "目前匯出裝置無法執行所選補幀後端，未替換後端或降低倍率",
    "en": "The export device cannot run the selected frame-generation backend. The backend and multiplier were kept.",
    "ja": "この書き出しデバイスでは選択した補間バックエンドを実行できません。バックエンドと倍率は保持されています。"
+  },
+  {
+   "zh": "HDR 补帧闪黑兼容",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "HDR 補幀閃黑相容",
+   "en": "HDR frame generation flash compatibility",
+   "ja": "HDR フレーム生成の暗転対策"
+  },
+  {
+   "zh": "默认关闭。仅 NVIDIA HDR10 补帧时生效；4K 额外约 32 MiB 显存，可能增加 GPU 开销。切换时画面可能短暂停顿。",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "預設關閉。僅 NVIDIA HDR10 補幀時生效；4K 額外約 32 MiB 顯存，可能增加 GPU 負擔。切換時畫面可能短暫停頓。",
+   "en": "Off by default. Applies to NVIDIA HDR10 frame generation; uses about 32 MiB of extra VRAM at 4K and may increase GPU work. Switching may briefly pause the picture.",
+   "ja": "初期設定はオフです。NVIDIA の HDR10 フレーム生成に適用されます。4K では約 32 MiB の追加 VRAM を使用し、GPU 負荷が増える場合があります。切り替え時に映像が一時停止する場合があります。"
+  },
+  {
+   "zh": "OBS、监控软件兼容需重启；HDR 补帧兼容可在播放中切换。",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "OBS、監控軟體相容需重新啟動；HDR 補幀相容可在播放中切換。",
+   "en": "OBS and monitoring compatibility require a restart; HDR frame generation compatibility can be switched during playback.",
+   "ja": "OBS とモニタリングソフトの互換設定は再起動が必要です。HDR フレーム生成の互換設定は再生中に切り替えられます。"
   }
  ]
 }

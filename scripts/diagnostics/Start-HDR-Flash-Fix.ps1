@@ -38,6 +38,10 @@ foreach ($name in @('chain-session.v1','chain-session.v1.vfg','qml-preferences.v
         $copied += [pscustomobject]@{path=$from;sha256=$digest}
     }
 }
+$prefsPath=Join-Path $profile 'qml-preferences.v1.json'
+$prefs=if(Test-Path -LiteralPath $prefsPath -PathType Leaf){Get-Content -LiteralPath $prefsPath -Raw | ConvertFrom-Json}else{'{}' | ConvertFrom-Json}
+$prefs | Add-Member -NotePropertyName 'hdrFgCompatibility' -NotePropertyValue ($Variant -eq 'Compatible') -Force
+[IO.File]::WriteAllText($prefsPath,($prefs | ConvertTo-Json -Depth 40),(New-Object Text.UTF8Encoding($false)))
 $envNames = @('TEMP','TMP','CUDA_CACHE_PATH','VEYRA_LOG_FILE','VEYRA_TEST_HDR_PRESENT_COPY')
 $savedEnv = @{}
 foreach ($name in $envNames) { $savedEnv[$name] = [Environment]::GetEnvironmentVariable($name,'Process') }
@@ -50,8 +54,9 @@ $result=1;$forcedStop=$false
 try {
     $env:TEMP=$tmp;$env:TMP=$tmp;$env:CUDA_CACHE_PATH=Join-Path $tmp 'cuda-cache'
     $env:VEYRA_LOG_FILE=Join-Path $output 'engine.log'
-    if ($Variant -eq 'Direct') { $env:VEYRA_TEST_HDR_PRESENT_COPY='0' }
-    else { [Environment]::SetEnvironmentVariable('VEYRA_TEST_HDR_PRESENT_COPY',$null,'Process') }
+    # Exercise the same saved setting as Settings > Compatibility, with no
+    # environment override. Only this private configuration is changed.
+    [Environment]::SetEnvironmentVariable('VEYRA_TEST_HDR_PRESENT_COPY',$null,'Process')
     # Keep the normal filename/path and QML disk-cache setting. Changing the
     # filename could bypass NVIDIA App/RTSS per-program profiles.
     Write-Host ('Variant: {0}. Use the same source/settings in both runs; close the player when finished.' -f $Variant)
