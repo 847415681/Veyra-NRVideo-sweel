@@ -8936,3 +8936,15 @@ media, SDK files or runtime binaries.
 重新执行pr31-playlist-test.py全部7项通过（窗口24检查），回执 `E:/项目/Veyra/logs/pr31-playlist-20261009/tests-20261009-144657/receipt.json`；321条目扫描9ms，提交0ms，UI计时器继续运行。
 重新执行pr31-playlist-gui-test.py all，4个真实bridge用例/36检查通过，回执目录：`E:/项目/Veyra/logs/pr31-playlist-20261009/gui-functional-20261009-144744` / `E:/项目/Veyra/logs/pr31-playlist-20261009/gui-next-20261009-144751` / `E:/项目/Veyra/logs/pr31-playlist-20261009/gui-english-20261009-144757` / `E:/项目/Veyra/logs/pr31-playlist-20261009/gui-empty-20261009-144803`。
 没有新测试包、push/Release或main改动；本地提交、范围/原件复核与源码bundle最终状态保存在reports/pr31-playlist-20261009/final.json。
+
+## 2026-10-09 BMD 新日志 / madVR 配套采集与官方软件核查
+
+用户提供veyra-qml(45).log，要求查madVR/官方软件与持续黑屏原因；回复暂不清楚是VideoProcessor＋madVR还是Media Express。本轮从已验973fc9b隔离到codex/blackmagic-signal-research-20261009，仅研究/文档，不再用未证实的接口差异制作修复候选。开工prepare.py保存E:/项目/Veyra/archives/blackmagic-signal-research-20261009/start.json与source-before.bundle，保护41既有工作树/495脏文件，main0e7018ad。
+
+`python -B E:/项目/Veyra/tmp/blackmagic-signal-research-20261009/research.py`解析实际日志：10-08会话7配置/44稀疏像素记录（38黑/6白），10-09会话6用户请求/9配置（r210自动重连3次）/41记录全部黑。今日所有配置兼容接收器enabled=true；5次原生HDYC合同匹配，33次Y16/中性色度；转换r210的8次RGB0。抽样点在原始CPU sample、写帧/GPU前，每次最多576点，非全帧/非硬件信号检测。末次819收帧/819处理/818送显、24.98回调FPS，NR/SR/FG关闭，不能将有FPS称为有效HDMI内容。解析首次因编码别名utf8-sig不存在退出1，改为utf-8-sig后退出0；未作为产品失败或测试通过伪证。
+
+只读核对并下载固定VideoProcessor7e6fc67、官网HTML988aff5、OBS e7f0b0d、libdshowcapture c13d4b7至E:/项目/Veyra/downloads/blackmagic-signal-research-20261009，sources.json/website-sources.json列每文件URL/SHA/大小。VideoProcessor显式选择输入、启用自动检测、跟随真实模式/RGB-YUV/位深重启，并读取no-input/lock/检测制式；OBS专用DeckLink来源有原生自动/手动与格式重配，通用DirectShow是另一条路径，所审OBS帧回调没有VP相同的no-input判定，未混称。VideoProcessor附加非商业限制，仅研究，不抄入产品。Blackmagic官方DeckLink SDK/Media Express/桌面手册对照确认配置成功不代表有效信号，自动检测只限支持设备；官网与个别GitHub网页fetch失败时改读作者固定源码，不冒称页面访问成功。
+
+判断：已确定上游抽样就黑、上次allocator候选现场未解决；确定Veyra缺原生检测状态/模式回调。没有实际input-lock/检测制式/no-input标志，不能断言仅为制式或输入口错误。用户反馈OBS通用也可出画，是反对“DirectShow天然不可用”的证据；具体图/模式/输入差异仍需同源对照。本机PnP无Blackmagic/DeckLink记录，只有Blackmagic RAW安装目录，不冒称BMD实卡验收。报告与后续原生输入适配验收合同见docs/BLACKMAGIC_SIGNAL_RESEARCH_REPORT_2026-10-09.md和同轮PLAN；拟沿共享图/容量1mailbox/显式reset、保留手动和DSHOW回退，不盲切端口/写EDID，不能承诺原生接口自动根治或延迟收益。
+
+产物统一E:/项目/Veyra/{tmp,reports,downloads,archives,worktrees}/blackmagic-signal-research-20261009；audit.py核对日志统计、源码原件SHA、原始像素采样位置、范围/41工作树/495脏文件和main，回执reports/.../final-audit.json。audit首轮错误匹配了接口前置声明而非Impl方法，位置断言失败，改为匹配完整实现签名后重验，未修改产品来迁就审计。产品源码、驱动、用户配置、运行库未修改，无产品改动不重复构建/GPU测试；无测试包、合并、push/Release或关机。
