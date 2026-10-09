@@ -1,5 +1,17 @@
 # WORKLOG
 
+## 2026-10-09 BMD 2.0.6 黑屏跟进候选
+
+用户提供veyra-qml(43).log，确认OBS两种来源可显示，要求继续排查2.0.6未解决的BMD黑屏。从main dbfceab隔离codex/blackmagic-followup-20261009，独立state.py/start/bundle保护38原工作树、495脏文件。七次连接持续出帧，HDYC原生连接已生效但两入口没有crossbar；44次原样本38黑场/6全白，不能证明真实图像或区分制式/路由/缓冲根因。对照原2.0.6文档纠正“本机USB通过”与“BMD未验”边界。
+
+按BLACKMAGIC_FOLLOWUP_PLAN_2026-10-09.md复用OBS固定c13d4b7 LGPL allocator/terminal/direct-connect约定，仅BMD原生视频采用驱动分配器、无接收端/N4缓冲要求、输出选择media type、保留DIB方向；严格核对实际subtype/布局/颜色/帧时长/隔行标志，保留阻塞/停止/flush/短帧检查。普通采集/音频原策略、v210原转换继续保留；同EXE进程级Legacy开关和私有配置日志启动脚本。源码及THIRD_PARTY_NOTICES记来源。此为兼容候选，不宣称allocator差异已经证实为现场黑屏根因。
+
+命令python -B scripts/acceptance/bmd-followup-build.py，最终receipt见reports/blackmagic-followup-20261009/build-current.json：新编译两产品source、相关fixture并链接相同objects；原71723缓存产品与dbfceab仅文档差异，缓存输入前后SHA相同。python -B scripts/acceptance/bmd-followup-test.py delivery-tests --usb：旧实现9项预期失败（策略对照，不是黑屏复现），当前261项0失败，GPU124项，实卡KUHAIMI27P YUY2连接60.101426/重连59.950521回调FPS、PTS单调。package.py prepare核对1614 donor后建立唯一硬链接依赖私有app；test.py gui --gui，生产GUI11.954秒exit0、截图/断开/属性状态通过、Main.qml恢复；截图是USB无信号图样，不是BMD/有效HDMI信号证明。Start-BMD-Capture-Test.ps1解析和15秒私有profile启动/正常退出/日志ZIP通过，原profileSHA不变。日志全在E:/项目/Veyra/logs/blackmagic-followup-20261009。
+
+失败保留：缺旧缓存测试object、Ninja依赖命令误组合而命令行过长未执行、GPU首次shader目录缺失、USB轮次pass=0被误判、旧对照回调计数级联，均修正并重新取证；第一次含Qt plugin的overlay被白名单拒绝，记录SHA/大小后仅删除自有失败ZIP并限定应用QML。详见BLACKMAGIC_FOLLOWUP_REPORT_2026-10-09.md。package.py package最终9,069,313字节/108项，SHA5da4a452e2612a81fd5b0d63605809723547d63be631b241415cab7aff470a40，CRC/每payloadSHA通过，无DLL/模型/SDK；EXE f1597d657037fe5174fd8d25dbd72902dc3f5b142b8b2d260121844bf9d462ee。对应源码与最终保全收据在同任务test-packages和reports/closure.json。
+
+当前可用构建/单份共享依赖app/必要日志截图/源码保留，所有新研发产物E盘。BMD/AMD-BMD实卡、长稳、屏幕延迟仍未验。没有子Agent/竞争GPU/驱动或用户配置改动，没有main合并/push/Release/关机；旧guard/start不改，反向测试和自查不冒称独立Reviewer。
+
 ## 2026-10-07 VFG本地候选交付完成
 
 - 最终归档源码e18942096bb65789a1701f0468acdc64f1be415e，candidate-final构建20.312秒exit0，EXE仍c007c7fc9072a6114eb2479b1880b65f5386a5fd445e6c58513faf3c1328a2b2；仅整理文档/验收脚本，产品与全部已测编译输入一致。

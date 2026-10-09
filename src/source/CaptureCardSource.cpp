@@ -833,6 +833,10 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
     std::wstring devicePath=selection.videoPath;
     if(devicePath.empty()){const auto devices=monikers(false);if(index<devices.size())devicePath=monikerPath(devices[index].Get());}
     const auto deviceName=captureDeviceName(devicePath);p.signalProbeEnabled=isBlackmagicCaptureDevice(deviceName,devicePath);
+    wchar_t legacyFlag[2]{};
+    const bool bmdLegacy=GetEnvironmentVariableW(L"VEYRA_BMD_DSHOW_LEGACY",legacyFlag,2)==1&&legacyFlag[0]==L'1';
+    const bool bmdCompat=p.signalProbeEnabled&&!bmdLegacy;
+    if(p.signalProbeEnabled)log::info("capture-bmd-compat",std::format("enabled={} legacyOverride={} allocator={} bufferRequirements={} connectType={} dibOrientation={} notSignalDetection=1",bmdCompat,bmdLegacy,bmdCompat?"upstream":"sink-default",bmdCompat?"driver":"N4",bmdCompat?"output-selected":"explicit",bmdCompat?"driver":"request-top-down"));
     const auto upstream=dshow::connectCaptureCrossbar(p.graph.Get(),p.builder.Get(),p.device.Get());
     log::info("capture-upstream",std::format("name={} inputMediums={} crossbar={} existing={} hr=0x{:08X} routeChanged=0",narrowForLog(deviceName),upstream.inputMediums,bool(upstream.filter),upstream.existing,uint32_t(upstream.hr)));
     if(FAILED(upstream.hr)){error_=std::format(L"采集卡上游输入连接失败（0x{:08X}），请检查驱动与输入选择。",uint32_t(upstream.hr));freeType(native);return false;}
@@ -852,7 +856,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
     // normalizes the mismatch (connected type is then negative and no flip is
     // applied), a refusal keeps the driver-declared sign and the existing flip.
     // Truthful bottom-up devices stay correct in both cases.
-    if(nativeSupported&&captureIsRgbDib(nativeLayout.packing)){
+    if(nativeSupported&&!bmdCompat&&captureIsRgbDib(nativeLayout.packing)){
         if(auto* header=captureBitmapHeader(*native);header&&header->biHeight>0){
             const LONG advertised=header->biHeight;header->biHeight=-advertised;
             const HRESULT topDownHr=p.config->SetFormat(native);
@@ -914,14 +918,22 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
         // suggestion is advisory; a refusal keeps the driver's defaults and is
         // reported after the connect instead of failing the device.
         const auto bufferPolicy=static_cast<CaptureBufferMode>(p.bufferMode);
-        const long suggestedBuffers=captureDesiredVideoBuffers(bufferPolicy,long(nativeLayout.width),long(nativeLayout.height));
+        const long suggestedBuffers=bmdCompat?0:captureDesiredVideoBuffers(bufferPolicy,long(nativeLayout.width),long(nativeLayout.height));
         ComPtr<IPin> input,output;
-        hr=createNativeCaptureSink(*native,[&p](IMediaSample* sample){REFERENCE_TIME a=0,b=0;const auto timeHr=sample->GetTime(&a,&b);if(FAILED(timeHr))return timeHr;return p.SampleCB(double(a)/1e7,sample);},p.grabFilter,input);
+        hr=createNativeCaptureSink(*native,[&p](IMediaSample* sample){REFERENCE_TIME a=0,b=0;const auto timeHr=sample->GetTime(&a,&b);if(FAILED(timeHr))return timeHr;return p.SampleCB(double(a)/1e7,sample);},p.grabFilter,input,bmdCompat?CaptureAllocatorMode::Upstream:CaptureAllocatorMode::SinkDefault);
         if(SUCCEEDED(hr))hr=p.graph->AddFilter(p.grabFilter.Get(),L"Native frame mailbox");
         if(SUCCEEDED(hr))hr=p.builder->FindPin(p.device.Get(),PINDIR_OUTPUT,&PIN_CATEGORY_CAPTURE,&MEDIATYPE_Video,FALSE,0,&output);
         if(SUCCEEDED(hr)&&suggestedBuffers>0)suggestCaptureVideoBuffering(output.Get(),suggestedBuffers,LONG(nativeLayout.sampleBytes));
-        if(SUCCEEDED(hr))hr=p.graph->ConnectDirect(output.Get(),input.Get(),native);
+        // OBS HDevice::ConnectPins (fixed commit/license in NativeCaptureSink.cpp)
+        // lets the output pin supply its configured media type. Check the actual
+        // layout after connection so this cannot silently pick another mode.
+        if(SUCCEEDED(hr))hr=p.graph->ConnectDirect(output.Get(),input.Get(),bmdCompat?nullptr:native);
         if(SUCCEEDED(hr))hr=input->ConnectionMediaType(&connected);
+        if(SUCCEEDED(hr)&&bmdCompat){
+            const bool same=nativeCaptureContractsMatch(*native,connected);
+            log::info("capture-bmd-compat",std::format("connectedContractMatches={} subtype=0x{:08X} converters=0",same,connected.subtype.Data1));
+            if(!same){error_=L"BMD 驱动返回的连接格式与所选模式不同，请按实际信号重新选择格式。";hr=VFW_E_INVALIDMEDIATYPE;}
+        }
         if(SUCCEEDED(hr)){
             ALLOCATOR_PROPERTIES actual{};
             const auto allocatorHr=queryCaptureAllocatorProperties(input.Get(),actual);
