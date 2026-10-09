@@ -8961,3 +8961,28 @@ media, SDK files or runtime binaries.
 - 初次构建依赖闭包/SDK枚举名/相对链接库路径/音频无关对象问题与CMake误用DLL-only FFmpeg前缀均修复后重验，失败日志仍在logs任务目录；不是产品通过证明。最终审查另修正EnableVideoInput早期制式回调丢失、10位RGB极白粗亮度样本溢出、未知HDR EOTF误作SDR、原生重连后名义帧率刷新等边界，均在上述最终构建/相应回归中。产物全在E:/项目/Veyra/{build,tests,logs,tmp,reports,archives}/decklink-native-20261009，SDK另在deps/decklink-sdk-obs31-20261009；无运行库/模型修改或SDK/二进制入Git。
 
 本机无BMD卡。以上证明本机产品状态机/GPU/UI及旧USB/音频回归，不是反馈者出画、BMD全型号/多声道/去隔行或实测延迟证明。原日志已定位到上游样本抽样黑，具体信号/驱动原因仍需新原生日志，不能以原生接入自动宣称根治。最终范围守卫、源码提交/checkpoint和增量bundle见reports/decklink-native-20261009/final.json。
+
+## 2026-10-10 设置错误、数字输入快捷键、超分和多语言布局
+
+用户提供日志46及手动输入后快捷键失效截图，要求四项修复、汇报并关机；沿用“不用打测试包”。从af2edf4052857c7db99d7c33f92827f02ab34319隔离到`E:/项目/Veyra/worktrees/settings-sr-ui-20261010`、`codex/settings-sr-ui-20261010`。独立archives同名/start.json和source-before.bundle保护43既有工作树、495脏文件、main0e7018ad；无Agent、无main合并、push/Release/版本更新。PLAN/REPORT在docs同名2026-10-10文件。
+
+- 日志46（259854字节，SHA256 f4361990c74a6f384d5d1d6625f6ae117409d5863e0cd315b104ea26f6376443）15:12:34.051 UTC关闭NR、HDR10+DLSS2X仍开，CreateSwapChainForHwnd E_ACCESSDENIED，8次重试及恢复旧设置再失败。原生同窗口/设备/格式/OBS合同保留交换链与稳定呈现队列，排空后重绑图资源；初始化降级、设置恢复、源尺寸和运行时故障恢复接同一边界。XeSS/真实合同变化仍关闭重建。保留HDR元数据已发送状态；释放旧兼容合成纹理。微软one-flip-chain-per-HWND合同支持保留旧对象的故障机制，但日志中的GamePP/NVIDIA overlay不足以确认具体持有方，refcount3也不是泄漏证明。反馈者5070Ti16GB与本机5070 12GB/616.56明确区分。
+- 隐藏数字TextInput保留焦点导致快捷键仍判typing，提交/Esc/失焦关闭显式清除，仅自身仍活动时返回窗口焦点，继续输入下一项不抢焦点。定向真实键盘13通过，菜单布局8、现有组件22通过。
+- SR原尺寸VSR被“未放大”门控跳过、FSR首帧无flow走普通resize两处修复；原尺寸仅视频VSR1–4可恢复，DLSS/FSR/图片仍按放大条件。FSR零motion+必要reset，不吃旧历史；导出提示改读共享gd.enableSr，不再把正在执行的原尺寸VSR说成关闭。预览/导出/图片三后端12组合同通过。普通调色被SR绕过是假设，实际像素证明原先已生效，未改正常描述符或冒称修复。
+- 菜单按字宽/图标/tag测量、限制窗口边界、长项换行和有界滚动；选择/按钮截断可看全文；参数行随宽度上下排、行高增长。截图又发现节点窄窗口统计栏被挤没和英文画布提示越界，改两行、统计滚动/全文提示和操作提示换行；截图等页面动画结束再检查。5新增键补全繁中/英文/日文，placeholder0，基线遗留缺译29→29。
+
+命令均在本轮工作树，输出前缀`E:/项目/Veyra/logs/settings-sr-ui-20261010/`：
+
+- `py -3.11 -B scripts/acceptance/settings-sr-ui-build.py`最终build-20261010-015445/receipt.json成功，21.203秒；18受影响依赖闭包对象核对/重编，MSVC14.44/SDK10.0.26100/Qt6.8.3，旧缓存/SDK输入哈希不变。GUI SHA256 587761373e1f064c13dc6f56d3ad31b6a8e755ae417e58c0ab7750dcd0867d9b。不宣称clean全工程重编；脚本按不可变开工基点识别头改动，提交后再执行也不会漏依赖。
+- `...build.py cmake-check`：build-20261010-015524/receipt.json，7.047秒，原生/no-SDK配置和驱动对象实际编译，以及新增两个集成测试的CMake对象编译成功。
+- `...test.py sr presenter slider menu components lifecycle video rollback`：tests-20261010-014713/receipt.json八组成功。GTA6原4K、原版NR1080p热切8次并放大视窗无需重启；失败注入、匹配revision/GPU完成、音频改动不重置图、暂停/恢复/4X/停止取消/来源新鲜度均通过。回退测试发现旧图恢复暖机把RolledBack覆盖为Completed，修复后实际恢复播放并保留失败revision/计时。
+- 审查旧兼容纹理释放后`...test.py presenter video`：tests-20261010-015303/receipt.json，18.218/41.875秒通过。保留外部COM引用、SDR8次+HDR P010/PQ/真实原版NR+DLSS2X8次切换，HDR兼容复制也交替开/关；实际呈现中心RGB最大10位差1，D3D12错误0。日志复用8次；不是反馈者overlay实机复现或全帧图像一致证明。
+- `...test.py sr-gta`：tests-20261010-013544/receipt.json，实际第12秒画面原生4K，VSR开/关变化16268204个RGB通道、MAE8=1.1377；2K→4K的VSR质量1/4、DLSS、FSR及调色回归通过。旧门控对照tests-20261010-012819为原尺寸0执行/0差异、FSR3帧首帧0/总2；最终`...test.py sr` tests-20261010-015539/receipt.json首帧1/总3，原尺寸合成样本9220022通道变化、MAE8=1.89597，12合同通过。数字只证明实际执行/改变，不是画质百分比；原尺寸恢复会新增GPU工作量，未做受控吞吐率或屏幕延迟对照。
+- `...test.py hdr color formats`：tests-20261010-014401/receipt.json全部exit0，无颜色/格式失败；`...gui-test.py` gui-20261010-014928/receipt.json五组真实生产界面通过，简中/英语1280×900、繁中/日语900×800、英语900×800×150%，本机KUHAIMI格式枚举/真实节点/专业页，不是复制样式。PNG和几何/完整文字断言保留，人工复核英文格式/节点与日文专业页。
+- `py -3.11 -B scripts/i18n/extract.py --check`：2162来源键，placeholder0，新缺译0。reports/settings-sr-ui-20261010/i18n-audit.json记录与基线的29条对照。
+
+早期失败日志保留：PNG保存缺COM初始化、私有app漏已有FSR加载器、Popup误用Qt FINAL属性名、窗口改变后菜单位置、截图处于过渡、测试脚本缺hdr分支；均修正后重验，未计为产品成功。所有测试每进程<300秒、构建<900秒，正常链路未新增GPU像素回读/逐帧CPU等待/无界队列。1614文件母包每次前后SHA不变，patched FFmpeg保留PS5 slices256，DLL/SDK/模型原件与真实用户配置不变，不入Git。
+
+产物统一`E:/项目/Veyra/{build,tests,logs,tmp,reports,archives}/settings-sr-ui-20261010`，仅单份私有运行目录和当前构建，不打包或复制整工程。最后control.py final-audit核对旧树/main/范围，源码commit/checkpoint/source-after.bundle、构建和各回执哈希、磁盘占用与清理记录存reports同名/final.json。现场5070Ti+overlay/AMD9070未复测，未重验全部编码器/封装，不宣称所有用户已根治；保存证据后按本次用户请求安排非强制关机，动作另存shutdown回执。
+
+收尾缓存删除被自动审批拒绝：PowerShell已解析并检查`E:/项目/Veyra/tmp/settings-sr-ui-20261010`绝对范围，Remove-Item请求仍返回`blocked by policy`，命令未执行；未更换工具绕过。2773文件/284748097逻辑字节保留，非磁盘已释放。cleanup.json与disk-before-cleanup.json如实记录，修复/构建/源码收尾继续。

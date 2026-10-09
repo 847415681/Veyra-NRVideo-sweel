@@ -24,6 +24,11 @@ public:
     bool open(gfx::D3D12DeviceContext&, HWND, pipeline::EnhanceGraph&, bool captureCompatible=false, bool mediaClockPaced=false);
     bool present(gfx::D3D12DeviceContext&,gfx::CommandSlotRing&,pipeline::EnhanceGraph&,unsigned slot,bool generated,bool referencesValid=true,int comparison=0,bool baseReference=false,float split=.5f,pipeline::FrameIdentity identity={},PreviewView view={},int64_t sourcePts100ns=-1,bool retainUnchanged=false);
     void close();
+    // Owner-thread graph replacement boundary. Native DXGI remains attached to
+    // its HWND; provider-owned presentation must be shut down before its graph.
+    bool prepareGraphChange();
+    // Explicit lifecycle regression: simulate an overlay retaining the chain.
+    Microsoft::WRL::ComPtr<IDXGISwapChain3> swapChainForTest()const{return sink_.swapChain();}
     // Present-sink providers (XeSS) block inside Present while pacing
     // their generated frames. A helper-thread Present was tried on
     // 2026-09-22 (X3): the provider then estimated its period from the
@@ -116,6 +121,9 @@ private:
     };
     std::optional<RetainedFrame> retainedFrame_;
     HWND window_=nullptr;
+    ID3D12Device* presentationDevice_=nullptr;
+    DXGI_FORMAT presentationFormat_=DXGI_FORMAT_UNKNOWN;
+    bool captureCompatible_=false;
     std::chrono::steady_clock::time_point lastResize_{};
     unsigned viewWidth_=0,viewHeight_=0;
     HMONITOR bufferMonitor_=nullptr;

@@ -109,7 +109,9 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         const auto plan=describeStages(stages,options.snapshot(),gd);
         if(!nvidiaFeatures&&gd.opticalFlowBackend==OpticalFlowBackend::Nvidia)gd.opticalFlowBackend=OpticalFlowBackend::AmdFidelityFx;
         const auto resolution=plan;
-        const bool srAvailable=plan.srApplied&&(nvidiaFeatures||options.settings.videoSrQuality==kVideoSrFsr);
+        // Availability comes from the shared stage contract: native-size RTX
+        // Video SR restores video even though ResolutionPlan has no enlargement.
+        const bool srAvailable=gd.enableSr;
         if(options.nr&&amdNrExport){
             fgNote=L"AMD NR 使用内部最高 1080p 处理，保留原尺寸合成与导出";
             veyra::log::info("export-nr",std::format("runtime=lmxxf source={}x{} output={}x{} internal={}x{} layers={}",info.width,info.height,gd.workWidth,gd.workHeight,gd.nrWidth,gd.nrHeight,gd.nrLayersExtent.size()));

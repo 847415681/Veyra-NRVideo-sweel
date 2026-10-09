@@ -6,6 +6,8 @@ Item {
     id: root
     width: 420; height: 180
     property real amount: 1.25
+    property int shortcuts: 0
+    Shortcut { sequence: "Right"; onActivated: root.shortcuts++ }
     VSlider {
         id: slider
         x: 20; y: 30; width: 220
@@ -20,6 +22,7 @@ Item {
         text: root.amount.toFixed(2)
     }
     VButton { id: outside; x: 20; y: 90; width: 120; height: 30; text: "Other control"; onClicked: forceActiveFocus() }
+    TextInput { id: nextInput; x: 160; y: 90; width: 140; height: 30; text: "Next input"; selectByMouse: true }
     TestCase {
         name: "SliderNumberInput"
         when: windowShown
@@ -28,6 +31,7 @@ Item {
             root.amount = 1.25
             slider.from = 0; slider.to = 5; slider.inputScale = 1; slider.inputDecimals = 2
             slider.enabledControl = true
+            root.shortcuts = 0
         }
         function type(text) {
             mouseClick(number, 35, 12)
@@ -66,6 +70,30 @@ Item {
             slider.enabledControl = false
             mouseClick(number, 35, 12)
             compare(number.editing, false); compare(root.amount, 1.25)
+        }
+        function test_shortcuts_after_commit_data() {
+            return [{tag:"return",key:Qt.Key_Return},{tag:"escape",key:Qt.Key_Escape}]
+        }
+        function test_shortcuts_after_commit(data) {
+            type("2.75")
+            keyClick(Qt.Key_Right)
+            compare(root.shortcuts, 0)
+            keyClick(data.key)
+            compare(number.editing, false)
+            const input = findChild(number, "vslider-value-input")
+            verify(!input.activeFocus && !input.focus)
+            keyClick(Qt.Key_Right)
+            tryCompare(root, "shortcuts", 1)
+        }
+        function test_focus_loss_keeps_next_editor() {
+            type("3.25")
+            mouseClick(nextInput, 25, 12)
+            tryCompare(number, "editing", false)
+            verify(nextInput.activeFocus)
+            keyClick(Qt.Key_A, Qt.ControlModifier)
+            keyClick("7")
+            compare(nextInput.text, "7")
+            compare(root.amount, 3.25)
         }
     }
 }

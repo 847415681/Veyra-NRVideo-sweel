@@ -26,7 +26,14 @@ Item {
     }
     function closeEditor(apply) {
         if (!editor.visible) return
+        const heldFocus = input.activeFocus
         editor.visible = false
+        // Hiding a TextInput does not clear its focus. The window's shortcut
+        // filter still treats that hidden item as typing after Enter/Escape.
+        // A focus-loss commit must not steal focus from the next input.
+        input.focus = false
+        if (heldFocus && valueText.Window.window)
+            valueText.Window.window.contentItem.forceActiveFocus()
         if (apply) {
             const raw = input.text.trim().replace(",", ".")
             const typed = Number(raw)

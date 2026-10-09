@@ -1272,7 +1272,9 @@ VPage {
                             }
                             VRow {
                                 label: qsTr("目标尺寸")
-                                hint: qsTr("决定输出分辨率")
+                                hint: veyra.videoSrQuality >= 1 && veyra.videoSrQuality <= 4
+                                    ? qsTr("放大时重建细节；原尺寸时修复压缩伪影。效果取决于片源。")
+                                    : qsTr("目标须大于片源尺寸；已达到目标时不执行超分。")
                                 VSeg {
                                     options: [
                                         { id: "1", label: "2K" },

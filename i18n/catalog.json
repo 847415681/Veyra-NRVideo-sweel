@@ -15030,6 +15030,41 @@
    "zh-TW": "交錯",
    "en": "Interlaced",
    "ja": "インターレース"
+  },
+  {
+   "zh": "放大时重建细节；原尺寸时修复压缩伪影。效果取决于片源。",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "放大時重建細節；原尺寸時修復壓縮瑕疵。效果取決於片源。",
+   "en": "Reconstructs detail when upscaling and reduces compression artifacts at native size. Results depend on the source.",
+   "ja": "拡大時は細部を再構成し、元の解像度では圧縮ノイズを低減します。効果は映像により異なります。"
+  },
+  {
+   "zh": "目标须大于片源尺寸；已达到目标时不执行超分。",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "目標須大於片源尺寸；已達到目標時不執行超解析度。",
+   "en": "The target must exceed the source size. Upscaling is skipped when the source already meets the target.",
+   "ja": "入力より大きい目標解像度が必要です。入力が目標以上の場合は超解像処理を行いません。"
+  },
+  {
+   "zh": "设置切换呈现排空失败，已停止",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "設定切換呈現排空失敗，已停止",
+   "en": "Could not drain presentation for the settings change. Playback stopped.",
+   "ja": "設定変更時に描画処理を完了できなかったため、再生を停止しました。"
+  },
+  {
+   "zh": "设置恢复呈现排空失败，已停止",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "設定還原呈現排空失敗，已停止",
+   "en": "Could not drain presentation to restore settings. Playback stopped.",
+   "ja": "設定復元時に描画処理を完了できなかったため、再生を停止しました。"
+  },
+  {
+   "zh": "输入尺寸切换呈现排空失败",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "輸入尺寸切換呈現排空失敗",
+   "en": "Could not drain presentation for the input size change.",
+   "ja": "入力サイズ変更時に描画処理を完了できませんでした。"
   }
  ]
 }

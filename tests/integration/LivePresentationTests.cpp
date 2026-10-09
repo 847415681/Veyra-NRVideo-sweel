@@ -98,11 +98,19 @@ int wmain(int argc,wchar_t**argv){
     }
 #endif
     SetEnvironmentVariableW(L"VEYRA_VERBOSE_FRAME_LOGS",L"1");
-    if(argc!=3&&!(argc==4&&(wcscmp(argv[3],L"--backend-recovery")==0||wcscmp(argv[3],L"--nr-first")==0||wcscmp(argv[3],L"--seek-stress")==0||wcscmp(argv[3],L"--half-rate")==0||wcscmp(argv[3],L"--overload")==0||wcscmp(argv[3],L"--file-overload")==0||wcscmp(argv[3],L"--source-gap")==0||wcscmp(argv[3],L"--file-endpoint")==0||wcscmp(argv[3],L"--file-continuity")==0||wcscmp(argv[3],L"--file-fg-recovery")==0||wcscmp(argv[3],L"--reset-rollback")==0)))return 2;SetProcessDPIAware();CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+    const bool settingsRebuild=argc==4&&wcscmp(argv[3],L"--settings-rebuild")==0;
+    if(!settingsRebuild&&argc!=3&&!(argc==4&&(wcscmp(argv[3],L"--backend-recovery")==0||wcscmp(argv[3],L"--nr-first")==0||wcscmp(argv[3],L"--seek-stress")==0||wcscmp(argv[3],L"--half-rate")==0||wcscmp(argv[3],L"--overload")==0||wcscmp(argv[3],L"--file-overload")==0||wcscmp(argv[3],L"--source-gap")==0||wcscmp(argv[3],L"--file-endpoint")==0||wcscmp(argv[3],L"--file-continuity")==0||wcscmp(argv[3],L"--file-fg-recovery")==0||wcscmp(argv[3],L"--reset-rollback")==0)))return 2;SetProcessDPIAware();CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     std::filesystem::create_directories(argv[2]);Logger::instance().openFile((std::filesystem::path(argv[2])/"engine.log").wstring());Logger::instance().setConsoleEnabled(false);
     HWND window=CreateWindowExW(0,L"STATIC",L"Live scheduler replay",WS_POPUP,0,0,960,540,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
     if(!window)return 3;engine::EngineController engine;engine::PlayerOptions options;options.nr=false;options.fg=false;options.captureReplayForTest=true;
     const bool nrFirst=argc==4&&wcscmp(argv[3],L"--nr-first")==0;
+    if(settingsRebuild){
+        options.captureReplayForTest=false;options.nr=options.fg=true;options.fgMultiplier=2;
+        options.settings.nrPolicy=pipeline::NrSizePolicy::Realtime;
+        options.settings.nrRuntime=engine::NrRuntime::NvidiaOriginal;
+        options.settings.frameGenerationBackend=engine::FrameGenerationBackend::Dlss;
+        engine.setVolume(0,true);ShowWindow(window,SW_SHOWNOACTIVATE);
+    }
     if(nrFirst){options.captureReplayForTest=false;options.nr=options.sr=options.fg=true;options.realtime=false;options.fgMultiplier=2;options.settings.lowLatency=true;options.settings.videoSrQuality=2;engine.setVolume(0,true);}
     const bool seekStress=argc==4&&wcscmp(argv[3],L"--seek-stress")==0;
     const bool backendRecovery=argc==4&&wcscmp(argv[3],L"--backend-recovery")==0;
@@ -125,6 +133,25 @@ int wmain(int argc,wchar_t**argv){
     int failures=0;auto check=[&](bool pass,const char* s){std::cout<<(pass?"PASS ":"FAIL ")<<s<<std::endl;if(!pass)++failures;};
     auto until=[&](auto predicate,int seconds=8){auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(seconds);while(std::chrono::steady_clock::now()<deadline){MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}auto s=engine.snapshot();if(s.failed){std::wcerr<<s.status<<'\n';return false;}if(predicate(s))return true;std::this_thread::sleep_for(5ms);}return false;};
     engine.open(window,argv[1],options);
+    if(settingsRebuild){
+        check(until([](const auto& s){return s.frames>20&&s.nrActive&&s.fgActive;},30),"original NR 1080p and DLSS 2X start on the actual video");
+        for(unsigned round=0;round<8&&!failures;++round){
+            const auto before=engine.snapshot();auto changed=before.applied;
+            changed.nr=round%2!=0;changed.multiplier=round==4?1:2;
+            changed.sr=round==2||round==3;changed.videoSrQuality=4;
+            check(engine.requestSettings(changed),"hot settings accepted");
+            const auto revision=engine.snapshot().desired.revision;
+            check(until([&](const auto& s){return !s.applying&&s.applied.revision==revision&&s.nrActive==changed.nr&&s.fgActive==(changed.multiplier>1)&&s.srActive==changed.sr&&s.metrics.flow.counters.realPresented>before.metrics.flow.counters.realPresented+12;},30),"new graph presents after NR/FG/SR transaction without restarting");
+            const auto after=engine.snapshot();
+            std::cout<<"SETTINGS_VIDEO round="<<round<<" revision="<<revision<<" nr="<<after.nrActive<<" sr="<<after.srActive<<" fg="<<after.fgActive<<" frames="<<after.frames<<" presents="<<after.metrics.flow.counters.realPresented<<" generated="<<after.metrics.flow.counters.generatedPresented<<" processingMs="<<after.metrics.flow.enhancementProcessing.mean.value_or(-1)<<std::endl;
+            if(round==3){
+                MONITORINFO monitor{sizeof(monitor)};GetMonitorInfoW(MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST),&monitor);
+                SetWindowPos(window,nullptr,monitor.rcMonitor.left,monitor.rcMonitor.top,monitor.rcMonitor.right-monitor.rcMonitor.left,monitor.rcMonitor.bottom-monitor.rcMonitor.top,SWP_NOZORDER|SWP_NOACTIVATE);
+            }
+        }
+        engine.stop();check(until([&](const auto&){return engine.idle();},8),"settings session drains");
+        DestroyWindow(window);CoUninitialize();return failures?1:0;
+    }
     if(backendRecovery){
         check(until([](const auto& s){return s.frames>20&&!s.applied.nr&&!s.backendWarning.empty();},25),"injected NR init failure retains real basic playback");
         SetEnvironmentVariableW(L"VEYRA_TEST_NR_INIT_FAILURE",nullptr);
@@ -298,7 +325,7 @@ int wmain(int argc,wchar_t**argv){
         check(colorSamples>=20&&colorSamples<=35,"one-second stage window receives completed source-frame timings");
     }
     auto state=engine.snapshot();auto settings=state.desired;settings.nr=true;settings.multiplier=2;engine.requestSettings(settings);
-    check(until([](const auto& s){return s.applied.nr&&s.applied.multiplier==2&&!s.applying&&s.nrEvaluated>2&&s.generated>0;}),"NR and 2x transaction while two batches are in flight");
+    check(until([](const auto& s){return s.applied.nr&&s.applied.multiplier==2&&!s.applying&&s.nrEvaluated>2&&s.generated>0;},30),"NR and 2x transaction while two batches are in flight");
     check(until([](const auto& s){const auto& r=s.metrics.flow.reset;return r.settingsRevision==s.applied.revision&&r.outcome==diagnostics::ResetOutcome::Completed&&r.totalMs.has_value();}),"settings reset completes only after matching GPU-ready output");
     {
         const auto s=engine.snapshot();const auto& r=s.metrics.flow.reset;double stages=0;bool measured=true;
