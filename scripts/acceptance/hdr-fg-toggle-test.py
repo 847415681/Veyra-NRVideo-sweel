@@ -94,8 +94,23 @@ finally:
 text=(case/'console.log').read_text(encoding='utf8',errors='replace')
 if (case/'engine.log').is_file():text+='\n'+(case/'engine.log').read_text(encoding='utf8',errors='replace')
 errors=[l for l in text.splitlines() if re.search(r'\[ERROR\s*\]|\[FATAL\s*\]|ReferenceError:|TypeError:|D3D12 ERROR|D3D12 CORRUPTION|HDRGUI_FAIL',l)]
+expectedErrors=[]
+if mode=='capture' and test=='contracts':
+ # These negative cases deliberately reject bad source contracts. Require the
+ # exact error counts AND their successful rejection assertions; do not ignore
+ # arbitrary ERROR lines or use a blanket exception for contract tests.
+ expected=[(r'\[ERROR\] \[capture-elgato\] Tonemap readback disagrees; refusing a mislabeled color contract$',1),
+           (r'\[ERROR\] \[capture\] dynamic capture contract changed; reopen required hr=0x80040200$',5)]
+ assertions={'PASS reject successful Set with contradictory readback':1,
+             'PASS BMD mode change requires reopen rather than reinterpretation':2,
+             'PASS BMD dynamic interlace change cannot keep stale temporal contract':2,
+             'PASS dynamic mode cannot reuse stale layout':1}
+ if all(sum(bool(re.search(pattern,line)) for line in errors)==count for pattern,count in expected) and all(text.count(line)==count for line,count in assertions.items()):
+  expectedErrors=[line for line in errors if any(re.search(pattern,line) for pattern,count in expected)]
+  errors=[line for line in errors if line not in expectedErrors]
 passed=r.returncode==0 and not errors
 receipt={'mode':mode,'command':command,'exit':r.returncode,'seconds':time.monotonic()-begin,'errors':errors,'exeSha256':sha(Path(command[0])),'events':[l for l in text.splitlines() if '[present-copy]' in l or l.startswith(('HDR_COPY','PRESENTATION','D3D12 errors')) or 'HDRGUI_' in l]}
+if expectedErrors:receipt['expectedNegativeCaseErrors']=expectedErrors
 if mode=='gui':
  prefs=json.loads((profile/'qml-preferences.v1.json').read_text(encoding='utf8'))
  passed=passed and 'HDRGUI_PASS' in text and prefs.get('hdrFgCompatibility')==(phase=='fresh') and prefs.get('sentinel')=='preserved' and (case/'settings.png').is_file()

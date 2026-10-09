@@ -1,5 +1,12 @@
 # WORKLOG
 
+## 2026-10-09 本地 main 整合完成与最终组合验收
+
+- 按用户授权保留原作者/提交合并四分支：flash 诊断 52d83eaf、VRAM 诊断 49c9e95c、BMD 083d6785、HDR 开关 2caa8dca（分支 tip f6a8fa27）。只有 AGENTS/WORKLOG 新段落冲突，保留完整旧正文与双方前置/追加记录；源码无冲突。设置→兼容“HDR补帧闪黑兼容”默认关闭、全局保存、播放中可切换；NVIDIA HDR10 应用 FG 才适用，关闭释放单张兼容纹理。
+- main 实际 hdr-fg-toggle-build.py --combined 最终69.141秒exit0；重编13生产头依赖消费者/翻译资源/2 BMD source，GUI4e0f8193…、native5b339177…。修正组合 fixture 漏链接新版 presenter 的访问违规与 engine 数量断言；契约负例日志按精确次数＋拒绝断言处理，没有改产品规避测试。旧失败证据保留。
+- 对最终EXE串行：capture merged-contracts-final contracts 261项/0失败；capture merged-pixels-v2 pixels 124项；native merged-hdr-toggle hdr-4k 512原帧/620生成、94无损检查误差0/D3D12错误0；gui merged-settings restore-off 真QML恢复关闭/保存/截图通过。窗口/全屏/resize/reset/反复开关已验，4K为输出缓冲而非4K源NR性能。Compatible/Direct私有启动器各15秒exit0、原配置保持、ZIP CRC通过。
+- 命令/完整SHA/限制见docs/MERGE_MAIN_2026-10-09.md；原缓存与1614 donor逐项保持。所有本轮产物在E:/项目/Veyra/{build,tests,logs,tmp,reports,archives}/hdr-fg-toggle-20261009；39工作树/495脏文件保全，最终回执在reports同目录。没有新完整发布包、版本变更、push/Release/关机，无子Agent或造压；5090现场闪黑/BMD实卡和延迟/NV显存增长仍未确认。
+
 ## 2026-10-09 HDR 补帧兼容开关（默认关闭）与 main 整合准备
 
 - 用户要求先将目前修复合入 main，解释 HDR 闪黑候选原因/代价后，明确要求设置页开关、默认关闭。按 HDR_FG_COMPAT_TOGGLE_PLAN_2026-10-09.md，在原 FG 分支实施；独立 start/bundle 保护39工作树/495脏文件，只有 FG 与后续获授权 main 可变，其余37工作树保持。

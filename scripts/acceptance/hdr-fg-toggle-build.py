@@ -73,6 +73,9 @@ if '--tests-only' in sys.argv:
  print('Native fixture rebuilt; GUI and original inputs unchanged',flush=True);raise SystemExit(0)
 for file in ('include/veyra/engine/PresentationSettings.h','include/veyra/engine/VideoPresenter.h','tests/integration/HdrCopyPresentationFixture.h'):
  sources[str(ROOT/file)]=sha(ROOT/file)
+if '--combined' in sys.argv:
+ for file in ('include/veyra/source/NativeCaptureSink.h','tests/unit/BmdAllocatorCases.h'):
+  sources[str(ROOT/file)]=sha(ROOT/file)
 deps=subprocess.check_output([tool,'-t','deps'],cwd=CACHE,text=True,encoding='utf8')
 headers=('include/veyra/engine/PresentationSettings.h','include/veyra/engine/VideoPresenter.h')
 dependent=[]
@@ -104,8 +107,9 @@ if combined:
   name='CMakeFiles/veyra_sources.dir/src/source/'+file+'.obj'
   overrides[name]=compileSource(ROOT/'src/source'/file,file[:-4],compiler(name))
 fixture=compileSource(ROOT/'tests/integration/FgPresentationTests.cpp','fg-presentation-tests',args(original[0]))
-core=[p for name,p in overrides.items() if '/src/engine/' in name and Path(name).stem in ('VideoPresenter.cpp','EngineController.cpp','EngineControllerImage.cpp') or name.startswith('CMakeFiles/veyra_sources.')]
+core=[p for name,p in overrides.items() if name.startswith(('CMakeFiles/veyra_engine.','CMakeFiles/veyra_sources.'))]
 assert sum(p.stem in ('VideoPresenter','EngineController','EngineControllerImage') for p in core)==3,core
+assert any(p.stem=='PreviewGpuSession' for p in core),core
 nativeLink=[]
 for a in native:
  if a.endswith('FgPresentationTests.cpp.obj'):nativeLink+=list(map(str,core+[fixture]))
@@ -129,7 +133,10 @@ if combined:
   names,variables=rule(target,False);assert len(names)==1,(target,names)
   rel=names[0].split('.dir/',1)[1][:-4]
   testObject=compileSource(ROOT/rel,name,compiler(names[0]))
-  rsp=OUT/(name+'.rsp');rsp.write_text('\n'.join(subprocess.list2cmdline([str(p)]) for p in captureObjects+[testObject])+'\n'+unescape(variables.get('LINK_PATH',''))+'\n'+unescape(variables['LINK_LIBRARIES']),encoding='utf8')
+  # HdrColorTests constructs VideoPresenter directly, so it must receive the
+  # same updated engine objects as the GUI, not the cached class implementation.
+  selectedObjects=core if name=='capture-gpu' else captureObjects
+  rsp=OUT/(name+'.rsp');rsp.write_text('\n'.join(subprocess.list2cmdline([str(p)]) for p in selectedObjects+[testObject])+'\n'+unescape(variables.get('LINK_PATH',''))+'\n'+unescape(variables['LINK_LIBRARIES']),encoding='utf8')
   directory=OUT/('manifest-'+name);directory.mkdir(exist_ok=True)
   testFlags=args(unescape(variables.get('LINK_FLAGS','')))
   run([cmake,'-E','vs_link_exe','--msvc-ver=1944','--intdir='+str(directory),r'--rc=C:\PROGRA~2\WI3CF2~1\10\bin\100261~1.0\x64\rc.exe',r'--mt=C:\PROGRA~2\WI3CF2~1\10\bin\100261~1.0\x64\mt.exe','--manifests','--',link,'/nologo','@'+str(rsp),'/out:'+str(OUT/(name+'.exe')),'/implib:'+str(OUT/(name+'.lib')),'/pdb:'+str(OUT/(name+'.pdb')),'/version:0.0']+testFlags,'link-'+name)
