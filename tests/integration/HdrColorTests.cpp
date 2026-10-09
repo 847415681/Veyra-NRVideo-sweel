@@ -8,6 +8,7 @@
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/RuntimePaths.h"
 #include "CaptureFormatGpuCases.h"
+#include "DeckLinkGpuCases.h"
 #include "SdrColorGpuCases.h"
 #include "HdrNativeRoundTripCases.h"
 #include "HdrToneMapGpuCases.h"
@@ -22,7 +23,7 @@ int wmain(int argc,wchar_t** argv){
  CoInitializeEx(nullptr,COINIT_MULTITHREADED);
  gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status st;gfx::DeviceContextDesc dd;
  if(!ctx.initialize(dd,st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,st))return 2;
- int failures=captureGpuCases(ctx,ring)+sdrColorGpuCases(ctx,ring)+hdrRoundTrip::run(ctx,ring)+hdrToneTests::run(ctx,ring)+screenScRgbCases(ctx,ring);
+ int failures=captureGpuCases(ctx,ring)+decklinkGpuCases(ctx,ring)+sdrColorGpuCases(ctx,ring)+hdrRoundTrip::run(ctx,ring)+hdrToneTests::run(ctx,ring)+screenScRgbCases(ctx,ring);
  if(argc>1){
   std::vector<uint8_t> software;const float expectedPeak=argc>2?float(_wtof(argv[2])):0;
   for(bool hardware:{false,true}){

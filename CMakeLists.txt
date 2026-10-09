@@ -559,6 +559,8 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     src/source/NativeCaptureSink.cpp
     src/source/MediaFileSource.cpp
     src/source/CaptureCardSource.cpp
+    src/source/DeckLinkCapture.cpp
+    src/source/DeckLinkDriver.cpp
     src/source/ElgatoHdrControl.cpp
     src/source/ScreenCaptureSource.cpp
     src/source/AverMediaAudioSwitch.cpp
@@ -567,6 +569,32 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     src/source/MagewellCapture.cpp
   )
   veyra_apply_warnings(veyra_sources)
+  # Optional external DeckLink SDK. Generate the official COM ABI outside the
+  # source tree; Desktop Video supplies the installed COM server at run time.
+  set(VEYRA_DECKLINK_SDK_DIR "" CACHE PATH "External DeckLink SDK Win IDL directory")
+  if(VEYRA_DECKLINK_SDK_DIR AND NOT EXISTS "${VEYRA_DECKLINK_SDK_DIR}/DeckLinkAPI.idl")
+    message(FATAL_ERROR "VEYRA_DECKLINK_SDK_DIR must contain the external Win DeckLinkAPI.idl")
+  endif()
+  if(VEYRA_DECKLINK_SDK_DIR AND EXISTS "${VEYRA_DECKLINK_SDK_DIR}/DeckLinkAPI.idl")
+    find_program(VEYRA_MIDL_EXECUTABLE midl REQUIRED)
+    set(VEYRA_DECKLINK_GENERATED "${CMAKE_CURRENT_BINARY_DIR}/decklink-generated")
+    file(MAKE_DIRECTORY "${VEYRA_DECKLINK_GENERATED}")
+    file(GLOB VEYRA_DECKLINK_IDL_DEPENDS "${VEYRA_DECKLINK_SDK_DIR}/*.idl")
+    add_custom_command(OUTPUT "${VEYRA_DECKLINK_GENERATED}/DeckLinkAPI_h.h"
+      COMMAND "${VEYRA_MIDL_EXECUTABLE}" /nologo /env x64 /I "${VEYRA_DECKLINK_SDK_DIR}"
+        /out "${VEYRA_DECKLINK_GENERATED}" /h DeckLinkAPI_h.h
+        /iid DeckLinkAPI_i.c /tlb DeckLinkAPI.tlb /client none /server none
+        "${VEYRA_DECKLINK_SDK_DIR}/DeckLinkAPI.idl"
+      DEPENDS ${VEYRA_DECKLINK_IDL_DEPENDS} VERBATIM)
+    add_custom_target(veyra_decklink_abi DEPENDS "${VEYRA_DECKLINK_GENERATED}/DeckLinkAPI_h.h")
+    add_dependencies(veyra_sources veyra_decklink_abi)
+    set_source_files_properties(src/source/DeckLinkDriver.cpp PROPERTIES
+      COMPILE_DEFINITIONS VEYRA_HAS_DECKLINK=1 INCLUDE_DIRECTORIES "${VEYRA_DECKLINK_GENERATED}")
+    message(STATUS "DeckLink native capture ABI: ${VEYRA_DECKLINK_SDK_DIR}")
+  else()
+    set_source_files_properties(src/source/DeckLinkDriver.cpp PROPERTIES COMPILE_DEFINITIONS VEYRA_HAS_DECKLINK=0)
+    message(STATUS "DeckLink native capture: no SDK configured (DirectShow remains available)")
+  endif()
   # Magewell Pro Capture low-latency video: compiled against the vendor SDK headers when
   # VEYRA_MAGEWELL_SDK_DIR points at them (kept outside the source tree); LibMWCapture.dll is
   # loaded at run time. Without the headers the feature reports itself unavailable.
@@ -623,6 +651,10 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_link_libraries(veyra_source_tests PRIVATE veyra_sources)
 
   add_executable(veyra_capture_tests tests/integration/CaptureSourceTests.cpp)
+  add_executable(veyra_decklink_tests tests/unit/DeckLinkCaptureTests.cpp)
+  target_compile_features(veyra_decklink_tests PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_decklink_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_link_libraries(veyra_decklink_tests PRIVATE veyra_sources)
   add_executable(veyra_screen_capture_tests tests/integration/ScreenCaptureTests.cpp)
   target_compile_features(veyra_screen_capture_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_screen_capture_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)

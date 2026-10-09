@@ -23,6 +23,7 @@
 #include "veyra/engine/CaptureHalfRate.h"
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/source/CaptureCardSource.h"
+#include "veyra/source/DeckLinkCapture.h"
 #include "veyra/source/ScreenCaptureSource.h"
 #include "veyra/xbox/DisconnectPolicy.h"
 #ifdef VEYRA_ENABLE_REMOTEPLAY
@@ -545,9 +546,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             {std::lock_guard lock(mutex_);snapshot_.sourceHdr=gd.hdrInput;}
             gd.highQualityPresentation=isRemote&&activeSource->info().color.reconstructChroma;
             gd.rgbInput=isImage||isScreen||(isCapture&&activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::Bgra8);
-            gd.captureBitDepth=activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::P010?10:activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::P016?16:8;
+            auto ingressBitDepth=[](pipeline::SourcePixelFormat format){return format==pipeline::SourcePixelFormat::P010||format==pipeline::SourcePixelFormat::V210||format==pipeline::SourcePixelFormat::Rgb10xLE?10u:format==pipeline::SourcePixelFormat::P016?16u:8u;};
+            gd.captureBitDepth=ingressBitDepth(activeSource->info().color.pixelFormat);
             gd.yuy2Input=isCapture&&activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::Yuy2;gd.stillImage=isImage;
             gd.packedInput=isCapture?pipeline::packedInputCode(activeSource->info().color.pixelFormat):0;
+            auto captureGraphColor=activeSource->info().color;
             const bool nvidiaAdapter=ctx.adapter().isNvidia;
             // AMD adapters run NR on the lmxxf runtime. Both the normalization
             // and the stage description used to drop NR on every non-NVIDIA
@@ -1159,7 +1162,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     captureSource.setBufferMode(unsigned(options.settings.captureBuffer));
                     if(captureSource.reconnect(muted_?0.0f:volume_.load(),unsigned(options.settings.audioSync),options.settings.audioOffsetMs)){
                         captureRecovering=false;reset=true;pendingResetCause=pipeline::ResetReason::DeviceLost;captureSampler.reset();
-                        {std::lock_guard lock(mutex_);snapshot_.captureRecovering=false;}
+                        {std::lock_guard lock(mutex_);snapshot_.captureRecovering=false;
+                            if(captureSource.info().videoDecodePath=="decklink")snapshot_.nominalSourceFps=captureSource.info().averageFps;}
                         status(L"采集设备已重新连接，等待新画面");
                     }else{
                         captureRetryAt=Clock::now()+std::chrono::seconds(std::min(5u,captureRetries));
@@ -1535,7 +1539,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             captureSource.videoReset();av_frame_free(&cachedFrame);hasOutput=false;out={};
                             captureRecovering=true;captureRetries=0;captureRetryAt=Clock::now()+std::chrono::milliseconds(500);
                             {std::lock_guard lock(mutex_);snapshot_.captureRecovering=true;snapshot_.captureFps=0;}
-                            status(L"采集信号中断，等待原设备恢复");continue;
+                            status(captureSource.errorMessage().empty()?L"采集信号中断，等待原设备恢复":captureSource.errorMessage());continue;
                         }
 #ifdef VEYRA_ENABLE_REMOTEPLAY
                         if(remote){const auto recovery=remote->recoveryStatus();status(recovery.message.empty()?L"PS5 串流异常，请检查主机状态后重新连接。":recovery.message,true);break;}
@@ -1584,11 +1588,18 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         status(isScreen?screenSource.status():isCapture?L"采集信号中断，请检查设备连接或格式":source.errorMessage().empty()?L"视频解码或时间戳错误":source.errorMessage(),true);break;}
                 }
                 if(isScreen){std::lock_guard lock(mutex_);snapshot_.sourceNotice=screenSource.status();}
-                if((isStream||isScreen)&&frame&&(uint32_t(frame->width)!=width||uint32_t(frame->height)!=height||(isScreen&&gd.hdrInput!=activeSource->info().color.isHdrPath()))){
+                const bool nativeCapture=physicalCapture&&activeSource->info().videoDecodePath=="decklink";
+                if((isStream||isScreen||nativeCapture)&&frame&&(uint32_t(frame->width)!=width||uint32_t(frame->height)!=height||(isScreen&&gd.hdrInput!=activeSource->info().color.isHdrPath())||
+                    (nativeCapture&&!source::decklink::sameColor(captureGraphColor,activeSource->info().color)))){
                     drainLivePresentation();if(!ring.drainQueue()){status(L"串流尺寸切换排空失败",true);break;}
                     width=uint32_t(frame->width);height=uint32_t(frame->height);
                     describeStages(stageRequest(options),options.snapshot(),gd);
                     gd.hdrInput=!isImage&&activeSource->info().color.isHdrPath();gd.hdrOutput=options.settings.useHdrPreview(gd.hdrInput,displayHdrActive());
+                    if(nativeCapture){
+                        captureGraphColor=activeSource->info().color;gd.rgbInput=captureGraphColor.pixelFormat==pipeline::SourcePixelFormat::Bgra8;
+                        gd.yuy2Input=false;gd.packedInput=pipeline::packedInputCode(captureGraphColor.pixelFormat);gd.captureBitDepth=ingressBitDepth(captureGraphColor.pixelFormat);
+                        std::lock_guard lock(mutex_);snapshot_.sourceWidth=width;snapshot_.sourceHeight=height;snapshot_.sourceHdr=gd.hdrInput;snapshot_.sourceDisplayAspect=activeSource->info().displayAspect;
+                    }
                     presenter.close();graph->shutdown();recentGraphCache.evict("source-resize");
                     graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,&coreCache);graphBytes=0;out={};hasOutput=false;
                     if(!graph->initialize(gd)||!openPreparedPresenter(options)){if(!stop_)status(L"串流尺寸切换失败",true);break;}

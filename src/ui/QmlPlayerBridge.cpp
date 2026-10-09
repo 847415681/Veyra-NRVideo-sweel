@@ -112,6 +112,7 @@ namespace Gdiplus { using std::min; using std::max; }
 #include "veyra/ngx/NrArchitecturePolicy.h"
 #include "veyra/ngx/FgCompatibilitySession.h"
 #include "veyra/source/CaptureCardSource.h"
+#include "veyra/source/DeckLinkCapture.h"
 #include "veyra/source/CaptureSignalProbe.h"
 #include "veyra/source/ScreenCaptureSource.h"
 
@@ -1964,12 +1965,21 @@ void QmlPlayerBridge::copyDiagnostics() {
 
 
 // --- capture dialog ----------------------------------------------------------
+static QString captureDeviceUiLabel(const source::CaptureDevice& device) {
+    return source::decklink::isPath(device.path)
+        ? uiText(device.name).replace(QStringLiteral("跟随驱动输入"), uiText(L"跟随驱动输入")) : utf8Of(device.name);
+}
 QVariantList QmlPlayerBridge::captureDevices() const {
     // The source's own enumeration (asynchronous, see refreshCaptureDevices). An
     // empty list means the machine reports no capture devices.
     QVariantList out;
-    for (const auto& d : impl_->captureVideo)
-        out << QVariantMap{{"id", utf8Of(d.path)}, {"label", utf8Of(d.name)}, {"embeddedAudio", d.hasEmbeddedAudio}};
+    for (const auto& d : impl_->captureVideo) {
+        const bool native=source::decklink::isPath(d.path);
+        const bool enabled=impl_->prefBool("blackmagicNativeCapture",false);
+        if(native&&!enabled)continue;
+        if(!native&&enabled&&source::isBlackmagicCaptureDevice(d.name,d.path))continue;
+        out << QVariantMap{{"id", utf8Of(d.path)}, {"label", captureDeviceUiLabel(d)}, {"embeddedAudio", d.hasEmbeddedAudio}};
+    }
     return out;
 }
 QString QmlPlayerBridge::captureDeviceId() const { return utf8Of(impl_->captureDevice); }
@@ -1987,14 +1997,17 @@ void QmlPlayerBridge::setCaptureDeviceId(const QString& value) {
     emit captureChanged();
 }
 QString QmlPlayerBridge::captureDeviceLabel() const {
-    for (const auto& d : impl_->captureVideo) if (d.path == impl_->captureDevice) return utf8Of(d.name);
+    for (const auto& d : impl_->captureVideo) if (d.path == impl_->captureDevice) return captureDeviceUiLabel(d);
     return impl_->captureDevice.empty() ? tr("未选择设备") : tr("设备未连接");
 }
 QVariantList QmlPlayerBridge::captureFormats() const {
     QVariantList out;
-    for (const auto& f : impl_->captureFormatList)
-        out << QVariantMap{{"id", utf8Of(f.key)}, {"label", uiText(f.label)}, {"tier", f.tier},
+    for (const auto& f : impl_->captureFormatList) {
+        auto label=uiText(f.label);
+        if(source::decklink::isPath(impl_->captureDevice))label=label.replace(QStringLiteral("逐行"),tr("逐行")).replace(QStringLiteral("隔行"),tr("隔行"));
+        out << QVariantMap{{"id", utf8Of(f.key)}, {"label", label}, {"tier", f.tier},
                            {"costHint", source::captureFormatNeedsCostHint(static_cast<source::CaptureFormatTier>(f.tier))}, {"driverCurrent", f.driverCurrent}};
+    }
     return out;
 }
 QString QmlPlayerBridge::captureFormatKey() const { return utf8Of(impl_->captureFormatKey); }
@@ -2069,7 +2082,7 @@ void QmlPlayerBridge::setCaptureBufferMode(int value) {
 bool QmlPlayerBridge::captureQueryBusy() const { return impl_->captureBusy || impl_->captureDriverSettingsOpen; }
 QString QmlPlayerBridge::captureStatus() const { return impl_->captureStatus; }
 bool QmlPlayerBridge::captureBlackmagicDevice() const {
-    for (const auto& d : impl_->captureVideo) if (d.path == impl_->captureDevice) return source::isBlackmagicCaptureDevice(d.name, d.path);
+    for (const auto& d : impl_->captureVideo) if (d.path == impl_->captureDevice) return source::decklink::isPath(d.path)||source::isBlackmagicCaptureDevice(d.name, d.path);
     return false;
 }
 bool QmlPlayerBridge::openCaptureDriverSettings(bool inputSelector) {
@@ -2145,15 +2158,23 @@ void QmlPlayerBridge::tickCapture() {
         veyra::log::info("capture-ui", std::format("devices video={} audio={}", i.captureVideo.size(), i.captureAudio.size()));
         // Restore the remembered device; otherwise the first one. Never guess audio.
         std::wstring pick;
-        for (const auto& d : i.captureVideo) if (d.path == i.capturePrefs.videoPath) pick = d.path;
-        if (pick.empty() && !i.captureVideo.empty() && i.capturePrefs.videoPath.empty()) pick = i.captureVideo.front().path;
+        const auto choices=captureDevices();
+        auto allowed=[&](std::wstring_view path){for(const auto& value:choices)if(wideOf(value.toMap().value("id").toString())==path)return true;return false;};
+        if(allowed(i.capturePrefs.videoPath))pick=i.capturePrefs.videoPath;
+        // The two APIs are separate identities. Restore an explicitly used
+        // endpoint, or select a unique native endpoint; never map by ordinal.
+        const bool native=i.prefBool("blackmagicNativeCapture",false);
+        const auto remembered=wideOf(i.prefs.value(native?"blackmagicNativeLastDevice":"blackmagicDirectShowLastDevice").toString());
+        if(pick.empty()&&allowed(remembered))pick=remembered;
+        if(pick.empty()&&native){std::vector<std::wstring> candidates;for(const auto& d:i.captureVideo)if(source::decklink::isPath(d.path))candidates.push_back(d.path);if(candidates.size()==1)pick=candidates.front();}
+        if (pick.empty() && !choices.empty() && i.capturePrefs.videoPath.empty()&&!native) pick=wideOf(choices.front().toMap().value("id").toString());
         i.captureStatus = i.captureVideo.empty() ? tr("未找到采集设备。连接后点击刷新。")
                         : pick.empty() ? tr("上次采集设备未连接。插回后刷新，或手动选择其他设备。") : QString();
         if (!pick.empty()) {
             i.captureDevice.clear();
             setCaptureDeviceId(utf8Of(pick));
             if (pick == i.capturePrefs.videoPath) restoreRememberedAudio();
-        }
+        }else{setCaptureDeviceId({});if(native)i.captureStatus=tr("请选择 BMD 原生设备；若列表中没有，请安装 Desktop Video 驱动。多个设备不会自动猜选。");}
         emit captureChanged();
         return;
     }
@@ -2171,6 +2192,7 @@ void QmlPlayerBridge::tickCapture() {
     i.captureStatus = i.captureFormatList.empty() ? tr("未读到有效的 4K 以内采集格式，或设备正被其他应用占用。")
                     : i.captureFormatKey.empty() ? tr("上次格式已不可用，请重新选择格式。")
                     : q.kind == 3 ? tr("驱动设置已关闭。请核对所选格式与设备帧率，再连接。")
+                    : source::decklink::isPath(i.captureDevice) ? tr("原生采集先确认有效信号；支持自动检测的卡建议选择自动。HDMI/SDI 跟随 Desktop Video Setup。")
                     : captureBlackmagicDevice() ? tr("请选择与输入信号一致的格式。驱动默认格式不代表检测到的信号。")
                     : tr("连接后使用当前增强设置。格式与音频变更需要重新连接。");
     veyra::log::info("capture-ui", std::format("formats={} selected={}", i.captureFormatList.size(), !i.captureFormatKey.empty()));
@@ -2186,6 +2208,9 @@ bool QmlPlayerBridge::startCaptureSession() {
     int device = -1;
     for (size_t k = 0; k < i.captureVideo.size(); ++k) if (i.captureVideo[k].path == i.captureDevice) device = int(k);
     const auto* format = source::selectCaptureFormat(i.captureFormatList, -1, i.captureFormatKey);
+    if(source::decklink::isPath(i.captureDevice)!=i.prefBool("blackmagicNativeCapture",false)&&captureBlackmagicDevice()){
+        emit notice(tr("采集接口已切换，请刷新并重新选择设备和格式"),true);return false;
+    }
     if (device < 0 || !format) { emit notice(tr("请先选择采集设备和格式"), true); return false; }
     const int audio = i.captureAudioChoice;
     const source::CaptureDevice* audioDevice = audio >= 0 && size_t(audio) < i.captureAudio.size() ? &i.captureAudio[size_t(audio)] : nullptr;
@@ -2201,6 +2226,7 @@ bool QmlPlayerBridge::startCaptureSession() {
                                  i.captureFps > 0 ? i.captureFps : format->fps, true});
     veyra::log::info("capture-ui", std::format("connect format={} audio={} color={} fps={}", QString::fromStdWString(format->label).toStdString(), audio, i.captureColor, i.captureFps));
     i.prefs["captureDeviceName"] = utf8Of(i.captureVideo[size_t(device)].name);
+    if(captureBlackmagicDevice())i.prefs[source::decklink::isPath(i.captureDevice)?"blackmagicNativeLastDevice":"blackmagicDirectShowLastDevice"]=utf8Of(i.captureDevice);
     rememberSource(QStringLiteral("capture"), utf8Of(i.captureVideo[size_t(device)].name));
     i.prefs["captureFormatLabel"] = utf8Of(format->label);
     i.savePrefs();
@@ -5070,6 +5096,10 @@ QRect QmlPlayerBridge::launchScreenAvailable() const {
 }
 
 bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
+    if(key==QLatin1String("blackmagicNativeCapture")){
+        if(captureQueryBusy()){emit notice(tr("请等待采集设备查询完成后再切换接口"),true);return false;}
+        if(captureBlackmagicDevice())impl_->prefs[source::decklink::isPath(impl_->captureDevice)?"blackmagicNativeLastDevice":"blackmagicDirectShowLastDevice"]=utf8Of(impl_->captureDevice);
+    }
     static const QHash<QString, std::pair<int, int>> ranges{
         {"subtitleSize", {16, 56}}, {"subtitleFont", {0, 5}}, {"subtitleOutline", {0, 3}},
         {"subtitleMargin", {0, 240}}, {"subtitleLines", {0, 8}},
@@ -5077,7 +5107,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"listInspectorWidth", {376, 4000}}};
     static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
-                                   "magewellLowLatency", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility"};
+                                   "magewellLowLatency", "blackmagicNativeCapture", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -5174,6 +5204,7 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
     if (key == QLatin1String("audioDevice")) sink::setPreferredRenderEndpoint(impl_->prefString("audioDevice").toStdWString());
     else if (key == QLatin1String("audioForceStereo")) sink::setForceStereoDownmix(impl_->prefBool("audioForceStereo", false));
     else if (key == QLatin1String("magewellLowLatency")) source::magewell::setLowLatencyPreference(impl_->prefBool("magewellLowLatency", false));
+    else if (key == QLatin1String("blackmagicNativeCapture")) { if(impl_->captureListed)refreshCaptureDevices();emit captureChanged(); }
     else if (key == QLatin1String("language")) {
         const QString code = i18n::resolve(impl_->prefString("language"));
         if (!i18n::apply(code)) emit notice(tr("这个语言的翻译没有找到，界面保持简体中文"), true);

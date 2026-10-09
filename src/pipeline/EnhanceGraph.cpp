@@ -63,8 +63,10 @@ constexpr int64_t usPerSecond = 1000000;
 float uintBits(uint32_t v) { return std::bit_cast<float>(v); }
 
 // N1 packed capture ingress helpers. Codes match pipeline::packedInputCode:
-// 1 BGR24, 2 RGB555, 3 RGB565, 4 UYVY, 5 YVYU.
+// 1 BGR24, 2 RGB555, 3 RGB565, 4 UYVY, 5 YVYU, 6 v210, 7 RGBXLE10.
 unsigned packedIngressRowBytes(uint32_t code,unsigned width){
+    if(code==6)return ((width+5)/6)*16;
+    if(code==7)return width*4;
     return code==1?width*3:width*2;
 }
 unsigned packedIngressTexels(uint32_t code,unsigned width){
@@ -77,6 +79,7 @@ AVPixelFormat packedIngressFormat(uint32_t code){
     case 3:return AV_PIX_FMT_RGB565LE;
     case 4:return AV_PIX_FMT_UYVY422;
     case 5:return AV_PIX_FMT_YVYU422;
+    case 6:case 7:return AV_PIX_FMT_BGRA; // raw storage carrier, explicitly unpacked
     default:break;
     }
     return AV_PIX_FMT_NONE;
@@ -92,6 +95,9 @@ uint8_t packedIngressLuma(const uint8_t* data,ptrdiff_t linesize,uint32_t code,u
         const unsigned r=(w>>11)&31,g=(w>>5)&63,b=w&31;return uint8_t((54*(r<<3|r>>2)+183*(g<<2|g>>4)+19*(b<<3|b>>2)+128)>>8);}
     case 4:return p[x*2+1]; // UYVY: Y0 follows U
     case 5:return p[x*2];   // YVYU: Y0 leads
+    case 6:{const auto* q=p+(x/6)*16;uint32_t words[4];std::memcpy(words,q,16);
+        constexpr unsigned word[]={0,1,1,2,3,3},shift[]={10,0,20,10,0,20};return uint8_t(((words[word[x%6]]>>shift[x%6])&1023)>>2);}
+    case 7:{uint32_t word;std::memcpy(&word,p+x*4,4);const auto r=(word>>22)&1023,g=(word>>12)&1023,b=(word>>2)&1023;return uint8_t(std::min(255u,(54*r+183*g+19*b+512)>>10));}
     default:break;
     }
     return 0;
@@ -1517,7 +1523,7 @@ bool EnhanceGraph::createComputePasses()
     const UINT ingressUavCount = preGradeRgba_ ? 2u : 1u;
     if (!yuvPass_.loadShader("YuvToLinearRgb.dxil", cs) || !yuvPass_.create(context_.device(), cs, 12, 2, ingressUavCount, 12+kColorGradeConstantCount, 4)) return false;
     const char* rgbShader=desc_.packedInput?"PackedCaptureToLinear.dxil":desc_.yuy2Input?"Yuy2ToLinear.dxil":"RgbToLinear.dxil";
-    if((desc_.rgbInput||desc_.yuy2Input||desc_.packedInput)&&(!rgbPass_.loadShader(rgbShader,cs)||!rgbPass_.create(context_.device(),cs,12,1,ingressUavCount,8+kColorGradeConstantCount,4)))return false;
+    if((desc_.rgbInput||desc_.yuy2Input||desc_.packedInput)&&(!rgbPass_.loadShader(rgbShader,cs)||!rgbPass_.create(context_.device(),cs,12,1,ingressUavCount,(desc_.packedInput?12:8)+kColorGradeConstantCount,4)))return false;
     // Descriptor budget grows with the NR stack: encode needs one SRV+UAV pair
     // per layer, decode needs three SRVs and one UAV per layer. The base 8
     // slots the single-layer graph always used are kept as the floor.
@@ -1919,7 +1925,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     }
     const bool gpuRgb=desc_.rgbInput&&frame->format==AV_PIX_FMT_D3D11&&hardwareSurface&&hardwareSurface->present();
     if(resolved.scRgb&&(!gpuRgb||resolved.transfer!=TransferFunction::Linear||resolved.primaries!=ColorPrimaries::BT709||hardwareSurface->texture->GetDesc().Format!=DXGI_FORMAT_R16G16B16A16_FLOAT))return false;
-    if (resolved.isHdrPath()&&(!desc_.hdrInput||(!resolved.scRgb&&desc_.rgbInput)||desc_.yuy2Input||desc_.packedInput)) {
+    const bool packedHdr=desc_.packedInput==6||desc_.packedInput==7;
+    if (resolved.isHdrPath()&&(!desc_.hdrInput||(!resolved.scRgb&&desc_.rgbInput)||desc_.yuy2Input||(desc_.packedInput&&!packedHdr))) {
         veyra::log::error("graph", "HDR input requires an explicit YUV HDR contract; RGB/YUY2 HDR ingress is unsupported"); return false;
     }
     if(std::abs(ptsMs)>9e13){veyra::log::error("timeline","PTS outside representable range");return false;}
@@ -2013,7 +2020,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         // (CaptureUploadFrame.h): the GPU copies from the frame's own buffer.
         if(auto* upload=(packed||desc_.yuy2Input)?captureUploadFrame(frame):nullptr;upload&&upload->direct&&upload->proxyValid&&upload->planes==1&&
            upload->device.Get()==context_.device()&&frame->data[0]==upload->mapped&&upload->width==srcW_&&upload->height==srcH_&&
-           upload->pitch>=ingressTexels*4&&upload->pixelBytes==(packed&&desc_.packedInput==1?3u:2u))gpuDirectFrame=upload;
+           upload->pitch>=ingressTexels*4&&upload->pixelBytes==(packed&&desc_.packedInput>=6?4u:packed&&desc_.packedInput==1?3u:2u))gpuDirectFrame=upload;
         if(!gpuDirectFrame)for(uint32_t y=0;y<srcH_;++y){
             auto* dst=mappedRgb_[parity]+y*rgbPitch_;const auto* src=frame->data[0]+ptrdiff_t(y)*frame->linesize[0];
             if(packed||desc_.yuy2Input||frame->format==AV_PIX_FMT_RGBA)std::memcpy(dst,src,size_t(ingressRowBytes));
@@ -2210,9 +2217,10 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     auto convertInput=[&](bool grade, ID3D12Resource* target, UINT uavSlot){
     tracker_.transition(list, target, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     if(desc_.rgbInput||desc_.yuy2Input||desc_.packedInput){
-        float c[8+kColorGradeConstantCount]={uintBits(srcW_),uintBits(srcH_),uintBits(workingTransferCode(resolved)),uintBits(resolved.range==ColorRange::Limited?1u:0u),
+        float c[12+kColorGradeConstantCount]={uintBits(srcW_),uintBits(srcH_),uintBits(resolved.transfer==TransferFunction::PQ?4u:resolved.transfer==TransferFunction::HLG?5u:workingTransferCode(resolved)),uintBits(resolved.range==ColorRange::Limited?1u:0u),
             resolved.range==ColorRange::Full?0.0f:1.0f,resolved.matrix==YuvMatrix::BT2020NCL?2.0f:resolved.matrix==YuvMatrix::BT601?0.0f:1.0f,resolved.primaries==ColorPrimaries::BT2020?1.0f:0.0f,uintBits(desc_.packedInput)};
-        if(grade)packColorGradeConstants(colorTables_,c+8);
+        if(desc_.packedInput){c[8]=desc_.hdrWorking()?1.f:0.f;c[9]=toneMapPeakNits_;c[10]=203.f;}
+        if(grade)packColorGradeConstants(colorTables_,c+(desc_.packedInput?12:8));
         if(resolved.scRgb){c[4]=desc_.hdrWorking()?1.f:2.f;c[5]=toneMapPeakNits_;}
         rgbPass_.bind(list,c,gpuHandleOf(rgbPass_,gpuRgb?3+parity:0).ptr,gpuHandleOf(rgbPass_,1+uavSlot).ptr,gpuHandleOf(rgbPass_,8).ptr);
         list->Dispatch((srcW_+15)/16,(srcH_+15)/16,1);

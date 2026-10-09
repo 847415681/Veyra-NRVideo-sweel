@@ -14743,6 +14743,293 @@
    "zh-TW": "關閉視窗",
    "en": "Close window",
    "ja": "ウィンドウを閉じる"
+  },
+  {
+   "zh": "Blackmagic 原生采集",
+   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "Blackmagic 原生擷取",
+   "en": "Blackmagic native capture",
+   "ja": "Blackmagic ネイティブキャプチャ"
+  },
+  {
+   "zh": "默认关闭。开启使用 DeckLink 原生接口，关闭使用 DirectShow。需安装 Desktop Video 驱动；切换后重新选择设备和格式并连接，不写入驱动永久配置。",
+   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "預設關閉。開啟使用 DeckLink 原生介面，關閉使用 DirectShow。需要 Desktop Video 驅動；切換後重新選擇裝置及格式並連線，不寫入驅動永久設定。",
+   "en": "Off by default. On uses DeckLink; off uses DirectShow. Requires Desktop Video. Reselect the device and format, then reconnect. Driver preferences are not changed.",
+   "ja": "既定はオフです。オンで DeckLink、オフで DirectShow を使用します。Desktop Video が必要です。切り替え後にデバイスと形式を選び直して接続してください。ドライバーの永続設定は変更しません。"
+  },
+  {
+   "zh": "原生采集跟随 Desktop Video Setup 的 HDMI/SDI 输入。支持自动检测的卡建议选择自动；信号未锁定时会明确提示。",
+   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "原生擷取沿用 Desktop Video Setup 的 HDMI/SDI 輸入。支援自動偵測的卡建議選擇自動；訊號未鎖定時會明確提示。",
+   "en": "Native capture follows the HDMI/SDI input selected in Desktop Video Setup. Choose automatic detection when supported. An unlocked signal is reported explicitly.",
+   "ja": "Desktop Video Setup で選んだ HDMI/SDI 入力を使用します。対応カードは自動検出を推奨します。信号がロックされていない場合は明示します。"
+  },
+  {
+   "zh": "Blackmagic 两个条目可能属于同一张卡。DirectShow 黑屏可尝试下方原生采集开关；手动格式须匹配实际信号。",
+   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "Blackmagic 兩個項目可能屬於同一張卡。DirectShow 黑畫面可嘗試下方原生擷取開關；手動格式須符合實際訊號。",
+   "en": "Both Blackmagic entries may refer to one card. If DirectShow is black, try native capture below. Manual formats must match the input signal.",
+   "ja": "Blackmagic の二つの項目が同じカードを指す場合があります。DirectShow が黒画面になる場合は下のネイティブキャプチャを試してください。手動形式は実際の信号に合わせます。"
+  },
+  {
+   "zh": "请等待采集设备查询完成后再切换接口",
+   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "請等待擷取裝置查詢完成後再切換介面",
+   "en": "Wait for device discovery to finish before switching interfaces.",
+   "ja": "デバイスの検索が完了してから切り替えてください。"
+  },
+  {
+   "zh": "请选择 BMD 原生设备；若列表中没有，请安装 Desktop Video 驱动。多个设备不会自动猜选。",
+   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "請選擇 BMD 原生裝置；若清單中沒有，請安裝 Desktop Video 驅動。多個裝置不會自動猜選。",
+   "en": "Select a native BMD device. If none is listed, install Desktop Video. Multiple devices are never selected by guesswork.",
+   "ja": "BMD ネイティブデバイスを選んでください。表示されない場合は Desktop Video をインストールしてください。複数のデバイスは自動で推測選択しません。"
+  },
+  {
+   "zh": "原生采集先确认有效信号；支持自动检测的卡建议选择自动。HDMI/SDI 跟随 Desktop Video Setup。",
+   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "原生擷取先確認有效訊號；支援自動偵測的卡建議選擇自動。HDMI/SDI 沿用 Desktop Video Setup。",
+   "en": "Native capture first verifies a valid signal. Use automatic detection when supported. HDMI/SDI follows Desktop Video Setup.",
+   "ja": "有効な信号を確認してからキャプチャします。対応カードは自動検出を使用してください。HDMI/SDI は Desktop Video Setup に従います。"
+  },
+  {
+   "zh": "采集接口已切换，请刷新并重新选择设备和格式",
+   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "擷取介面已切換，請重新整理並選擇裝置及格式",
+   "en": "Capture interface changed. Refresh and reselect the device and format.",
+   "ja": "キャプチャのインターフェイスが変更されました。更新してデバイスと形式を選び直してください。"
+  },
+  {
+   "zh": "BMD HDR 帧的 EOTF 不受支持；仅接受 SDR、PQ 或 HLG，拒绝猜测颜色传递",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD HDR 影格的 EOTF 不受支援；僅接受 SDR、PQ 或 HLG，不猜測色彩傳遞",
+   "en": "Unsupported BMD EOTF. Only SDR, PQ and HLG are supported; the transfer function will not be guessed.",
+   "ja": "BMD の EOTF は未対応です。SDR、PQ、HLG のみ対応し、伝達関数の推測は行いません。"
+  },
+  {
+   "zh": "BMD HDR 需要 10 位原生输入格式",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "BMD HDR 需要 10 位元原生輸入格式",
+   "en": "BMD HDR requires a native 10-bit input format.",
+   "ja": "BMD HDR にはネイティブ 10 ビット入力形式が必要です。"
+  },
+  {
+   "zh": "BMD PCM 音频配置失败；视频继续运行",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "BMD PCM 音訊設定失敗；視訊繼續執行",
+   "en": "BMD PCM audio configuration failed; video continues.",
+   "ja": "BMD PCM 音声の設定に失敗しました。映像は継続します。"
+  },
+  {
+   "zh": "BMD 制式回调异常",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD 制式回呼異常",
+   "en": "BMD format callback failed.",
+   "ja": "BMD 形式コールバックでエラーが発生しました。"
+  },
+  {
+   "zh": "BMD 原生入口跟随 Desktop Video Setup 的 HDMI/SDI 输入设置；请在该程序选择输入口，再使用自动检测或手动制式。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "BMD 原生入口沿用 Desktop Video Setup 的 HDMI/SDI 輸入設定；請在該程式選擇輸入埠，再使用自動偵測或手動制式。",
+   "en": "Native BMD capture uses the HDMI/SDI input selected in Desktop Video Setup. Select the input there, then use automatic detection or a manual format.",
+   "ja": "BMD ネイティブ入力は Desktop Video Setup の HDMI/SDI 設定に従います。同アプリで入力を選び、自動検出または手動形式を使用してください。"
+  },
+  {
+   "zh": "BMD 原生接口 {} 失败（0x{:08X}），请检查驱动、输入制式和设备占用",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD 原生介面 {} 失敗（0x{:08X}），請檢查驅動、輸入制式與裝置占用",
+   "en": "BMD native API {} failed (0x{:08X}). Check the driver, input format and device access.",
+   "ja": "BMD ネイティブ API {} が失敗しました（0x{:08X}）。ドライバー、入力形式、デバイスの使用状況を確認してください。"
+  },
+  {
+   "zh": "BMD 原生接口不可用，请安装 Desktop Video 驱动或使用 DirectShow 入口",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "BMD 原生介面無法使用，請安裝 Desktop Video 驅動或使用 DirectShow 入口",
+   "en": "Native BMD capture is unavailable. Install Desktop Video or use DirectShow.",
+   "ja": "BMD ネイティブ入力を使用できません。Desktop Video をインストールするか DirectShow を使用してください。"
+  },
+  {
+   "zh": "BMD 实际信号为 {:.3f} FPS，与请求的 {:.3f} FPS 不一致；设为 0 可跟随实际信号",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "BMD 實際訊號為 {:.3f} FPS，與要求的 {:.3f} FPS 不一致；設為 0 可沿用實際訊號",
+   "en": "BMD signal is {:.3f} FPS, but {:.3f} FPS was requested. Set 0 to follow the signal.",
+   "ja": "BMD の実信号は {:.3f} FPS ですが、要求値は {:.3f} FPS です。0 に設定すると実信号に従います。"
+  },
+  {
+   "zh": "BMD 帧回调异常",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD 影格回呼異常",
+   "en": "BMD frame callback failed.",
+   "ja": "BMD フレームコールバックでエラーが発生しました。"
+  },
+  {
+   "zh": "BMD 帧布局已改变，正在重新协商采集",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "BMD 影格配置已變更，正在重新協商擷取",
+   "en": "BMD frame layout changed; renegotiating capture.",
+   "ja": "BMD フレーム配置が変わりました。キャプチャを再設定しています。"
+  },
+  {
+   "zh": "BMD 无法读取有效画面或源时间戳",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD 無法讀取有效畫面或來源時間戳記",
+   "en": "BMD could not read valid video or source timestamps.",
+   "ja": "BMD の有効な映像またはソースのタイムスタンプを取得できません。"
+  },
+  {
+   "zh": "BMD 未检测到有效输入。请关闭占用采集卡的应用，并在 Desktop Video Setup 核对 HDMI/SDI 和制式；也可选择手动制式",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "BMD 未偵測到有效輸入。請關閉占用擷取卡的應用程式，並在 Desktop Video Setup 核對 HDMI/SDI 與制式；也可選擇手動制式",
+   "en": "BMD found no valid input. Close other capture apps and check HDMI/SDI and format in Desktop Video Setup. A matching manual format can also be selected.",
+   "ja": "BMD の有効な入力が見つかりません。他のキャプチャアプリを終了し、Desktop Video Setup の HDMI/SDI と形式を確認してください。対応する手動形式も選択できます。"
+  },
+  {
+   "zh": "BMD 标记 HDR，但驱动未提供 HDR 元数据接口",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD 標記 HDR，但驅動未提供 HDR 中繼資料介面",
+   "en": "BMD reports HDR, but the driver provides no HDR metadata interface.",
+   "ja": "BMD は HDR を報告していますが、ドライバーに HDR メタデータのインターフェイスがありません。"
+  },
+  {
+   "zh": "BMD 输入不支持所选制式/像素格式",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD 輸入不支援所選制式／像素格式",
+   "en": "BMD input does not support the selected video/pixel format.",
+   "ja": "BMD 入力は選択した映像／ピクセル形式に対応していません。"
+  },
+  {
+   "zh": "BMD 输入信号丢失，正在等待 HDMI/SDI 信号锁定",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "BMD 輸入訊號遺失，正在等待 HDMI/SDI 訊號鎖定",
+   "en": "BMD input signal lost; waiting for HDMI/SDI signal lock.",
+   "ja": "BMD 入力信号が失われました。HDMI/SDI の信号ロックを待っています。"
+  },
+  {
+   "zh": "BMD 输入制式/颜色格式已变化，正在重新检测信号",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "BMD 輸入制式／色彩格式已變更，正在重新偵測訊號",
+   "en": "BMD input mode/color format changed; detecting the signal again.",
+   "ja": "BMD 入力モード／色形式が変わりました。信号を再検出しています。"
+  },
+  {
+   "zh": "BMD 输入颜色/行距合同已变化，正在重建处理链",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "BMD 輸入色彩／列距契約已變更，正在重建處理鏈",
+   "en": "BMD input color/stride changed; rebuilding the processing chain.",
+   "ja": "BMD 入力の色／行ストライドが変わりました。処理パイプラインを再構築しています。"
+  },
+  {
+   "zh": "BMD 返回无效帧布局、时间戳或不受支持的 HDR 位深",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "BMD 傳回無效影格配置、時間戳記或不受支援的 HDR 位元深度",
+   "en": "BMD returned an invalid frame layout, timestamp or unsupported HDR bit depth.",
+   "ja": "BMD が無効なフレーム配置、タイムスタンプ、または未対応の HDR ビット深度を返しました。"
+  },
+  {
+   "zh": "BMD 返回未支持的像素格式",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD 傳回未支援的像素格式",
+   "en": "BMD returned an unsupported pixel format.",
+   "ja": "BMD が未対応のピクセル形式を返しました。"
+  },
+  {
+   "zh": "BMD 返回未知颜色空间",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD 傳回未知色彩空間",
+   "en": "BMD returned an unknown color space.",
+   "ja": "BMD が不明な色空間を返しました。"
+  },
+  {
+   "zh": "BMD 采集帧缓冲分配失败",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "BMD 擷取影格緩衝配置失敗",
+   "en": "BMD capture frame allocation failed.",
+   "ja": "BMD キャプチャフレームのメモリ確保に失敗しました。"
+  },
+  {
+   "zh": "WASAPI 音频端点无效；视频继续运行",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "WASAPI 音訊端點無效；視訊繼續執行",
+   "en": "WASAPI audio endpoint is unavailable; video continues.",
+   "ja": "WASAPI 音声エンドポイントを使用できません。映像は継続します。"
+  },
+  {
+   "zh": "[原生] {} · {}",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "[原生] {} · {}",
+   "en": "[Native] {} · {}",
+   "ja": "[ネイティブ] {} · {}"
+  },
+  {
+   "zh": "{} · {} x {} @ {:.3f} fps · {} · BMD 原生",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "{} · {} x {} @ {:.3f} fps · {} · BMD 原生",
+   "en": "{} · {} x {} @ {:.3f} fps · {} · Native BMD",
+   "ja": "{} · {} x {} @ {:.3f} fps · {} · BMD ネイティブ"
+  },
+  {
+   "zh": "保存的 BMD 制式不可用，请重新选择",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "儲存的 BMD 制式無法使用，請重新選擇",
+   "en": "Saved BMD format is unavailable. Select a format again.",
+   "ja": "保存された BMD 形式を使用できません。形式を選び直してください。"
+  },
+  {
+   "zh": "保存的 BMD 制式已不可用，请刷新并重新选择",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "儲存的 BMD 制式已無法使用，請重新整理並選擇",
+   "en": "Saved BMD format is no longer available. Refresh and select a format again.",
+   "ja": "保存された BMD 形式は利用できなくなりました。更新して選び直してください。"
+  },
+  {
+   "zh": "未找到该 BMD 原生设备，请安装 Desktop Video 驱动并刷新设备列表",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "找不到該 BMD 原生裝置，請安裝 Desktop Video 驅動並重新整理裝置清單",
+   "en": "Native BMD device not found. Install Desktop Video and refresh the device list.",
+   "ja": "BMD ネイティブデバイスが見つかりません。Desktop Video をインストールし、デバイス一覧を更新してください。"
+  },
+  {
+   "zh": "独立采集音频配置失败；BMD 原生视频继续运行",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "獨立擷取音訊設定失敗；BMD 原生視訊繼續執行",
+   "en": "Separate capture audio configuration failed; native BMD video continues.",
+   "ja": "独立したキャプチャ音声の設定に失敗しました。BMD ネイティブ映像は継続します。"
+  },
+  {
+   "zh": "自动检测实际信号 · BMD 原生",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "自動偵測實際訊號 · BMD 原生",
+   "en": "Detect input automatically · Native BMD",
+   "ja": "入力信号を自動検出 · BMD ネイティブ"
+  },
+  {
+   "zh": "跟随驱动输入",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "沿用驅動輸入",
+   "en": "Driver input",
+   "ja": "ドライバーの入力設定"
+  },
+  {
+   "zh": "这张 BMD 卡不支持自动检测，请选择与信号一致的手动制式",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "這張 BMD 卡不支援自動偵測，請選擇與訊號一致的手動制式",
+   "en": "This BMD card does not support automatic detection. Select the manual format matching the signal.",
+   "ja": "この BMD カードは自動検出に対応していません。信号に一致する手動形式を選んでください。"
+  },
+  {
+   "zh": "逐行",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "循序",
+   "en": "Progressive",
+   "ja": "プログレッシブ"
+  },
+  {
+   "zh": "隔行",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "交錯",
+   "en": "Interlaced",
+   "ja": "インターレース"
   }
  ]
 }
