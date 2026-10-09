@@ -8867,3 +8867,5 @@ py -3.11 -B E:/项目/Veyra/reports/subtitle-formats-20261009/video-smoke.py：H
 产物统一 E:/项目/Veyra/{reports,build,tests,logs,tmp,downloads,test-packages,archives}/subtitle-formats-20261009；本地交付 Veyra-2.0.6-subtitle-fix-overlay.zip，含 EXE+FFmpeg+所需QML/许可证/对应源码，需完整覆盖2.0.6，单换EXE无效。详细边界见 docs/SUBTITLE_FORMATS_REPORT_2026-10-09.md；远端原片/全片大量PGS/AMD/Intel/HDR尚未验收，不宣称所有用户根治。不重试被拒的历史清理，保留一共享app、当前构建及必要证据；最终 manifest / 源码提交 / 保全回执见 reports/.../final.json。
 
 打包与收尾命令 py -3.11 -B E:/项目/Veyra/reports/subtitle-formats-20261009/package-overlay.py、py -3.11 -B scripts/acceptance/subtitle-formats-control.py final。覆盖包/source两个内层ZIP CRC及逐文件SHA核对，源码排除既有两个MP4宣传文件与一个旧pyc，不移除仓库原文件。候选不替换原完整package-manifest，另附subtitle-fix-manifest.json列明变更。单份共享app恢复最终EXE/新FFmpeg/原Main.qml，母包1614文件SHA保持。提交仅本轮23个白名单源码/文档/脚本，main与39原树保持；独立checkpoint与source-after.bundle在archives目录，未冒称独立Reviewer。
+
+用户随后明确“不用打测试包”。立即停止后续打包与测试包交付；此前已经生成的73,394,839字节覆盖ZIP仅为内部中间证据，不作为交付物，未覆盖用户播放器。产品提交 a29243c1753ca75a63ad1d9e7051ff35178f9a11 已完成，之后只修改方案/报告/本记录中的交付决定，不重跑已通过测试或改动产品。当前交付为代码与排查结果；main仍为0e7018ad，未合并/推送/发布。最终保全重新核对并记入reports/.../final.json。

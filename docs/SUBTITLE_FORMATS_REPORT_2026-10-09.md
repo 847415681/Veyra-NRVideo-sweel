@@ -45,10 +45,12 @@ AV1 4K 测试片 `tests/stream-fix-20261001/av1_4k_150m.mkv` 回退 libdav1d 软
 
 首次 FFmpeg configure 因 MinGW pkg-config 损坏中文路径失败；改用 `E:/veyra-subtitle-20261009` junction（实际仍在 E:/项目/Veyra）后成功。首次格式测试暴露短 MPL2 被误探为 LRC，按明确扩展名选择已有 demuxer 后通过；loading fixture 实为两个内嵌加一个同名外挂，期望值纠正为 3。原失败回执保留，没有覆盖为通过。
 
-## 本地交付与边界
+## 当前交付与边界
 
-覆盖包：`E:/项目/Veyra/test-packages/subtitle-formats-20261009/Veyra-2.0.6-subtitle-fix-overlay.zip`。关闭播放器、备份将被覆盖的文件，再将包内文件解压覆盖现有 **2.0.6** 目录。必须一起更新 EXE 和 FFmpeg DLL，单换 EXE 不会修复压缩 PGS。包内附对应 Veyra 源码、patched FFmpeg/dav1d/zlib 源码、许可证和逐文件 manifest；不包含新 NR/FG DLL、模型、SDK、个人配置、凭据、测试媒体或现场日志。
+用户在收尾明确要求“**不用打测试包**”。本轮交付代码修复和排查结果，不继续打包、不交付测试包。产品代码已存档于 `a29243c1753ca75a63ad1d9e7051ff35178f9a11`；其后只更新这项交付决定的文档，不改变已验证的代码或 EXE。
+
+收到此指令前，覆盖包已经生成于 `E:/项目/Veyra/test-packages/subtitle-formats-20261009/Veyra-2.0.6-subtitle-fix-overlay.zip`，只保留为内部中间证据，**不是本轮交付物**。对应 Veyra 与 FFmpeg/dav1d/zlib 源码、许可证和逐文件 manifest 已核对。以后整合正式版本时，必须一并采用 zlib-enabled FFmpeg，单换 EXE 不会修复压缩 PGS；当前旧包和用户配置均未覆盖。
 
 仍未验证受影响用户实际原片、整部影片大量 PGS、AMD/Intel 实机与 HDR 字幕显示；本机是 RTX5070。缓存上限未提高，达到上限会明确提示后续内容未加载。TTML decoder 不在当前 FFmpeg 中，不宣称支持；STL 指 Spruce 文本格式，不是 EBU 二进制 STL；TXT 只识别带支持格式时间码的内容，不自动生成字幕。没有更改字幕渲染顺序、NR、补帧或导出实现。
 
-本轮仅本地隔离分支存档与候选包，未合并 main、未 push、未创建 Release、未更改正式版本号。开工的 39 既有工作树/495 脏文件与 main 固定快照由 `subtitle-formats-control.py` 逐项核对；候选完整性、源码包和最终保全以 `reports/subtitle-formats-20261009/final.json` 为准。
+本轮仅本地隔离分支存档，未合并 main、未 push、未创建 Release、未更改正式版本号。开工的 39 既有工作树/495 脏文件与 main 固定快照由 `subtitle-formats-control.py` 逐项核对；最终验收、未交付包的状态和保全以 `reports/subtitle-formats-20261009/final.json` 为准。
