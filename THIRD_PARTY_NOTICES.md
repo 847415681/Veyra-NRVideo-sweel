@@ -54,6 +54,16 @@ also follows the format contract in that commit's `source/dshow-formats.cpp`;
 Veyra reuses its existing UYVY GPU ingress and retains explicit color metadata.
 These adaptations do not constitute Blackmagic hardware certification.
 
+The Blackmagic-specific allocator negotiation and terminal renderer flag in
+`src/source/NativeCaptureSink.cpp`, and output-selected direct connection in
+`src/source/CaptureCardSource.cpp`, additionally adapt `CapturePin::GetAllocator`,
+`GetAllocatorRequirements`, `MiscFlagsHandler::GetMiscFlags` and
+`HDevice::ConnectPins` from that same commit (`source/capture-filter.cpp`,
+`source/device.cpp`, Copyright (C) 2023 Lain Bailey, LGPL-2.1-or-later).
+Veyra limits this compatibility policy to Blackmagic/DeckLink video, retains
+the upstream-selected allocator for diagnostics, and preserves its own
+blocking, stop/flush, sample-size and negotiated media-contract checks.
+
 The AVerMedia hardware HDR-to-SDR property request in
 `src/source/CaptureCardSource.cpp` is adapted from `source/device-vendor.cpp`
 (`SetTonemapperAvermedia`) in [obsproject/libdshowcapture](https://github.com/obsproject/libdshowcapture/tree/c13d4b7b0c66979396ba0a9060c9aafc15bb7b22),

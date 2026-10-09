@@ -33,12 +33,14 @@ struct OutputPin final:IPin,IAMBufferNegotiation {
     HRESULT STDMETHODCALLTYPE EndFlush()override{return S_OK;}
     HRESULT STDMETHODCALLTYPE NewSegment(REFERENCE_TIME,REFERENCE_TIME,double)override{return S_OK;}
 };
+#include "BmdAllocatorCases.h"
 int main(){
     CoInitializeEx(nullptr,COINIT_MULTITHREADED);int failures=0;
     auto check=[&](bool pass,const char* name){std::cout<<(pass?"PASS ":"FAIL ")<<name<<'\n';if(!pass)++failures;};
     captureFormatCases(check);
     blackmagicTest::run(check);
     elgatoHdrCases(check);
+    bmdAllocatorCases(check);
     VIDEOINFOHEADER2 vi{};vi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);vi.bmiHeader.biWidth=4;vi.bmiHeader.biHeight=2;vi.bmiHeader.biBitCount=16;vi.bmiHeader.biSizeImage=24;vi.AvgTimePerFrame=166667;
     AM_MEDIA_TYPE type{};type.majortype=MEDIATYPE_Video;type.subtype=MEDIASUBTYPE_YUY2;type.formattype=FORMAT_VideoInfo2;type.pbFormat=reinterpret_cast<BYTE*>(&vi);type.cbFormat=sizeof(vi);
     source::CaptureMediaLayout layout;check(source::captureMediaLayout(type,layout)&&layout.stride==12&&layout.rowBytes==8&&!layout.bottomUp,"VideoInfo2 YUY2 padded row contract");

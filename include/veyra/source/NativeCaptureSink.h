@@ -5,9 +5,15 @@
 #include <wrl/client.h>
 #include <functional>
 namespace veyra::source {
+enum class CaptureAllocatorMode { SinkDefault, Upstream };
+// Exact raw connection contract, including subtype and VideoInfo2 field flags.
+bool nativeCaptureContractsMatch(const AM_MEDIA_TYPE&,const AM_MEDIA_TYPE&);
 // Native terminal filter: no legacy SampleGrabber orientation/VideoInfo2
 // restriction, conversion filter or extra queue. Callback borrows the sample.
 HRESULT createNativeCaptureSink(const AM_MEDIA_TYPE&,std::function<HRESULT(IMediaSample*)>,Microsoft::WRL::ComPtr<IBaseFilter>&,Microsoft::WRL::ComPtr<IPin>&);
+// Blackmagic compatibility: let the output pin choose its own allocator and
+// requirements. The selected allocator is still retained after NotifyAllocator.
+HRESULT createNativeCaptureSink(const AM_MEDIA_TYPE&,std::function<HRESULT(IMediaSample*)>,Microsoft::WRL::ComPtr<IBaseFilter>&,Microsoft::WRL::ComPtr<IPin>&,CaptureAllocatorMode);
 HRESULT createNativeAudioSink(const AM_MEDIA_TYPE&,std::function<HRESULT(IMediaSample*)>,Microsoft::WRL::ComPtr<IBaseFilter>&,Microsoft::WRL::ComPtr<IPin>&);
 HRESULT createBitstreamAudioSink(const AM_MEDIA_TYPE&,std::function<HRESULT(IMediaSample*)>,Microsoft::WRL::ComPtr<IBaseFilter>&,Microsoft::WRL::ComPtr<IPin>&);
 // Compressed (MJPEG/H.264/HEVC/...) variant: carries the driver payload without

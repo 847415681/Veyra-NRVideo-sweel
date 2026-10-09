@@ -11,6 +11,11 @@
 
 namespace veyra::source {
 using Microsoft::WRL::ComPtr;
+bool nativeCaptureContractsMatch(const AM_MEDIA_TYPE& a,const AM_MEDIA_TYPE& b){
+    if(a.subtype!=b.subtype||!equivalentCaptureTypes(a,b))return false;
+    const auto fields=[](const AM_MEDIA_TYPE& t){return t.formattype==FORMAT_VideoInfo2&&t.pbFormat&&t.cbFormat>=sizeof(VIDEOINFOHEADER2)?reinterpret_cast<const VIDEOINFOHEADER2*>(t.pbFormat)->dwInterlaceFlags:DWORD(0);};
+    return fields(a)==fields(b);
+}
 namespace {
 LONG audioBlockBytes(const WAVEFORMATEX& f){
     // Round up to whole sample frames, including uncommon rates such as 11025.
@@ -57,7 +62,7 @@ public:
     HRESULT STDMETHODCALLTYPE Reset()override{used_=false;return S_OK;}
     HRESULT STDMETHODCALLTYPE Clone(IEnumMediaTypes** p)override{if(!p)return E_POINTER;try{*p=new TypeEnum(type_,used_);return S_OK;}catch(...){*p=nullptr;return E_OUTOFMEMORY;}}
 };
-class NativeSink final:public IBaseFilter,public IPin,public IMemInputPin {
+class NativeSink final:public IBaseFilter,public IPin,public IMemInputPin,public IAMFilterMiscFlags {
     std::atomic<ULONG> refs_{1};std::recursive_mutex mutex_;
     FILTER_STATE state_=State_Stopped;bool flushing_=false;
     AM_MEDIA_TYPE desired_{},connected_{};CaptureMediaLayout layout_;
@@ -66,8 +71,9 @@ class NativeSink final:public IBaseFilter,public IPin,public IMemInputPin {
     std::function<HRESULT(IMediaSample*)> callback_;
     bool audio_=false;
     bool compressed_=false;
+    CaptureAllocatorMode allocatorMode_=CaptureAllocatorMode::SinkDefault;
 public:
-    NativeSink(const AM_MEDIA_TYPE& type,std::function<HRESULT(IMediaSample*)> cb,bool compressed=false):callback_(std::move(cb)){
+    NativeSink(const AM_MEDIA_TYPE& type,std::function<HRESULT(IMediaSample*)> cb,bool compressed=false,CaptureAllocatorMode allocatorMode=CaptureAllocatorMode::SinkDefault):callback_(std::move(cb)),allocatorMode_(allocatorMode){
         compressed_=compressed;audio_=!compressed&&audioType(type);
         if(compressed_){
             if(FAILED(copyType(desired_,type)))throw std::bad_alloc();
@@ -80,7 +86,8 @@ public:
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void** p)override{
         if(!p)return E_POINTER;*p=nullptr;
         if(id==IID_IUnknown||id==IID_IPersist||id==IID_IMediaFilter||id==IID_IBaseFilter)*p=static_cast<IBaseFilter*>(this);
-        else if(id==IID_IPin)*p=static_cast<IPin*>(this);else if(id==IID_IMemInputPin)*p=static_cast<IMemInputPin*>(this);else return E_NOINTERFACE;
+        else if(id==IID_IPin)*p=static_cast<IPin*>(this);else if(id==IID_IMemInputPin)*p=static_cast<IMemInputPin*>(this);
+        else if(id==IID_IAMFilterMiscFlags&&allocatorMode_==CaptureAllocatorMode::Upstream)*p=static_cast<IAMFilterMiscFlags*>(this);else return E_NOINTERFACE;
         AddRef();return S_OK;
     }
     ULONG STDMETHODCALLTYPE AddRef()override{return ++refs_;}ULONG STDMETHODCALLTYPE Release()override{auto n=--refs_;if(!n)delete this;return n;}
@@ -110,7 +117,7 @@ public:
     HRESULT STDMETHODCALLTYPE QueryDirection(PIN_DIRECTION* p)override{if(!p)return E_POINTER;*p=PINDIR_INPUT;return S_OK;}
     HRESULT STDMETHODCALLTYPE QueryId(LPWSTR* p)override{if(!p)return E_POINTER;*p=static_cast<LPWSTR>(CoTaskMemAlloc(sizeof(L"Input")));if(!*p)return E_OUTOFMEMORY;memcpy(*p,L"Input",sizeof(L"Input"));return S_OK;}
     HRESULT STDMETHODCALLTYPE QueryAccept(const AM_MEDIA_TYPE* p)override{
-        if(!p)return E_POINTER;std::lock_guard lock(mutex_);if(compressed_)return sameCompressed(*p,peer_?connected_:desired_)?S_OK:S_FALSE;if(audio_)return sameAudio(*p,peer_?connected_:desired_)?S_OK:S_FALSE;if(peer_)return equivalentCaptureTypes(*p,connected_)?S_OK:S_FALSE;CaptureMediaLayout candidate;
+        if(!p)return E_POINTER;std::lock_guard lock(mutex_);if(compressed_)return sameCompressed(*p,peer_?connected_:desired_)?S_OK:S_FALSE;if(audio_)return sameAudio(*p,peer_?connected_:desired_)?S_OK:S_FALSE;if(peer_)return (allocatorMode_==CaptureAllocatorMode::Upstream?nativeCaptureContractsMatch(*p,connected_):equivalentCaptureTypes(*p,connected_))?S_OK:S_FALSE;CaptureMediaLayout candidate;
         return captureMediaLayout(*p,candidate)&&p->subtype==desired_.subtype&&candidate.width==layout_.width&&candidate.height==layout_.height?S_OK:S_FALSE;
     }
     HRESULT STDMETHODCALLTYPE EnumMediaTypes(IEnumMediaTypes** p)override{if(!p)return E_POINTER;try{*p=new TypeEnum(desired_);return S_OK;}catch(...){*p=nullptr;return E_OUTOFMEMORY;}}
@@ -119,9 +126,24 @@ public:
     HRESULT STDMETHODCALLTYPE BeginFlush()override{std::lock_guard lock(mutex_);flushing_=true;return S_OK;}
     HRESULT STDMETHODCALLTYPE EndFlush()override{std::lock_guard lock(mutex_);flushing_=false;return S_OK;}
     HRESULT STDMETHODCALLTYPE NewSegment(REFERENCE_TIME,REFERENCE_TIME,double)override{return S_OK;}
-    HRESULT STDMETHODCALLTYPE GetAllocator(IMemAllocator** p)override{if(!p)return E_POINTER;std::lock_guard lock(mutex_);if(!allocator_){const auto hr=CoCreateInstance(CLSID_MemoryAllocator,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&allocator_));if(FAILED(hr))return hr;}return allocator_.CopyTo(p);}
-    HRESULT STDMETHODCALLTYPE NotifyAllocator(IMemAllocator* p,BOOL)override{
+    // Adapted from OBS libdshowcapture c13d4b7b0c66979396ba0a9060c9aafc15bb7b22,
+    // CapturePin allocator methods (Lain Bailey, LGPL-2.1-or-later).
+    // Unlike OBS, retain the selected allocator for truthful post-connect
+    // diagnostics. Never replace a driver pool with the generic allocator.
+    HRESULT STDMETHODCALLTYPE GetAllocator(IMemAllocator** p)override{
+        if(!p)return E_POINTER;*p=nullptr;std::lock_guard lock(mutex_);
+        if(!allocator_){
+            if(allocatorMode_==CaptureAllocatorMode::Upstream)return VFW_E_NO_ALLOCATOR;
+            const auto hr=CoCreateInstance(CLSID_MemoryAllocator,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&allocator_));if(FAILED(hr))return hr;
+        }
+        return allocator_.CopyTo(p);
+    }
+    HRESULT STDMETHODCALLTYPE NotifyAllocator(IMemAllocator* p,BOOL readOnly)override{
         if(!p)return E_POINTER;std::lock_guard lock(mutex_);allocator_=p;
+        if(allocatorMode_==CaptureAllocatorMode::Upstream){
+            ALLOCATOR_PROPERTIES actual{};const auto hr=p->GetProperties(&actual);
+            log::info("capture-bmd-allocator",std::format("upstreamSelected=1 readOnly={} buffers={} bytes={} align={} prefix={} hr=0x{:08X}",bool(readOnly),actual.cBuffers,actual.cbBuffer,actual.cbAlign,actual.cbPrefix,uint32_t(hr)));
+        }
         if(audio_){
             ALLOCATOR_PROPERTIES actual{};const auto hr=p->GetProperties(&actual);
             const auto& f=*reinterpret_cast<const WAVEFORMATEX*>(desired_.pbFormat);
@@ -131,6 +153,7 @@ public:
     }
     HRESULT STDMETHODCALLTYPE GetAllocatorRequirements(ALLOCATOR_PROPERTIES* p)override{
         if(!p)return E_POINTER;std::lock_guard lock(mutex_);
+        if(allocatorMode_==CaptureAllocatorMode::Upstream){*p={};return E_NOTIMPL;}
         *p={compressed_?4:3,compressed_?LONG(512*1024):audio_?audioBlockBytes(*reinterpret_cast<const WAVEFORMATEX*>(desired_.pbFormat)):LONG(layout_.sampleBytes),1,0};return S_OK;
     }
     // Receive holds the pin mutex across the callback (DirectShow requires
@@ -144,7 +167,7 @@ public:
         AM_MEDIA_TYPE* changed=nullptr;const auto typeHr=sample->GetMediaType(&changed);
         if(FAILED(typeHr)){if(changed){clearType(*changed);CoTaskMemFree(changed);}log::error("capture",std::format("sample GetMediaType hr=0x{:08X}",uint32_t(typeHr)));return typeHr;}
         if(typeHr==S_OK&&changed){
-            const bool same=audio_?sameAudio(*changed,connected_):compressed_?sameCompressed(*changed,connected_):equivalentCaptureTypes(*changed,connected_);
+            const bool same=audio_?sameAudio(*changed,connected_):compressed_?sameCompressed(*changed,connected_):allocatorMode_==CaptureAllocatorMode::Upstream?nativeCaptureContractsMatch(*changed,connected_):equivalentCaptureTypes(*changed,connected_);
             clearType(*changed);CoTaskMemFree(changed);if(!same){log::error("capture",std::format("dynamic capture contract changed; reopen required hr=0x{:08X}",uint32_t(VFW_E_INVALIDMEDIATYPE)));return VFW_E_INVALIDMEDIATYPE;}
         }
         if(compressed_){if(sample->GetActualDataLength()<=0)return VFW_E_BUFFER_UNDERFLOW;}
@@ -154,6 +177,9 @@ public:
     }
     HRESULT STDMETHODCALLTYPE ReceiveMultiple(IMediaSample** p,long n,long* done)override{if(!p||!done||n<0)return E_INVALIDARG;*done=0;while(*done<n){const auto hr=Receive(p[*done]);if(hr!=S_OK)return hr;++*done;}return S_OK;}
     HRESULT STDMETHODCALLTYPE ReceiveCanBlock()override{return S_OK;}
+    // OBS MiscFlagsHandler::GetMiscFlags, same source/license as above.
+    // Use this object's canonical IUnknown; do not create a separate COM identity.
+    ULONG STDMETHODCALLTYPE GetMiscFlags()override{return AM_FILTER_MISC_FLAGS_IS_RENDERER;}
 };
 }
 HRESULT suggestCaptureAudioBuffering(IPin* pin,const WAVEFORMATEX& format){
@@ -203,8 +229,11 @@ HRESULT createCompressedCaptureSink(const AM_MEDIA_TYPE& type,std::function<HRES
     try{filter.Attach(new NativeSink(type,std::move(callback),true));return filter.As(&pin);}catch(...){return E_OUTOFMEMORY;}
 }
 HRESULT createNativeCaptureSink(const AM_MEDIA_TYPE& type,std::function<HRESULT(IMediaSample*)> callback,ComPtr<IBaseFilter>& filter,ComPtr<IPin>& pin){
+    return createNativeCaptureSink(type,std::move(callback),filter,pin,CaptureAllocatorMode::SinkDefault);
+}
+HRESULT createNativeCaptureSink(const AM_MEDIA_TYPE& type,std::function<HRESULT(IMediaSample*)> callback,ComPtr<IBaseFilter>& filter,ComPtr<IPin>& pin,CaptureAllocatorMode allocatorMode){
     filter.Reset();pin.Reset();CaptureMediaLayout layout;if(!captureMediaLayout(type,layout))return VFW_E_INVALIDMEDIATYPE;
-    try{filter.Attach(new NativeSink(type,std::move(callback)));return filter.As(&pin);}catch(...){return E_OUTOFMEMORY;}
+    try{filter.Attach(new NativeSink(type,std::move(callback),false,allocatorMode));return filter.As(&pin);}catch(...){return E_OUTOFMEMORY;}
 }
 HRESULT createNativeAudioSink(const AM_MEDIA_TYPE& type,std::function<HRESULT(IMediaSample*)> callback,ComPtr<IBaseFilter>& filter,ComPtr<IPin>& pin){
     filter.Reset();pin.Reset();if(!audioType(type))return VFW_E_INVALIDMEDIATYPE;
