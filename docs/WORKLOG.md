@@ -8928,3 +8928,11 @@ media, SDK files or runtime binaries.
 - 翻译 `py -3.11 -B scripts/i18n/extract.py --check`：placeholder问题0。新增41个来源键全部有繁中/英文/日文；全项目30个遗留缺译与基线相同，未顺手扩改。
 - 排查修正：Git autocrlf来源只允许在原件回执SHA匹配且规范换行内容完全相等时复用；测试宿主C++/QML Window类型不匹配改为真实QML宿主；拖放QVariantList没有添加条目改为明确QList<QUrl>并原生事件回归；移除后的过期总数摘要清除，异常JSON数值安全读取。初次失败日志保留，均未当成通过。
 - 产物：`E:/项目/Veyra/{build,tests,logs,tmp,reports,archives}/pr31-playlist-20261009`；同名受控目录，无测试包/整工程备份，无运行库字节改动或二进制入Git。实体采集卡换输出、OS持续拖动/多显示器/DPI与全部媒体未实测；不宣称全设备通过。本轮未修改main、推送、关闭远端PR/issue、发布、关机或派Agent。
+
+### 同轮最终重排边界修正
+
+最终审查发现拖到行间空隙会因indexAt=-1误移到首尾；现先解析相邻行，再处理列表端点，追加真实鼠标回归。
+最终构建28.250秒，回执 `E:/项目/Veyra/logs/pr31-playlist-20261009/build-20261009-144612/receipt.json`，GUI SHA256 `357C3583D54DC8193421D3348B1548230F81B2A159279AF1E30411C1E0F60119`。
+重新执行pr31-playlist-test.py全部7项通过（窗口24检查），回执 `E:/项目/Veyra/logs/pr31-playlist-20261009/tests-20261009-144657/receipt.json`；321条目扫描9ms，提交0ms，UI计时器继续运行。
+重新执行pr31-playlist-gui-test.py all，4个真实bridge用例/36检查通过，回执目录：`E:/项目/Veyra/logs/pr31-playlist-20261009/gui-functional-20261009-144744` / `E:/项目/Veyra/logs/pr31-playlist-20261009/gui-next-20261009-144751` / `E:/项目/Veyra/logs/pr31-playlist-20261009/gui-english-20261009-144757` / `E:/项目/Veyra/logs/pr31-playlist-20261009/gui-empty-20261009-144803`。
+没有新测试包、push/Release或main改动；本地提交、范围/原件复核与源码bundle最终状态保存在reports/pr31-playlist-20261009/final.json。

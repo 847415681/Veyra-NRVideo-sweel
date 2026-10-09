@@ -46,7 +46,12 @@ Window {
     }
     function finishDrag(commit) {
         if (dragging && commit) {
-            let target = list.indexAt(list.width / 2, dragY + list.contentY)
+            const at = dragY + list.contentY
+            let target = list.indexAt(list.width / 2, at)
+            // indexAt returns -1 in the inter-row spacing as well as outside
+            // the list. Resolve a nearby row before treating it as an end.
+            if (target < 0) target = list.indexAt(list.width / 2, at - list.spacing)
+            if (target < 0) target = list.indexAt(list.width / 2, at + list.spacing)
             if (target < 0) target = dragY < list.height / 2 ? 0 : playlist.count - 1
             playlist.move(playlist.indexOfPath(dragPath), target)
         }

@@ -33,19 +33,19 @@ issue21：https://github.com/Likely7/Veyra-NRVideo/issues/21 。本次实现用�
 
 | 命令 | 结果与证据 |
 | --- | --- |
-| `py -3.11 -B scripts/acceptance/pr31-playlist-build.py` | GUI、音频测试、生产模型与窗口测试均编译/链接成功；28.406秒。重生成两个Q_OBJECT的meta-object；保留当前HDR/BMD与字幕全部必要对象，原缓存只读哈希核验。 |
+| `py -3.11 -B scripts/acceptance/pr31-playlist-build.py` | GUI、音频测试、生产模型与窗口测试均编译/链接成功；28.250秒。重生成两个Q_OBJECT的meta-object；保留当前HDR/BMD与字幕全部必要对象，原缓存只读哈希核验。 |
 | `py -3.11 -B scripts/acceptance/pr31-playlist-test.py` | 7项均exit0：model/window/endpoint-switch/endpoint-loss/slow-start/transient/xbox-float-rtp。 |
 | `py -3.11 -B scripts/acceptance/pr31-playlist-gui-test.py all` | functional/next/english/empty四个实际播放器用例均exit0，36项检查，无QML/引擎错误。 |
 | `py -3.11 -B scripts/i18n/extract.py --check` | 新增41个来源键全部有三种翻译、占位符无错误；全项目遗留30个未翻译键与27cf4b4基线一致，未扩改。 |
 | `py -3.11 -B scripts/acceptance/pr31-playlist-control.py …` | 40既有工作树、495脏文件不变，本轮变更在白名单内；最终复核见reports目录。 |
 
-当前GUI SHA256：`5155C55D52B33BC445F5B61F2D872EEA9D41A57614B5DB9CAC1DC26E43123810`。
+当前GUI SHA256：`357C3583D54DC8193421D3348B1548230F81B2A159279AF1E30411C1E0F60119`。
 
-- 构建回执：`E:/项目/Veyra/logs/pr31-playlist-20261009/build-20261009-143504/receipt.json`。
-- 本机测试回执：`E:/项目/Veyra/logs/pr31-playlist-20261009/tests-20261009-143640/receipt.json`。
-- 模型1642个断言通过，包含fixture生成、321条目逐行检查、元数据排序、持久化逐行一致、删除不删文件、取消/销毁/去重/缺失/损坏配置等；不是1642个独立功能场景。提交导入调用0毫秒，后台扫描321文件11毫秒，导入期间UI计时器继续运行。仅代表本机热缓存目录元数据测试，不是媒体解码或所有硬盘性能。
-- 窗口23个检查通过，使用真实生产模型、Qt鼠标事件与原生URL拖放事件，覆盖重排、双击、删除、文件夹/多文件/单文件拖入、尺寸适配、关闭再开和所属窗口关闭。
-- GUI证据：`gui-functional-20261009-143727`、`gui-next-20261009-143733`、`gui-english-20261009-143740`、`gui-empty-20261009-143746`，均在同一logs目录。输入为既有20秒测试影片的硬链接，使用私有配置与私有app；原便携包1614文件每次前后哈希不变。
+- 构建回执：`E:/项目/Veyra/logs/pr31-playlist-20261009/build-20261009-144612/receipt.json`。
+- 本机测试回执：`E:/项目/Veyra/logs/pr31-playlist-20261009/tests-20261009-144657/receipt.json`。
+- 模型1642个断言通过，包含fixture生成、321条目逐行检查、元数据排序、持久化逐行一致、删除不删文件、取消/销毁/去重/缺失/损坏配置等；不是1642个独立功能场景。提交导入调用0毫秒，后台扫描321文件9毫秒，导入期间UI计时器继续运行。仅代表本机热缓存目录元数据测试，不是媒体解码或所有硬盘性能。
+- 窗口24个检查通过，使用真实生产模型、Qt鼠标事件与原生URL拖放事件，覆盖重排、双击、删除、文件夹/多文件/单文件拖入、尺寸适配、关闭再开和所属窗口关闭。
+- GUI证据：`gui-functional-20261009-144744`、`gui-next-20261009-144751`、`gui-english-20261009-144757`、`gui-empty-20261009-144803`，均在同一logs目录。输入为既有20秒测试影片的硬链接，使用私有配置与私有app；原便携包1614文件每次前后哈希不变。
 
 ## 排查中修正与边界
 
@@ -53,6 +53,7 @@ issue21：https://github.com/Likely7/Veyra-NRVideo/issues/21 。本次实现用�
 2. 初版窗口测试把原生C++ QQuickWindow传给QML Window属性，类型不匹配。测试宿主改为真实QML Window，随后验证实际窗口交互；该次失败没有当通过处理。
 3. 原生URL拖入的QML→C++转换用QVariantList时没有添加条目；改为明确的QList<QUrl>，文件夹/多文件/单文件原生事件均通过。主窗口也使用相同明确类型。
 4. 移除后旧导入摘要中的总数会过期，现移除时清除该摘要；JSON数值改用安全整数读取，避免异常数值转换。
-5. 尚未实测实体采集卡换输出、操作系统标题栏持续拖动/四角拖拽、多显示器/DPI组合与全部媒体格式。已验证系统API接线、程序调整尺寸后的布局和本机GUI，不扩大为全设备通过。
+5. 最终对抗审查发现行间距的indexAt返回-1会被误当成列表端点；补充邻近行解析，新增真实鼠标拖入行间隙用例通过。
+6. 尚未实测实体采集卡换输出、操作系统标题栏持续拖动/四角拖拽、多显示器/DPI组合与全部媒体格式。已验证系统API接线、程序调整尺寸后的布局和本机GUI，不扩大为全设备通过。
 
 GUI/测试/脚本源文件及对应回执已保留；没有SDK、DLL、模型、用户配置或私有媒体进入源码Git。

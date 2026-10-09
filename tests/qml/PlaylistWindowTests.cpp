@@ -120,6 +120,20 @@ int main(int argc, char** argv) {
     drop(win, path + "/outside/three.mp4");
     QTest::qWait(20); for (int i = 0; i < 200 && model.busy(); ++i) QTest::qWait(10);
     check(model.count() == 15 && requested.isEmpty(), "single file drop in playlist appends instead of switching video");
+    // A spacing gap is not the beginning/end of the playlist. Drag a lower
+    // row into a gap in the middle, where indexAt alone returns -1.
+    auto* movedGrip = find(win->contentItem(), "playlist-grip-3");
+    auto* firstRow = find(win->contentItem(), "playlist-row-1");
+    if (movedGrip && firstRow) {
+        const auto source = model.pathAt(3);
+        const auto first = point(movedGrip);
+        const auto gap = firstRow->mapToScene(QPointF(firstRow->width()/2, firstRow->height()+2)).toPoint();
+        QTest::mousePress(win, Qt::LeftButton, Qt::NoModifier, first);
+        QTest::mouseMove(win, QPoint(first.x(), gap.y()), 100);
+        QTest::mouseRelease(win, Qt::LeftButton, Qt::NoModifier, QPoint(first.x(), gap.y()));
+        QTest::qWait(80);
+        check(model.pathAt(1) == source && model.pathAt(model.currentIndex()) == playing, "drop in row spacing stays near the drop instead of jumping to an end");
+    } else check(false, "visible handles for gap reorder");
     auto* list = find(win->contentItem(), "playlist-list");
     win->resize(620, 480); win->setPosition(win->x() + 25, win->y() + 30); QTest::qWait(100);
     check(win->width() == 620 && win->height() == 480 && list && list->width() > 560, "resized layout adapts without clipping controls");
