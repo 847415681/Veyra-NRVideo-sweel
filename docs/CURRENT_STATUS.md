@@ -1,5 +1,13 @@
 # 当前项目状态 / Current Status
 
+## 2026-10-10 已验修复合入本地main
+
+用户在本地测试包交付后授权合并main。`codex/sr-visual-quality-20261010`的实测tip `48d8f34`及11个未合入提交已通过功能merge `ff80a49`合入，合并Git树与实测树完全相同；后续只增加文档记录。包含内嵌PGS/压缩字幕、播放列表/文件夹导入及PR31采集音频、Blackmagic原生可保存开关、设置切换恢复、数字输入快捷键、多语言布局和关闭效果器编辑不重建；现有HDR补帧兼容开关默认关闭。超分画质实验全部撤回，无本轮新的普遍画质收益。
+
+已有完整NVIDIA测试包 `E:/项目/Veyra/test-packages/fixes-20261010/Veyra-2.0.6-fixes-20261010-NVIDIA-win64-portable.zip` 保持，来源commit48d8f34，13组回归、GPU/软件QML私有配置冷启动播放及1626文件SHA/CRC通过。**本次没有推送或GitHub发布、没有更新版本或重新打包**；公开版本记录仍见下方2.0.6发布回执。本机/实卡边界保留，NV显存持续增长尚未根治。详细证据与保护范围见[合并记录](MERGE_MAIN_2026-10-10.md)。
+
+后续构建须显式传 `VEYRA_DECKLINK_SDK_DIR` 指向E盘外置SDK；打包FFmpeg须用 `E:/项目/Veyra/deps/ffmpeg-subtitle-formats-20261009/installed` 的已验zlib版，保留PS5 H.264 slices256/dav1d及对应源码/许可证。不要仅从旧缓存复制DLL而丢掉压缩PGS修复。下方未合并/未打包语句均为历史阶段状态。
+
 ## 2026-10-07 当前公开正式版2.0.6
 
 [v2.0.6](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.6)已发布且核对latest。VFG调度、AMD NR→FSR输出、Blackmagic兼容整合；NVIDIA/AMD完整包、应用/依赖源码及SHA256SUMS共5资产远端digest一致，最终ZIP冷启通过。详见[发布回执](RELEASE_2.0.6_REPORT_2026-10-07.md)。5群二维码已替换，图片标注10月14日前有效。NV显存持续增长未修复，AMD/Blackmagic实卡复测边界见验收；下方记录仅代表当时状态。

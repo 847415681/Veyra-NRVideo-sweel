@@ -9012,3 +9012,11 @@ sr-visual-package.py stage：1614文件已审NVIDIA母包清单硬链接暂存�
 package.py smoke：未改生产QML，私有data-dir、系统PATH、缓存/日志外置；GPU/软件QML两个冷启动和GTA6实际播放均通过、包文件SHA前后相同。第一次误匹配不存在frames日志字段而失败，实际realPresented=460；改核对realPresented≥100重跑两种模式通过，不冒称初次脚本也通过。真实播放计数/命令在test-packages/fixes-20261010/package-smoke.json。源码commit后seal封装并逐文件SHA/CRC、manifest唯一性/路径/私密产物排除、runtime清单核对；实际最终包路径/SHA/字节/源码提交与审计状态写同目录package.json和reports同名/package-current.json，收尾final.json链接本次全部回执及保护守卫/bundle结果。
 
 本地候选包含此前字幕、播放列表/PR31、BMD原生开关、HDR补帧默认关闭开关、设置切换/输入/布局/关闭项编辑/保存及既有VFG修复。没有本轮SR生产实验；未重测所有编码器/串流，无AMD/BMD实卡，不宣称NV显存增长/现场黑屏全根治。原件、45工作树/495脏文件/main继续由sr-visual-control.py守卫核对；不处理先前被自动审批拒绝的其它任务缓存。
+
+## 2026-10-10 已验修复本地合并main
+
+用户在测试包交付后明确“合并到main吧”。`py -3.11 -B E:/项目/Veyra/reports/merge-fixes-20261010/prepare.py`核对已验tip48d8f3464d64ef5e7ee672bbca3526d1bccfca7e、来源/main干净、构建源/各回执/测试包及源码SHA，通过；不可变archives同名/start.json保存46工作树/495脏文件。main0e7018ad为来源祖先，11提交/108文件，无二进制/SDK/模型新入Git；pre-main/source-tip标签和source-before.bundle verify通过，未修改旧guard/start。
+
+在E:/项目/Veyra/worktrees/main-merge-20261002执行`git merge --no-ff codex/sr-visual-quality-20261010 -m "Merge tested 2.0.6 subtitle, playlist, capture and settings fixes"`，功能merge ff80a49ad199334cafb79de79a8ee1b1f66c8aee，无冲突。`git diff --exit-code codex/sr-visual-quality-20261010 HEAD`通过，完整Git树与实测分支相同；因此复用已验证16EXE构建、13组回归、两种界面实际播放和ZIP核验，不声称新跑测试。之后只补AGENTS/CURRENT_STATUS/本WORKLOG/docs/MERGE_MAIN_2026-10-10.md四份文档。字幕/播放列表/PR31/BMD开关/设置恢复/焦点/布局/关闭项编辑等一并合入，SR画质实验仍全部撤回。
+
+合并完成/收尾标签、source-after.bundle verify与最终main在reports/merge-fixes-20261010/final.json。新守卫逐项核对其余45工作树/495脏文件、48d8f34源分支、产品与实测版本一致、仅四文档变化、main干净和原测试包SHA1350c723d56bd8aba13afbb09f959f591f1e6ce819f324e4b3fcb7dbc9103b9c，旧包714646109字节不动。后续构建明确外置DeckLink SDK，打包明确使用已验zlib/PS5 slices256/dav1d FFmpeg前缀与对应源码。没有push/Release/版本变更/重打包/删除分支工作树/关机，实卡与显存增长未解边界保持。
