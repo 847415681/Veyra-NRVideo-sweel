@@ -2834,7 +2834,14 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     const unsigned fgMultiplier=previewMultiplier&&fgBackendAvailable?std::clamp(previewMultiplier,2u,desc_.fgMultiplier):desc_.fgMultiplier;
     out.fgCandidates=fgBackendAvailable?fgMultiplier-1:0;
     bool resetFg=reset||!prevValid_||fgHistorySkipped_;
-    const auto decision=fgBackendAvailable?(admitFg?admitFg(out.batch,resetFg):FgDecision::Evaluate):FgDecision::Skip;
+    const bool historyValid=!resetFg;
+    // VEYRA_TEST_VFG_SKIP_RESETS_HISTORY=1 restores the pre-2026-10-10 rule
+    // (a VFG pair skipped for budget resets history) for same-EXE A/B runs.
+    static const bool vfgSkipResetsHistory=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_SKIP_RESETS_HISTORY",nullptr,0)>0;
+    auto decision=fgBackendAvailable?(admitFg?admitFg(out.batch,resetFg):FgDecision::Evaluate):FgDecision::Skip;
+    // For VFG a budget seed is a hidden reset Run whose only purpose is to keep
+    // history; recording B below keeps it without any Run.
+    if(vfgBackend_&&decision==FgDecision::Seed&&historyValid&&!vfgSkipResetsHistory)decision=FgDecision::Skip;
     const bool runFg=decision!=FgDecision::Skip;
     // An overloaded preview pair may afford one reset evaluation now. Seed
     // on this real input so the following pair does not lose another group.
@@ -2855,12 +2862,16 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     }
     if(reduced)out.fgSkippedBeforeEval=out.fgCandidates-fgCalls;
     out.fgRecovery=runFg&&(fgHistorySkipped_||reseedRejected);
-    if(fgBackendAvailable&&!runFg){out.fgSkippedBeforeEval=out.fgCandidates;fgHistorySkipped_=true;}
-    if(runFg&&vfgBackend_){
+    // VFG history is our explicit A/B input pair, not provider state. A pair
+    // skipped for budget still records B, so the next pair interpolates from a
+    // valid A: no reset, no hidden seed Run, no second lost group.
+    const bool vfgRecordOnly=vfgBackend_&&fgBackendAvailable&&!runFg&&historyValid&&!vfgSkipResetsHistory;
+    if(fgBackendAvailable&&!runFg){out.fgSkippedBeforeEval=out.fgCandidates;fgHistorySkipped_=!vfgRecordOnly;}
+    if((runFg||vfgRecordOnly)&&vfgBackend_){
         // First timestamp precedes the producer signal/CUDA dependency wait;
         // the matching end follows the consumer copy. The direct-queue span
         // therefore includes actual cross-queue work, not CPU wall time.
-        gpuTimer_.mark(list,GpuStage::FgBatch);gpuTimer_.mark(list,GpuStage::Fg1);
+        if(runFg){gpuTimer_.mark(list,GpuStage::FgBatch);gpuTimer_.mark(list,GpuStage::Fg1);}
         tracker_.transition(list,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
         if(!vfgBackend_->capture(list,videoFrame_[parity].Get(),parity)){failedBackend_=engine::FailedBackend::Fg;return false;}
         tracker_.transition(list,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
