@@ -1023,9 +1023,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     // The GPU may finish between the first poll and resolve.
                     // Collect its timestamps before removing this watch.
                     if(!watch.gpuExecutionMs)collectTimings();
-                    unsigned valid=0,invalid=0;
+                    unsigned valid=0,invalid=0,failed=0;
                     for(unsigned i=0;i<batch.batch.count;++i)if(batch.batch.frames[i].kind==pipeline::FrameKind::Generated){
                         if(batch.batch.frames[i].validity==pipeline::GenerationValidity::Valid)++valid;else ++invalid;
+                        failed+=batch.batch.frames[i].validity==pipeline::GenerationValidity::Failed;
                     }
                     watch.flow->ready(batch.batch.batchId,watch.real,valid,invalid,host100ns());
                     traceFrame(diagnostics::TraceKind::Ready,batch.batch.identity,batch.batch.batchId,std::max(batch.videoFenceValue,batch.genFenceValue),batch.batch.b100ns,invalid,valid,elapsedMs(watch.processStart));
@@ -1040,7 +1041,15 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         if(!batch.historyReset&&!batch.fgRecovery&&!batch.fgReduced&&batch.fgEvaluated+1==options.fgMultiplier)
                             vfgOverload.observe(watch.fgExecutionMs,watch.firstFgExecutionMs,host100ns());
                     }
-                    if(adaptiveCapturePhase&&watch.captureArrival>0&&valid==batch.fgCandidates&&
+                    // A group whose frames were all evaluated but then marked a content
+                    // duplicate or provider-disabled did the same GPU work, so its
+                    // readiness is a valid phase sample. Learning only from displayed
+                    // groups let samples expire during static/duplicate content (60->30:
+                    // B held 33 ms) and re-converge for ~1 s once motion resumed.
+                    // VEYRA_TEST_PAIR_PHASE_VALID_ONLY=1 restores the old rule for A/B.
+                    static const bool phaseValidOnly=GetEnvironmentVariableW(L"VEYRA_TEST_PAIR_PHASE_VALID_ONLY",nullptr,0)>0;
+                    const bool phaseSample=phaseValidOnly?valid==batch.fgCandidates:valid+invalid==batch.fgCandidates&&!failed;
+                    if(adaptiveCapturePhase&&watch.captureArrival>0&&phaseSample&&
                        batch.hasGenerated&&!batch.historyReset&&!batch.fgRecovery&&
                        batch.batch.identity.settingsRevision==fgBudgetRevision&&watch.presentationGeneration==presentationGeneration.load()){
                         int64_t requiredDelay=0;
