@@ -150,23 +150,29 @@ struct VfgBackend::Impl {
     // stream around each Run. "handoff" is the stream idle time between two
     // subframes of one pair (D3D copy/signal round trip); "pair" is the idle
     // time before a pair's first Run, which includes the rest of the graph.
-    bool profileGpu=false,haveRunEnd=false;
-    std::array<CUevent,4> events{};
-    uint64_t profiledJobs=0;unsigned pendingSub=0;bool pending=false;
+    bool profileGpu=false,profileGap=true;
+    // Ring of per-job event pairs ([2*i] after the producer wait, [2*i+1]
+    // after Run), resolved in order whenever ready and never synchronized.
+    // One slot stays free so the previous job's end event survives until the
+    // next one resolves; a full ring skips profiling and marks a gap.
+    static constexpr unsigned kProfileJobs=32;
+    std::array<CUevent,2*kProfileJobs> events{};
+    std::array<unsigned,kProfileJobs> profiledSub{};std::array<bool,kProfileJobs> profiledAfterGap{};
+    uint64_t profileHead=0,profileTail=0;
     std::array<double,3> gpuSum{},gpuMax{};std::array<unsigned,3> gpuSamples{};
     std::chrono::steady_clock::time_point nextGpuLog{};
-    // Job k records events[2*(k%2)] after its producer wait and
-    // events[2*(k%2)+1] after its Run. They are read when the next job starts
-    // (never synchronized); an unfinished pair of events drops that sample.
     void resolveGpu(){
-        if(!pending)return;
-        pending=false;
-        const unsigned start=2*unsigned((profiledJobs-1)%2),end=start+1,previousEnd=2*unsigned(profiledJobs%2)+1;
-        if(cuEventQueryFn(events[end])!=CUDA_SUCCESS){haveRunEnd=false;return;}
-        float ms=0;
-        if(cuEventElapsedTimeFn(&ms,events[start],events[end])==CUDA_SUCCESS)gpuSample(0,ms);
-        if(haveRunEnd&&cuEventElapsedTimeFn(&ms,events[previousEnd],events[start])==CUDA_SUCCESS)gpuSample(pendingSub>1?1:2,ms);
-        haveRunEnd=true;
+        while(profileTail<profileHead){
+            const unsigned slot=unsigned(profileTail%kProfileJobs);
+            if(cuEventQueryFn(events[2*slot+1])!=CUDA_SUCCESS)return;
+            float ms=0;
+            if(cuEventElapsedTimeFn(&ms,events[2*slot],events[2*slot+1])==CUDA_SUCCESS)gpuSample(0,ms);
+            if(!profiledAfterGap[slot]){
+                const unsigned previous=unsigned((profileTail-1)%kProfileJobs);
+                if(cuEventElapsedTimeFn(&ms,events[2*previous+1],events[2*slot])==CUDA_SUCCESS)gpuSample(profiledSub[slot]>1?1:2,ms);
+            }
+            ++profileTail;
+        }
     }
     void gpuSample(unsigned index,double ms){
         if(!std::isfinite(ms)||ms<0)return;
@@ -236,8 +242,12 @@ struct VfgBackend::Impl {
         Current current(*this);if(!current.active)return false;
         CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS wait{};wait.params.fence.value=value;
         bool ok=cu(cpuCall(2,[&]{return cuWaitExternalSemaphoresAsyncFn(&inputSemaphore,&wait,1,stream);}),"cuWaitExternalSemaphoresAsync")&&!failed.load();
-        const unsigned profileStart=2*unsigned(profiledJobs%2);
-        if(profileGpu){resolveGpu();logGpu();ok=ok&&cu(cuEventRecordFn(events[profileStart],stream),"profile cuEventRecord");}
+        bool profiling=false;const unsigned profileSlot=unsigned(profileHead%kProfileJobs);
+        if(profileGpu){
+            resolveGpu();logGpu();
+            if(profileHead-profileTail<kProfileJobs-1)profiling=ok&&cu(cuEventRecordFn(events[2*profileSlot],stream),"profile cuEventRecord");
+            if(!profiling)profileGap=true;
+        }
         // NVIDIA MIT sample, commit 52011f89c1741d06b40ea312af1f20be8be9ec62,
         // VideoFrameGenerationEffectApp: both input images must be rebound for
         // each NEW pair, even when their pointers are unchanged. Rebinding for
@@ -260,9 +270,10 @@ struct VfgBackend::Impl {
             if(rejectRun&&++runCount==rejectRun){log::warn("vfg","injected VFG Run rejection (test hook)");ok=false;}
             else ok=cv(cpuCall(9,[&]{return run(effect,1);}),"NvVFX_Run async");
         }
-        if(profileGpu){
-            if(ok&&cu(cuEventRecordFn(events[profileStart+1],stream),"profile cuEventRecord")){++profiledJobs;pending=true;pendingSub=sub;}
-            else haveRunEnd=false;
+        if(profiling){
+            if(ok&&cu(cuEventRecordFn(events[2*profileSlot+1],stream),"profile cuEventRecord")){
+                profiledSub[profileSlot]=sub;profiledAfterGap[profileSlot]=profileGap;profileGap=false;++profileHead;
+            }else profileGap=true;
         }
         // Publish rejection before releasing the consumer. Its GPU copy still
         // drains, but resolveFrame must never present that slot as a success.
