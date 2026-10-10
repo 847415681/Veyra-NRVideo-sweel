@@ -116,7 +116,13 @@ struct VfgBackend::Impl {
     uint64_t inputRevision=0,boundInputRevision=0;
     unsigned boundParity=2,boundMultiplier=0;
     bool boundReset=false;
-    struct Job {unsigned parity,sub,multiplier;bool reset;uint64_t revision,value;};
+    struct Job {unsigned parity,sub,multiplier;bool reset;uint64_t revision,value,producerValue;};
+    // Owner-thread view of the last submitted job, separate from the worker's
+    // SDK binding. Later subframes of one immutable pair read the same inputs
+    // and write distinct outputs, so only a new or repeated sequence needs a
+    // fresh producer dependency (perFrameProducer: test switch for the old rule).
+    Job submitted{};
+    bool haveSubmitted=false,perFrameProducer=false;
     std::array<std::atomic<SubmissionState>,kOutputs> states{};
     std::atomic<bool> failed=false;
     std::mutex jobsMutex,profileMutex;
@@ -238,10 +244,13 @@ struct VfgBackend::Impl {
         buffer.resource.Reset();
     }
     bool cudaJob(const Job& job){
-        const auto [parity,sub,multiplier,reset,revision,value]=job;
+        const auto [parity,sub,multiplier,reset,revision,value,producerValue]=job;
         Current current(*this);if(!current.active)return false;
-        CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS wait{};wait.params.fence.value=value;
-        bool ok=cu(cpuCall(2,[&]{return cuWaitExternalSemaphoresAsyncFn(&inputSemaphore,&wait,1,stream);}),"cuWaitExternalSemaphoresAsync")&&!failed.load();
+        bool ok=!failed.load();
+        if(producerValue){
+            CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS wait{};wait.params.fence.value=producerValue;
+            ok=cu(cpuCall(2,[&]{return cuWaitExternalSemaphoresAsyncFn(&inputSemaphore,&wait,1,stream);}),"cuWaitExternalSemaphoresAsync")&&ok;
+        }
         bool profiling=false;const unsigned profileSlot=unsigned(profileHead%kProfileJobs);
         if(profileGpu){
             resolveGpu();logGpu();
@@ -312,10 +321,19 @@ struct VfgBackend::Impl {
     }
     bool handoff(unsigned parity,unsigned sub,unsigned multiplier,bool reset){
         const unsigned slot=parity+2*(sub-1);
+        // A NEW pair's producer signal follows capture() and the preceding
+        // pair's output copies on the direct queue. Later subframes of the same
+        // pair run back to back on the serial CUDA stream: waiting for each
+        // previous D3D copy left the stream idle ~0.3 ms per subframe at capture
+        // 4X (VEYRA_TEST_VFG_GPU_PROFILE). Repeated/backward indices keep the
+        // dependency, so an output buffer is never rewritten before its copy.
+        const bool newDependency=perFrameProducer||!haveSubmitted||inputRevision!=submitted.revision||
+            parity!=submitted.parity||reset!=submitted.reset||multiplier!=submitted.multiplier||sub<=submitted.sub;
         if(!asynchronous){
             const uint64_t value=++signalValue;
-            if(!hr(cpuCall(1,[&]{return context->directQueue()->Signal(producer.Get(),value);}),"signal VFG producer"))return false;
-            const bool ok=cudaJob({parity,sub,multiplier,reset,inputRevision,value});
+            if(newDependency&&!hr(cpuCall(1,[&]{return context->directQueue()->Signal(producer.Get(),value);}),"signal VFG producer"))return false;
+            const Job job{parity,sub,multiplier,reset,inputRevision,value,newDependency?value:0};
+            const bool ok=cudaJob(job);
             if(!ok){
                 failed.store(true);Current current(*this);
                 if(current.active&&stream)cu(cuStreamSynchronizeFn(stream),"rejected synchronous job drain");
@@ -323,6 +341,7 @@ struct VfgBackend::Impl {
             }
             states[slot].store(ok?SubmissionState::Succeeded:SubmissionState::Failed);
             if(!hr(cpuCall(11,[&]{return context->directQueue()->Wait(completion.Get(),value);}),"queue wait VFG completion"))return false;
+            if(ok){submitted=job;haveSubmitted=true;}
             logCpu();return ok;
         }
         std::lock_guard lock(jobsMutex);
@@ -330,13 +349,15 @@ struct VfgBackend::Impl {
             log::error("vfg","bounded VFG submission rejected; no GPU wait queued");return false;
         }
         const uint64_t value=++signalValue;
-        if(!hr(cpuCall(1,[&]{return context->directQueue()->Signal(producer.Get(),value);}),"signal VFG producer"))return false;
+        if(newDependency&&!hr(cpuCall(1,[&]{return context->directQueue()->Signal(producer.Get(),value);}),"signal VFG producer"))return false;
         // Allocate the queue entry before adding a GPU dependency. Even a host
         // allocation exception cannot leave a wait with no job to signal it.
-        jobs.push_back({parity,sub,multiplier,reset,inputRevision,value});
+        const Job job{parity,sub,multiplier,reset,inputRevision,value,newDependency?value:0};
+        jobs.push_back(job);
         if(!hr(cpuCall(11,[&]{return context->directQueue()->Wait(completion.Get(),value);}),"queue wait VFG completion")){
             jobs.pop_back();return false;
         }
+        submitted=job;haveSubmitted=true;
         states[slot].store(SubmissionState::Pending);++outstanding;jobsChanged.notify_one();return true;
     }
     void stopWorker(){
@@ -358,6 +379,7 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
     }
     p.context=&context;p.width=width;p.height=height;p.format=format;p.maxMultiplier=multiplier;
     p.profileCpu=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_CPU_PROFILE",nullptr,0)>0;
+    p.perFrameProducer=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_PER_FRAME_PRODUCER",nullptr,0)>0;
     wchar_t reject[16]{};
     const auto rejectLength=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_REJECT_RUN",reject,16);
     if(rejectLength&&rejectLength<16)p.rejectRun=unsigned(std::clamp(_wtoi(reject),0,1000000));
@@ -444,7 +466,7 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
         try{p.worker=std::thread([&p]{p.work();});}
         catch(...){log::error("vfg","VFG worker creation failed");return false;}
     }
-    log::info("vfg",std::format("SDK submission={} capacity={} (CUDA work remains serial)",p.asynchronous?"bounded worker":"graph owner",kOutputs));
+    log::info("vfg",std::format("SDK submission={} capacity={} producerDependency={} (CUDA work remains serial)",p.asynchronous?"bounded worker":"graph owner",kOutputs,p.perFrameProducer?"per subframe (test)":"per input pair"));
     p.ready=true;log::info("vfg","native VFG initialized; GPU-only D3D12 buffer/fence bridge");return true;
 #else
     (void)context;(void)root;(void)width;(void)height;(void)format;(void)multiplier;(void)quality;(void)asynchronousSubmission;
