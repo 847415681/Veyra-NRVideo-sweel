@@ -9376,11 +9376,11 @@
    "ja": "状態：%1"
   },
   {
-   "zh": "自动：与屏幕同步防撕裂 · 提交帧率受屏幕刷新率限制",
+   "zh": "自动：与屏幕同步防撕裂 · 提交帧率受屏幕刷新率限制 · 想再降延迟可选“允许撕裂”（可能撕裂）或在显卡驱动开启 G-SYNC/FreeSync，最多少等一次刷新（60Hz 约 8 ms）",
    "src": "qml/ProPage.qml",
-   "zh-TW": "自動：與螢幕同步防撕裂 · 提交幀率受螢幕更新率限制",
-   "en": "Auto: synchronize with the display to prevent tearing; submitted FPS is limited by the refresh rate",
-   "ja": "自動：画面と同期してティアリングを防止 · 送信 FPS はリフレッシュレートが上限"
+   "zh-TW": "自動：與螢幕同步防撕裂 · 提交幀率受螢幕更新率限制 · 想再降延遲可選「允許撕裂」（可能撕裂）或在顯示卡驅動開啟 G-SYNC/FreeSync，最多少等一次更新（60Hz 約 8 ms）",
+   "en": "Auto: synchronize with the display to prevent tearing; submitted FPS is limited by the refresh rate. For lower latency choose \"Allow tearing\" (may tear) or enable G-SYNC/FreeSync in the GPU driver to wait up to one refresh less (about 8 ms at 60 Hz)",
+   "ja": "自動：画面と同期してティアリングを防止 · 送信 FPS はリフレッシュレートが上限 · さらに遅延を減らすには「ティアリングを許可」（ティアリングの可能性あり）を選ぶか、GPU ドライバーで G-SYNC/FreeSync を有効にすると、待ち時間が最大 1 リフレッシュ分短くなります（60Hz で約 8 ms）"
   },
   {
    "zh": "生效：{}p / {} fps / {} / 请求 {} Mbps · 实收视频 {:.1f} Mbps",
