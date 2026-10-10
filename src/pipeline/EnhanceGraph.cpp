@@ -3055,14 +3055,18 @@ uint64_t EnhanceGraph::failedNgxResult() const {
 
 bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if(!s.validate().empty())return false;
-    if(s.hdrOutputMode!=desc_.hdrOutputMode||s.fgMotion!=desc_.fgMotion||s.srMotion!=desc_.srMotion||s.nrMotion!=desc_.nrMotion)return false;
+    if(s.hdrOutputMode!=desc_.hdrOutputMode||
+       (desc_.enableFg&&s.fgMotion!=desc_.fgMotion)||
+       (desc_.enableSr&&s.srMotion!=desc_.srMotion)||
+       (desc_.enableNr&&s.nrMotion!=desc_.nrMotion))return false;
     // These change the admitted split topology/reference contract. Refuse
     // before mutating any live parameter; the controller must rebuild.
     if((desc_.splitNrAcrossSr()||interNrProtectionRgba_)&&(!s.nr||s.protection.enabled!=desc_.protection.enabled||
        (s.protection.enabled&&!desc_.protectionBeforeSr()&&!interNrProtectionRgba_)))return false;
     auto nextNr=desc_;engine::describeNrLayers(s,nextNr);
-    if(!desc_.nrLayersSizePolicy.empty()&&nextNr.nrLayersSizePolicy!=desc_.nrLayersSizePolicy)return false;
-    if(nextNr.nrTemporal!=desc_.nrTemporal||nextNr.nrAntiFlicker!=desc_.nrAntiFlicker)return false;
+    if(desc_.enableNr&&!desc_.nrLayersSizePolicy.empty()&&nextNr.nrLayersSizePolicy!=desc_.nrLayersSizePolicy)return false;
+    if(desc_.enableNr&&(nextNr.nrTemporal!=desc_.nrTemporal||
+       (nextNr.nrTemporal&&nextNr.nrAntiFlicker!=desc_.nrAntiFlicker)))return false;
     if(s.nr&&desc_.enableNr){
         if(s.activeNrLayerCount()!=nrInstances_.size())return false;
         for(size_t i=0;i<nrInstances_.size();++i){
@@ -3070,7 +3074,7 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
             if(temporal!=nrInstances_[i]->temporalEnabled)return false;
             const auto tier=i<nextNr.nrLayersAntiFlicker.size()?nextNr.nrLayersAntiFlicker[i]:nextNr.nrAntiFlicker;
             const auto previousTier=i<desc_.nrLayersAntiFlicker.size()?desc_.nrLayersAntiFlicker[i]:desc_.nrAntiFlicker;
-            if(tier!=previousTier)return false;
+            if(temporal&&tier!=previousTier)return false;
         }
     }
     // A non-NVIDIA adapter keeps the user's requested NR setting in the UI
@@ -3079,18 +3083,24 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if(s.nr&&desc_.enableNr&&!nrCreated())return false;
     const auto requestedFlow=context_.adapter().vendorId==0x1002&&s.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia
         ?engine::OpticalFlowBackend::AmdFidelityFx:s.opticalFlowBackend;
-    if(requestedFlow!=desc_.opticalFlowBackend||s.amdFlowHalfResolution!=desc_.amdFlowHalfResolution)return false;
+    const bool usesSharedFlow=nvofStandalone_||(desc_.enableFg&&desc_.fgUsesFlow())||
+        (srEnabled_&&desc_.srUsesFlow()&&(desc_.videoSrQuality==0||desc_.videoSrQuality==engine::kVideoSrFsr));
+    if(usesSharedFlow&&(requestedFlow!=desc_.opticalFlowBackend||s.amdFlowHalfResolution!=desc_.amdFlowHalfResolution))return false;
     // DLSS allocates multiplier-specific feature/output resources.
     // XeSS has a fixed 2X proxy swapchain contract. Settings callers must
     // rebuild instead of accepting a change that cannot take effect in place.
-    if(s.nrRuntime!=desc_.nrRuntime||std::max(2u,s.multiplier)!=desc_.fgMultiplier||s.frameGenerationBackend!=desc_.frameGenerationBackend||s.vfgQuality!=desc_.vfgQuality||s.videoSrQuality!=desc_.videoSrQuality||!s.validate().empty()||(s.multiplier>1&&s.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&(!fgCapsAvailable_||s.multiplier-1>uint32_t(fgMultiFrameMax_))))return false;
+    if((desc_.enableNr&&s.nrRuntime!=desc_.nrRuntime)||
+       (desc_.enableFg&&(std::max(2u,s.multiplier)!=desc_.fgMultiplier||s.frameGenerationBackend!=desc_.frameGenerationBackend||
+        (desc_.frameGenerationBackend==engine::FrameGenerationBackend::Vfg&&s.vfgQuality!=desc_.vfgQuality)))||
+       (desc_.enableSr&&s.videoSrQuality!=desc_.videoSrQuality)||
+       (s.multiplier>1&&s.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&(!fgCapsAvailable_||s.multiplier-1>uint32_t(fgMultiFrameMax_))))return false;
     // The colour master switch changes the graph shape (tables + shader branch)
     // and must rebuild; every other colour field is a live uniform update.
     if(s.color.enabled!=desc_.color.enabled)return false;
     if(s.additionalColorCount!=desc_.additionalColorCount)return false;
     for(unsigned i=0;i<s.additionalColorCount;++i){
         const auto& a=s.additionalColors[i];const auto& b=desc_.additionalColors[i];
-        if(a.enabled!=b.enabled||a.lutName!=b.lutName||a.lutInputSpace!=b.lutInputSpace)return false;
+        if(a.enabled!=b.enabled||(a.enabled&&(a.lutName!=b.lutName||a.lutInputSpace!=b.lutInputSpace)))return false;
     }
     if(s.videoHdr.enabled!=desc_.videoHdr.enabled)return false;
     // Output stabiliser: its pass is allocated at build time, so on/off rebuilds; strength and
@@ -3099,7 +3109,7 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if((s.nrHoldStrength>0.0f)!=(desc_.nrHoldStrength>0.0f))return false;
     // Switching the referenced .cube re-stages a descriptor, which needs the
     // queue drained: treat it as a rebuild (parameters stay live).
-    if(s.color.lutNameString()!=desc_.color.lutNameString()||s.color.lutInputSpace!=desc_.color.lutInputSpace)return false;
+    if(s.color.enabled&&(s.color.lutNameString()!=desc_.color.lutNameString()||s.color.lutInputSpace!=desc_.color.lutInputSpace))return false;
     pausedNrResidualOnly_=false;
     if(pausedNrSettings_){
         auto residualEdit=*pausedNrSettings_;residualEdit.revision=s.revision;
@@ -3121,13 +3131,17 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     desc_.hdrCurve=s.hdrCurve;desc_.hdrMetadata=s.hdrMetadata;
     if(!(s.color==desc_.color)){
         desc_.color=s.color;
-        if(nodeColorInstances_[0])nodeColorInstances_[0]->refresh(s.color);
-        else refreshColorTables();
+        if(s.color.enabled){
+            if(nodeColorInstances_[0])nodeColorInstances_[0]->refresh(s.color);
+            else refreshColorTables();
+        }
     }
     for(unsigned i=0;i<s.additionalColorCount;++i)if(!(s.additionalColors[i]==desc_.additionalColors[i])){
         desc_.additionalColors[i]=s.additionalColors[i];
-        if(additionalColorInstances_[i])additionalColorInstances_[i]->refresh(s.additionalColors[i]);
-        if(nodeColorInstances_[i+1])nodeColorInstances_[i+1]->refresh(s.additionalColors[i]);
+        if(s.additionalColors[i].enabled){
+            if(additionalColorInstances_[i])additionalColorInstances_[i]->refresh(s.additionalColors[i]);
+            if(nodeColorInstances_[i+1])nodeColorInstances_[i+1]->refresh(s.additionalColors[i]);
+        }
     }
     desc_.contentRate=s.content;desc_.model=s.model;desc_.residual=s.residual;desc_.protection=s.protection;desc_.settingsRevision=s.revision;
     desc_.nrHoldStrength=s.nrHoldStrength;desc_.nrHoldTolerance=s.nrHoldTolerance;

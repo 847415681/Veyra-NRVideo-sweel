@@ -1,4 +1,5 @@
 #include "veyra/engine/EngineController.h"
+#include "veyra/engine/EffectChain.h"
 #include "veyra/Log.h"
 #include <chrono>
 #include <iostream>
@@ -13,7 +14,99 @@
 #endif
 using namespace veyra;
 using namespace std::chrono_literals;
+namespace {
+int inactiveEffectsTest(const wchar_t* input,const wchar_t* output,bool nodeMode){
+    CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+    std::filesystem::create_directories(output);
+    Logger::instance().openFile((std::filesystem::path(output)/"engine.log").wstring());
+    Logger::instance().setConsoleEnabled(false);
+    HWND window=CreateWindowExW(0,L"STATIC",L"Inactive effect settings",WS_POPUP,0,0,960,540,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
+    if(!window)return 3;
+    ShowWindow(window,SW_SHOWNOACTIVATE);
+    engine::EngineController player;player.setVolume(0,true);
+    engine::PlayerOptions options;options.nr=false;options.sr=false;options.fg=true;options.fgMultiplier=2;
+    options.settings.nrRuntime=engine::NrRuntime::NvidiaOriginal;
+    options.settings.nrLayerCount=2;
+    for(auto& layer:options.settings.nrLayers)layer.runtime=engine::NrRuntime::NvidiaOriginal;
+    if(nodeMode){
+        auto chain=engine::toChain(options.snapshot());chain.mode=engine::ChainMode::Node;
+        engine::removeLegacyNodeProtection(chain);
+        options.nodeOrder=engine::runtimeOrder(chain);
+    }
+    player.open(window,input,options);
+    int failures=0;unsigned edits=0;
+    auto check=[&](bool pass,const char* text){std::cout<<(pass?"PASS ":"FAIL ")<<text<<std::endl;failures+=!pass;};
+    auto until=[&](auto predicate,int seconds=30){
+        const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(seconds);
+        while(std::chrono::steady_clock::now()<deadline){
+            MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}
+            const auto s=player.snapshot();if(s.failed)return false;if(predicate(s))return true;
+            std::this_thread::sleep_for(5ms);
+        }
+        return false;
+    };
+    auto store=[&](auto edit,const char* label){
+        if(failures)return;
+        const auto before=player.snapshot();auto next=before.desired;edit(next);next.revision=before.applied.revision;
+        check(player.requestSettings(next,options.nodeOrder),"inactive edit accepted");
+        check(player.snapshot().desired.revision==before.applied.revision,"inactive edit retains GPU revision immediately");
+        if(failures)return;
+        check(until([&](const auto& s){return !s.applying&&s.applied==next&&s.metrics.flow.counters.realPresented>=before.metrics.flow.counters.realPresented+8;}),label);
+        const auto after=player.snapshot();
+        check(after.metrics.identity.epoch==before.metrics.identity.epoch&&after.metrics.flow.reset.settingsRevision==before.metrics.flow.reset.settingsRevision&&after.metrics.flow.reset.sourceFrameId==before.metrics.flow.reset.sourceFrameId,"inactive edit retains epoch and reset record");
+        if(before.fgActive)check(after.metrics.flow.counters.generatedPresented>before.metrics.flow.counters.generatedPresented,"generated presentation continues across inactive edit");
+        std::cout<<"INACTIVE_EDIT index="<<++edits<<" revision="<<after.applied.revision<<" epoch="<<after.metrics.identity.epoch<<" realDelta="<<after.metrics.flow.counters.realPresented-before.metrics.flow.counters.realPresented<<" generatedDelta="<<after.metrics.flow.counters.generatedPresented-before.metrics.flow.counters.generatedPresented<<std::endl;
+    };
+    auto activate=[&](auto edit,const char* label){
+        if(failures)return;
+        const auto before=player.snapshot();auto next=before.desired;edit(next);
+        check(player.requestSettings(next,options.nodeOrder),"active resource change accepted");
+        const auto revision=player.snapshot().desired.revision;
+        check(revision!=before.applied.revision,"active resource change advances GPU revision");
+        check(until([&](const auto& s){return !s.applying&&s.applied.revision==revision&&s.metrics.flow.reset.settingsRevision==revision&&s.metrics.flow.reset.outcome==diagnostics::ResetOutcome::Completed&&s.metrics.flow.counters.realPresented>=8;}),label);
+    };
+    check(until([](const auto& s){return !s.applying&&!s.nrActive&&!s.srActive&&s.fgActive&&s.metrics.flow.counters.realPresented>30&&s.metrics.flow.counters.generatedPresented>20;}),"GTA6 4K actual DLSS 2X starts with NR and SR off");
+    store([](auto& s){s.model.style=2;s.residual.total=5;s.nrTemporal=true;s.nrRuntime=engine::NrRuntime::Ampere;s.nrPolicy=pipeline::NrSizePolicy::P720;s.nrMotion=engine::MotionSource::Zero;s.nrLayers[0].model.style=2;s.nrLayers[0].temporal=true;s.nrLayers[0].runtime=engine::NrRuntime::Ampere;s.nrLayers[0].sizePolicy=pipeline::NrSizePolicy::Native;auto& layer=s.nrLayers[1];layer.model.style=1;layer.model.tone=.37f;layer.residual.total=1.7f;layer.sizePolicy=pipeline::NrSizePolicy::P720;},"disabled NR model/runtime/resolution stored while DLSS keeps presenting");
+    store([](auto& s){s.srTarget=pipeline::SrTarget::Qhd;s.videoSrQuality=4;s.srMotion=engine::MotionSource::Zero;},"disabled SR target/quality/motion stored");
+    store([](auto& s){s.color.exposure=.4f;s.color.setLutName(L"deliberately-missing-inactive.cube");},"disabled colour LUT is stored without loading it");
+    store([](auto& s){s.videoHdr.peakNits=800;s.protection.featherPixels=15;s.protection.regions[0]={.1f,.2f,.6f,.7f};s.nrHoldTolerance=.12f;s.hdrCurve.midGrayNits=300;s.hdrMetadata.maxCllNits=1500;},"disabled HDR/protection/stabiliser tuning stored");
+    activate([](auto& s){s.flow=engine::FlowQuality::Performance;},"shared optical-flow quality still rebuilds for active DLSS");
+    activate([](auto& s){s.multiplier=1;},"frame generation turns off normally");
+    store([](auto& s){s.frameGenerationBackend=engine::FrameGenerationBackend::Vfg;s.vfgQuality=0;s.fgMotion=engine::MotionSource::Zero;s.fgStrictAdmission=true;},"disabled FG backend/quality/motion stored");
+    store([](auto& s){s.flow=engine::FlowQuality::Quality;s.opticalFlowBackend=engine::OpticalFlowBackend::GpuDis;s.amdFlowHalfResolution=true;},"unused shared flow settings stored when every consumer is off");
+    if(!failures){
+        player.pause(true);std::this_thread::sleep_for(250ms);
+        const auto before=player.snapshot();auto next=before.desired;next.model.tone=.37f;
+        check(player.requestSettings(next,options.nodeOrder),"inactive edit accepted while paused");
+        check(until([&](const auto& s){return !s.applying&&s.applied.model.tone==.37f;}),"paused inactive parameters stored");
+        std::this_thread::sleep_for(250ms);const auto after=player.snapshot();
+        check(after.applied.revision==before.applied.revision&&after.processedCompleted==before.processedCompleted,"paused inactive edit does not process the cached frame");
+        player.pause(false);
+        check(until([&](const auto& s){return s.frames>after.frames+10;}),"resume continues after inactive edits");
+    }
+    activate([](auto& s){
+        s.nr=true;s.nrMotion=engine::MotionSource::OpticalFlow;
+        s.flow=engine::FlowQuality::Balanced;s.opticalFlowBackend=engine::OpticalFlowBackend::Nvidia;s.amdFlowHalfResolution=false;
+        auto& layer=s.nrLayers[1];layer.enabled=true;
+        s.model=layer.model;s.residual=layer.residual;s.nrRuntime=layer.runtime;s.nrTemporal=layer.temporal;s.nrPolicy=layer.sizePolicy;
+    },"original NR runs with one active layer and one bypassed layer");
+    store([](auto& s){auto& layer=s.nrLayers[0];layer.model.intensity=.21f;layer.residual.total=4;layer.residual.correction.enabled=true;layer.sizePolicy=pipeline::NrSizePolicy::P480;},"bypassed NR layer does not interrupt the active NR layer");
+    activate([](auto& s){s.color.enabled=true;s.color.setLutName(L"");},"colour enables with its previously stored exposure");
+    store([](auto& s){s.color.exposure=.6f;s.videoSrQuality=2;s.frameGenerationBackend=engine::FrameGenerationBackend::XeSS;s.nrLayers[0].sizePolicy=pipeline::NrSizePolicy::P900;},"mixed live colour and disabled settings apply in one transaction");
+    activate([](auto& s){s.nrLayers[1].model.intensity=.6f;s.model=s.nrLayers[1].model;},"active NR model edit still resets its history");
+    activate([](auto& s){s.sr=true;},"previously stored SR quality is used on activation");
+    if(!failures){const auto s=player.snapshot();check(s.nrActive&&s.srActive&&s.applied.color.exposure==.6f&&s.applied.videoSrQuality==2&&s.applied.nrLayers[0].residual.total==4,"active effects and all bypassed values remain independent");}
+    store([](auto& s){s.frameGenerationBackend=engine::FrameGenerationBackend::Vfg;s.vfgQuality=0;},"VFG selection is saved while FG is off and NR/SR are on");
+    activate([](auto& s){s.multiplier=2;},"previously stored VFG backend/quality generates real frames on activation");
+    if(!failures)check(until([](const auto& s){return s.fgActive&&s.applied.frameGenerationBackend==engine::FrameGenerationBackend::Vfg&&s.applied.vfgQuality==0&&s.metrics.flow.counters.generatedPresented>4;}),"VFG actually presents generated frames using the saved selection");
+    player.stop();check(until([&](const auto&){return player.idle();},8),"inactive-effects session drains normally");
+    DestroyWindow(window);CoUninitialize();
+    std::cout<<"INACTIVE_RESULT nodeMode="<<nodeMode<<" edits="<<edits<<" failures="<<failures<<std::endl;
+    return failures?1:0;
+}
+}
 int wmain(int argc,wchar_t**argv){
+    if(argc==4&&(wcscmp(argv[3],L"--inactive-effects")==0||wcscmp(argv[3],L"--inactive-effects-node")==0))return inactiveEffectsTest(argv[1],argv[2],wcscmp(argv[3],L"--inactive-effects-node")==0);
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     // Explicit opt-in; uses existing local pairing without changing it. Runs
     // the actual shared engine, audio endpoint, GPU admission and presenter.

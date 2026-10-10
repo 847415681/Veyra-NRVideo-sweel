@@ -620,7 +620,8 @@ bool ChainSession::select(ChainMode mode) {
     return true;
 }
 
-bool requiresGraphRebuild(const EnhancementSettings& previous, const EnhancementSettings& next) {
+bool requiresGraphRebuild(const EnhancementSettings& savedPrevious, const EnhancementSettings& savedNext) {
+    const auto previous=savedPrevious.activeVideoSettings();const auto next=savedNext.activeVideoSettings();
     if(!previous.sameNrTopology(next))return true;
     // Everything the graph allocates or branches on. Live uniform parameters
     // (NR model/residual sliders, colour values, protection rectangles, audio,

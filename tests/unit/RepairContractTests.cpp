@@ -212,7 +212,9 @@ int main(){
     auto audioOnly=s;audioOnly.revision=2;audioOnly.audioSync=engine::AudioSyncMode::Manual;audioOnly.audioOffsetMs=90;
     check(audioOnly.sameVideoConfiguration(s),"audio changes do not invalidate video configuration");
     auto attempted=audioOnly;attempted.model.style=1;
-    check(!attempted.sameVideoConfiguration(s),"NR model changes still invalidate video configuration");
+    check(attempted.sameVideoConfiguration(s),"bypassed NR model changes retain video configuration");
+    auto activeNr=s;activeNr.nr=true;auto activeEdit=activeNr;activeEdit.model.style=1;
+    check(!activeEdit.sameVideoConfiguration(activeNr),"active NR model changes still invalidate video configuration");
     auto latest=attempted;latest.audioOffsetMs=100;latest.rejectVideoRequest(attempted,s);
     check(latest.revision==s.revision&&latest.model==s.model&&latest.audioOffsetMs==100,"video failure preserves a newer independent audio request");
     latest=attempted;latest.rejectVideoRequest(attempted,s);

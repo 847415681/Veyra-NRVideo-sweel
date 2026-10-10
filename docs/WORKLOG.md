@@ -1,5 +1,13 @@
 # WORKLOG
 
+## 2026-10-10 关闭效果器编辑卡顿
+
+- 用户反馈关闭效果器时仅调整内部设置也顿一下；从30c6f60隔离codex/inactive-effects-20261010，start保护44既有工作树/495脏文件和main0e7018ad，未派Agent。根因是完整视频设置比较导致无效GPU revision/排空/重建，同revision的applySettings还会重置NR。新增仅比较开启参数的视图，完整保存值不丢；关闭项更新跳过GPU/暂停帧处理，开启后应用新值。多NR/共享光流/HDR元数据依赖及混合事务保留有效更新。
+- 原实现+同一真实GTA6 GPU回归先失败于“关闭NR编辑保留revision”；修复后tests-20261010-104836列表/节点各9次、70项PASS，28.047/27.750秒；暂停无额外处理、真实/生成帧继续呈现、开启采用保存的NR720/style1/1.7、VSR quality2、VFG2X quality0。失败回退18.375秒及HDR合同5.344秒通过。最终引擎/管线/原生测试对象SHA与该组一致。
+- 最终python -B scripts/acceptance/inactive-effects-build.py，build-20261010-105757，30.109秒/16EXE，37对象依赖闭包、303旧输入SHA保持；GUI f10aadd55c54c93e4d356884e160aff09439c7b56e26655195b009e8589d7856。inactive-effects-test.py chain contracts：287/259项PASS；inactive-effects-gui.py实际生产QML：9次关闭项编辑revision2不变/reset0/图更新0、重启保存值和非法偏好回退均通过。
+- QML首轮发现原有全局抗闪烁强度/容差未保存，仅补已有preferences读写/范围校验，不改会话格式；缺字段仍默认关闭。保留此前重启失败证据。链fixture旧1:1 VideoSR期望导致29失败，未改上一任务源独立复现相同29项后只修fixture；裸SHA bundle empty失败改真实分支名后验证。详见docs/INACTIVE_EFFECTS_REPORT_2026-10-10.md，不以旧失败冒充本轮引擎根因。
+- 全产物E:/项目/Veyra/{build,tests,logs,tmp,reports,archives}/inactive-effects-20261010，生产源码worktrees同名；每测试≤300秒，donor1614文件原样，私有配置/Main.qml注入已恢复，不改用户原配置/运行库/SDK/模型。inactive-effects-control.py收尾保护及final.json核对提交/checkpoint/增量bundle；没有测试包/merge/push/Release/再次关机。GPU连续呈现不等于屏幕端到端延迟或AMD/BMD实卡验收。
+
 ## 2026-10-09 本地 main 整合完成与最终组合验收
 
 - 按用户授权保留原作者/提交合并四分支：flash 诊断 52d83eaf、VRAM 诊断 49c9e95c、BMD 083d6785、HDR 开关 2caa8dca（分支 tip f6a8fa27）。只有 AGENTS/WORKLOG 新段落冲突，保留完整旧正文与双方前置/追加记录；源码无冲突。设置→兼容“HDR补帧闪黑兼容”默认关闭、全局保存、播放中可切换；NVIDIA HDR10 应用 FG 才适用，关闭释放单张兼容纹理。

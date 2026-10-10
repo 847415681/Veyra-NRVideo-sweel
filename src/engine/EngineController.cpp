@@ -223,8 +223,8 @@ bool EngineController::requestSettings(EnhancementSettings s,std::optional<Chain
         veyra::log::info("settings",std::format("fsr multiplier gate: requested={} maxGeneratedFrames=1 applied=unchanged",s.multiplier));
         return false;
     }
-    // Revision partitions GPU history and measurements. Audio-only edits must
-    // not invalidate in-flight video, and identical notifications are no-ops.
+    // Revision partitions GPU history and measurements. Saved bypassed-effect
+    // parameters and audio-only edits must not invalidate in-flight video.
     s.revision=desired_.revision;if(s==desired_&&order==desiredNodeOrder_){if(acceptedRevision)*acceptedRevision=desired_.revision;return true;}
     if(!s.sameVideoConfiguration(desired_)||order!=desiredNodeOrder_)s.revision=++nextRevision_;
     desiredNodeOrder_=order;desired_=s;snapshot_.desired=s;snapshot_.applying=snapshot_.applied!=desired_;
@@ -1368,15 +1368,18 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // reset. Without this the panel only took effect after an
                 // unrelated rebuild (toggling NR): the "sliders do nothing" report.
                 if(requested.revision==previous.revision&&!(requested==previous)){
-                    if(graph->applySettings(requested)){
+                    const bool videoChanged=!requested.sameActiveVideoParameters(previous);
+                    // applySettings updates descriptors and resets NR history.
+                    // A stored-only edit must not call it, even while paused.
+                    if(!videoChanged||graph->applySettings(requested)){
                         options=PlayerOptions::from(requested,requestedOrder);
                         {std::lock_guard lock(mutex_);snapshot_.applied=options.snapshot();snapshot_.applying=desired_!=snapshot_.applied;}
-                        veyra::log::info("settings",std::format("live parameter update revision={} colourEnabled={} exposure={:.2f} contrast={:.2f} temperature={:.2f}",requested.revision,requested.color.enabled?1:0,requested.color.exposure,requested.color.contrast,requested.color.temperature));
+                        veyra::log::info("settings",std::format("{} revision={} colourEnabled={} exposure={:.2f} contrast={:.2f} temperature={:.2f}",videoChanged?"live parameter update":"stored inactive/non-video parameters; GPU untouched",requested.revision,requested.color.enabled?1:0,requested.color.exposure,requested.color.contrast,requested.color.temperature));
                         // Colour lives inside the ingest dispatch, so a paused
                         // frame has no process() call to upload the new tables or
                         // re-run the chain: remember that the cached frame must
                         // be re-rendered before the next present.
-                        if(paused_||isImage)refreshPausedFrame_=true;
+                        if(videoChanged&&(paused_||isImage))refreshPausedFrame_=true;
                     }else{
                         std::lock_guard lock(mutex_);if(desired_.revision==requested.revision)desiredNodeOrder_=previousOrder;desired_.rejectVideoRequest(requested,previous);snapshot_.desired=desired_;snapshot_.applying=desired_!=previous;snapshot_.status=L"这套参数需要重建管线，已回到上一套数值";
                     }

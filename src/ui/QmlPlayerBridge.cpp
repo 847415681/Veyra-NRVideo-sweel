@@ -1155,8 +1155,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                 QTimer::singleShot(0, this, [this, error] { emit notice(error, true); });
         }
     }
-    // Sound sync is a player setting, not part of either chain: it is kept in
-    // the shell preferences and restored here, after the session.
+    // These controls are global, outside either effect chain. Restore them
+    // from shell preferences after the session; old profiles keep defaults.
     {
         auto s = impl_->facade.pendingSettings();
         const auto& p = impl_->prefs;
@@ -1173,7 +1173,17 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             const int rate = p.value(QStringLiteral("contentRate")).toInt();
             if (rate >= 0 && rate <= int(engine::ContentRate::Capture60To30) && int(s.content) != rate) { s.content = static_cast<engine::ContentRate>(rate); changed = true; }
         }
-        if (changed && !impl_->commit(std::move(s))) veyra::log::warn("ui-prefs", "saved sound sync not accepted");
+        auto restoreHold = [&](const char* key, float& target) {
+            if (!p.contains(QLatin1String(key))) return;
+            bool ok = false;
+            const double value = p.value(QLatin1String(key)).toDouble(&ok);
+            if (ok && std::isfinite(value) && value >= 0 && value <= 1 && target != float(value)) {
+                target = float(value); changed = true;
+            }
+        };
+        restoreHold("nrHoldStrength", s.nrHoldStrength);
+        restoreHold("nrHoldTolerance", s.nrHoldTolerance);
+        if (changed && !impl_->commit(std::move(s))) veyra::log::warn("ui-prefs", "saved global controls not accepted");
     }
     // Presentation (低延迟队列 / 显示同步 / 输出上限) and the picture aspect.
     {
@@ -4305,7 +4315,9 @@ void QmlPlayerBridge::setNrHoldStrength(double value) {
     const float next = float(value);
     if (s.nrHoldStrength == next) return;
     s.nrHoldStrength = next;
-    impl_->commit(std::move(s));
+    if (!impl_->commit(std::move(s))) return;
+    impl_->prefs[QStringLiteral("nrHoldStrength")] = double(next);
+    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "output stabiliser strength not saved");
     emit settingsChanged();
 }
 double QmlPlayerBridge::nrHoldTolerance() const { return double(settings().nrHoldTolerance); }
@@ -4314,7 +4326,9 @@ void QmlPlayerBridge::setNrHoldTolerance(double value) {
     const float next = float(value);
     if (s.nrHoldTolerance == next) return;
     s.nrHoldTolerance = next;
-    impl_->commit(std::move(s));
+    if (!impl_->commit(std::move(s))) return;
+    impl_->prefs[QStringLiteral("nrHoldTolerance")] = double(next);
+    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "output stabiliser tolerance not saved");
     emit settingsChanged();
 }
 
