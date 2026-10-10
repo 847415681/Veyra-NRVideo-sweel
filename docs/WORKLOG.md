@@ -1,5 +1,12 @@
 # WORKLOG
 
+## 2026-10-11 补帧内容节奏：去除重复帧重新设计（Claude）
+
+- 用户要求在补帧“内容节奏”里重新设计去重复帧，兼容 30/40 帧游戏用 60 帧采集及非整数倍率，避免原 60→30 误删真实帧导致鬼影，不增加明显耗时；用 GTA6 30 帧视频渲染 60/58 帧测试，做完汇报后关机。存档 checkpoint/pre-claude-dedup-20261011（main 5ba186a）与 archives/claude-dedup-20261011；分支 claude/dedup-cadence-20261011。
+- 新增 include/veyra/engine/ContentDedup.h：用采集回调已有的 64×36 亮度点与“上一张留下的画面”比较，重复画面在 GPU 工作前丢弃；留下的帧用回归周期预测、夹在采样时间窗内的内容时间戳。自动/识别 xx fps 模式去重，60→30 改为去重 + 30 帧上限（无 CPU 画面的硬解串流仍按时间戳减半）。VEYRA_TEST_CONTENT_DEDUP_LEGACY=1 恢复旧行为。
+- 测试见 docs/CONTENT_CADENCE_2026-10-11.md。
+- 不 merge/push/Release，不改默认内容节奏、NR/SR/FG 模型、运行库、驱动、用户配置。
+
 ## 2026-10-10 关闭效果器编辑卡顿
 
 - 用户反馈关闭效果器时仅调整内部设置也顿一下；从30c6f60隔离codex/inactive-effects-20261010，start保护44既有工作树/495脏文件和main0e7018ad，未派Agent。根因是完整视频设置比较导致无效GPU revision/排空/重建，同revision的applySettings还会重置NR。新增仅比较开启参数的视图，完整保存值不丢；关闭项更新跳过GPU/暂停帧处理，开启后应用新值。多NR/共享光流/HDR元数据依赖及混合事务保留有效更新。

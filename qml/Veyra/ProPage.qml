@@ -1716,7 +1716,7 @@ VPage {
                                 }
                                 VRow {
                                     label: qsTr("内容节奏")
-                                    hint: qsTr("游戏 30 帧、采集卡输出 60 帧时选“采集 60→30”")
+                                    hint: qsTr("游戏锁 30/40 帧、采集卡输出 60 帧时选“自动识别内容节奏”：只去掉重复画面，补帧时间均匀；“采集 60→30”另外把上限固定为 30 帧")
                                     VSelect {
                                         objectName: "list-content-rate"
                                         implicitWidth: 170

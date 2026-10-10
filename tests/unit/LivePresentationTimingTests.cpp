@@ -3,6 +3,9 @@
 #include "veyra/engine/LivePresentationResetPolicy.h"
 #include "veyra/source/CaptureTiming.h"
 #include "veyra/engine/CaptureHalfRate.h"
+#include "veyra/engine/ContentDedup.h"
+#include <array>
+#include <vector>
 #include "veyra/engine/FrameRateWindow.h"
 #include "veyra/engine/PresentationScheduler.h"
 #include "veyra/engine/PresentationSettings.h"
@@ -144,5 +147,81 @@ int main(){
     check(livePairHoldMs(true,1e12,0)<=1000./30,"timestamp jump has bounded hold");
     check(livePairHoldMs(true,10,20)==0,"backwards PTS cannot sleep negatively");
     check(livePairHoldMs(true,std::numeric_limits<double>::infinity(),0)==0,"nonfinite PTS rejected");
+    {
+        // ContentDedup: synthetic 64x36 luma pictures sampled at a capture rate.
+        using veyra::engine::ContentDedup;
+        auto picture=[](uint64_t id,int noise,uint64_t sample,std::array<uint8_t,ContentDedup::kPoints>& out){
+            for(unsigned i=0;i<ContentDedup::kPoints;++i){
+                uint64_t h=(id+1)*0x9E3779B97F4A7C15ull+i*0xBF58476D1CE4E5B9ull;h^=h>>31;h*=0x94D049BB133111EBull;h^=h>>29;
+                int v=int(h&0xFF);
+                if(noise){uint64_t n=(sample+7)*0xD6E8FEB86659FD93ull+i*0x2545F4914F6CDD1Dull;n^=n>>32;v+=int(n%unsigned(2*noise+1))-noise;}
+                out[i]=uint8_t(std::clamp(v,0,255));
+            }
+        };
+        struct Run{int kept=0,keptRepeats=0,droppedReal=0,regularSpans=0,spans=0;bool monotonic=true,neverLate=true;std::vector<int64_t> intervals;};
+        // contentOf(sample) gives the picture shown by sample i (ground truth).
+        auto run=[&](double captureFps,auto contentOf,int count,int noise,int64_t cap,int64_t hint,int64_t expectedPeriod){
+            ContentDedup dedup;Run r;std::array<uint8_t,ContentDedup::kPoints> luma{};
+            const int64_t dt=int64_t(std::llround(1e7/captureFps));int64_t lastContent=-1;int64_t lastPicture=-1;int64_t pendingPicture=-1;
+            for(int i=0;i<count;++i){
+                const int64_t pts=int64_t(i)*dt+1000;const int64_t id=contentOf(i);picture(uint64_t(id),noise,uint64_t(i),luma);
+                const auto d=dedup.observe(luma.data(),pts,dt,i==0,cap,hint);
+                if(d.keep){
+                    ++r.kept;if(id==lastPicture)++r.keptRepeats;
+                    if(pendingPicture>=0&&pendingPicture!=id&&cap==0)++r.droppedReal; // a newer picture superseded an unkept one
+                    pendingPicture=-1;lastPicture=id;
+                    r.monotonic&=d.contentPts>lastContent;r.neverLate&=d.contentPts<=pts;lastContent=d.contentPts;
+                    if(i>60&&d.interval){++r.spans;r.intervals.push_back(d.interval);if(expectedPeriod&&std::llabs(d.interval-expectedPeriod)<=5000)++r.regularSpans;}
+                }else if(id!=lastPicture)pendingPicture=id;
+            }
+            return r;
+        };
+        const int n=1200;
+        {const auto r=run(60.0,[](int i){return int64_t(i/2);},n,0,0,0,333333);
+         check(r.kept==n/2&&r.keptRepeats==0&&r.droppedReal==0,"dedup 30-in-60: every real picture kept once, every repeat dropped");
+         check(r.monotonic&&r.neverLate&&r.regularSpans==r.spans,"dedup 30-in-60: content spans exactly 33.3 ms, never later than the sample");}
+        {const auto r=run(58.0,[](int i){return int64_t(std::floor(i*30.0/58.0+1e-9));},n,0,0,0,333333);
+         check(r.keptRepeats==0&&r.droppedReal==0&&std::abs(r.kept-int(std::floor((n-1)*30.0/58.0))-1)<=1,"dedup 30-in-58: all real pictures kept, no repeats");
+         check(r.monotonic&&r.neverLate&&r.regularSpans*100>=r.spans*95,"dedup 30-in-58: uneven 34.5/17.2 ms samples become even 33.3 ms content spans");}
+        {const auto r=run(60.0,[](int i){return int64_t(std::floor(i*40.0/60.0+1e-9));},n,0,0,0,250000);
+         check(r.keptRepeats==0&&r.droppedReal==0&&std::abs(r.kept-n*2/3)<=1,"dedup 40-in-60: all real pictures kept, no repeats");
+         check(r.monotonic&&r.neverLate&&r.regularSpans*100>=r.spans*95,"dedup 40-in-60: alternating 33/17 ms samples become even 25 ms content spans");}
+        {const auto r=run(60.0,[](int i){return int64_t(i);},n,0,0,0,166667);
+         check(r.kept==n&&r.regularSpans==r.spans,"dedup true 60: nothing dropped, timing unchanged");}
+        {const auto r=run(60.0,[](int i){return int64_t(i/2);},n,2,0,0,333333);
+         check(r.droppedReal==0&&r.keptRepeats*100<=n/2*5,"dedup 30-in-60 with capture noise: real pictures kept, repeats dropped");}
+        {const auto r=run(60.0,[](int i){return int64_t(i/2);},n,0,333334,333333,333333);
+         check(r.kept==n/2&&r.keptRepeats==0,"60->30 cap on 30 fps content keeps every real picture");}
+        {const auto r=run(60.0,[](int i){return int64_t(i);},n,0,333334,333333,0);
+         check(std::abs(r.kept-n/2)<=1&&r.keptRepeats==0,"60->30 cap on 60 fps content keeps every second picture");}
+        {// Hitch: one picture shown for three samples, then the 30 fps cadence resumes one slot later.
+         const auto r=run(60.0,[](int i){return int64_t(i<301?i/2:(i<304?150:(i-1)/2));},n,0,0,0,333333);
+         check(r.keptRepeats==0&&r.droppedReal==0&&r.monotonic&&r.neverLate,"dedup hitch: no real picture lost, timestamps stay ordered and never late");}
+        {// 60->30 with a phase slip: the blind sampler would keep repeats from here on.
+         const auto r=run(60.0,[](int i){return int64_t(i<301?i/2:(i+1)/2);},n,0,333334,333333,333333);
+         check(r.keptRepeats==0,"60->30 cap follows a phase slip instead of keeping repeats");}
+        {// A still scene where only a small object moves (4 points change).
+         ContentDedup dedup;std::array<uint8_t,ContentDedup::kPoints> luma{};picture(1,0,0,luma);int kept=0;
+         for(int i=0;i<120;++i){luma[100]=uint8_t(i*40);luma[101]=uint8_t(i*40+9);luma[600]=uint8_t(i*40+3);luma[2000]=uint8_t(i*40+5);kept+=dedup.observe(luma.data(),i*166667+1000,166667,i==0).keep;}
+         check(kept==120,"dedup keeps a frame where only a small object moved");}
+        {// Slow fade: +1 level per sample never freezes.
+         ContentDedup dedup;std::array<uint8_t,ContentDedup::kPoints> luma{};int kept=0;
+         for(int i=0;i<120;++i){for(auto& v:luma)v=uint8_t(40+i);kept+=dedup.observe(luma.data(),i*166667+1000,166667,i==0).keep;}
+         check(kept>=40,"dedup lets a slow fade advance");}
+        {// Still screen: a held picture is re-kept within 250 ms.
+         ContentDedup dedup;std::array<uint8_t,ContentDedup::kPoints> luma{};picture(3,0,0,luma);int kept=0;
+         for(int i=0;i<240;++i)kept+=dedup.observe(luma.data(),i*166667+1000,166667,i==0).keep;
+         check(kept>=16&&kept<=28&&dedup.stats().held>=15,"dedup still screen keeps one frame every 150-250 ms");}
+        {// No CPU picture: everything is kept.
+         ContentDedup dedup;int kept=0;for(int i=0;i<60;++i)kept+=dedup.observe(nullptr,i*166667+1000,166667,i==0).keep;
+         check(kept==60,"dedup without a picture keeps every sample");}
+        {// No CPU picture with 60->30 (hardware-decoded streams): every second slot, as before.
+         ContentDedup dedup;int kept=0;for(int i=0;i<120;++i)kept+=dedup.observe(nullptr,i*166667+1000+(i%3-1)*5000,166667,i==0,333334,333333).keep;
+         check(kept==60,"60->30 without a picture still samples every second slot by timestamp");}
+        {// A boundary one slot after a kept frame is kept at once (settings transactions wait for it).
+         ContentDedup dedup;bool first=dedup.observe(nullptr,1000,166667,true,333334,0).keep;
+         const bool next=dedup.observe(nullptr,166667+1000,166667,true,333334,0).keep;
+         check(first&&next,"60->30 without a picture keeps a boundary frame immediately");}
+    }
     return failed?1:0;
 }
