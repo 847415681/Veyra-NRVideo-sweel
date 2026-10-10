@@ -1048,9 +1048,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     // B held 33 ms) and re-converge for ~1 s once motion resumed.
                     // VEYRA_TEST_PAIR_PHASE_VALID_ONLY=1 restores the old rule for A/B.
                     static const bool phaseValidOnly=GetEnvironmentVariableW(L"VEYRA_TEST_PAIR_PHASE_VALID_ONLY",nullptr,0)>0;
-                    const bool phaseSample=phaseValidOnly?valid==batch.fgCandidates:valid+invalid==batch.fgCandidates&&!failed;
+                    // resolveGeneration clears hasGenerated when no frame stayed valid,
+                    // so the evaluated group is recognised by its generated frames.
+                    const bool phaseSample=phaseValidOnly?valid==batch.fgCandidates&&batch.hasGenerated:
+                        batch.fgCandidates>0&&valid+invalid==batch.fgCandidates&&!failed;
                     if(adaptiveCapturePhase&&watch.captureArrival>0&&phaseSample&&
-                       batch.hasGenerated&&!batch.historyReset&&!batch.fgRecovery&&
+                       !batch.historyReset&&!batch.fgRecovery&&
                        batch.batch.identity.settingsRevision==fgBudgetRevision&&watch.presentationGeneration==presentationGeneration.load()){
                         int64_t requiredDelay=0;
                         const auto observed=host100ns();
