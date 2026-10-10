@@ -2099,7 +2099,22 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             if(stop_||(paused_&&!seekPreviewPending)||seekSeconds_>=0)return {State::Complete};
                             const double itemPtsMs=double(item.pts100ns)/10000;
                             const auto decisionTime=host100ns();
-                            const bool generationExpired=generated&&(isCapture?timeline.expired(item.pts100ns,decisionTime,100000):!fileAwaitingVideo&&previewGeneratedExpired(nowMs(),itemPtsMs));
+                            // Live sources hand DXGI one frame at a time (see the capacity
+                            // check below), so a late burst no longer queues in the swap
+                            // chain and reaches the screen one refresh after another. A
+                            // generated frame whose next presentable frame is already ready
+                            // and due is superseded; real frames are never dropped.
+                            // VEYRA_TEST_LIVE_PRESENT_QUEUE=1 restores the old behaviour.
+                            static const bool liveQueueGate=GetEnvironmentVariableW(L"VEYRA_TEST_LIVE_PRESENT_QUEUE",nullptr,0)==0;
+                            bool superseded=false;
+                            if(isCapture&&generated&&liveQueueGate)
+                                for(unsigned next=s.next+1;next<batch.batch.count;++next){
+                                    const auto& successor=batch.batch.frames[next];
+                                    if(!graph->resolveFrame(batch,next))break;
+                                    if(successor.kind==pipeline::FrameKind::Generated&&successor.validity!=pipeline::GenerationValidity::Valid)continue;
+                                    superseded=decisionTime>=timeline.deadline(successor.pts100ns);break;
+                                }
+                            const bool generationExpired=generated&&(superseded||(isCapture?timeline.expired(item.pts100ns,decisionTime,100000):!fileAwaitingVideo&&previewGeneratedExpired(nowMs(),itemPtsMs)));
                             const auto readiness=previewFrameReadiness(item,comparisonMode_!=0||!generatedPresentationCurrent(jobGeneration,presentationGeneration.load()),generationExpired,[&]{return graph->resolveFrame(batch,s.next);});
                             if(traceSubframes&&generated&&(readiness==PreviewFrameReadiness::Expired||readiness==PreviewFrameReadiness::Suppressed))
                                 traceFrame(diagnostics::TraceKind::Discarded,item.identity,batch.batch.batchId,item.lease->readyFence,item.pts100ns,item.subframe,unsigned(readiness),isCapture?double(decisionTime-timeline.deadline(item.pts100ns))/10000:nowMs()-itemPtsMs);
@@ -2154,6 +2169,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                                 if(optionalNow<due)return {State::Pending,due};
                                 if(!presenter.presentationReady())return {State::Pending,optionalNow+2000};
                             }
+                            // Default VSync keeps a one-deep DXGI queue but never waited on
+                            // it, so overloaded live presents piled up behind the refresh
+                            // (VFG 4X: Present->scanout P50 8.9 ms, P95 21.8 ms at 320 Hz).
+                            // Present only when the swap chain can take the frame. A no-op
+                            // when tearing or a provider owns presentation.
+                            else if(isCapture&&liveQueueGate&&!presenter.presentationReady())return {State::Pending,optionalNow+2000};
                             const auto waited=elapsedMs(*s.deadlineStart);s.deadlineStart.reset();s.waitMs+=waited;flow->cpu(diagnostics::CpuStage::DeadlineWait,waited,host100ns());
                             const bool deviationValid=!isCapture&&!isImage&&!fileAwaitingVideo&&!paused_;
                             const double entryDeviation=deviationValid?nowMs()-itemPtsMs:0;
