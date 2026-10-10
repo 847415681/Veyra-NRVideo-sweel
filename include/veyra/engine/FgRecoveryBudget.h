@@ -111,6 +111,15 @@ public:
         const double grace=double(std::max<int64_t>(0,outputInterval))/10000;
         return double(midpointDeadline-now)/10000+grace>=std::max(0.0,queued+*base+*firstFgMs-progress)+std::max(0.0,present);
     }
+    // Live partial group: base work plus `calls` measured interpolations must
+    // reach the deadline of the group's last output, with the same 10 ms
+    // presentation grace as canAdmit. Does not touch recovery state.
+    bool canAdmitPartial(int64_t now,int64_t lastDeadline,double elapsed,double present,std::optional<double> perCallMs,unsigned calls)const{
+        const auto base=baseCost(now);
+        if(!base||!perCallMs||!std::isfinite(*perCallMs)||*perCallMs<0)return false;
+        const double progress=std::clamp(elapsed,0.0,*base);
+        return double(lastDeadline-now)/10000+10>=std::max(0.0,*base+*perCallMs*calls-progress)+std::max(0.0,present);
+    }
     bool recovering()const{return limited_&&recoveryPairs_>0;}
 };
 }

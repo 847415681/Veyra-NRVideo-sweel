@@ -1803,7 +1803,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // owns generation inside its presenter and has no graph admission.
                 if(isCapture&&!rereadCached&&!presentSinkFrameGeneration(options.settings.frameGenerationBackend)){
                     const auto presentP95=livePresentGpu.p95();
-                    admitFg=[&,presentP95](const pipeline::FrameBatch& batch,bool warmingHistory){
+                    admitFg=[&,presentP95](const pipeline::FrameBatch& batch,bool warmingHistory)->pipeline::EnhanceGraph::FgAdmissionResult{
                         // Physical capture and PS5 delivery clocks are not
                         // guaranteed to match the host clock. Anchor each new
                         // input pair before enhancement, so a 59.94-vs-60Hz
@@ -1817,8 +1817,27 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         const auto now=host100ns(),deadline=liveTimeline.deadline(lastGenerated);
                         const double elapsed=elapsedMs(processStart);
                         const bool admitted=fgBudget.admit(now,deadline,elapsed,presentP95,warmingHistory);
-                        logAdmission(batch,now,deadline,elapsed,presentP95,admitted,warmingHistory,pairAnchoredLive?(isStream?"decoded-pair":"capture-pair"):"continuous");
-                        return admitted?pipeline::EnhanceGraph::FgDecision::Evaluate:pipeline::EnhanceGraph::FgDecision::Skip;
+                        const char* timeline=pairAnchoredLive?(isStream?"decoded-pair":"capture-pair"):"continuous";
+                        logAdmission(batch,now,deadline,elapsed,presentP95,admitted,warmingHistory,timeline);
+                        if(admitted)return pipeline::EnhanceGraph::FgDecision::Evaluate;
+                        // VFG sets its multiplier per pair. Instead of a whole-group
+                        // hole, emit the largest smaller group whose last output still
+                        // fits; its frames keep their true positions on the A/B
+                        // timeline and history is kept. Deadlines are unchanged.
+                        // VEYRA_TEST_VFG_NO_LIVE_REDUCED=1 disables it for A/B runs.
+                        static const bool liveReduced=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_NO_LIVE_REDUCED",nullptr,0)==0;
+                        if(liveReduced&&!warmingHistory&&previewFgMultiplier>2&&options.settings.frameGenerationBackend==FrameGenerationBackend::Vfg){
+                            const auto perCall=frameFlow->snapshot(now).gpuTiming[size_t(diagnostics::GpuStage::Fg1)].p95;
+                            for(unsigned m=previewFgMultiplier-1;m>=2;--m){
+                                const auto last=liveTimeline.deadline(pipeline::FrameBatch::interpolate(a,batch.b100ns,m-1,m));
+                                if(!fgBudget.canAdmitPartial(now,last,elapsed,presentP95,perCall,m-1))continue;
+                                ++fgReducedPairs;
+                                if(now>=nextFgReducedLog){nextFgReducedLog=now+10000000;
+                                    veyra::log::info("live-fg-admission",std::format("timeline={} revision={} source={} reduced={}X requestedMultiplier={} reducedPairs={} remainingLastMs={:.3f} perCallGpuP95Ms={:.3f} predictedFullMs={:.3f} (VFG history kept; smaller presentable group instead of whole-group hole)",timeline,batch.identity.settingsRevision,batch.identity.sourceFrameId,m,options.fgMultiplier,fgReducedPairs,double(last-now)/10000,perCall.value_or(-1),fgBudget.predicted(now,false).value_or(-1)));}
+                                return {pipeline::EnhanceGraph::FgDecision::Reduced,m};
+                            }
+                        }
+                        return pipeline::EnhanceGraph::FgDecision::Skip;
                     };
                 }
                 // File playback checks both the first output and whole-group
