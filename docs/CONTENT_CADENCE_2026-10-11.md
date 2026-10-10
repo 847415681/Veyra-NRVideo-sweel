@@ -77,7 +77,7 @@
 - `py -3.11 -I tests/claude-dedup-20261011/harness/regress.py dedup …`：chain、contracts、hdr、presenter、lifecycle、video、rollback、inactive、inactive-node、sr、slider、menu、components、timing，以及新增的 half-rate（原有 `--half-rate` 测试，用真 60 帧素材、硬件解码，覆盖“无 CPU 画面时 60→30 仍按时间戳隔帧”）。
 - 第一轮 half-rate 失败：无 CPU 画面的 60→30 兜底分支没有处理边界，设置切换后的第一帧可能被当作“不满两个时隙”丢掉，热切换事务一直等不到这帧（同一 EXE 用旧行为开关则全部通过）。已改为边界帧立即保留并重新锚定，增加对应单测。
 - 修正后 half-rate 一次出现“禁用后的版本不应保留之前的插帧计数”单项失败；新旧行为各再跑两次全部通过（新行为 3 次中 1 次，旧行为 3 次中 0 次），判断为该检查的时序偶发，与去重逻辑无关，如实记录。
-- 最终版本完整回归结果见下方追加记录。
+- 最终版本（85cbd5a）完整回归 15 组全部通过：`logs/claude-dedup-20261011/dedup/tests-20261011-034458/receipt.json`；donor 测试包 1626 个文件前后逐项一致。单测程序 96 项 PASS。
 
 ## 未验证与边界
 

@@ -4,7 +4,7 @@
 
 - 用户要求在补帧“内容节奏”里重新设计去重复帧，兼容 30/40 帧游戏用 60 帧采集及非整数倍率，避免原 60→30 误删真实帧导致鬼影，不增加明显耗时；用 GTA6 30 帧视频渲染 60/58 帧测试，做完汇报后关机。存档 checkpoint/pre-claude-dedup-20261011（main 5ba186a）与 archives/claude-dedup-20261011；分支 claude/dedup-cadence-20261011。
 - 新增 include/veyra/engine/ContentDedup.h：用采集回调已有的 64×36 亮度点与“上一张留下的画面”比较，重复画面在 GPU 工作前丢弃；留下的帧用回归周期预测、夹在采样时间窗内的内容时间戳。自动/识别 xx fps 模式去重，60→30 改为去重 + 30 帧上限（无 CPU 画面的硬解串流仍按时间戳减半）。VEYRA_TEST_CONTENT_DEDUP_LEGACY=1 恢复旧行为。
-- 测试见 docs/CONTENT_CADENCE_2026-10-11.md。
+- GTA6 渲染素材回放：30→60/58、40 帧放 60 Hz 新版 0 丢失、0 重复，内容间隔 99.6–100% 在 ±1 ms；旧 60→30 在 40 帧内容丢 189/761，58 Hz 下不起作用。回归 15 组全部通过（logs/claude-dedup-20261011/dedup/tests-20261011-034458）。详见 docs/CONTENT_CADENCE_2026-10-11.md。
 - 不 merge/push/Release，不改默认内容节奏、NR/SR/FG 模型、运行库、驱动、用户配置。
 
 ## 2026-10-10 关闭效果器编辑卡顿
