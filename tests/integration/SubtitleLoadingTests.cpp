@@ -1,5 +1,6 @@
 #include "veyra/engine/Subtitles.h"
 #include <chrono>
+#include <cmath>
 #include <iostream>
 #include <thread>
 
@@ -63,7 +64,12 @@ int wmain(int argc,wchar_t** argv){
                 if(cue.begin<previous||cue.end<=cue.begin)return 1;
                 previous=cue.begin;
             }
-            if(track.usable()&&textAt(track,(track.cues.front().begin+track.cues.front().end)/2).empty())return 1;
+            if(track.usable()){
+                const auto& cue=track.cues.front();
+                const double at=std::isfinite(cue.end)?(cue.begin+cue.end)/2:cue.begin+.1;
+                if(cuesAt(track,at).empty())return 1;
+                if(!cue.bitmap&&textAt(track,at).empty())return 1;
+            }
         }
         std::cout<<"tracks="<<result.tracks.size()<<" usable="<<usable<<" cues="<<cues
                  <<" elapsedMs="<<std::chrono::duration<double,std::milli>(Clock::now()-start).count()<<'\n';

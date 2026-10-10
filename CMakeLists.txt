@@ -559,6 +559,8 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     src/source/NativeCaptureSink.cpp
     src/source/MediaFileSource.cpp
     src/source/CaptureCardSource.cpp
+    src/source/DeckLinkCapture.cpp
+    src/source/DeckLinkDriver.cpp
     src/source/ElgatoHdrControl.cpp
     src/source/ScreenCaptureSource.cpp
     src/source/AverMediaAudioSwitch.cpp
@@ -567,6 +569,32 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     src/source/MagewellCapture.cpp
   )
   veyra_apply_warnings(veyra_sources)
+  # Optional external DeckLink SDK. Generate the official COM ABI outside the
+  # source tree; Desktop Video supplies the installed COM server at run time.
+  set(VEYRA_DECKLINK_SDK_DIR "" CACHE PATH "External DeckLink SDK Win IDL directory")
+  if(VEYRA_DECKLINK_SDK_DIR AND NOT EXISTS "${VEYRA_DECKLINK_SDK_DIR}/DeckLinkAPI.idl")
+    message(FATAL_ERROR "VEYRA_DECKLINK_SDK_DIR must contain the external Win DeckLinkAPI.idl")
+  endif()
+  if(VEYRA_DECKLINK_SDK_DIR AND EXISTS "${VEYRA_DECKLINK_SDK_DIR}/DeckLinkAPI.idl")
+    find_program(VEYRA_MIDL_EXECUTABLE midl REQUIRED)
+    set(VEYRA_DECKLINK_GENERATED "${CMAKE_CURRENT_BINARY_DIR}/decklink-generated")
+    file(MAKE_DIRECTORY "${VEYRA_DECKLINK_GENERATED}")
+    file(GLOB VEYRA_DECKLINK_IDL_DEPENDS "${VEYRA_DECKLINK_SDK_DIR}/*.idl")
+    add_custom_command(OUTPUT "${VEYRA_DECKLINK_GENERATED}/DeckLinkAPI_h.h"
+      COMMAND "${VEYRA_MIDL_EXECUTABLE}" /nologo /env x64 /I "${VEYRA_DECKLINK_SDK_DIR}"
+        /out "${VEYRA_DECKLINK_GENERATED}" /h DeckLinkAPI_h.h
+        /iid DeckLinkAPI_i.c /tlb DeckLinkAPI.tlb /client none /server none
+        "${VEYRA_DECKLINK_SDK_DIR}/DeckLinkAPI.idl"
+      DEPENDS ${VEYRA_DECKLINK_IDL_DEPENDS} VERBATIM)
+    add_custom_target(veyra_decklink_abi DEPENDS "${VEYRA_DECKLINK_GENERATED}/DeckLinkAPI_h.h")
+    add_dependencies(veyra_sources veyra_decklink_abi)
+    set_source_files_properties(src/source/DeckLinkDriver.cpp PROPERTIES
+      COMPILE_DEFINITIONS VEYRA_HAS_DECKLINK=1 INCLUDE_DIRECTORIES "${VEYRA_DECKLINK_GENERATED}")
+    message(STATUS "DeckLink native capture ABI: ${VEYRA_DECKLINK_SDK_DIR}")
+  else()
+    set_source_files_properties(src/source/DeckLinkDriver.cpp PROPERTIES COMPILE_DEFINITIONS VEYRA_HAS_DECKLINK=0)
+    message(STATUS "DeckLink native capture: no SDK configured (DirectShow remains available)")
+  endif()
   # Magewell Pro Capture low-latency video: compiled against the vendor SDK headers when
   # VEYRA_MAGEWELL_SDK_DIR points at them (kept outside the source tree); LibMWCapture.dll is
   # loaded at run time. Without the headers the feature reports itself unavailable.
@@ -623,6 +651,10 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_link_libraries(veyra_source_tests PRIVATE veyra_sources)
 
   add_executable(veyra_capture_tests tests/integration/CaptureSourceTests.cpp)
+  add_executable(veyra_decklink_tests tests/unit/DeckLinkCaptureTests.cpp)
+  target_compile_features(veyra_decklink_tests PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_decklink_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_link_libraries(veyra_decklink_tests PRIVATE veyra_sources)
   add_executable(veyra_screen_capture_tests tests/integration/ScreenCaptureTests.cpp)
   target_compile_features(veyra_screen_capture_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_screen_capture_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
@@ -654,6 +686,10 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_link_libraries(veyra_screenshot_combination_tests PRIVATE veyra_engine)
   target_compile_features(veyra_screenshot_combination_tests PRIVATE cxx_std_20)
   add_executable(veyra_bitmap_subtitle_tests tests/integration/BitmapSubtitleTests.cpp)
+  add_executable(veyra_subtitle_format_tests tests/integration/SubtitleFormatTests.cpp)
+  target_compile_features(veyra_subtitle_format_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_subtitle_format_tests PRIVATE /utf-8)
+  target_link_libraries(veyra_subtitle_format_tests PRIVATE veyra_engine)
   target_link_libraries(veyra_bitmap_subtitle_tests PRIVATE veyra_engine)
   target_compile_features(veyra_bitmap_subtitle_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_subtitle_loading_tests PRIVATE veyra_engine)
@@ -775,6 +811,12 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_features(veyra_present_sink_lifecycle_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_present_sink_lifecycle_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_link_libraries(veyra_present_sink_lifecycle_tests PRIVATE veyra_gfx user32)
+  add_executable(veyra_settings_transaction_tests tests/integration/SettingsTransactionTests.cpp)
+  target_compile_features(veyra_settings_transaction_tests PRIVATE cxx_std_20)
+  target_link_libraries(veyra_settings_transaction_tests PRIVATE veyra_engine)
+  add_executable(veyra_sr_quality_tests tests/integration/SrQualityTests.cpp)
+  target_compile_features(veyra_sr_quality_tests PRIVATE cxx_std_20)
+  target_link_libraries(veyra_sr_quality_tests PRIVATE veyra_engine)
   add_executable(veyra_experimental_backend_tests tests/integration/ExperimentalBackendTests.cpp)
   target_compile_features(veyra_experimental_backend_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_experimental_backend_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
@@ -879,6 +921,7 @@ endif()
 # never depend on Qt being installed.
 if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   add_library(veyra_qml_bridge STATIC src/ui/QmlExportQueueModel.cpp include/veyra/ui/QmlExportQueueModel.h src/ui/QmlPlayerBridge.cpp src/ui/ThumbnailProvider.cpp
+    src/ui/PlaylistModel.cpp include/veyra/ui/PlaylistModel.h
     include/veyra/ui/QmlPlayerBridge.h include/veyra/ui/ThumbnailProvider.h
     # P4-c: the existing subtitle renderer, reused as-is (no second renderer).
     apps/veyra/ui/SubtitleOverlay.cpp)
@@ -932,6 +975,21 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # piece of the old shell worth keeping, and its own dialog is what users
   # expect from a desktop app. No QWidget UI is created.
   target_link_libraries(veyra_qml_bridge PUBLIC veyra_engine Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Widgets)
+  add_executable(veyra_playlist_tests tests/unit/PlaylistModelTests.cpp src/ui/PlaylistModel.cpp include/veyra/ui/PlaylistModel.h)
+  set_target_properties(veyra_playlist_tests PROPERTIES AUTOMOC ON)
+  target_compile_features(veyra_playlist_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_playlist_tests PRIVATE /utf-8)
+  target_include_directories(veyra_playlist_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(veyra_playlist_tests PRIVATE Qt6::Core)
+  find_package(Qt6 COMPONENTS Test)
+  if(TARGET Qt6::Test)
+    add_executable(veyra_playlist_window_tests tests/qml/PlaylistWindowTests.cpp)
+    target_compile_features(veyra_playlist_window_tests PRIVATE cxx_std_20)
+    target_compile_options(veyra_playlist_window_tests PRIVATE /utf-8)
+    target_include_directories(veyra_playlist_window_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_compile_definitions(veyra_playlist_window_tests PRIVATE VEYRA_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml")
+    target_link_libraries(veyra_playlist_window_tests PRIVATE veyra_qml_bridge Qt6::Test)
+  endif()
   # VEYRA_DISPLAY_VERSION is the human-readable version the app reports; it is
   # the same value the resource file uses, so the UI cannot drift from it.
   target_compile_definitions(veyra_qml_bridge PRIVATE VEYRA_DISPLAY_VERSION="${VEYRA_DISPLAY_VERSION}")

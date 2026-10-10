@@ -1,4 +1,5 @@
 #include "veyra/source/CaptureCardSource.h"
+#include "veyra/source/DeckLinkCapture.h"
 #include "veyra/source/CaptureFrameRate.h"
 #include "veyra/source/WasapiAudioInput.h"
 #include "veyra/source/CaptureTiming.h"
@@ -269,7 +270,8 @@ static bool writeCaptureFrame(const CaptureMediaLayout& layout,const uint8_t* da
         if(!data||bytes<layout.sampleBytes)return false;
         pipeline::interleaveCaptureI420(frame,data,layout.stride,data+layout.chromaOffset,data+layout.secondChromaOffset,layout.chromaStride,layout.width,layout.height,flip);
     }else if(!copyCaptureSample(layout,data,bytes,frame,flipRows))return false;
-    pipeline::sampleCaptureUploadProxy(frame,data,layout.stride,flip);
+    if(layout.packing==CapturePacking::V210)pipeline::sampleCaptureV210Proxy(frame,data,layout.stride,flip);
+    else pipeline::sampleCaptureUploadProxy(frame,data,layout.stride,flip);
     return true;
 }
 struct CaptureCardSource::Impl:ISampleGrabberCB {
@@ -371,6 +373,7 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
     // Manual capture flip; read by the DirectShow callback thread.
     std::atomic<bool> verticalFlip{false};
     std::unique_ptr<WasapiAudioInput> wasapi;
+    std::unique_ptr<decklink::Capture> decklink;
     std::wstring audioError;
     AudioInputRecovery audioRecovery;
     SourceInfo info;CaptureMediaLayout layout;Clock::time_point lastFrame;
@@ -407,7 +410,8 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
     }
     long driverBuffers=0;
     bool externalTimeAnchored=false;double externalTimeOffset=0;
-    void deliverExternal(const uint8_t* data,size_t bytes,double deviceSeconds,bool discontinuity){
+    int64_t pendingNativePts100ns=0;
+    void deliverExternal(const uint8_t* data,size_t bytes,double deviceSeconds,bool discontinuity,int64_t duration100ns=0,int64_t nativePts100ns=0){
         const auto arrival=Clock::now();
         externalFrames.fetch_add(1,std::memory_order_relaxed);
         AVFrame* staged=nullptr;bool written=false;
@@ -428,7 +432,8 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
             if(pending)++dropped;
             pendingDiscontinuity=captureDiscontinuity(pending,pendingDiscontinuity,discontinuity,received>0,pendingTime,time,info.averageFps);
             pending=true;pendingTime=time;pendingArrival=arrival;
-            pendingDuration=captureDuration(0,0,false,nominalDuration100ns);
+            pendingNativePts100ns=nativePts100ns;
+            pendingDuration=captureDuration(0,duration100ns,duration100ns>0,nominalDuration100ns);
             if(!received)firstArrival=arrival;
             ++received;latestArrival=arrival;
             recentArrivals.push_back(arrival);
@@ -436,6 +441,38 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
         }
         wake.notify_one();
         if(frameEvent)SetEvent(frameEvent);
+    }
+    bool allocateFrames(const SourceOpenDesc& desc){auto& p=*this;
+    // Native capture with the graph's device: the three mailbox frames are
+    // D3D12 upload buffers, so the callback's copy is the only CPU copy of a
+    // frame (CaptureUploadFrame.h). Semiplanar and packed layouts keep their
+    // format; planar I420/YV12 becomes NV12. Layouts that are converted per
+    // pixel on the CPU (NV21, legacy rollback, 32-bit RGB) keep ordinary frames,
+    // as does VEYRA_TEST_CAPTURE_CPU_FRAMES=1 for A/B runs.
+    const bool packed10=p.layout.packing==CapturePacking::V210||p.layout.packing==CapturePacking::Rgb10xLE;
+    AVPixelFormat uploadFormat=AV_PIX_FMT_NONE;
+    if(desc.d3d12Device&&!p.compressedPath&&GetEnvironmentVariableW(L"VEYRA_TEST_CAPTURE_CPU_FRAMES",nullptr,0)==0){
+        const bool legacyYuy2=p.layout.format==AV_PIX_FMT_YUYV422&&(p.layout.packing==CapturePacking::Uyvy||p.layout.packing==CapturePacking::Yvyu);
+        if(packed10)uploadFormat=AV_PIX_FMT_BGRA;
+        else if(p.layout.planes==3&&p.layout.format==AV_PIX_FMT_YUV420P&&p.info.width%2==0&&p.info.height%2==0)uploadFormat=AV_PIX_FMT_NV12;
+        else if(p.layout.planes==(pipeline::captureUploadPixelBytes(p.layout.format)&&(p.layout.format==AV_PIX_FMT_NV12||p.layout.format==AV_PIX_FMT_P010||p.layout.format==AV_PIX_FMT_P016)?2u:1u)&&
+            p.layout.packing!=CapturePacking::Nv21&&!legacyYuy2)uploadFormat=p.layout.format;
+    }
+    const bool uploadFrames=uploadFormat!=AV_PIX_FMT_NONE;
+    unsigned uploadBacked=0;
+    for(auto** f:{&p.frame,&p.pendingFrame,&p.stagingFrame}){
+        *f=uploadFrames?pipeline::allocCaptureUploadFrame(static_cast<ID3D12Device*>(desc.d3d12Device),uploadFormat,unsigned(p.info.width),unsigned(p.info.height),packed10):nullptr;
+        if(*f){++uploadBacked;continue;}
+        *f=av_frame_alloc();if(!*f)return false;
+        (*f)->format=p.layout.format;(*f)->width=p.info.width;(*f)->height=p.info.height;
+        // 256-byte row alignment matches the graph's D3D12 upload pitch, so
+        // the ingest copy is one memcpy per plane instead of one per row.
+        if(av_frame_get_buffer(*f,256)<0)return false;
+    }
+    log::info("capture",std::format("mailbox frames uploadBacked={} of 3 layoutFormat={} frameFormat={} (single CPU copy when 3)",uploadBacked,int(p.layout.format),int(uploadFrames&&uploadBacked==3?uploadFormat:p.layout.format)));
+    p.stagingBusy=false;
+    if(!p.frameEvent)p.frameEvent=CreateEventW(nullptr,FALSE,FALSE,nullptr);
+    return p.frameEvent!=nullptr;
     }
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void** pp)override{if(!pp)return E_POINTER;*pp=nullptr;if(id==IID_IUnknown||id==__uuidof(ISampleGrabberCB)){*pp=static_cast<ISampleGrabberCB*>(this);AddRef();return S_OK;}return E_NOINTERFACE;}
     ULONG STDMETHODCALLTYPE AddRef()override{return ++refs;}ULONG STDMETHODCALLTYPE Release()override{return --refs;}
@@ -689,6 +726,7 @@ std::vector<CaptureDevice> CaptureCardSource::deviceDetails(bool audio){
         }
         result.push_back(std::move(device));
     }
+    if(!audio)for(auto& device:decklink::devices())result.push_back({std::move(device.name),std::move(device.path),true,false});
     if(audio)for(auto& endpoint:WasapiAudioInput::devices())result.push_back({std::move(endpoint.name),std::move(endpoint.id),false,true});
     return result;
 }
@@ -735,16 +773,26 @@ std::vector<CaptureFormat> enumerateFormats(IAMStreamConfig* config,bool preferD
     return out;
 }
 std::vector<CaptureFormat> CaptureCardSource::formats(unsigned device){
+    const auto details=deviceDetails();if(device<details.size()&&decklink::isPath(details[device].path))return formatsByPath(details[device].path);
     ComPtr<IGraphBuilder> g;ComPtr<ICaptureGraphBuilder2>b;ComPtr<IBaseFilter>f;ComPtr<IAMStreamConfig>c;if(!configuration(device,g,b,f,c))return {};
     const auto list=monikers(false);const auto name=device<list.size()?propertyString(list[device].Get(),L"FriendlyName"):L"";
     return enumerateFormats(c.Get(),isBlackmagicCaptureDevice(name));
 }
 std::vector<CaptureFormat> CaptureCardSource::formatsByPath(std::wstring_view devicePath){
+    if(decklink::isPath(devicePath)){
+        std::vector<CaptureFormat> out;
+        for(const auto& device:decklink::devices())if(device.path==devicePath&&device.autoDetection)
+            out.push_back({0,0,0,0,L"自动检测实际信号 · BMD 原生",decklink::modeKey(0),0,0,true});
+        int index=1;for(const auto& mode:decklink::modes(devicePath))out.push_back({index++,mode.width,mode.height,double(mode.scale)/mode.duration,
+            std::format(L"{} · {} x {} @ {:.3f} fps · {} · BMD 原生",mode.name,mode.width,mode.height,double(mode.scale)/mode.duration,mode.interlaced?L"隔行":L"逐行"),decklink::modeKey(mode.id),1,0,false});
+        return out;
+    }
     ComPtr<IGraphBuilder> g;ComPtr<ICaptureGraphBuilder2>b;ComPtr<IBaseFilter>f;ComPtr<IAMStreamConfig>c;if(!configuration(devicePath,g,b,f,c))return {};
     return enumerateFormats(c.Get(),isBlackmagicCaptureDevice(captureDeviceName(devicePath),devicePath));
 }
 bool CaptureCardSource::showDeviceProperties(std::wstring_view devicePath,uintptr_t owner,bool inputSelector,std::wstring& error,std::wstring* changedFormatKey){
     error.clear();if(changedFormatKey)changedFormatKey->clear();
+    if(decklink::isPath(devicePath)){error=L"BMD 原生入口跟随 Desktop Video Setup 的 HDMI/SDI 输入设置；请在该程序选择输入口，再使用自动检测或手动制式。";return false;}
     ComPtr<IGraphBuilder> graph;ComPtr<ICaptureGraphBuilder2> builder;ComPtr<IBaseFilter> device;ComPtr<IAMStreamConfig> config;
     if(!configuration(devicePath,graph,builder,device,config)){error=L"无法打开驱动设置；请先断开采集并关闭占用设备的应用。";return false;}
     AM_MEDIA_TYPE* before=nullptr;const HRESULT beforeHr=config->GetFormat(&before);
@@ -810,7 +858,60 @@ void CaptureCardSource::videoReset(bool resetAudio){if(p_->wasapi)p_->wasapi->vi
 void CaptureCardSource::setAudioSync(unsigned mode,int offset){if(p_->wasapi)p_->wasapi->setSync(mode,offset);else if(p_->audioSession)p_->audioSession->setSync(mode,offset);}
 sink::CaptureAudioState CaptureCardSource::audioState()const{auto state=p_->wasapi?p_->wasapi->snapshot():p_->audioSession?p_->audioSession->snapshot():sink::CaptureAudioState{};if(!p_->audioError.empty())state.error=p_->audioError;return state;}
 bool CaptureCardSource::open(const SourceOpenDesc& desc){return configure(desc)&&start();}
+bool CaptureCardSource::configureDeckLink(const SourceOpenDesc& desc){
+    auto& p=*p_;CaptureSelection selection;if(!parseCapturePath(desc.path,selection))return false;
+    const auto formats=formatsByPath(selection.videoPath);
+    const auto* selected=selectCaptureFormat(formats,selection.format,selection.formatKey);
+    if(!selected){error_=L"保存的 BMD 制式已不可用，请刷新并重新选择";return false;}
+    p.decklink=std::make_unique<decklink::Capture>();
+    if(!p.decklink->configure(selection.videoPath,selected->key,selection.audio==kCaptureAudioFromVideoDevice)){
+        error_=p.decklink->error();p.decklink.reset();return false;
+    }
+    const auto input=p.decklink->contract();const auto mode=p.decklink->mode();
+    p.layout={};auto& layout=p.layout;layout.width=input.width;layout.height=input.height;layout.stride=input.stride;
+    layout.rowBytes=unsigned(decklink::rowBytes(input.pixel,input.width));layout.sampleBytes=size_t(input.stride)*input.height;
+    layout.bottomUp=input.bottomUp;layout.duration=input.duration100ns;layout.color=input.color;
+    applyCaptureColorOverride(layout.color,selection.colorOverride);
+    switch(input.pixel){
+    case decklink::Pixel::Uyvy8:layout.packing=CapturePacking::Uyvy;layout.format=AV_PIX_FMT_UYVY422;break;
+    case decklink::Pixel::Bgra8:layout.packing=CapturePacking::Bgra32;layout.format=AV_PIX_FMT_BGR0;break; // capture is opaque, ignore undefined alpha
+    case decklink::Pixel::V210:layout.packing=CapturePacking::V210;layout.format=AV_PIX_FMT_BGRA;break;
+    case decklink::Pixel::Rgb10xLE:layout.packing=CapturePacking::Rgb10xLE;layout.format=AV_PIX_FMT_BGRA;break;
+    }
+    if(layout.color.isHdrPath()&&input.pixel!=decklink::Pixel::V210&&input.pixel!=decklink::Pixel::Rgb10xLE){error_=L"BMD HDR 需要 10 位原生输入格式";p.decklink.reset();return false;}
+    p.info={};p.info.kind=pipeline::SourceKind::CaptureCard;p.info.width=input.width;p.info.height=input.height;
+    p.info.displayAspect=double(input.width)/input.height;p.info.duration=pipeline::Rational::unknown();p.info.color=layout.color;
+    p.info.averageFps=double(mode.scale)/mode.duration;p.info.nominalRateNum=int(mode.scale);p.info.nominalRateDen=int(mode.duration);
+    p.info.timestampQuantum=1e-7;p.info.videoDecodePath="decklink";
+    p.info.videoPixelFormatName=input.pixel==decklink::Pixel::V210?"v210":input.pixel==decklink::Pixel::Rgb10xLE?"R10l":input.pixel==decklink::Pixel::Uyvy8?"UYVY":"BGRA";
+    if(selection.requestedFps>0&&!captureFrameRateMatches(selection.requestedFps,layout.duration)){
+        error_=std::format(L"BMD 实际信号为 {:.3f} FPS，与请求的 {:.3f} FPS 不一致；设为 0 可跟随实际信号",p.info.averageFps,selection.requestedFps);p.decklink.reset();return false;
+    }
+    p.nominalDuration100ns=layout.duration;p.externalTimeAnchored=true;p.externalTimeOffset=0;
+    if(!p.allocateFrames(desc)){error_=L"BMD 采集帧缓冲分配失败";return false;}
+    if(selection.audio==kCaptureAudioFromVideoDevice){
+        WAVEFORMATEX wave{};wave.wFormatTag=WAVE_FORMAT_PCM;wave.nChannels=2;wave.nSamplesPerSec=48000;wave.wBitsPerSample=16;wave.nBlockAlign=4;wave.nAvgBytesPerSec=192000;
+        p.audioSession=std::make_unique<sink::CaptureAudioSession>();
+        if(!p.audioSession->configure(wave,sizeof(wave))){p.audioSession.reset();p.audioError=L"BMD PCM 音频配置失败；视频继续运行";}
+    }else if(selection.audio==kCaptureAudioWasapi){
+        p.wasapi=std::make_unique<WasapiAudioInput>();
+        if(!p.wasapi->configure(selection.audioPath)){p.wasapi.reset();p.audioError=L"WASAPI 音频端点无效；视频继续运行";}
+    }else if(selection.audio>=0){
+        // Optional independent DirectShow audio, retaining the user's explicit
+        // endpoint. Native video never opens a second DirectShow video stream.
+        HRESULT hr=CoCreateInstance(CLSID_FilterGraph,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&p.graph));
+        if(SUCCEEDED(hr))hr=CoCreateInstance(CLSID_CaptureGraphBuilder2,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&p.builder));
+        if(SUCCEEDED(hr))hr=p.builder->SetFiltergraph(p.graph.Get());
+        if(SUCCEEDED(hr)&&connectDirectShowAudio(desc))hr=p.graph.As(&p.control);
+        else if(SUCCEEDED(hr))hr=E_FAIL;
+        log::info("decklink-audio",std::format("separate DirectShow audio hr=0x{:08X}",uint32_t(hr)));
+        if(FAILED(hr))p.audioError=L"独立采集音频配置失败；BMD 原生视频继续运行";
+    }
+    p.configured=true;reconnectDesc_=desc;reconnectFormat_=selected->key;reconnectInfo_=p.info;
+    return true;
+}
 bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.clear();p_->lastAudioGain=-1;auto& p=*p_;CaptureSelection selection;if(!parseCapturePath(desc.path,selection))return false;const unsigned index=selection.videoIndex;int format=selection.format;const int audio=selection.audio;
+    if(selection.stable&&decklink::isPath(selection.videoPath))return configureDeckLink(desc);
     if(selection.stable?!configuration(selection.videoPath,p.graph,p.builder,p.device,p.config):!configuration(index,p.graph,p.builder,p.device,p.config))return false;
     const auto available=enumerateFormats(p.config.Get());
     const auto* chosen=selectCaptureFormat(available,format,selection.formatKey);
@@ -1055,33 +1156,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
     }
     if(FAILED(p.graph.As(&p.control))||FAILED(p.graph.As(&p.events)))return false;
     if(p.grab&&(FAILED(p.grab->SetBufferSamples(FALSE))||FAILED(p.grab->SetCallback(&p,0))))return false;
-    // Native capture with the graph's device: the three mailbox frames are
-    // D3D12 upload buffers, so the callback's copy is the only CPU copy of a
-    // frame (CaptureUploadFrame.h). Semiplanar and packed layouts keep their
-    // format; planar I420/YV12 becomes NV12. Layouts that are converted per
-    // pixel on the CPU (NV21, legacy rollback, 32-bit RGB) keep ordinary frames,
-    // as does VEYRA_TEST_CAPTURE_CPU_FRAMES=1 for A/B runs.
-    AVPixelFormat uploadFormat=AV_PIX_FMT_NONE;
-    if(desc.d3d12Device&&!p.compressedPath&&GetEnvironmentVariableW(L"VEYRA_TEST_CAPTURE_CPU_FRAMES",nullptr,0)==0){
-        const bool legacyYuy2=p.layout.format==AV_PIX_FMT_YUYV422&&(p.layout.packing==CapturePacking::Uyvy||p.layout.packing==CapturePacking::Yvyu);
-        if(p.layout.planes==3&&p.layout.format==AV_PIX_FMT_YUV420P&&p.info.width%2==0&&p.info.height%2==0)uploadFormat=AV_PIX_FMT_NV12;
-        else if(p.layout.planes==(pipeline::captureUploadPixelBytes(p.layout.format)&&(p.layout.format==AV_PIX_FMT_NV12||p.layout.format==AV_PIX_FMT_P010||p.layout.format==AV_PIX_FMT_P016)?2u:1u)&&
-            p.layout.packing!=CapturePacking::Nv21&&!legacyYuy2)uploadFormat=p.layout.format;
-    }
-    const bool uploadFrames=uploadFormat!=AV_PIX_FMT_NONE;
-    unsigned uploadBacked=0;
-    for(auto** f:{&p.frame,&p.pendingFrame,&p.stagingFrame}){
-        *f=uploadFrames?pipeline::allocCaptureUploadFrame(static_cast<ID3D12Device*>(desc.d3d12Device),uploadFormat,unsigned(p.info.width),unsigned(p.info.height)):nullptr;
-        if(*f){++uploadBacked;continue;}
-        *f=av_frame_alloc();if(!*f)return false;
-        (*f)->format=p.layout.format;(*f)->width=p.info.width;(*f)->height=p.info.height;
-        // 256-byte row alignment matches the graph's D3D12 upload pitch, so
-        // the ingest copy is one memcpy per plane instead of one per row.
-        if(av_frame_get_buffer(*f,256)<0)return false;
-    }
-    log::info("capture",std::format("mailbox frames uploadBacked={} of 3 layoutFormat={} frameFormat={} (single CPU copy when 3)",uploadBacked,int(p.layout.format),int(uploadFrames&&uploadBacked==3?uploadFormat:p.layout.format)));
-    p.stagingBusy=false;
-    if(!p.frameEvent)p.frameEvent=CreateEventW(nullptr,FALSE,FALSE,nullptr);
+    if(!p.allocateFrames(desc))return false;
     if(compressedPath){
         // Write targets: the frame the worker is filling plus one spare handed
         // out by read(). Frames are never reused while the caller still owns
@@ -1462,10 +1537,19 @@ if(audioTypes.empty()&&(!allowBitstream||bitstreamTypes.empty())){log::warn("cap
     return connectedAudio;
 }
 bool CaptureCardSource::start(){
-    auto& p=*p_;if(p.info.opened)return true;if(!p.configured||!p.control)return false;
+    auto& p=*p_;if(p.info.opened)return true;if(!p.configured||(!p.control&&!p.decklink))return false;
     if(p.audioSession&&p.audioSessionDeferred)log::info("capture-audio-bitstream","audio session starts with the first decoded bitstream frame");
     else if(p.audioSession&&!p.audioSession->start())log::warn("capture-audio","audio start failed; retaining video capture");
     p.audioRecovery.reset(GetTickCount64());
+    if(p.decklink){
+        if(p.control){const HRESULT hr=p.control->Run();log::info("decklink-audio",std::format("Run separate audio hr=0x{:08X}",uint32_t(hr)));}
+        p.lastFrame=Impl::Clock::now();
+        p.info.opened=p.decklink->start([&p](const decklink::Frame& frame){p.deliverExternal(frame.data,frame.bytes,double(frame.pts100ns)/1e7,false,frame.duration100ns,frame.pts100ns);},
+            [&p](const void* data,size_t bytes,int64_t pts){if(p.audioSession)p.audioSession->push(data,bytes,double(pts)/10000,false);});
+        if(!p.info.opened){error_=p.decklink->error();return false;}
+        if(p.wasapi&&!p.wasapi->start())p.audioError=L"WASAPI 音频启动失败；视频继续运行";
+        return true;
+    }
     // Driver frame age (observeDriverAge): fix the graph clock now and note its time at Run.
     p.ageClock.Reset();p.runReference=0;p.driverAges.clear();
     {ComPtr<IFilterGraph> fg;ComPtr<IMediaFilter> mf;
@@ -1532,6 +1616,7 @@ bool CaptureCardSource::reconnect(float gain,unsigned syncMode,int offsetMs){
     const auto desc=reconnectDesc_;const auto key=reconnectFormat_;const auto expected=reconnectInfo_;
     // Stop callbacks before carrying counters into the next device session.
     // Never hold the mailbox lock while DirectShow Stop waits for a callback.
+    if(p_->decklink)p_->decklink->stop();
     if(p_->control){const HRESULT hr=p_->control->Stop();log::info("capture-reconnect",std::format("Stop hr=0x{:08X}",uint32_t(hr)));if(FAILED(hr))return false;}
     {std::lock_guard lock(p_->mutex);
         receivedOffset_+=p_->received;deliveredOffset_+=p_->sequence;droppedOffset_+=p_->dropped;}
@@ -1541,7 +1626,7 @@ bool CaptureCardSource::reconnect(float gain,unsigned syncMode,int offsetMs){
     auto reopen=desc;reopen.path=std::format(L"capture2:{}:{}:{}:{}:{}",encodePath(selection.videoPath),format,selection.audio,encodePath(selection.audioPath),selection.colorOverride);
     reopen.path+=capturePathOptions(selection.requestedFps,encodePath(key));
     bool ok=configure(reopen);
-    if(ok){const auto& current=p_->info;
+    if(ok&&!decklink::isPath(selection.videoPath)){const auto& current=p_->info;
         ok=current.width==expected.width&&current.height==expected.height&&captureFrameRateMatches(expected.averageFps,p_->layout.duration)&&current.color.pixelFormat==expected.color.pixelFormat&&
            current.color.transfer==expected.color.transfer&&current.color.matrix==expected.color.matrix&&current.color.primaries==expected.color.primaries&&
            current.color.range==expected.color.range&&current.color.displayReferred709==expected.color.displayReferred709&&current.color.preserveSdrCodeValues==expected.color.preserveSdrCodeValues;
@@ -1561,6 +1646,7 @@ CaptureMetrics CaptureCardSource::metrics()const{
 SourceReadStatus CaptureCardSource::read(pipeline::FramePacket& packet,const AVFrame** frame){return readWithWait(packet,frame,30);}
 SourceReadStatus CaptureCardSource::tryRead(pipeline::FramePacket& packet,const AVFrame** frame){return readWithWait(packet,frame,0);}
 SourceReadStatus CaptureCardSource::readWithWait(pipeline::FramePacket& packet,const AVFrame** frame,unsigned milliseconds){auto& p=*p_;*frame=nullptr;if(!p.info.opened)return SourceReadStatus::Error;
+    if(p.decklink&&p.decklink->needsReopen()){error_=p.decklink->error();log::warn("decklink-reconnect",narrowForLog(error_));return SourceReadStatus::Error;}
     // Magewell: stop DirectShow video once the SDK has proved itself (30 frames), and run
     // it again if the SDK thread ends, so video never stops altogether.
     if(p.magewellDelivering.load()&&p.control){
@@ -1575,7 +1661,7 @@ SourceReadStatus CaptureCardSource::readWithWait(pipeline::FramePacket& packet,c
         }
     }
     long code=0;LONG_PTR a=0,b=0;while(p.events&&p.events->GetEvent(&code,&a,&b,0)==S_OK){if(code==EC_DEVICE_LOST||code==EC_ERRORABORT)log::warn("capture-reconnect",std::format("DirectShow event={} detail=0x{:X}",code,uint64_t(a)));p.events->FreeEventParams(code,a,b);if(code==EC_DEVICE_LOST||code==EC_ERRORABORT)return SourceReadStatus::Error;}
-    double time=0;uint32_t flags=0;uint64_t sequence=0;pipeline::Rational duration;AVFrame* delivered=nullptr;AVFrame* expiredHardware=nullptr;bool feedDecode=false;
+    double time=0;int64_t nativeTime100ns=0;uint32_t flags=0;uint64_t sequence=0;pipeline::Rational duration;AVFrame* delivered=nullptr;AVFrame* expiredHardware=nullptr;bool feedDecode=false;
     {
         std::unique_lock lock(p.mutex);if(milliseconds)p.wake.wait_for(lock,std::chrono::milliseconds(milliseconds),[&]{return p.pending||p.callbackError;});
         if(p.callbackError)return SourceReadStatus::Error;
@@ -1598,7 +1684,7 @@ SourceReadStatus CaptureCardSource::readWithWait(pipeline::FramePacket& packet,c
             // must never be null here (SampleCB rejects that as an error).
             std::swap(p.frame,p.pendingFrame);delivered=p.frame;
         }
-        p.pending=false;time=p.pendingTime;p.readArrival=p.pendingArrival;
+        p.pending=false;time=p.pendingTime;nativeTime100ns=p.pendingNativePts100ns;p.readArrival=p.pendingArrival;
         duration=p.pendingDuration;
         p.readAgeMs=std::chrono::duration<double,std::milli>(Impl::Clock::now()-p.readArrival).count();
         if(!p.sequence)flags|=static_cast<uint32_t>(pipeline::FrameFlagBits::Open);
@@ -1618,7 +1704,7 @@ SourceReadStatus CaptureCardSource::readWithWait(pipeline::FramePacket& packet,c
         colorInfo=pipeline::resolveFrameColor(*delivered,p.layout.color);
         if(delivered->format==AV_PIX_FMT_D3D12&&colorInfo.pixelFormat==pipeline::SourcePixelFormat::Unknown)colorInfo.pixelFormat=pipeline::SourcePixelFormat::NV12;
     }
-    delivered->pts=static_cast<int64_t>(time*10000000);delivered->duration=duration.isUnknown()?0:duration.to100ns();delivered->time_base={1,10000000};packet={};packet.pts={delivered->pts,10000000};packet.duration=duration;packet.colorInfo=colorInfo;packet.sourceKind=pipeline::SourceKind::CaptureCard;packet.sequence=sequence;packet.flags=flags;packet.sourceEpoch=1;
+    delivered->pts=p.decklink?nativeTime100ns:static_cast<int64_t>(time*10000000);delivered->duration=duration.isUnknown()?0:duration.to100ns();delivered->time_base={1,10000000};packet={};packet.pts={delivered->pts,10000000};packet.duration=duration;packet.colorInfo=colorInfo;packet.sourceKind=pipeline::SourceKind::CaptureCard;packet.sequence=sequence;packet.flags=flags;packet.sourceEpoch=1;
     packet.sequence+=receivedOffset_;packet.sourceEpoch=epoch_;
     packet.arrivalHost100ns=std::chrono::duration_cast<std::chrono::nanoseconds>(p.readArrival.time_since_epoch()).count()/100;
     if(log::verboseFrameLogs())log::info("capture-read-sample",std::format("source={} arrival={} read={} width={} height={} format={}",packet.sequence,packet.arrivalHost100ns,std::chrono::duration_cast<std::chrono::nanoseconds>(Impl::Clock::now().time_since_epoch()).count()/100,delivered->width,delivered->height,delivered->format));
@@ -1626,6 +1712,8 @@ SourceReadStatus CaptureCardSource::readWithWait(pipeline::FramePacket& packet,c
 }
 void CaptureCardSource::close()noexcept{
     auto& p=*p_;
+    // Native stop detaches and joins callbacks before freeing mailbox/audio.
+    if(p.decklink){p.decklink->stop();p.decklink.reset();}
     p.magewellDelivering=false;
     if(p.magewell){p.magewell->stop();p.magewell.reset();}if(p.control){const HRESULT hr=p.control->Stop();if(FAILED(hr))log::error("capture-close",std::format("Stop failed hr=0x{:08X}; releasing graph",uint32_t(hr)));}if(p.grab){const HRESULT hr=p.grab->SetCallback(nullptr,0);if(FAILED(hr))log::error("capture-close",std::format("detach callback hr=0x{:08X}",uint32_t(hr)));}
     if(p.wasapi)p.wasapi->stop();p.wasapi.reset();

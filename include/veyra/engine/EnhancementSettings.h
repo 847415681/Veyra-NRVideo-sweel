@@ -331,32 +331,87 @@ struct EnhancementSettings {
     AudioSyncMode audioSync=AudioSyncMode::Automatic;
     int32_t audioOffsetMs=0;
     bool operator==(const EnhancementSettings&) const = default;
+    // Comparison only: persistent settings keep every bypassed node's values.
+    // GPU history belongs to the running effects, not to these saved drafts.
+    EnhancementSettings activeVideoSettings() const {
+        auto active=*this;
+        const EnhancementSettings defaults;
+        if(!nr){
+            active.model=defaults.model;active.residual=defaults.residual;
+            active.nrRuntime=defaults.nrRuntime;active.nrTemporal=defaults.nrTemporal;
+            active.nrAntiFlicker=defaults.nrAntiFlicker;active.nrPolicy=defaults.nrPolicy;
+            active.nrMotion=defaults.nrMotion;active.nrLayers=defaults.nrLayers;
+        }else{
+            if(!active.residual.correction.enabled)active.residual.correction={};
+            if(!active.nrTemporal)active.nrAntiFlicker=defaults.nrAntiFlicker;
+            for(size_t i=0;i<active.nrLayers.size();++i){
+                auto& layer=active.nrLayers[i];
+                if(i>=nrLayerCount||!layer.enabled){layer={};continue;}
+                if(!layer.residual.correction.enabled)layer.residual.correction={};
+                if(!layer.temporal)layer.antiFlicker=NrAntiFlicker::Flow;
+            }
+        }
+        if(!nr||!sr)active.lowLatency=defaults.lowLatency;
+        if(!nr||!protection.enabled)active.protection=defaults.protection;
+        if(!sr){active.srTarget=defaults.srTarget;active.videoSrQuality=defaults.videoSrQuality;active.srMotion=defaults.srMotion;}
+        if(multiplier<=1){
+            active.frameGenerationBackend=defaults.frameGenerationBackend;active.vfgQuality=defaults.vfgQuality;
+            active.fgMotion=defaults.fgMotion;active.fgStrictAdmission=defaults.fgStrictAdmission;
+        }else if(frameGenerationBackend!=FrameGenerationBackend::Vfg)active.vfgQuality=defaults.vfgQuality;
+        if(!color.enabled)active.color=defaults.color;
+        for(size_t i=0;i<active.additionalColors.size();++i)
+            if(i>=additionalColorCount||!additionalColors[i].enabled)active.additionalColors[i]={};
+        if(!videoHdr.enabled)active.videoHdr=defaults.videoHdr;
+        if(nrHoldStrength==0)active.nrHoldTolerance=defaults.nrHoldTolerance;
+        if(!hdrCurve.enabled){
+            active.hdrCurve=defaults.hdrCurve;
+            // Display peak also rescales enabled HDR10 metadata, independently
+            // of the pixel curve's switch (resolveHdrTuning).
+            if(hdrMetadata.enabled&&(hdrMetadata.masteringPeakNits||hdrMetadata.maxCllNits||hdrMetadata.maxFallNits))
+                active.hdrCurve.displayPeakNits=hdrCurve.displayPeakNits;
+        }
+        if(!hdrMetadata.enabled)active.hdrMetadata=defaults.hdrMetadata;
+        // Flow is shared. Turning off one effect does not make it inactive
+        // while another consumer still needs it (VFG has its own flow).
+        const bool flowUsed=(nr&&(motionUsesFlow(nrMotion)||usesNrTemporal()))||
+            (sr&&(videoSrQuality==0||videoSrQuality==kVideoSrFsr)&&motionUsesFlow(srMotion))||
+            (multiplier>1&&motionUsesFlow(fgMotion,frameGenerationBackend));
+        if(!flowUsed){active.flow=defaults.flow;active.opticalFlowBackend=defaults.opticalFlowBackend;active.amdFlowHalfResolution=defaults.amdFlowHalfResolution;}
+        return active;
+    }
+    bool sameActiveVideoParameters(const EnhancementSettings& other) const {
+        auto active=activeVideoSettings();const auto target=other.activeVideoSettings();
+        active.revision=target.revision;active.audioSync=target.audioSync;active.audioOffsetMs=target.audioOffsetMs;
+        active.captureFlipVertical=target.captureFlipVertical;active.exportBitrateMbps=target.exportBitrateMbps;
+        return active==target;
+    }
     bool sameVideoConfiguration(const EnhancementSettings& other) const {
-        auto video=*this;
-        video.revision=other.revision;
-        video.audioSync=other.audioSync;
-        video.audioOffsetMs=other.audioOffsetMs;
+        auto video=activeVideoSettings();const auto target=other.activeVideoSettings();
+        video.revision=target.revision;
+        video.audioSync=target.audioSync;
+        video.audioOffsetMs=target.audioOffsetMs;
         // Capture flip is applied per sample on the source's callback thread;
         // toggling it must not rebuild the graph.
-        video.captureFlipVertical=other.captureFlipVertical;
+        video.captureFlipVertical=target.captureFlipVertical;
         // Export-only fields: changing the bitrate must never invalidate the
         // running preview graph (the controller would otherwise rebuild it).
-        video.exportBitrateMbps=other.exportBitrateMbps;
+        video.exportBitrateMbps=target.exportBitrateMbps;
         // Colour grade: parameters are uniform-only (never a rebuild), but the
         // master switch changes the graph shape, so it stays in the comparison.
-        video.color=other.color;
-        video.color.enabled=color.enabled;
-        video.color.lutName=color.lutName;
-        video.color.lutInputSpace=color.lutInputSpace;
-        video.additionalColors=other.additionalColors;
+        const auto oldColor=video.color;const auto oldAdditional=video.additionalColors;
+        video.color=target.color;
+        video.color.enabled=oldColor.enabled;
+        video.color.lutName=oldColor.lutName;
+        video.color.lutInputSpace=oldColor.lutInputSpace;
+        video.additionalColors=target.additionalColors;
         for(size_t i=0;i<additionalColors.size();++i){
-            video.additionalColors[i].enabled=additionalColors[i].enabled;
-            video.additionalColors[i].lutName=additionalColors[i].lutName;
-            video.additionalColors[i].lutInputSpace=additionalColors[i].lutInputSpace;
+            video.additionalColors[i].enabled=oldAdditional[i].enabled;
+            video.additionalColors[i].lutName=oldAdditional[i].lutName;
+            video.additionalColors[i].lutInputSpace=oldAdditional[i].lutInputSpace;
         }
-        video.videoHdr=other.videoHdr;
+        video.videoHdr=target.videoHdr;
         video.videoHdr.enabled=videoHdr.enabled;
-        return video==other;
+        return video==target;
     }
     void rejectVideoRequest(const EnhancementSettings& attempted,const EnhancementSettings& previous) {
         if(revision!=attempted.revision)return;

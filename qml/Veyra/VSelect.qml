@@ -23,7 +23,9 @@ Rectangle {
         anchors.leftMargin: 12
         anchors.rightMargin: 10
         Text {
+            id: valueLabel
             Layout.fillWidth: true
+            Layout.minimumWidth: 0
             text: sel.value
             color: Theme.t1
             font.family: Theme.fontUi
@@ -33,6 +35,10 @@ Rectangle {
         }
         VIcon { name: "down"; size: 14; color: Theme.t3 }
     }
+
+    ToolTip.visible: hover.hovered && valueLabel.truncated
+    ToolTip.delay: 500
+    ToolTip.text: sel.value
 
     VMenu {
         id: menu

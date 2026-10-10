@@ -14,6 +14,7 @@ parser.add_argument('--source', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--version', required=True)
 parser.add_argument('--dav1d-source', type=Path)
+parser.add_argument('--zlib-source', type=Path)
 args = parser.parse_args()
 if args.output.exists():
     raise SystemExit('Output exists; choose a new candidate')
@@ -50,6 +51,13 @@ with os.add_dll_directory(str((args.prefix / 'bin').resolve())):
 if license_name != 'LGPL version 2.1 or later':
     raise SystemExit(f'Unexpected library license: {license_name}')
 extra_sources = []
+if '--enable-zlib' in configuration:
+    if not args.zlib_source or not (args.zlib_source / 'LICENSE').is_file():
+        raise SystemExit('The statically linked zlib requires its matching source and notices')
+    notice = args.prefix / 'share/zlib'
+    if not (notice / 'vcpkg.spdx.json').is_file():
+        raise SystemExit('The zlib build provenance must accompany the corresponding source')
+    extra_sources += [(args.zlib_source, 'zlib-source'), (notice, 'zlib-notices')]
 if '--enable-libdav1d' in configuration:
     if not args.dav1d_source or not (args.dav1d_source / 'COPYING').is_file():
         raise SystemExit('The linked dav1d requires its matching source and notices')
@@ -60,7 +68,7 @@ if '--enable-libdav1d' in configuration:
             expected = next(c['checksumValue'] for c in item['checksums'] if c['algorithm'] == 'SHA256')
             if hashlib.sha256((dav1d_port / item['fileName']).read_bytes()).hexdigest() != expected.lower():
                 raise SystemExit('dav1d port provenance mismatch')
-    extra_sources = [(args.dav1d_source, 'dav1d-source'), (dav1d_port, 'dav1d-vcpkg-port'),
+    extra_sources += [(args.dav1d_source, 'dav1d-source'), (dav1d_port, 'dav1d-vcpkg-port'),
                      (args.prefix / 'share/dav1d', 'dav1d-notices')]
 args.output.parent.mkdir(parents=True, exist_ok=True)
 with zipfile.ZipFile(args.output, 'x', compression=zipfile.ZIP_DEFLATED, compresslevel=7) as archive:
@@ -96,6 +104,9 @@ with zipfile.ZipFile(args.output, 'x', compression=zipfile.ZIP_DEFLATED, compres
         'external libraries exactly as listed in binary-configuration.txt, no CLI programs).\n'
         'When dav1d is enabled, dav1d-source and dav1d-vcpkg-port contain its source/recipe;\n'
         'build and install it first, then configure FFmpeg with --enable-libdav1d.\n'
+        'When zlib is enabled, zlib-source/zlib-notices contain its matching source/provenance.\n'
+        'Build the static zlib library with the dynamic MSVC CRT (/MD), install its pkg-config file,\n'
+        'then add --enable-zlib using prepare-slice-build.py --zlib-prefix. No zlib DLL is needed.\n'
         'See portfile.cmake and build.sh.in.\n'
         'The recorded configuration includes original local build paths; adapt paths locally.\n'
         'Veyra links dynamically; compatible rebuilt libraries may replace the shipped DLLs.\n'

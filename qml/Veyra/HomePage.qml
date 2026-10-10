@@ -85,6 +85,13 @@ VPage {
             }
         }
 
+        VButton {
+            objectName: "home-playlist"
+            Layout.alignment: Qt.AlignHCenter
+            text: qsTr("播放列表 · 导入文件夹"); iconName: "list"
+            onClicked: veyra.showPlaylist()
+        }
+
         // .srcgrid: 164px cards, gap 12. Six cards since PC and Xbox streaming (1044 wide,
         // fits a 1280 window); a narrower window wraps them onto a second row.
         Flow {

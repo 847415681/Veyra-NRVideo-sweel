@@ -363,7 +363,7 @@ Window {
         onDropped: drop => {
             if (!drop.hasUrls || drop.urls.length === 0) return
             drop.accept(Qt.CopyAction)
-            veyra.openUrl(drop.urls[0])
+            veyra.openDroppedUrls(drop.urls)
         }
     }
 
@@ -551,6 +551,13 @@ Window {
         y: root.fullscreen ? 16 : 52
         z: 90
     }
+    PlaylistWindow {
+        id: playlistWindow
+        owner: root
+        playlist: veyra.playlist
+        onAddFiles: veyra.addPlaylistFilesDialog()
+        onAddFolder: veyra.addPlaylistFolderDialog()
+    }
     FullscreenBar {
         id: fullBar
         owner: root
@@ -567,6 +574,7 @@ Window {
         onRequestFullscreen: root.toggleFullscreen()
         onRequestLock: root.toggleLock()
         onRequestHide: root.setPillHidden(true)
+        onRequestPlaylist: playlistWindow.toggle()
         onRequestMove: if (!root.fullscreen && !root.maximized) root.startSystemMove()
         onActivity: root.pointerActivity()
     }
@@ -685,6 +693,7 @@ Window {
 
     Connections {
         target: veyra
+        function onPlaylistRequested() { playlistWindow.open() }
         function onNotice(text, isError) { toast.show(text, isError) }
         function onOverlayRestartSuggested() { overlayRestart.open() }
         function onNavigate(p) {

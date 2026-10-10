@@ -21,7 +21,11 @@ void VideoPresenter::sourceProcessed(pipeline::FrameIdentity identity){
     xessWorkPosition_=(xessWorkPosition_+1)%xessWork_.size();xessInputId_=0;
 }
 bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::EnhanceGraph& graph,bool captureCompatible,bool mediaClockPaced) {
-    close();
+    const bool reuse=sink_.swapChain()&&!sink_.xess()&&!graph.xessEnabled()&&window_==window&&
+        presentationDevice_==ctx.device()&&presentationFormat_==graph.outputFormat()&&
+        captureCompatible_==captureCompatible&&presentationQueue_;
+    if(reuse){if(!prepareGraphChange())return false;}
+    else close();
     RECT rc{};
     if(!IsWindow(window)||!GetClientRect(window,&rc)){
         veyra::log::warn("present","presentation creation cancelled: target window is no longer available");
@@ -30,7 +34,9 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
     viewWidth_=viewHeight_=0;bufferMonitor_=nullptr;monitorWidth_=monitorHeight_=0;
     ++generation_;
     Status st=Status::Ok;
-    if((graph.fgEnabled()||graph.usesComputeQueue())&&!graph.xessEnabled()){
+    // Keep one presentation queue for the native chain's lifetime. A later
+    // FG/compute switch can reuse it instead of replacing the HWND's chain.
+    if(!reuse&&!graph.xessEnabled()){
         D3D12_COMMAND_QUEUE_DESC desc{};desc.Type=D3D12_COMMAND_LIST_TYPE_DIRECT;
         wchar_t requestedPriority[16]{};
         if(GetEnvironmentVariableW(L"VEYRA_TEST_PRESENT_QUEUE_PRIORITY",requestedPriority,16)&&std::wstring_view(requestedPriority)==L"high"){
@@ -47,10 +53,11 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
         if(FAILED(hr)){veyra::log::error("present",std::format("application frame-generation presentation queue/fence hr=0x{:X}",unsigned(hr)));close();return false;}
         presentationEvent_=CreateEventW(nullptr,FALSE,FALSE,nullptr);
         if(!presentationEvent_||!presentationRing_.initialize(ctx.device(),presentationQueue_.Get(),presentationFence_.Get(),presentationEvent_,3,st)){close();return false;}
-        veyra::log::info("present","application frame-generation presentation uses independent queue/fence, 3 command slots; shared textures use producer/consumer GPU fences");
+        veyra::log::info("present","native presentation uses persistent independent queue/fence, 3 command slots; shared textures use producer/consumer GPU fences");
     }
     auto* queue=presentationQueue_?presentationQueue_.Get():ctx.directQueue();
     gpuTimer_.initialize(ctx.device(),queue);window_=window;
+    presentationDevice_=ctx.device();presentationFormat_=graph.outputFormat();captureCompatible_=captureCompatible;
     gfx::PresentSink::Desc d;d.targetWindow=window;d.width=std::max(1L,rc.right);d.height=std::max(1L,rc.bottom);d.vsync=false;d.tearing=false;
     d.waitable=!GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_SWAPCHAIN",nullptr,0);
     d.hdr=graph.hdrOutput();d.hdr10=graph.hdr10Output();d.xess=graph.xessEnabled();d.captureCompatible=captureCompatible;d.fgMultiplier=graph.fgMultiplier();
@@ -71,7 +78,9 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
         }
         veyra::log::info("present",std::format("XeSS retained buffers {}x{} client={}x{}; window scaling avoids provider rebuild",d.width,d.height,rc.right,rc.bottom));
     }
-    if(!sink_.initialize(ctx.device(),queue,d,st))return false;
+    if(!reuse&&!sink_.initialize(ctx.device(),queue,d,st))return false;
+    if(reuse)veyra::log::info("present-reuse",std::format("retained native swapchain generation={} format={} fg={} output={}x{}; rebinding drained graph descriptors",generation_,unsigned(graph.outputFormat()),graph.fgEnabled(),graph.workWidth(),graph.workHeight()));
+    pass_={};rtvs_.Reset();compositeTarget_.Reset();
     std::vector<uint8_t> vs,ps;
     // The output pool contains both parities of every generated subframe.
     // Comparison references follow it; derive offsets to cover VFG through 8X.
@@ -102,6 +111,16 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
     veyra::log::info("present-copy",std::format("enabled={} format={} extent={}x{} (GPU-only final composition; no pixel readback)",copyBeforePresent_,unsigned(graph.outputFormat()),sink_.bufferWidth(),sink_.bufferHeight()));
     for(unsigned i=0;i<pipeline::kOutputPoolSlots;++i)pipeline::makeSrv(ctx.device(),i<2?graph.videoFrameResource(i):graph.generatedFrameResource(i-2),graph.outputFormat(),{pass_.heap->GetCPUDescriptorHandleForHeapStart().ptr+size_t(i)*pass_.increment});
     for(unsigned i=0;i<4;++i)pipeline::makeSrv(ctx.device(),i<2?graph.sourceReference(i):graph.baseReference(i-2),DXGI_FORMAT_R16G16B16A16_FLOAT,{pass_.heap->GetCPUDescriptorHandleForHeapStart().ptr+size_t(i+pipeline::kOutputPoolSlots)*pass_.increment});
+    return true;
+}
+bool VideoPresenter::prepareGraphChange(){
+    if(sink_.xess()){close();return true;}
+    if(presentationRing_.initialized()&&!presentationRing_.drainQueue())return false;
+    hasPresented_=false;retainedFrame_.reset();gpuTimer_.close();
+    // Retain metadataSent_: a new graph disabling metadata must clear the
+    // hint that is still attached to the retained DXGI chain.
+    metadataDirty_=true;metadataAttempt_={};sourceMetadata_={};
+    reflex_.close();reflexFrame_=0;
     return true;
 }
 bool VideoPresenter::refresh(ID3D12Device* device){
@@ -400,6 +419,7 @@ void VideoPresenter::close(){
     presentMotionPass_={};presentMotion_={};previousXessWidth_=previousXessHeight_=0;
     presentationRing_.shutdown();presentationFence_.Reset();presentationQueue_.Reset();
     if(presentationEvent_){CloseHandle(presentationEvent_);presentationEvent_=nullptr;}
+    presentationDevice_=nullptr;presentationFormat_=DXGI_FORMAT_UNKNOWN;window_=nullptr;
 }
 PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceContext& ctx,PresentationSettings requested,bool fg,std::wstring& status){
     bool wanted=requested.hdrFgCompatibility&&copyEligible_;

@@ -399,6 +399,7 @@ class QmlPlayerBridge : public QObject {
 
     // --- dialogs the UI opens ----------------------------------------------
     Q_PROPERTY(QVariantList recentFiles READ recentFiles NOTIFY recentFilesChanged)
+    Q_PROPERTY(QObject* playlist READ playlist CONSTANT)
     Q_PROPERTY(QVariantList presets READ presets NOTIFY presetsChanged)
     // The name of the preset currently in effect, or "自定义" when the
     // settings no longer match any stored preset. Derived, never guessed.
@@ -475,6 +476,11 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QVariantList colourLooks READ colourLooks NOTIFY colourLibraryChanged)
 
 public:
+    QObject* playlist() const;
+    Q_INVOKABLE void showPlaylist();
+    Q_INVOKABLE void addPlaylistFilesDialog();
+    Q_INVOKABLE void addPlaylistFolderDialog();
+    Q_INVOKABLE void openDroppedUrls(const QList<QUrl>& urls);
     bool amdNrGpu() const;
     QVariantMap effectCapabilities() const;
     QVariantList nrRuntimeChoices() const;
@@ -1078,6 +1084,7 @@ public:
     Q_INVOKABLE void copyDiagnostics();
 
 signals:
+    void playlistRequested();
     void nodeAnchorsChanged();
     void ps5Changed();
     void moonlightUiChanged();
@@ -1148,6 +1155,7 @@ private:
     void tickPs5();
     void tickMoonlight();
     void tickXbox();
+    void tickPlaylist();
 #ifdef VEYRA_ENABLE_XBOX
     void setupXbox();
 #endif

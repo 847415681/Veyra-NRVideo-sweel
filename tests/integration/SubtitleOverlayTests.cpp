@@ -15,7 +15,7 @@ static BOOL captureLayer(HWND,HDC,POINT*,SIZE* size,HDC source,POINT*,COLORREF,B
 #include "../../apps/veyra/ui/SubtitleOverlay.cpp"
 #undef UpdateLayeredWindow
 
-int main(){
+int wmain(int argc,wchar_t** argv){
     using namespace veyra::ui;
     Gdiplus::GdiplusStartupInput input;ULONG_PTR token=0;
     if(Gdiplus::GdiplusStartup(&token,&input,nullptr)!=Gdiplus::Ok)return 1;
@@ -66,6 +66,31 @@ int main(){
     updateSubtitleOverlay(overlay,{red},view);check(updates==count,"unchanged cues reuse cache");
     red.style.bold=true;updateSubtitleOverlay(overlay,{red},view);
     check(updates==count+1&&pixels!=before,"bold change repaints actual raster");
+    if(argc>1){
+        const auto track=veyra::engine::loadSubtitleFile(argv[1]);
+        check(track.cues.size()==2&&track.cues[0].bitmap,"real decoded SUP feeds the production overlay");
+        if(track.cues.size()==2&&track.cues[0].bitmap){
+            SubtitleLine image;image.bitmap=track.cues[0].bitmap;
+            view.videoWidth=1280;view.videoHeight=720;view.scale=1;
+            updateSubtitleOverlay(overlay,{image},view);
+            auto pixel=[&](int x,int y){return pixels[size_t(y)*imageWidth+x];};
+            check((pixel(56,366)>>24)==255&&(pixel(456,116)>>24)==255,"authored lower and upper rectangles map into letterboxed video");
+            check((pixel(72,366)>>24)==128&&((pixel(72,366)>>16)&255)<=128,"partial alpha survives the real GDI raster");
+            check(pixel(320,240)==0,"transparent bitmap gap remains transparent");
+            before=pixels;view.scale=3;view.fontOverride=L"Arial";
+            updateSubtitleOverlay(overlay,{image},view);
+            check(pixels==before,"text size and font do not distort bitmap subtitles");
+            image.bitmap=track.cues[1].bitmap;updateSubtitleOverlay(overlay,{image},view);
+            check(pixel(56,366)!=before[size_t(366)*imageWidth+56],"new palette repaints immutable bitmap snapshot");
+            updateSubtitleOverlay(overlay,{},view);
+            check(!IsWindowVisible(overlay),"clear display hides the native subtitle layer");
+            image.bitmap=track.cues[0].bitmap;updateSubtitleOverlay(overlay,{image},view);
+            check(IsWindowVisible(overlay)&&pixels==before,"backward seek restores original bitmap pixels");
+            SetWindowPos(overlay,nullptr,0,0,960,540,SWP_NOZORDER|SWP_NOACTIVATE);
+            updateSubtitleOverlay(overlay,{image},view);
+            check(imageWidth==960&&imageHeight==540&&(pixel(84,459)>>24)==255&&(pixel(684,84)>>24)==255,"resize/fullscreen aspect maps both authored rectangles");
+        }
+    }
     DestroyWindow(overlay);DestroyWindow(parent);Gdiplus::GdiplusShutdown(token);
     return failures?1:0;
 }

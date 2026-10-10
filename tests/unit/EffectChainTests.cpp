@@ -567,13 +567,14 @@ void testLegacyPlanDimensions() {
         legacyRequest.stillImage = request.stillImage; legacyRequest.exportJob = request.exportJob;
         veyra::pipeline::EnhanceGraphDesc legacy;
         describeStages(legacyRequest, s, legacy);
-        // Independent pre-integration formula: describeStages now consumes the
-        // compiler, so comparing only those two would be a circular test.
+        // Independent sizing formula. Video SR can also restore at 1:1:
+        // source-size restoration has no resize resource but keeps NR/SR order.
         const auto oldPlan=veyra::pipeline::ResolutionPlan::make(source,s.sr,
             request.exportJob?veyra::pipeline::NrSizePolicy::Native:s.nrPolicy,
             request.stillImage||request.exportJob,s.revision,s.srTarget,
             !request.exportJob&&s.lowLatency&&s.nr);
-        const bool oldNrFirst=!request.stillImage&&!request.exportJob&&s.lowLatency&&s.nr&&oldPlan.srApplied;
+        const bool nativeVideoSr=s.sr&&!request.stillImage&&s.videoSrQuality>=1&&s.videoSrQuality<=4;
+        const bool oldNrFirst=!request.stillImage&&!request.exportJob&&s.lowLatency&&s.nr&&(oldPlan.srApplied||nativeVideoSr);
         ok = ok && legacy.fixedExecutionPlan.has_value() && legacy.validateFixedExecutionPlan().empty() &&
              plan.output == oldPlan.base && plan.output == veyra::pipeline::Extent{legacy.workWidth, legacy.workHeight} &&
              legacy.nrBeforeSr==oldNrFirst && legacy.nrWidth==oldPlan.nr.width && legacy.nrHeight==oldPlan.nr.height &&
@@ -976,7 +977,63 @@ void testPerLayerAntiFlickerSnapshot(){
                          "stacked snapshot retains independent second layer anti-flicker tier");
     }
 }
+__declspec(noinline) void testInactiveEffectEdits(){
+    auto off=populated();off.nr=off.sr=off.color.enabled=off.videoHdr.enabled=off.protection.enabled=false;off.multiplier=1;
+    off.nrLayerCount=2;off.nrLayers={};off.additionalColorCount=2;
+    auto edited=off;
+    edited.model.style=2;edited.nrRuntime=NrRuntime::NvidiaOriginal;edited.nrTemporal=false;
+    edited.nrPolicy=veyra::pipeline::NrSizePolicy::P480;edited.nrMotion=MotionSource::Zero;
+    edited.nrLayers[0].temporal=true;edited.nrLayers[0].runtime=NrRuntime::LmxxfAmd;edited.nrLayers[0].sizePolicy=veyra::pipeline::NrSizePolicy::Native;
+    edited.nrLayers[1].residual.correction.enabled=true;
+    edited.videoSrQuality=5;edited.srTarget=veyra::pipeline::SrTarget::Qhd;edited.srMotion=MotionSource::Zero;
+    edited.frameGenerationBackend=FrameGenerationBackend::Vfg;edited.vfgQuality=2;edited.fgMotion=MotionSource::Zero;edited.fgStrictAdmission=true;
+    edited.color.setLutName(L"missing-disabled.cube");edited.color.exposure=.7f;
+    edited.additionalColors[0].setLutName(L"missing-second.cube");edited.additionalColors[1].exposure=-.8f;
+    edited.videoHdr.peakNits=700;edited.protection.featherPixels=40;edited.nrHoldTolerance=.25f;
+    edited.hdrCurve.midGrayNits=400;edited.hdrMetadata.maxCllNits=2000;
+    edited.flow=FlowQuality::Performance;edited.opticalFlowBackend=OpticalFlowBackend::GpuDis;edited.amdFlowHalfResolution=true;
+    check(edited.validate().empty()&&off!=edited,"inactive edits remain valid distinct persistent settings");
+    check(off.sameActiveVideoParameters(edited)&&edited.sameActiveVideoParameters(off)&&off.sameVideoConfiguration(edited),"all bypassed effect parameters are absent from active GPU identity");
+    check(!requiresGraphRebuild(off,edited)&&!requiresGraphRebuild(edited,off),"bypassed topology/LUT/backend edits do not rebuild in either direction");
+    auto restored=edited;fromChain(toChain(edited),restored);
+    check(restored.model==edited.nrLayers[0].model&&restored.nrLayers==edited.nrLayers&&restored.color==edited.color&&restored.videoHdr==edited.videoHdr,"chain conversion retains disabled values independently of comparison");
+    for(unsigned effect=0;effect<7;++effect){
+        auto active=edited;
+        switch(effect){
+        case 0:active.nr=true;active.nrLayers[1].enabled=true;active.nrRuntime=active.nrLayers[1].runtime;break;
+        case 1:active.sr=true;break;
+        case 2:active.multiplier=2;break;
+        case 3:active.color.enabled=true;break;
+        case 4:active.videoHdr.enabled=true;break;
+        case 5:active.hdrCurve.enabled=true;break;
+        case 6:active.hdrMetadata.enabled=true;break;
+        }
+        check(!active.sameVideoConfiguration(edited)&&!active.sameActiveVideoParameters(edited),"enabling an edited effect changes active identity");
+    }
+    for(auto backend:{FrameGenerationBackend::Dlss,FrameGenerationBackend::XeSS,FrameGenerationBackend::Fsr,FrameGenerationBackend::Vfg}){
+        auto active=off;active.multiplier=2;active.frameGenerationBackend=backend;active.fgMotion=MotionSource::OpticalFlow;
+        auto next=active;next.flow=FlowQuality::Performance;
+        check(active.sameVideoConfiguration(next)==(backend==FrameGenerationBackend::Vfg),"shared flow stays active for every external-flow FG consumer");
+        next=active;next.nrPolicy=veyra::pipeline::NrSizePolicy::Native;next.nrRuntime=NrRuntime::LmxxfAmd;
+        check(active.sameVideoConfiguration(next),"active FG does not activate stored NR parameters");
+    }
+    auto stack=populated();stack.nrLayerCount=2;stack.nrLayers[0].enabled=false;stack.nrLayers[1].enabled=true;
+    stack.nrLayers[1].runtime=stack.nrRuntime;stack.nrLayers[1].lowLatencyPairing=stack.lowLatency;
+    auto next=stack;next.nrLayers[0].runtime=NrRuntime::LmxxfAmd;next.nrLayers[0].sizePolicy=veyra::pipeline::NrSizePolicy::Native;next.nrLayers[0].temporal=true;
+    check(stack.sameActiveVideoParameters(next)&&!requiresGraphRebuild(stack,next),"a bypassed first NR layer does not change an active second layer");
+    next.nrLayers[1].sizePolicy=veyra::pipeline::NrSizePolicy::P720;
+    check(!stack.sameVideoConfiguration(next)&&requiresGraphRebuild(stack,next),"active layer size still rebuilds after bypassed edits");
+    auto live=populated();live.sr=false;live.multiplier=1;
+    next=live;next.videoSrQuality=5;next.frameGenerationBackend=FrameGenerationBackend::XeSS;next.color.exposure+=.1f;
+    check(live.sameVideoConfiguration(next)&&!live.sameActiveVideoParameters(next)&&!requiresGraphRebuild(live,next),"mixed live colour and inactive backend edits need uniform upload without a reset");
+    auto metadata=off;metadata.hdrMetadata.enabled=true;metadata.hdrMetadata.maxCllNits=1000;
+    next=metadata;next.hdrCurve.displayPeakNits=600;
+    HdrCurveSettings curve;HdrMetadataSettings resolved;
+    resolveHdrTuning(next.hdrCurve,next.hdrMetadata,curve,resolved);
+    check(resolved.maxCllNits==600&&!metadata.sameActiveVideoParameters(next),"display peak remains active for enabled metadata even with the pixel curve off");
+}
 int main() {
+    testInactiveEffectEdits();
     {
         using namespace veyra;using namespace veyra::engine;
         for(const auto source:{pipeline::Extent{3840,2160},pipeline::Extent{2560,1440},pipeline::Extent{3840,1600}}){

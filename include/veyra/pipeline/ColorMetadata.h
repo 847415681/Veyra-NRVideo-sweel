@@ -31,7 +31,9 @@ inline ColorDescription resolveFrameColor(const AVFrame& frame,ColorDescription 
     case AV_PIX_FMT_YUV420P10LE:case AV_PIX_FMT_P010:c.pixelFormat=SourcePixelFormat::P010;break;
     case AV_PIX_FMT_YUV420P:case AV_PIX_FMT_YUVJ420P:c.pixelFormat=SourcePixelFormat::Yuv420P;break;
     case AV_PIX_FMT_YUYV422:c.pixelFormat=SourcePixelFormat::Yuy2;break;
-    case AV_PIX_FMT_BGRA:case AV_PIX_FMT_BGR0:c.pixelFormat=SourcePixelFormat::Bgra8;break;
+    case AV_PIX_FMT_BGRA:case AV_PIX_FMT_BGR0:
+        if(c.pixelFormat!=SourcePixelFormat::V210&&c.pixelFormat!=SourcePixelFormat::Rgb10xLE)c.pixelFormat=SourcePixelFormat::Bgra8;
+        break;
     case AV_PIX_FMT_BGR24:c.pixelFormat=SourcePixelFormat::Bgr24;break;
     case AV_PIX_FMT_RGB555LE:c.pixelFormat=SourcePixelFormat::Rgb555;break;
     case AV_PIX_FMT_RGB565LE:c.pixelFormat=SourcePixelFormat::Rgb565;break;

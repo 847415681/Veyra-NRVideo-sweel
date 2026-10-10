@@ -76,6 +76,7 @@ public:
     void close()noexcept override;
 private:
     std::wstring error_;
+    bool configureDeckLink(const SourceOpenDesc&);
     bool connectDirectShowAudio(const SourceOpenDesc&);
     // AVerMedia capture cards need their installed vendor component to arm
     // non-PCM (Dolby/DTS) passthrough before the audio pin is negotiated.

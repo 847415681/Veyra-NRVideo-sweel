@@ -23,6 +23,7 @@
 #include "veyra/engine/CaptureHalfRate.h"
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/source/CaptureCardSource.h"
+#include "veyra/source/DeckLinkCapture.h"
 #include "veyra/source/ScreenCaptureSource.h"
 #include "veyra/xbox/DisconnectPolicy.h"
 #ifdef VEYRA_ENABLE_REMOTEPLAY
@@ -222,8 +223,8 @@ bool EngineController::requestSettings(EnhancementSettings s,std::optional<Chain
         veyra::log::info("settings",std::format("fsr multiplier gate: requested={} maxGeneratedFrames=1 applied=unchanged",s.multiplier));
         return false;
     }
-    // Revision partitions GPU history and measurements. Audio-only edits must
-    // not invalidate in-flight video, and identical notifications are no-ops.
+    // Revision partitions GPU history and measurements. Saved bypassed-effect
+    // parameters and audio-only edits must not invalidate in-flight video.
     s.revision=desired_.revision;if(s==desired_&&order==desiredNodeOrder_){if(acceptedRevision)*acceptedRevision=desired_.revision;return true;}
     if(!s.sameVideoConfiguration(desired_)||order!=desiredNodeOrder_)s.revision=++nextRevision_;
     desiredNodeOrder_=order;desired_=s;snapshot_.desired=s;snapshot_.applying=snapshot_.applied!=desired_;
@@ -545,9 +546,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             {std::lock_guard lock(mutex_);snapshot_.sourceHdr=gd.hdrInput;}
             gd.highQualityPresentation=isRemote&&activeSource->info().color.reconstructChroma;
             gd.rgbInput=isImage||isScreen||(isCapture&&activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::Bgra8);
-            gd.captureBitDepth=activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::P010?10:activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::P016?16:8;
+            auto ingressBitDepth=[](pipeline::SourcePixelFormat format){return format==pipeline::SourcePixelFormat::P010||format==pipeline::SourcePixelFormat::V210||format==pipeline::SourcePixelFormat::Rgb10xLE?10u:format==pipeline::SourcePixelFormat::P016?16u:8u;};
+            gd.captureBitDepth=ingressBitDepth(activeSource->info().color.pixelFormat);
             gd.yuy2Input=isCapture&&activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::Yuy2;gd.stillImage=isImage;
             gd.packedInput=isCapture?pipeline::packedInputCode(activeSource->info().color.pixelFormat):0;
+            auto captureGraphColor=activeSource->info().color;
             const bool nvidiaAdapter=ctx.adapter().isNvidia;
             // AMD adapters run NR on the lmxxf runtime. Both the normalization
             // and the stage description used to drop NR on every non-NVIDIA
@@ -695,7 +698,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(failure==FailedBackend::Fg&&(ngx::AmpereMfgUnlock::applied()||(ngx::DlssgTransfusion::applied()&&ngx::DlssgTransfusion::snapshot().target==ngx::DlssgTransfusion::Target::Ampere)))backendRecoveryWarning+=L"；RTX 30 系补帧解锁已应用，但当前驱动/运行库组合下运行时不开放补帧，可改用 AMD FSR 补帧";
 
                     if(!ring.drainQueue()||!ring.discardRecording())return false;
-                    presenter.close();graph->shutdown();selected=PlayerOptions::from(reduced,selected.nodeOrder);
+                    if(!presenter.prepareGraphChange())return false;
+                    graph->shutdown();selected=PlayerOptions::from(reduced,selected.nodeOrder);
                     describeStages(stageRequest(selected),selected.snapshot(),desc);
                 }
                 return false;
@@ -945,6 +949,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             };
             std::optional<diagnostics::FrameFlowMetrics::ResetRecord> resetRecord;
             std::optional<diagnostics::FrameFlowMetrics::ResetRecord> lastResetRecord;
+            bool rollbackWarmupPending=false;
             Clock::time_point resetStart{},resetStageStart{};
             auto markResetStage=[&](diagnostics::ResetStage stage){
                 if(!resetRecord)return;
@@ -957,6 +962,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(!resetRecord)return;
                 resetRecord->outcome=outcome;resetRecord->totalMs=elapsedMs(resetStart);
                 lastResetRecord=resetRecord;
+                if(outcome==diagnostics::ResetOutcome::RolledBack)rollbackWarmupPending=true;
                 if(frameFlow)frameFlow->resetLifecycle(*resetRecord);
                 const auto& r=*resetRecord;const auto ms=[&](diagnostics::ResetStage s){return r.stageMs[size_t(s)].value_or(-1.0);};
                 traceFrame(diagnostics::TraceKind::Reset,{r.epoch,r.settingsRevision,r.sourceFrameId},0,0,0,r.reason,unsigned(outcome),*r.totalMs);
@@ -1159,7 +1165,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     captureSource.setBufferMode(unsigned(options.settings.captureBuffer));
                     if(captureSource.reconnect(muted_?0.0f:volume_.load(),unsigned(options.settings.audioSync),options.settings.audioOffsetMs)){
                         captureRecovering=false;reset=true;pendingResetCause=pipeline::ResetReason::DeviceLost;captureSampler.reset();
-                        {std::lock_guard lock(mutex_);snapshot_.captureRecovering=false;}
+                        {std::lock_guard lock(mutex_);snapshot_.captureRecovering=false;
+                            if(captureSource.info().videoDecodePath=="decklink")snapshot_.nominalSourceFps=captureSource.info().averageFps;}
                         status(L"采集设备已重新连接，等待新画面");
                     }else{
                         captureRetryAt=Clock::now()+std::chrono::seconds(std::min(5u,captureRetries));
@@ -1310,7 +1317,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         (previous.frameGenerationBackend!=requested.frameGenerationBackend||previous.multiplier!=requested.multiplier||previous.vfgQuality!=requested.vfgQuality);
                     const bool preserveWorkingNr=previous.nr&&requested.nr&&previous.nrRuntime!=requested.nrRuntime;
                     if(accepted&&rebuild){
-                        presenter.close();bool reused=false;
+                        if(!presenter.prepareGraphChange()){finishReset(diagnostics::ResetOutcome::Failed);status(L"设置切换呈现排空失败，已停止",true);break;}
+                        bool reused=false;
                         const bool mayRetain=recentCacheAllowed&&!isCapture&&!isImage&&
                             RecentGraphCache::eligible(gd)&&RecentGraphCache::effectsOff(nextDesc);
                         if(mayRetain&&recentGraphCache.retain(graph,RecentGraphCache::key(previous,previousOrder,gd),graphBytes)){
@@ -1333,7 +1341,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         markResetStage(diagnostics::ResetStage::Create);
                         if(stop_){veyra::log::info("engine","settings rebuild cancelled; skipping rollback on exit");break;}
                         if(!accepted){
-                            presenter.close();graph->shutdown();recentGraphCache.evict("build-rollback");
+                            if(!presenter.prepareGraphChange()){status(L"设置恢复呈现排空失败，已停止",true);break;}
+                            graph->shutdown();recentGraphCache.evict("build-rollback");
                             graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,&coreCache);graphBytes=0;
                             if(!gpu->configureQueue(gd,!isCapture&&!isImage)||!graph->initialize(gd)||!openPreparedPresenter(options)){if(!stop_)status(L"设置失败且旧资源恢复失败，已停止",true);break;}
                         }
@@ -1359,15 +1368,18 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // reset. Without this the panel only took effect after an
                 // unrelated rebuild (toggling NR): the "sliders do nothing" report.
                 if(requested.revision==previous.revision&&!(requested==previous)){
-                    if(graph->applySettings(requested)){
+                    const bool videoChanged=!requested.sameActiveVideoParameters(previous);
+                    // applySettings updates descriptors and resets NR history.
+                    // A stored-only edit must not call it, even while paused.
+                    if(!videoChanged||graph->applySettings(requested)){
                         options=PlayerOptions::from(requested,requestedOrder);
                         {std::lock_guard lock(mutex_);snapshot_.applied=options.snapshot();snapshot_.applying=desired_!=snapshot_.applied;}
-                        veyra::log::info("settings",std::format("live parameter update revision={} colourEnabled={} exposure={:.2f} contrast={:.2f} temperature={:.2f}",requested.revision,requested.color.enabled?1:0,requested.color.exposure,requested.color.contrast,requested.color.temperature));
+                        veyra::log::info("settings",std::format("{} revision={} colourEnabled={} exposure={:.2f} contrast={:.2f} temperature={:.2f}",videoChanged?"live parameter update":"stored inactive/non-video parameters; GPU untouched",requested.revision,requested.color.enabled?1:0,requested.color.exposure,requested.color.contrast,requested.color.temperature));
                         // Colour lives inside the ingest dispatch, so a paused
                         // frame has no process() call to upload the new tables or
                         // re-run the chain: remember that the cached frame must
                         // be re-rendered before the next present.
-                        if(paused_||isImage)refreshPausedFrame_=true;
+                        if(videoChanged&&(paused_||isImage))refreshPausedFrame_=true;
                     }else{
                         std::lock_guard lock(mutex_);if(desired_.revision==requested.revision)desiredNodeOrder_=previousOrder;desired_.rejectVideoRequest(requested,previous);snapshot_.desired=desired_;snapshot_.applying=desired_!=previous;snapshot_.status=L"这套参数需要重建管线，已回到上一套数值";
                     }
@@ -1535,7 +1547,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             captureSource.videoReset();av_frame_free(&cachedFrame);hasOutput=false;out={};
                             captureRecovering=true;captureRetries=0;captureRetryAt=Clock::now()+std::chrono::milliseconds(500);
                             {std::lock_guard lock(mutex_);snapshot_.captureRecovering=true;snapshot_.captureFps=0;}
-                            status(L"采集信号中断，等待原设备恢复");continue;
+                            status(captureSource.errorMessage().empty()?L"采集信号中断，等待原设备恢复":captureSource.errorMessage());continue;
                         }
 #ifdef VEYRA_ENABLE_REMOTEPLAY
                         if(remote){const auto recovery=remote->recoveryStatus();status(recovery.message.empty()?L"PS5 串流异常，请检查主机状态后重新连接。":recovery.message,true);break;}
@@ -1584,12 +1596,20 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         status(isScreen?screenSource.status():isCapture?L"采集信号中断，请检查设备连接或格式":source.errorMessage().empty()?L"视频解码或时间戳错误":source.errorMessage(),true);break;}
                 }
                 if(isScreen){std::lock_guard lock(mutex_);snapshot_.sourceNotice=screenSource.status();}
-                if((isStream||isScreen)&&frame&&(uint32_t(frame->width)!=width||uint32_t(frame->height)!=height||(isScreen&&gd.hdrInput!=activeSource->info().color.isHdrPath()))){
+                const bool nativeCapture=physicalCapture&&activeSource->info().videoDecodePath=="decklink";
+                if((isStream||isScreen||nativeCapture)&&frame&&(uint32_t(frame->width)!=width||uint32_t(frame->height)!=height||(isScreen&&gd.hdrInput!=activeSource->info().color.isHdrPath())||
+                    (nativeCapture&&!source::decklink::sameColor(captureGraphColor,activeSource->info().color)))){
                     drainLivePresentation();if(!ring.drainQueue()){status(L"串流尺寸切换排空失败",true);break;}
                     width=uint32_t(frame->width);height=uint32_t(frame->height);
                     describeStages(stageRequest(options),options.snapshot(),gd);
                     gd.hdrInput=!isImage&&activeSource->info().color.isHdrPath();gd.hdrOutput=options.settings.useHdrPreview(gd.hdrInput,displayHdrActive());
-                    presenter.close();graph->shutdown();recentGraphCache.evict("source-resize");
+                    if(nativeCapture){
+                        captureGraphColor=activeSource->info().color;gd.rgbInput=captureGraphColor.pixelFormat==pipeline::SourcePixelFormat::Bgra8;
+                        gd.yuy2Input=false;gd.packedInput=pipeline::packedInputCode(captureGraphColor.pixelFormat);gd.captureBitDepth=ingressBitDepth(captureGraphColor.pixelFormat);
+                        std::lock_guard lock(mutex_);snapshot_.sourceWidth=width;snapshot_.sourceHeight=height;snapshot_.sourceHdr=gd.hdrInput;snapshot_.sourceDisplayAspect=activeSource->info().displayAspect;
+                    }
+                    if(!presenter.prepareGraphChange()){status(L"输入尺寸切换呈现排空失败",true);break;}
+                    graph->shutdown();recentGraphCache.evict("source-resize");
                     graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,&coreCache);graphBytes=0;out={};hasOutput=false;
                     if(!graph->initialize(gd)||!openPreparedPresenter(options)){if(!stop_)status(L"串流尺寸切换失败",true);break;}
                     reset=true;pendingResetCause=pipeline::ResetReason::Resize;
@@ -1915,7 +1935,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             const auto attempted=options.snapshot();
                             drainLivePresentation();
                             if(!ring.drainQueue()||!ring.discardRecording()){status(L"增强故障恢复排空失败",true);break;}
-                            out={};hasOutput=false;presenter.close();graph->shutdown();
+                            if(!presenter.prepareGraphChange()){status(L"增强故障恢复排空失败",true);break;}
+                            out={};hasOutput=false;graph->shutdown();
                             {std::lock_guard lock(mutex_);reduced.revision=++nextRevision_;}
                             options=PlayerOptions::from(reduced,options.nodeOrder);
                             describeStages(stageRequest(options),options.snapshot(),gd);
@@ -1930,7 +1951,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         }
                     }
                     if(transaction){
-                        ring.drainQueue();out={};presenter.close();graph->shutdown();recentGraphCache.evict("process-rollback");
+                        if(!ring.drainQueue()||!presenter.prepareGraphChange()){status(L"设置恢复呈现排空失败，已停止",true);break;}
+                        out={};graph->shutdown();recentGraphCache.evict("process-rollback");
                         graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,&coreCache);graphBytes=0;options=PlayerOptions::from(previous,previousOrder);
                         gd=previousDesc;
                         if(graph->initialize(gd)&&openPreparedPresenter(options)&&graph->process(frame,pts,true,out,pkt.sequence,&pkt.colorInfo,&pkt.hardwareSurface,comparisonMode_!=0)){
@@ -1947,7 +1969,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 reset=false;hasOutput=true;
                 const auto processDone=Clock::now();
                 if(physicalCapture&&veyra::log::verboseFrameLogs())veyra::log::info("capture-graph-sample",std::format("source={} epoch={} revision={} arrival={} start={} submitted={} slotWaitMs={:.6f}",pkt.sequence,out.batch.identity.epoch,out.batch.identity.settingsRevision,captureArrival,std::chrono::duration_cast<std::chrono::nanoseconds>(processStart.time_since_epoch()).count()/100,std::chrono::duration_cast<std::chrono::nanoseconds>(processDone.time_since_epoch()).count()/100,processSlotWaitMs));
-                if(!resetRecord&&out.historyReset&&!previewOnlyReset){
+                // The restored graph's first frame has empty temporal history.
+                // It is the failed transaction's rollback warmup, not another
+                // successful user reset that may overwrite the failure record.
+                const bool restoredWarmup=rollbackWarmupPending&&
+                    (pendingResetCause==pipeline::ResetReason::None||pendingResetCause==pipeline::ResetReason::Settings);
+                rollbackWarmupPending=false;
+                if(!resetRecord&&out.historyReset&&!previewOnlyReset&&!restoredWarmup){
                     resetStart=processStart;resetStageStart=processStart;
                     resetRecord=diagnostics::FrameFlowMetrics::ResetRecord{};resetRecord->sessionId=runSessionId;resetRecord->settingsRevision=out.batch.identity.settingsRevision;resetRecord->epoch=out.batch.identity.epoch;resetRecord->sourceFrameId=out.batch.identity.sourceFrameId;resetRecord->reason=static_cast<uint8_t>(diagnostics::resetCause(pkt.flags,pendingResetCause,out.detectedReset));
                     resetRecord->stageMs[size_t(diagnostics::ResetStage::Drain)]=0.0;resetRecord->stageMs[size_t(diagnostics::ResetStage::Destroy)]=0.0;resetRecord->stageMs[size_t(diagnostics::ResetStage::Create)]=0.0;

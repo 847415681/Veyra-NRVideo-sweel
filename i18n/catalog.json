@@ -14365,6 +14365,706 @@
    "zh-TW": "OBS、監控軟體相容需重新啟動；HDR 補幀相容可在播放中切換。",
    "en": "OBS and monitoring compatibility require a restart; HDR frame generation compatibility can be switched during playback.",
    "ja": "OBS とモニタリングソフトの互換設定は再起動が必要です。HDR フレーム生成の互換設定は再生中に切り替えられます。"
+  },
+  {
+   "zh": "正在读取字幕",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "正在讀取字幕",
+   "en": "Reading subtitles",
+   "ja": "字幕を読み込み中"
+  },
+  {
+   "zh": "缺少此字幕格式的解码器",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "缺少此字幕格式的解碼器",
+   "en": "Decoder for this subtitle format is unavailable",
+   "ja": "この字幕形式のデコーダーがありません"
+  },
+  {
+   "zh": "字幕数据解码失败（请查看日志）",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "字幕資料解碼失敗（請查看日誌）",
+   "en": "Subtitle decoding failed (see log)",
+   "ja": "字幕のデコードに失敗しました（ログを確認）"
+  },
+  {
+   "zh": "没有读到字幕数据（请检查封装或压缩支持）",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "未讀到字幕資料（請檢查封裝或壓縮支援）",
+   "en": "No subtitle packets read (check container or compression support)",
+   "ja": "字幕データを読み取れません（コンテナまたは圧縮形式を確認）"
+  },
+  {
+   "zh": "未解码出可显示的字幕",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "未解碼出可顯示的字幕",
+   "en": "No displayable subtitles decoded",
+   "ja": "表示できる字幕がありません"
+  },
+  {
+   "zh": "字幕文件不存在或无法读取",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "字幕檔案不存在或無法讀取",
+   "en": "Subtitle file is missing or unreadable",
+   "ja": "字幕ファイルが存在しないか読み取れません"
+  },
+  {
+   "zh": "VobSub 需要同名 .idx 和 .sub 文件，请加载 .idx",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "VobSub 需要同名 .idx 和 .sub 檔案，請載入 .idx",
+   "en": "VobSub requires matching .idx and .sub files; load the .idx file",
+   "ja": "VobSub には同名の .idx と .sub が必要です。.idx を読み込んでください"
+  },
+  {
+   "zh": "文件格式不支持、数据损坏或没有字幕内容",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "檔案格式不支援、資料損壞或沒有字幕內容",
+   "en": "Unsupported format, damaged data, or no subtitle content",
+   "ja": "未対応の形式、破損したデータ、または字幕なし"
+  },
+  {
+   "zh": "外部字幕加载失败：%1 · %2",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "外部字幕載入失敗：%1 · %2",
+   "en": "External subtitle loading failed: %1 · %2",
+   "ja": "外部字幕の読み込みに失敗：%1 · %2"
+  },
+  {
+   "zh": "正在加载外部字幕：%1",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "正在載入外部字幕：%1",
+   "en": "Loading external subtitles: %1",
+   "ja": "外部字幕を読み込み中：%1"
+  },
+  {
+   "zh": "字幕文件 (*.srt *.ass *.ssa *.vtt *.sup *.pgs *.idx *.sub *.smi *.sami *.sbv *.mpl *.stl *.txt);;所有文件 (*.*)",
+   "src": "src/engine/Subtitles.cpp;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "字幕檔案 (*.srt *.ass *.ssa *.vtt *.sup *.pgs *.idx *.sub *.smi *.sami *.sbv *.mpl *.stl *.txt);;所有檔案 (*.*)",
+   "en": "Subtitle files (*.srt *.ass *.ssa *.vtt *.sup *.pgs *.idx *.sub *.smi *.sami *.sbv *.mpl *.stl *.txt);;All files (*.*)",
+   "ja": "字幕ファイル (*.srt *.ass *.ssa *.vtt *.sup *.pgs *.idx *.sub *.smi *.sami *.sbv *.mpl *.stl *.txt);;すべてのファイル (*.*)"
+  },
+  {
+   "zh": "文本字幕 · PGS/SUP · VobSub（IDX+SUB）",
+   "src": "qml/Veyra/DialogHost.qml",
+   "zh-TW": "文字字幕 · PGS/SUP · VobSub（IDX+SUB）",
+   "en": "Text · PGS/SUP · VobSub (IDX+SUB)",
+   "ja": "テキスト字幕 · PGS/SUP · VobSub（IDX+SUB）"
+  },
+  {
+   "zh": "文本字幕超过 16 MiB 上限",
+   "src": "src/engine/Subtitles.cpp",
+   "zh-TW": "文字字幕超過 16 MiB 上限",
+   "en": "Text subtitles exceed the 16 MiB limit",
+   "ja": "テキスト字幕が 16 MiB の上限を超えています"
+  },
+  {
+   "zh": "%1 项",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "%1 項",
+   "en": "%1 items",
+   "ja": "%1 件"
+  },
+  {
+   "zh": "上一项",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "上一項",
+   "en": "Previous item",
+   "ja": "前の項目"
+  },
+  {
+   "zh": "下一项",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "下一項",
+   "en": "Next item",
+   "ja": "次の項目"
+  },
+  {
+   "zh": "仅清空列表，不删除硬盘文件",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "僅清空清單，不刪除硬碟檔案",
+   "en": "Clear playlist; keep files on disk",
+   "ja": "リストのみクリア。ファイルは削除しません"
+  },
+  {
+   "zh": "从列表移除，不删除文件",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "從清單移除，不刪除檔案",
+   "en": "Remove from playlist; keep file",
+   "ja": "リストから削除。ファイルは保持します"
+  },
+  {
+   "zh": "修改时间：新 → 旧",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "修改時間：新 → 舊",
+   "en": "Modified: newest first",
+   "ja": "更新日時：新しい順"
+  },
+  {
+   "zh": "修改时间：旧 → 新",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "修改時間：舊 → 新",
+   "en": "Modified: oldest first",
+   "ja": "更新日時：古い順"
+  },
+  {
+   "zh": "列表或导入任务已达上限，请稍后重试或移除部分条目",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "清單或匯入工作已達上限，請稍後重試或移除部分項目",
+   "en": "Playlist or import queue is full. Try later or remove some items.",
+   "ja": "リストまたは追加待ちが上限に達しました。後で再試行するか、項目を削除してください。"
+  },
+  {
+   "zh": "名称 A → Z",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "名稱 A → Z",
+   "en": "Name A → Z",
+   "ja": "名前 A → Z"
+  },
+  {
+   "zh": "名称 Z → A",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "名稱 Z → A",
+   "en": "Name Z → A",
+   "ja": "名前 Z → A"
+  },
+  {
+   "zh": "媒体文件 (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts *.mts *.m4v *.wmv *.mpg *.mpeg *.vob *.flv *.ogv *.asf *.3gp *.jpg *.jpeg *.png *.bmp *.webp);;所有文件 (*)",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "媒體檔案 (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts *.mts *.m4v *.wmv *.mpg *.mpeg *.vob *.flv *.ogv *.asf *.3gp *.jpg *.jpeg *.png *.bmp *.webp);;所有檔案 (*)",
+   "en": "Media files (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts *.mts *.m4v *.wmv *.mpg *.mpeg *.vob *.flv *.ogv *.asf *.3gp *.jpg *.jpeg *.png *.bmp *.webp);;All files (*)",
+   "ja": "メディアファイル (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts *.mts *.m4v *.wmv *.mpg *.mpeg *.vob *.flv *.ogv *.asf *.3gp *.jpg *.jpeg *.png *.bmp *.webp);;すべてのファイル (*)"
+  },
+  {
+   "zh": "定位正在播放的文件",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "定位正在播放的檔案",
+   "en": "Show current file",
+   "ja": "再生中のファイルを表示"
+  },
+  {
+   "zh": "导入文件夹",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "匯入資料夾",
+   "en": "Import folder",
+   "ja": "フォルダーを追加"
+  },
+  {
+   "zh": "导入文件夹到播放列表",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "匯入資料夾至播放清單",
+   "en": "Import folder into playlist",
+   "ja": "プレイリストにフォルダーを追加"
+  },
+  {
+   "zh": "导入文件夹，或将文件 / 文件夹拖到这里\n支持子文件夹 · 双击播放 · 拖动左侧手柄调整顺序",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "匯入資料夾，或將檔案 / 資料夾拖到這裡\n支援子資料夾 · 按兩下播放 · 拖曳左側把手調整順序",
+   "en": "Import a folder, or drop files / folders here\nIncludes subfolders · Double-click to play · Drag the left handle to reorder",
+   "ja": "フォルダーを追加するか、ファイル / フォルダーをドロップ\nサブフォルダー対応 · ダブルクリックで再生 · 左のハンドルで並べ替え"
+  },
+  {
+   "zh": "已停止",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "已停止",
+   "en": "Stopped",
+   "ja": "停止中"
+  },
+  {
+   "zh": "已播完",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "已播完",
+   "en": "Finished",
+   "ja": "再生終了"
+  },
+  {
+   "zh": "已添加 %1 项 · 列表共 %2 项",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "已新增 %1 項 · 清單共 %2 項",
+   "en": "Added %1 items · %2 total",
+   "ja": "%1 件追加 · 合計 %2 件"
+  },
+  {
+   "zh": "已达到导入上限（最多10000项），其余文件未添加",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "已達到匯入上限（最多10000項），其餘檔案未新增",
+   "en": "Import limit reached (10,000 items). Remaining files were not added.",
+   "ja": "追加の上限（10,000 件）に達しました。残りのファイルは追加されていません。"
+  },
+  {
+   "zh": "手动顺序",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "手動順序",
+   "en": "Custom order",
+   "ja": "手動の順序"
+  },
+  {
+   "zh": "拖入只追加列表，不打断当前播放",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "拖入僅追加清單，不中斷目前播放",
+   "en": "Drops append without interrupting playback",
+   "ja": "追加しても現在の再生は中断しません"
+  },
+  {
+   "zh": "播完后播放下一项",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "播完後播放下一項",
+   "en": "Play next when finished",
+   "ja": "終了後に次の項目を再生"
+  },
+  {
+   "zh": "播放列表",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "播放清單",
+   "en": "Playlist",
+   "ja": "プレイリスト"
+  },
+  {
+   "zh": "播放列表 · 导入文件夹",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "播放清單 · 匯入資料夾",
+   "en": "Playlist · Import folder",
+   "ja": "プレイリスト · フォルダーを追加"
+  },
+  {
+   "zh": "播放列表保存失败：%1",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "播放清單儲存失敗：%1",
+   "en": "Could not save playlist: %1",
+   "ja": "プレイリストを保存できません：%1"
+  },
+  {
+   "zh": "播放列表文件损坏，已使用空列表",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "播放清單檔案損壞，已使用空清單",
+   "en": "Playlist file is damaged; using an empty list.",
+   "ja": "プレイリストが破損しているため、空のリストを使用します。"
+  },
+  {
+   "zh": "播放列表文件无法读取，已使用空列表",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "播放清單檔案無法讀取，已使用空清單",
+   "en": "Could not read playlist; using an empty list.",
+   "ja": "プレイリストを読み込めないため、空のリストを使用します。"
+  },
+  {
+   "zh": "播放失败",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "播放失敗",
+   "en": "Playback failed",
+   "ja": "再生に失敗"
+  },
+  {
+   "zh": "文件不存在或已移动：%1",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "檔案不存在或已移動：%1",
+   "en": "File missing or moved: %1",
+   "ja": "ファイルが見つからないか移動されています：%1"
+  },
+  {
+   "zh": "文件大小：大 → 小",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "檔案大小：大 → 小",
+   "en": "Size: largest first",
+   "ja": "サイズ：大きい順"
+  },
+  {
+   "zh": "文件大小：小 → 大",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "檔案大小：小 → 大",
+   "en": "Size: smallest first",
+   "ja": "サイズ：小さい順"
+  },
+  {
+   "zh": "未添加新条目：文件已在列表中，或没有支持的媒体文件",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "未新增項目：檔案已在清單中，或沒有支援的媒體檔案",
+   "en": "No new items: files are already listed or no supported media was found.",
+   "ja": "新しい項目はありません。登録済みか、対応するメディアが見つかりませんでした。"
+  },
+  {
+   "zh": "松开以追加到播放列表",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "放開以追加至播放清單",
+   "en": "Drop to append to playlist",
+   "ja": "ドロップしてプレイリストに追加"
+  },
+  {
+   "zh": "正在打开",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "正在開啟",
+   "en": "Opening",
+   "ja": "読み込み中"
+  },
+  {
+   "zh": "正在扫描文件夹…",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "正在掃描資料夾…",
+   "en": "Scanning folders…",
+   "ja": "フォルダーをスキャン中…"
+  },
+  {
+   "zh": "正在播放",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "正在播放",
+   "en": "Playing",
+   "ja": "再生中"
+  },
+  {
+   "zh": "正在查看",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "正在檢視",
+   "en": "Viewing",
+   "ja": "表示中"
+  },
+  {
+   "zh": "添加文件",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "新增檔案",
+   "en": "Add files",
+   "ja": "ファイルを追加"
+  },
+  {
+   "zh": "添加文件到播放列表",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "新增檔案至播放清單",
+   "en": "Add files to playlist",
+   "ja": "プレイリストにファイルを追加"
+  },
+  {
+   "zh": "排序",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "排序",
+   "en": "Sort",
+   "ja": "並べ替え"
+  },
+  {
+   "zh": "关闭窗口",
+   "src": "qml/Veyra/PlaylistWindow.qml; src/ui/PlaylistModel.cpp",
+   "zh-TW": "關閉視窗",
+   "en": "Close window",
+   "ja": "ウィンドウを閉じる"
+  },
+  {
+   "zh": "Blackmagic 原生采集",
+   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "Blackmagic 原生擷取",
+   "en": "Blackmagic native capture",
+   "ja": "Blackmagic ネイティブキャプチャ"
+  },
+  {
+   "zh": "默认关闭。开启使用 DeckLink 原生接口，关闭使用 DirectShow。需安装 Desktop Video 驱动；切换后重新选择设备和格式并连接，不写入驱动永久配置。",
+   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "預設關閉。開啟使用 DeckLink 原生介面，關閉使用 DirectShow。需要 Desktop Video 驅動；切換後重新選擇裝置及格式並連線，不寫入驅動永久設定。",
+   "en": "Off by default. On uses DeckLink; off uses DirectShow. Requires Desktop Video. Reselect the device and format, then reconnect. Driver preferences are not changed.",
+   "ja": "既定はオフです。オンで DeckLink、オフで DirectShow を使用します。Desktop Video が必要です。切り替え後にデバイスと形式を選び直して接続してください。ドライバーの永続設定は変更しません。"
+  },
+  {
+   "zh": "原生采集跟随 Desktop Video Setup 的 HDMI/SDI 输入。支持自动检测的卡建议选择自动；信号未锁定时会明确提示。",
+   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "原生擷取沿用 Desktop Video Setup 的 HDMI/SDI 輸入。支援自動偵測的卡建議選擇自動；訊號未鎖定時會明確提示。",
+   "en": "Native capture follows the HDMI/SDI input selected in Desktop Video Setup. Choose automatic detection when supported. An unlocked signal is reported explicitly.",
+   "ja": "Desktop Video Setup で選んだ HDMI/SDI 入力を使用します。対応カードは自動検出を推奨します。信号がロックされていない場合は明示します。"
+  },
+  {
+   "zh": "Blackmagic 两个条目可能属于同一张卡。DirectShow 黑屏可尝试下方原生采集开关；手动格式须匹配实际信号。",
+   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "Blackmagic 兩個項目可能屬於同一張卡。DirectShow 黑畫面可嘗試下方原生擷取開關；手動格式須符合實際訊號。",
+   "en": "Both Blackmagic entries may refer to one card. If DirectShow is black, try native capture below. Manual formats must match the input signal.",
+   "ja": "Blackmagic の二つの項目が同じカードを指す場合があります。DirectShow が黒画面になる場合は下のネイティブキャプチャを試してください。手動形式は実際の信号に合わせます。"
+  },
+  {
+   "zh": "请等待采集设备查询完成后再切换接口",
+   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "請等待擷取裝置查詢完成後再切換介面",
+   "en": "Wait for device discovery to finish before switching interfaces.",
+   "ja": "デバイスの検索が完了してから切り替えてください。"
+  },
+  {
+   "zh": "请选择 BMD 原生设备；若列表中没有，请安装 Desktop Video 驱动。多个设备不会自动猜选。",
+   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "請選擇 BMD 原生裝置；若清單中沒有，請安裝 Desktop Video 驅動。多個裝置不會自動猜選。",
+   "en": "Select a native BMD device. If none is listed, install Desktop Video. Multiple devices are never selected by guesswork.",
+   "ja": "BMD ネイティブデバイスを選んでください。表示されない場合は Desktop Video をインストールしてください。複数のデバイスは自動で推測選択しません。"
+  },
+  {
+   "zh": "原生采集先确认有效信号；支持自动检测的卡建议选择自动。HDMI/SDI 跟随 Desktop Video Setup。",
+   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "原生擷取先確認有效訊號；支援自動偵測的卡建議選擇自動。HDMI/SDI 沿用 Desktop Video Setup。",
+   "en": "Native capture first verifies a valid signal. Use automatic detection when supported. HDMI/SDI follows Desktop Video Setup.",
+   "ja": "有効な信号を確認してからキャプチャします。対応カードは自動検出を使用してください。HDMI/SDI は Desktop Video Setup に従います。"
+  },
+  {
+   "zh": "采集接口已切换，请刷新并重新选择设备和格式",
+   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "擷取介面已切換，請重新整理並選擇裝置及格式",
+   "en": "Capture interface changed. Refresh and reselect the device and format.",
+   "ja": "キャプチャのインターフェイスが変更されました。更新してデバイスと形式を選び直してください。"
+  },
+  {
+   "zh": "BMD HDR 帧的 EOTF 不受支持；仅接受 SDR、PQ 或 HLG，拒绝猜测颜色传递",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD HDR 影格的 EOTF 不受支援；僅接受 SDR、PQ 或 HLG，不猜測色彩傳遞",
+   "en": "Unsupported BMD EOTF. Only SDR, PQ and HLG are supported; the transfer function will not be guessed.",
+   "ja": "BMD の EOTF は未対応です。SDR、PQ、HLG のみ対応し、伝達関数の推測は行いません。"
+  },
+  {
+   "zh": "BMD HDR 需要 10 位原生输入格式",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "BMD HDR 需要 10 位元原生輸入格式",
+   "en": "BMD HDR requires a native 10-bit input format.",
+   "ja": "BMD HDR にはネイティブ 10 ビット入力形式が必要です。"
+  },
+  {
+   "zh": "BMD PCM 音频配置失败；视频继续运行",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "BMD PCM 音訊設定失敗；視訊繼續執行",
+   "en": "BMD PCM audio configuration failed; video continues.",
+   "ja": "BMD PCM 音声の設定に失敗しました。映像は継続します。"
+  },
+  {
+   "zh": "BMD 制式回调异常",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD 制式回呼異常",
+   "en": "BMD format callback failed.",
+   "ja": "BMD 形式コールバックでエラーが発生しました。"
+  },
+  {
+   "zh": "BMD 原生入口跟随 Desktop Video Setup 的 HDMI/SDI 输入设置；请在该程序选择输入口，再使用自动检测或手动制式。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "BMD 原生入口沿用 Desktop Video Setup 的 HDMI/SDI 輸入設定；請在該程式選擇輸入埠，再使用自動偵測或手動制式。",
+   "en": "Native BMD capture uses the HDMI/SDI input selected in Desktop Video Setup. Select the input there, then use automatic detection or a manual format.",
+   "ja": "BMD ネイティブ入力は Desktop Video Setup の HDMI/SDI 設定に従います。同アプリで入力を選び、自動検出または手動形式を使用してください。"
+  },
+  {
+   "zh": "BMD 原生接口 {} 失败（0x{:08X}），请检查驱动、输入制式和设备占用",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD 原生介面 {} 失敗（0x{:08X}），請檢查驅動、輸入制式與裝置占用",
+   "en": "BMD native API {} failed (0x{:08X}). Check the driver, input format and device access.",
+   "ja": "BMD ネイティブ API {} が失敗しました（0x{:08X}）。ドライバー、入力形式、デバイスの使用状況を確認してください。"
+  },
+  {
+   "zh": "BMD 原生接口不可用，请安装 Desktop Video 驱动或使用 DirectShow 入口",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "BMD 原生介面無法使用，請安裝 Desktop Video 驅動或使用 DirectShow 入口",
+   "en": "Native BMD capture is unavailable. Install Desktop Video or use DirectShow.",
+   "ja": "BMD ネイティブ入力を使用できません。Desktop Video をインストールするか DirectShow を使用してください。"
+  },
+  {
+   "zh": "BMD 实际信号为 {:.3f} FPS，与请求的 {:.3f} FPS 不一致；设为 0 可跟随实际信号",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "BMD 實際訊號為 {:.3f} FPS，與要求的 {:.3f} FPS 不一致；設為 0 可沿用實際訊號",
+   "en": "BMD signal is {:.3f} FPS, but {:.3f} FPS was requested. Set 0 to follow the signal.",
+   "ja": "BMD の実信号は {:.3f} FPS ですが、要求値は {:.3f} FPS です。0 に設定すると実信号に従います。"
+  },
+  {
+   "zh": "BMD 帧回调异常",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD 影格回呼異常",
+   "en": "BMD frame callback failed.",
+   "ja": "BMD フレームコールバックでエラーが発生しました。"
+  },
+  {
+   "zh": "BMD 帧布局已改变，正在重新协商采集",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "BMD 影格配置已變更，正在重新協商擷取",
+   "en": "BMD frame layout changed; renegotiating capture.",
+   "ja": "BMD フレーム配置が変わりました。キャプチャを再設定しています。"
+  },
+  {
+   "zh": "BMD 无法读取有效画面或源时间戳",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD 無法讀取有效畫面或來源時間戳記",
+   "en": "BMD could not read valid video or source timestamps.",
+   "ja": "BMD の有効な映像またはソースのタイムスタンプを取得できません。"
+  },
+  {
+   "zh": "BMD 未检测到有效输入。请关闭占用采集卡的应用，并在 Desktop Video Setup 核对 HDMI/SDI 和制式；也可选择手动制式",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "BMD 未偵測到有效輸入。請關閉占用擷取卡的應用程式，並在 Desktop Video Setup 核對 HDMI/SDI 與制式；也可選擇手動制式",
+   "en": "BMD found no valid input. Close other capture apps and check HDMI/SDI and format in Desktop Video Setup. A matching manual format can also be selected.",
+   "ja": "BMD の有効な入力が見つかりません。他のキャプチャアプリを終了し、Desktop Video Setup の HDMI/SDI と形式を確認してください。対応する手動形式も選択できます。"
+  },
+  {
+   "zh": "BMD 标记 HDR，但驱动未提供 HDR 元数据接口",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD 標記 HDR，但驅動未提供 HDR 中繼資料介面",
+   "en": "BMD reports HDR, but the driver provides no HDR metadata interface.",
+   "ja": "BMD は HDR を報告していますが、ドライバーに HDR メタデータのインターフェイスがありません。"
+  },
+  {
+   "zh": "BMD 输入不支持所选制式/像素格式",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD 輸入不支援所選制式／像素格式",
+   "en": "BMD input does not support the selected video/pixel format.",
+   "ja": "BMD 入力は選択した映像／ピクセル形式に対応していません。"
+  },
+  {
+   "zh": "BMD 输入信号丢失，正在等待 HDMI/SDI 信号锁定",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "BMD 輸入訊號遺失，正在等待 HDMI/SDI 訊號鎖定",
+   "en": "BMD input signal lost; waiting for HDMI/SDI signal lock.",
+   "ja": "BMD 入力信号が失われました。HDMI/SDI の信号ロックを待っています。"
+  },
+  {
+   "zh": "BMD 输入制式/颜色格式已变化，正在重新检测信号",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "BMD 輸入制式／色彩格式已變更，正在重新偵測訊號",
+   "en": "BMD input mode/color format changed; detecting the signal again.",
+   "ja": "BMD 入力モード／色形式が変わりました。信号を再検出しています。"
+  },
+  {
+   "zh": "BMD 输入颜色/行距合同已变化，正在重建处理链",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "BMD 輸入色彩／列距契約已變更，正在重建處理鏈",
+   "en": "BMD input color/stride changed; rebuilding the processing chain.",
+   "ja": "BMD 入力の色／行ストライドが変わりました。処理パイプラインを再構築しています。"
+  },
+  {
+   "zh": "BMD 返回无效帧布局、时间戳或不受支持的 HDR 位深",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "BMD 傳回無效影格配置、時間戳記或不受支援的 HDR 位元深度",
+   "en": "BMD returned an invalid frame layout, timestamp or unsupported HDR bit depth.",
+   "ja": "BMD が無効なフレーム配置、タイムスタンプ、または未対応の HDR ビット深度を返しました。"
+  },
+  {
+   "zh": "BMD 返回未支持的像素格式",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD 傳回未支援的像素格式",
+   "en": "BMD returned an unsupported pixel format.",
+   "ja": "BMD が未対応のピクセル形式を返しました。"
+  },
+  {
+   "zh": "BMD 返回未知颜色空间",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD 傳回未知色彩空間",
+   "en": "BMD returned an unknown color space.",
+   "ja": "BMD が不明な色空間を返しました。"
+  },
+  {
+   "zh": "BMD 采集帧缓冲分配失败",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "BMD 擷取影格緩衝配置失敗",
+   "en": "BMD capture frame allocation failed.",
+   "ja": "BMD キャプチャフレームのメモリ確保に失敗しました。"
+  },
+  {
+   "zh": "WASAPI 音频端点无效；视频继续运行",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "WASAPI 音訊端點無效；視訊繼續執行",
+   "en": "WASAPI audio endpoint is unavailable; video continues.",
+   "ja": "WASAPI 音声エンドポイントを使用できません。映像は継続します。"
+  },
+  {
+   "zh": "[原生] {} · {}",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "[原生] {} · {}",
+   "en": "[Native] {} · {}",
+   "ja": "[ネイティブ] {} · {}"
+  },
+  {
+   "zh": "{} · {} x {} @ {:.3f} fps · {} · BMD 原生",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "{} · {} x {} @ {:.3f} fps · {} · BMD 原生",
+   "en": "{} · {} x {} @ {:.3f} fps · {} · Native BMD",
+   "ja": "{} · {} x {} @ {:.3f} fps · {} · BMD ネイティブ"
+  },
+  {
+   "zh": "保存的 BMD 制式不可用，请重新选择",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "儲存的 BMD 制式無法使用，請重新選擇",
+   "en": "Saved BMD format is unavailable. Select a format again.",
+   "ja": "保存された BMD 形式を使用できません。形式を選び直してください。"
+  },
+  {
+   "zh": "保存的 BMD 制式已不可用，请刷新并重新选择",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "儲存的 BMD 制式已無法使用，請重新整理並選擇",
+   "en": "Saved BMD format is no longer available. Refresh and select a format again.",
+   "ja": "保存された BMD 形式は利用できなくなりました。更新して選び直してください。"
+  },
+  {
+   "zh": "未找到该 BMD 原生设备，请安装 Desktop Video 驱动并刷新设备列表",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "找不到該 BMD 原生裝置，請安裝 Desktop Video 驅動並重新整理裝置清單",
+   "en": "Native BMD device not found. Install Desktop Video and refresh the device list.",
+   "ja": "BMD ネイティブデバイスが見つかりません。Desktop Video をインストールし、デバイス一覧を更新してください。"
+  },
+  {
+   "zh": "独立采集音频配置失败；BMD 原生视频继续运行",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "獨立擷取音訊設定失敗；BMD 原生視訊繼續執行",
+   "en": "Separate capture audio configuration failed; native BMD video continues.",
+   "ja": "独立したキャプチャ音声の設定に失敗しました。BMD ネイティブ映像は継続します。"
+  },
+  {
+   "zh": "自动检测实际信号 · BMD 原生",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "自動偵測實際訊號 · BMD 原生",
+   "en": "Detect input automatically · Native BMD",
+   "ja": "入力信号を自動検出 · BMD ネイティブ"
+  },
+  {
+   "zh": "跟随驱动输入",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "沿用驅動輸入",
+   "en": "Driver input",
+   "ja": "ドライバーの入力設定"
+  },
+  {
+   "zh": "这张 BMD 卡不支持自动检测，请选择与信号一致的手动制式",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "這張 BMD 卡不支援自動偵測，請選擇與訊號一致的手動制式",
+   "en": "This BMD card does not support automatic detection. Select the manual format matching the signal.",
+   "ja": "この BMD カードは自動検出に対応していません。信号に一致する手動形式を選んでください。"
+  },
+  {
+   "zh": "逐行",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "循序",
+   "en": "Progressive",
+   "ja": "プログレッシブ"
+  },
+  {
+   "zh": "隔行",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "交錯",
+   "en": "Interlaced",
+   "ja": "インターレース"
+  },
+  {
+   "zh": "放大时重建细节；原尺寸时修复压缩伪影。效果取决于片源。",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "放大時重建細節；原尺寸時修復壓縮瑕疵。效果取決於片源。",
+   "en": "Reconstructs detail when upscaling and reduces compression artifacts at native size. Results depend on the source.",
+   "ja": "拡大時は細部を再構成し、元の解像度では圧縮ノイズを低減します。効果は映像により異なります。"
+  },
+  {
+   "zh": "目标须大于片源尺寸；已达到目标时不执行超分。",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "目標須大於片源尺寸；已達到目標時不執行超解析度。",
+   "en": "The target must exceed the source size. Upscaling is skipped when the source already meets the target.",
+   "ja": "入力より大きい目標解像度が必要です。入力が目標以上の場合は超解像処理を行いません。"
+  },
+  {
+   "zh": "设置切换呈现排空失败，已停止",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "設定切換呈現排空失敗，已停止",
+   "en": "Could not drain presentation for the settings change. Playback stopped.",
+   "ja": "設定変更時に描画処理を完了できなかったため、再生を停止しました。"
+  },
+  {
+   "zh": "设置恢复呈现排空失败，已停止",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "設定還原呈現排空失敗，已停止",
+   "en": "Could not drain presentation to restore settings. Playback stopped.",
+   "ja": "設定復元時に描画処理を完了できなかったため、再生を停止しました。"
+  },
+  {
+   "zh": "输入尺寸切换呈现排空失败",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "輸入尺寸切換呈現排空失敗",
+   "en": "Could not drain presentation for the input size change.",
+   "ja": "入力サイズ変更時に描画処理を完了できませんでした。"
   }
  ]
 }

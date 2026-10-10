@@ -4,6 +4,7 @@
 #include "veyra/ui/EffectAvailability.h"
 #include "veyra/engine/FrameGenerationSelection.h"
 #include "veyra/ui/QmlExportQueueModel.h"
+#include "veyra/ui/PlaylistModel.h"
 #include "veyra/ui/UiLanguage.h"
 #include <QQmlEngine>
 #include <QMetaMethod>
@@ -111,6 +112,7 @@ namespace Gdiplus { using std::min; using std::max; }
 #include "veyra/ngx/NrArchitecturePolicy.h"
 #include "veyra/ngx/FgCompatibilitySession.h"
 #include "veyra/source/CaptureCardSource.h"
+#include "veyra/source/DeckLinkCapture.h"
 #include "veyra/source/CaptureSignalProbe.h"
 #include "veyra/source/ScreenCaptureSource.h"
 
@@ -295,8 +297,14 @@ struct QmlPlayerBridge::Impl {
     QVariantMap anchors;
     // Where the user's own files live (the facade resolves the same default).
     std::filesystem::path dataDir;
+    PlaylistModel* playlist = nullptr;
+    QString playlistPath;
+    uint64_t playlistSession = 0, playlistCompletedSession = 0;
     // --- subtitles (ported from the Win32 shell, same semantics) ---
     std::unique_ptr<engine::SubtitleLoader> subLoader;
+    std::unique_ptr<engine::SubtitleLoader> subFileLoader;
+    uint64_t subFileGeneration = 0;
+    std::wstring subFilePath;
     uint64_t subGeneration = 0;
     std::vector<engine::SubtitleTrack> subTracks;   // external files first, then the loader's
     size_t subExternal = 0;                          // user-loaded files at the front
@@ -1011,6 +1019,16 @@ QVariantList QmlPlayerBridge::srBackendChoices() const {
 QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesystem::path dataDirectory,
                                 QObject* parent)
     : QObject(parent), impl_(std::make_unique<Impl>(engine, std::move(dataDirectory))) {
+    impl_->playlist = new PlaylistModel(utf8Of((impl_->dataDir / L"playlist.v1.json").wstring()), this);
+    connect(impl_->playlist, &PlaylistModel::playRequested, this, [this](const QString& path) {
+        openPath(path);
+        // Explicit playlist selection starts at the beginning; opening from
+        // recent files retains the existing resume-position preference.
+        impl_->resumeSession = 0;
+    });
+    connect(impl_->playlist, &PlaylistModel::error, this, [this](const QString& text) {
+        veyra::log::warn("playlist", text.toStdString()); emit notice(text, true);
+    });
     connect(this,&QmlPlayerBridge::snapshotChanged,this,
         [this,ceiling=fgMaxMultiplier(),text=fgProviderText()]() mutable {
             const auto nextCeiling=fgMaxMultiplier();const auto nextText=fgProviderText();
@@ -1137,8 +1155,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                 QTimer::singleShot(0, this, [this, error] { emit notice(error, true); });
         }
     }
-    // Sound sync is a player setting, not part of either chain: it is kept in
-    // the shell preferences and restored here, after the session.
+    // These controls are global, outside either effect chain. Restore them
+    // from shell preferences after the session; old profiles keep defaults.
     {
         auto s = impl_->facade.pendingSettings();
         const auto& p = impl_->prefs;
@@ -1155,7 +1173,17 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             const int rate = p.value(QStringLiteral("contentRate")).toInt();
             if (rate >= 0 && rate <= int(engine::ContentRate::Capture60To30) && int(s.content) != rate) { s.content = static_cast<engine::ContentRate>(rate); changed = true; }
         }
-        if (changed && !impl_->commit(std::move(s))) veyra::log::warn("ui-prefs", "saved sound sync not accepted");
+        auto restoreHold = [&](const char* key, float& target) {
+            if (!p.contains(QLatin1String(key))) return;
+            bool ok = false;
+            const double value = p.value(QLatin1String(key)).toDouble(&ok);
+            if (ok && std::isfinite(value) && value >= 0 && value <= 1 && target != float(value)) {
+                target = float(value); changed = true;
+            }
+        };
+        restoreHold("nrHoldStrength", s.nrHoldStrength);
+        restoreHold("nrHoldTolerance", s.nrHoldTolerance);
+        if (changed && !impl_->commit(std::move(s))) veyra::log::warn("ui-prefs", "saved global controls not accepted");
     }
     // Presentation (低延迟队列 / 显示同步 / 输出上限) and the picture aspect.
     {
@@ -1293,6 +1321,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         // An export in flight needs its own poll; it is a separate job and its
         // snapshot is not part of the player snapshot.
         if (impl_->exportQueue.queue().needsTick()) pollExport();
+        tickPlaylist();
     });
     impl_->timer->start(16);
     startGpuSampler();
@@ -1946,12 +1975,21 @@ void QmlPlayerBridge::copyDiagnostics() {
 
 
 // --- capture dialog ----------------------------------------------------------
+static QString captureDeviceUiLabel(const source::CaptureDevice& device) {
+    return source::decklink::isPath(device.path)
+        ? uiText(device.name).replace(QStringLiteral("跟随驱动输入"), uiText(L"跟随驱动输入")) : utf8Of(device.name);
+}
 QVariantList QmlPlayerBridge::captureDevices() const {
     // The source's own enumeration (asynchronous, see refreshCaptureDevices). An
     // empty list means the machine reports no capture devices.
     QVariantList out;
-    for (const auto& d : impl_->captureVideo)
-        out << QVariantMap{{"id", utf8Of(d.path)}, {"label", utf8Of(d.name)}, {"embeddedAudio", d.hasEmbeddedAudio}};
+    for (const auto& d : impl_->captureVideo) {
+        const bool native=source::decklink::isPath(d.path);
+        const bool enabled=impl_->prefBool("blackmagicNativeCapture",false);
+        if(native&&!enabled)continue;
+        if(!native&&enabled&&source::isBlackmagicCaptureDevice(d.name,d.path))continue;
+        out << QVariantMap{{"id", utf8Of(d.path)}, {"label", captureDeviceUiLabel(d)}, {"embeddedAudio", d.hasEmbeddedAudio}};
+    }
     return out;
 }
 QString QmlPlayerBridge::captureDeviceId() const { return utf8Of(impl_->captureDevice); }
@@ -1969,14 +2007,17 @@ void QmlPlayerBridge::setCaptureDeviceId(const QString& value) {
     emit captureChanged();
 }
 QString QmlPlayerBridge::captureDeviceLabel() const {
-    for (const auto& d : impl_->captureVideo) if (d.path == impl_->captureDevice) return utf8Of(d.name);
+    for (const auto& d : impl_->captureVideo) if (d.path == impl_->captureDevice) return captureDeviceUiLabel(d);
     return impl_->captureDevice.empty() ? tr("未选择设备") : tr("设备未连接");
 }
 QVariantList QmlPlayerBridge::captureFormats() const {
     QVariantList out;
-    for (const auto& f : impl_->captureFormatList)
-        out << QVariantMap{{"id", utf8Of(f.key)}, {"label", uiText(f.label)}, {"tier", f.tier},
+    for (const auto& f : impl_->captureFormatList) {
+        auto label=uiText(f.label);
+        if(source::decklink::isPath(impl_->captureDevice))label=label.replace(QStringLiteral("逐行"),tr("逐行")).replace(QStringLiteral("隔行"),tr("隔行"));
+        out << QVariantMap{{"id", utf8Of(f.key)}, {"label", label}, {"tier", f.tier},
                            {"costHint", source::captureFormatNeedsCostHint(static_cast<source::CaptureFormatTier>(f.tier))}, {"driverCurrent", f.driverCurrent}};
+    }
     return out;
 }
 QString QmlPlayerBridge::captureFormatKey() const { return utf8Of(impl_->captureFormatKey); }
@@ -2051,7 +2092,7 @@ void QmlPlayerBridge::setCaptureBufferMode(int value) {
 bool QmlPlayerBridge::captureQueryBusy() const { return impl_->captureBusy || impl_->captureDriverSettingsOpen; }
 QString QmlPlayerBridge::captureStatus() const { return impl_->captureStatus; }
 bool QmlPlayerBridge::captureBlackmagicDevice() const {
-    for (const auto& d : impl_->captureVideo) if (d.path == impl_->captureDevice) return source::isBlackmagicCaptureDevice(d.name, d.path);
+    for (const auto& d : impl_->captureVideo) if (d.path == impl_->captureDevice) return source::decklink::isPath(d.path)||source::isBlackmagicCaptureDevice(d.name, d.path);
     return false;
 }
 bool QmlPlayerBridge::openCaptureDriverSettings(bool inputSelector) {
@@ -2127,15 +2168,23 @@ void QmlPlayerBridge::tickCapture() {
         veyra::log::info("capture-ui", std::format("devices video={} audio={}", i.captureVideo.size(), i.captureAudio.size()));
         // Restore the remembered device; otherwise the first one. Never guess audio.
         std::wstring pick;
-        for (const auto& d : i.captureVideo) if (d.path == i.capturePrefs.videoPath) pick = d.path;
-        if (pick.empty() && !i.captureVideo.empty() && i.capturePrefs.videoPath.empty()) pick = i.captureVideo.front().path;
+        const auto choices=captureDevices();
+        auto allowed=[&](std::wstring_view path){for(const auto& value:choices)if(wideOf(value.toMap().value("id").toString())==path)return true;return false;};
+        if(allowed(i.capturePrefs.videoPath))pick=i.capturePrefs.videoPath;
+        // The two APIs are separate identities. Restore an explicitly used
+        // endpoint, or select a unique native endpoint; never map by ordinal.
+        const bool native=i.prefBool("blackmagicNativeCapture",false);
+        const auto remembered=wideOf(i.prefs.value(native?"blackmagicNativeLastDevice":"blackmagicDirectShowLastDevice").toString());
+        if(pick.empty()&&allowed(remembered))pick=remembered;
+        if(pick.empty()&&native){std::vector<std::wstring> candidates;for(const auto& d:i.captureVideo)if(source::decklink::isPath(d.path))candidates.push_back(d.path);if(candidates.size()==1)pick=candidates.front();}
+        if (pick.empty() && !choices.empty() && i.capturePrefs.videoPath.empty()&&!native) pick=wideOf(choices.front().toMap().value("id").toString());
         i.captureStatus = i.captureVideo.empty() ? tr("未找到采集设备。连接后点击刷新。")
                         : pick.empty() ? tr("上次采集设备未连接。插回后刷新，或手动选择其他设备。") : QString();
         if (!pick.empty()) {
             i.captureDevice.clear();
             setCaptureDeviceId(utf8Of(pick));
             if (pick == i.capturePrefs.videoPath) restoreRememberedAudio();
-        }
+        }else{setCaptureDeviceId({});if(native)i.captureStatus=tr("请选择 BMD 原生设备；若列表中没有，请安装 Desktop Video 驱动。多个设备不会自动猜选。");}
         emit captureChanged();
         return;
     }
@@ -2153,6 +2202,7 @@ void QmlPlayerBridge::tickCapture() {
     i.captureStatus = i.captureFormatList.empty() ? tr("未读到有效的 4K 以内采集格式，或设备正被其他应用占用。")
                     : i.captureFormatKey.empty() ? tr("上次格式已不可用，请重新选择格式。")
                     : q.kind == 3 ? tr("驱动设置已关闭。请核对所选格式与设备帧率，再连接。")
+                    : source::decklink::isPath(i.captureDevice) ? tr("原生采集先确认有效信号；支持自动检测的卡建议选择自动。HDMI/SDI 跟随 Desktop Video Setup。")
                     : captureBlackmagicDevice() ? tr("请选择与输入信号一致的格式。驱动默认格式不代表检测到的信号。")
                     : tr("连接后使用当前增强设置。格式与音频变更需要重新连接。");
     veyra::log::info("capture-ui", std::format("formats={} selected={}", i.captureFormatList.size(), !i.captureFormatKey.empty()));
@@ -2168,6 +2218,9 @@ bool QmlPlayerBridge::startCaptureSession() {
     int device = -1;
     for (size_t k = 0; k < i.captureVideo.size(); ++k) if (i.captureVideo[k].path == i.captureDevice) device = int(k);
     const auto* format = source::selectCaptureFormat(i.captureFormatList, -1, i.captureFormatKey);
+    if(source::decklink::isPath(i.captureDevice)!=i.prefBool("blackmagicNativeCapture",false)&&captureBlackmagicDevice()){
+        emit notice(tr("采集接口已切换，请刷新并重新选择设备和格式"),true);return false;
+    }
     if (device < 0 || !format) { emit notice(tr("请先选择采集设备和格式"), true); return false; }
     const int audio = i.captureAudioChoice;
     const source::CaptureDevice* audioDevice = audio >= 0 && size_t(audio) < i.captureAudio.size() ? &i.captureAudio[size_t(audio)] : nullptr;
@@ -2183,6 +2236,7 @@ bool QmlPlayerBridge::startCaptureSession() {
                                  i.captureFps > 0 ? i.captureFps : format->fps, true});
     veyra::log::info("capture-ui", std::format("connect format={} audio={} color={} fps={}", QString::fromStdWString(format->label).toStdString(), audio, i.captureColor, i.captureFps));
     i.prefs["captureDeviceName"] = utf8Of(i.captureVideo[size_t(device)].name);
+    if(captureBlackmagicDevice())i.prefs[source::decklink::isPath(i.captureDevice)?"blackmagicNativeLastDevice":"blackmagicDirectShowLastDevice"]=utf8Of(i.captureDevice);
     rememberSource(QStringLiteral("capture"), utf8Of(i.captureVideo[size_t(device)].name));
     i.prefs["captureFormatLabel"] = utf8Of(format->label);
     i.savePrefs();
@@ -3514,7 +3568,9 @@ void QmlPlayerBridge::refreshSubtitles(const std::wstring& media) {
     auto& i = *impl_;
     i.subTracks.clear(); i.subExternal = i.subLoaded = 0;
     i.subPrimary = i.subSecondary = -1; i.subPrimaryChosen = i.subSecondaryChosen = false;
-    i.subStatus.clear(); i.subMedia = media;
+    i.subStatus=QFileInfo(QString::fromStdWString(media)).isFile()?tr("正在读取字幕"):QString{}; i.subMedia = media;
+    if(i.subFileLoader)i.subFileGeneration=i.subFileLoader->requestFile(L"");
+    i.subFilePath.clear();
     if (i.subAlignWorker.joinable()) { i.subAlignWorker.request_stop(); i.subAlignWorker = {}; }
     i.subAligning = false; i.subAlignReady = false;
     if (!i.subLoader) i.subLoader = std::make_unique<engine::SubtitleLoader>();
@@ -3535,6 +3591,7 @@ void QmlPlayerBridge::tickSubtitles() {
             i.subTracks.insert(i.subTracks.begin() + std::ptrdiff_t(i.subExternal),
                                std::make_move_iterator(result->tracks.begin()), std::make_move_iterator(result->tracks.end()));
             i.subLoaded = count;
+            if(result->complete&&i.subStatus==tr("正在读取字幕"))i.subStatus.clear();
             int firstUsable = -1, firstChinese = -1;
             for (size_t k = 0; k < i.subTracks.size(); ++k) {
                 if (!i.subTracks[k].usable()) continue;
@@ -3555,6 +3612,30 @@ void QmlPlayerBridge::tickSubtitles() {
                         t.embedded ? 1 : 0, t.cues.size(), t.usable() ? 1 : 0));
             veyra::log::info("subtitle", std::format("tracks={} primary={} secondary={}", i.subTracks.size(), i.subPrimary, i.subSecondary));
             changed = true;
+        }
+    }
+    if(i.subFileLoader){
+        if(auto result=i.subFileLoader->poll();result&&result->generation==i.subFileGeneration&&result->complete&&!i.subFilePath.empty()){
+            const auto file=QFileInfo(QString::fromStdWString(i.subFilePath)).fileName();
+            i.subFilePath.clear();
+            const bool usable=std::any_of(result->tracks.begin(),result->tracks.end(),[](const auto& t){return t.usable();});
+            if(!usable){
+                const auto detail=result->tracks.empty()?tr("文件格式不支持、数据损坏或没有字幕内容"):uiText(result->tracks.front().note);
+                i.subStatus=tr("外部字幕加载失败：%1 · %2").arg(file,detail);
+                emit notice(i.subStatus,true);
+            }else{
+                const int added=int(result->tracks.size());
+                int first=0;
+                while(!result->tracks[size_t(first)].usable())++first;
+                i.subTracks.insert(i.subTracks.begin(),std::make_move_iterator(result->tracks.begin()),std::make_move_iterator(result->tracks.end()));
+                i.subExternal+=size_t(added);
+                if(i.subSecondary>=0)i.subSecondary+=added;
+                if(i.subAlignTrack>=0)i.subAlignTrack+=added;
+                i.subPrimary=first;i.subPrimaryChosen=true;
+                i.subStatus=tr("已加载外部字幕：%1").arg(file);
+                veyra::log::info("subtitle",std::format("external loaded tracks={} file={}",added,file.toStdString()));
+            }
+            changed=true;
         }
     }
     if (i.subAlignReady.exchange(false) && i.subAlignGeneration == i.subGeneration &&
@@ -3656,7 +3737,8 @@ QVariantList QmlPlayerBridge::subtitleTracks() const {
         if (label.isEmpty()) label = tr("字幕 %1").arg(k + 1);
         QString note = t.embedded ? tr("内嵌") : tr("外挂");
         if (!t.codec.empty()) note += QStringLiteral(" · ") + QString::fromStdWString(t.codec).toUpper();
-        if (!t.usable()) note += QStringLiteral(" · ") + (t.note.empty() ? tr("不可用") : QString::fromStdWString(t.note));
+        if (!t.note.empty()) note += QStringLiteral(" · ") + uiText(t.note);
+        else if(!t.usable()) note += QStringLiteral(" · ") + tr("未解码出可显示的字幕");
         out << QVariantMap{{"index", int(k)}, {"label", label}, {"note", note}, {"usable", t.usable()},
                            {"embedded", t.embedded}, {"cues", int(t.cues.size())}, {"offsetMs", t.offsetMs}};
     }
@@ -3711,27 +3793,18 @@ void QmlPlayerBridge::setSubtitleBottomInset(int value) {
 void QmlPlayerBridge::loadSubtitleDialog() {
     const QString start = impl_->subMedia.empty() ? QString() : QFileInfo(QString::fromStdWString(impl_->subMedia)).absolutePath();
     const QString path = QFileDialog::getOpenFileName(nullptr, tr("加载外部字幕"), start,
-        tr("字幕文件 (*.srt *.ass *.ssa *.vtt);;所有文件 (*.*)"));
+        tr("字幕文件 (*.srt *.ass *.ssa *.vtt *.sup *.pgs *.idx *.sub *.smi *.sami *.sbv *.mpl *.stl *.txt);;所有文件 (*.*)"));
     if (!path.isEmpty()) loadSubtitleFile(path);
 }
 bool QmlPlayerBridge::loadSubtitleFile(const QString& path) {
-    engine::SubtitleTrack track;
-    try { track = engine::loadSubtitleFile(wideOf(path)); } catch (...) {}
-    if (!track.usable()) {
-        veyra::log::warn("subtitle", "external file has no usable cues path=" + path.toStdString());
-        emit notice(tr("字幕文件无法读取或没有字幕内容：%1").arg(QFileInfo(path).fileName()), true);
+    if(!QFileInfo(path).isFile()){
+        emit notice(tr("字幕文件不存在或无法读取"),true);
         return false;
     }
-    if (track.name.empty()) track.name = QFileInfo(path).fileName().toStdWString();
-    impl_->subTracks.insert(impl_->subTracks.begin(), std::move(track));
-    ++impl_->subExternal;
-    if (impl_->subPrimary >= 0) ++impl_->subPrimary;
-    if (impl_->subSecondary >= 0) ++impl_->subSecondary;
-    if (impl_->subAlignTrack >= 0) ++impl_->subAlignTrack;
-    impl_->subPrimary = 0; impl_->subPrimaryChosen = true;
-    if (impl_->subSecondary == 0) impl_->subSecondary = -1;
-    impl_->subStatus = tr("已加载外部字幕：%1").arg(QFileInfo(path).fileName());
-    veyra::log::info("subtitle", std::format("external loaded cues={} path={}", impl_->subTracks.front().cues.size(), path.toStdString()));
+    if(!impl_->subFileLoader)impl_->subFileLoader=std::make_unique<engine::SubtitleLoader>();
+    impl_->subFilePath=wideOf(path);
+    impl_->subFileGeneration=impl_->subFileLoader->requestFile(impl_->subFilePath);
+    impl_->subStatus=tr("正在加载外部字幕：%1").arg(QFileInfo(path).fileName());
     emit subtitlesChanged();
     return true;
 }
@@ -4242,7 +4315,9 @@ void QmlPlayerBridge::setNrHoldStrength(double value) {
     const float next = float(value);
     if (s.nrHoldStrength == next) return;
     s.nrHoldStrength = next;
-    impl_->commit(std::move(s));
+    if (!impl_->commit(std::move(s))) return;
+    impl_->prefs[QStringLiteral("nrHoldStrength")] = double(next);
+    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "output stabiliser strength not saved");
     emit settingsChanged();
 }
 double QmlPlayerBridge::nrHoldTolerance() const { return double(settings().nrHoldTolerance); }
@@ -4251,7 +4326,9 @@ void QmlPlayerBridge::setNrHoldTolerance(double value) {
     const float next = float(value);
     if (s.nrHoldTolerance == next) return;
     s.nrHoldTolerance = next;
-    impl_->commit(std::move(s));
+    if (!impl_->commit(std::move(s))) return;
+    impl_->prefs[QStringLiteral("nrHoldTolerance")] = double(next);
+    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "output stabiliser tolerance not saved");
     emit settingsChanged();
 }
 
@@ -4801,8 +4878,67 @@ void QmlPlayerBridge::openFileDialog() {
 }
 int QmlPlayerBridge::thumbnailGeneration() const { return impl_->thumbnailGeneration; }
 
+QObject* QmlPlayerBridge::playlist() const { return impl_->playlist; }
+void QmlPlayerBridge::showPlaylist() { emit playlistRequested(); }
+void QmlPlayerBridge::addPlaylistFilesDialog() {
+    const auto paths = QFileDialog::getOpenFileNames(nullptr, tr("添加文件到播放列表"), {},
+        tr("媒体文件 (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts *.mts *.m4v *.wmv *.mpg *.mpeg *.vob *.flv *.ogv *.asf *.3gp *.jpg *.jpeg *.png *.bmp *.webp);;所有文件 (*)"));
+    if (!paths.isEmpty()) { impl_->playlist->addPaths(paths); emit playlistRequested(); }
+}
+void QmlPlayerBridge::addPlaylistFolderDialog() {
+    const auto path = QFileDialog::getExistingDirectory(nullptr, tr("导入文件夹到播放列表"));
+    if (!path.isEmpty()) { impl_->playlist->addPaths({path}); emit playlistRequested(); }
+}
+void QmlPlayerBridge::openDroppedUrls(const QList<QUrl>& urls) {
+    // A single file on the video retains drag-to-open. Folder/multi-file drops
+    // append to the playlist; dropping inside PlaylistWindow always appends.
+    if (urls.size() == 1) {
+        const QUrl url = urls.front();
+        if (url.isLocalFile() && !QFileInfo(url.toLocalFile()).isDir()) { openUrl(url); return; }
+    }
+    impl_->playlist->addUrls(urls);
+    emit playlistRequested();
+}
+void QmlPlayerBridge::tickPlaylist() {
+    const auto& s = impl_->snapshot;
+    using T = engine::TransportState;
+    if (!impl_->playlistSession) return;
+    if (!impl_->liveKind.isEmpty() || utf8Of(impl_->sourceLabel) != impl_->playlistPath) {
+        impl_->playlistSession = 0; impl_->playlist->setPlayback({}, {}); return;
+    }
+    if (s.sessionId != impl_->playlistSession) return; // Ignore old session snapshots after open.
+    if (s.capture || s.remotePlay) { impl_->playlistSession = 0; impl_->playlist->setPlayback({}, {}); return; }
+    QString state = QStringLiteral("stopped");
+    switch (s.transport) {
+    case T::Opening: state = QStringLiteral("opening"); break;
+    case T::Playing: state = s.image ? QStringLiteral("image") : QStringLiteral("playing"); break;
+    case T::Paused: state = QStringLiteral("paused"); break;
+    case T::Ended: state = QStringLiteral("ended"); break;
+    case T::Failed: state = QStringLiteral("failed"); break;
+    default: break;
+    }
+    impl_->playlist->setPlayback(impl_->playlistPath, state);
+    if (s.transport != T::Ended || s.failed || s.image || impl_->openingSource ||
+        impl_->playlistCompletedSession == s.sessionId) return;
+    impl_->playlistCompletedSession = s.sessionId;
+    // Wait for this GUI tick to finish, then recheck the engine session. A stop,
+    // new file, or live source selected in between must cancel auto-advance.
+    QTimer::singleShot(0, this, [this, session = s.sessionId] {
+        const auto latest = impl_->engine.snapshot();
+        if (impl_->playlistSession == session && latest.sessionId == session &&
+            latest.transport == T::Ended && !latest.failed && !latest.image && impl_->liveKind.isEmpty())
+            impl_->playlist->advanceAfterEnd();
+    });
+}
+
 void QmlPlayerBridge::openPath(const QString& path) {
     if (path.isEmpty()) return;
+    if (QFileInfo(path).isDir()) {
+        impl_->playlist->addPaths({path}); emit playlistRequested(); return;
+    }
+    if (PlaylistModel::supported(path) && !impl_->playlist->containsPath(path)) impl_->playlist->addPaths({path});
+    impl_->playlistPath = path;
+    impl_->playlist->setPlayback(path, QStringLiteral("opening"));
     rememberPosition(true);
     impl_->exportQueue.setSelectedId(0);
     ++impl_->liveOpenGen; impl_->pendingLiveText.clear();   // a waiting live open is dropped
@@ -4836,6 +4972,7 @@ void QmlPlayerBridge::openPath(const QString& path) {
     options.hardwareDecodeOnly = impl_->prefString("decode") == QLatin1String("hardware");
     impl_->engine.open(impl_->videoWindow, wide, options);
     impl_->openingSessionId = impl_->engine.snapshot().sessionId;
+    impl_->playlistSession = impl_->openingSessionId;
     impl_->resumeSession = 0;
     if ((impl_->prefBool("rememberPosition", true)||impl_->prefBool("autoResume",false))) {
         const auto saved = impl_->prefs.value("positions").toMap().value(path).toMap();
@@ -4871,6 +5008,8 @@ void QmlPlayerBridge::togglePlayPause() {
     veyra::log::info("ui-transport", pause ? "pause" : "resume");
 }
 void QmlPlayerBridge::stopPlayback() {
+    impl_->playlistSession = 0;
+    impl_->playlist->setPlayback(impl_->playlistPath, QStringLiteral("stopped"));
     rememberPosition(true);
     ++impl_->liveOpenGen; impl_->pendingLiveText.clear();
     impl_->openingSource = false;
@@ -4971,6 +5110,10 @@ QRect QmlPlayerBridge::launchScreenAvailable() const {
 }
 
 bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
+    if(key==QLatin1String("blackmagicNativeCapture")){
+        if(captureQueryBusy()){emit notice(tr("请等待采集设备查询完成后再切换接口"),true);return false;}
+        if(captureBlackmagicDevice())impl_->prefs[source::decklink::isPath(impl_->captureDevice)?"blackmagicNativeLastDevice":"blackmagicDirectShowLastDevice"]=utf8Of(impl_->captureDevice);
+    }
     static const QHash<QString, std::pair<int, int>> ranges{
         {"subtitleSize", {16, 56}}, {"subtitleFont", {0, 5}}, {"subtitleOutline", {0, 3}},
         {"subtitleMargin", {0, 240}}, {"subtitleLines", {0, 8}},
@@ -4978,7 +5121,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"listInspectorWidth", {376, 4000}}};
     static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
-                                   "magewellLowLatency", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility"};
+                                   "magewellLowLatency", "blackmagicNativeCapture", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -5075,6 +5218,7 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
     if (key == QLatin1String("audioDevice")) sink::setPreferredRenderEndpoint(impl_->prefString("audioDevice").toStdWString());
     else if (key == QLatin1String("audioForceStereo")) sink::setForceStereoDownmix(impl_->prefBool("audioForceStereo", false));
     else if (key == QLatin1String("magewellLowLatency")) source::magewell::setLowLatencyPreference(impl_->prefBool("magewellLowLatency", false));
+    else if (key == QLatin1String("blackmagicNativeCapture")) { if(impl_->captureListed)refreshCaptureDevices();emit captureChanged(); }
     else if (key == QLatin1String("language")) {
         const QString code = i18n::resolve(impl_->prefString("language"));
         if (!i18n::apply(code)) emit notice(tr("这个语言的翻译没有找到，界面保持简体中文"), true);

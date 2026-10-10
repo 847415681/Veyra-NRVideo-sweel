@@ -78,6 +78,8 @@ enum class SourcePixelFormat : uint8_t {
     Rgb565,    // 16-bit 5:6:5 DIB
     Uyvy,      // UYVY 4:2:2
     Yvyu,      // YVYU 4:2:2
+    V210,      // DeckLink 10-bit 4:2:2, four LE words per six pixels
+    Rgb10xLE,  // DeckLink R10l: R bits 31..22, G 21..12, B 11..2
 };
 // Value carried in EnhanceGraphDesc::packedInput; 0 means "not a packed input".
 constexpr uint32_t packedInputCode(SourcePixelFormat format) {
@@ -87,6 +89,8 @@ constexpr uint32_t packedInputCode(SourcePixelFormat format) {
     case SourcePixelFormat::Rgb565: return 3;
     case SourcePixelFormat::Uyvy: return 4;
     case SourcePixelFormat::Yvyu: return 5;
+    case SourcePixelFormat::V210: return 6;
+    case SourcePixelFormat::Rgb10xLE: return 7;
     default: break;
     }
     return 0;

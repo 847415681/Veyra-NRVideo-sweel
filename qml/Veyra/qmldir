@@ -1,4 +1,5 @@
 module Veyra
+PlaylistWindow 1.0 PlaylistWindow.qml
 PlaybackRateButton 1.0 PlaybackRateButton.qml
 PlaybackRateDialog 1.0 PlaybackRateDialog.qml
 singleton Theme 1.0 Theme.qml

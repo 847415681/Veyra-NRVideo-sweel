@@ -6,7 +6,7 @@
 #include <format>
 
 namespace veyra::source {
-enum class CapturePacking { Unknown, Yuy2, Uyvy, Yvyu, Nv12, Nv21, I420, Yv12, P010, P016, Bgr32, Bgra32, Bgr24, Rgb555, Rgb565 };
+enum class CapturePacking { Unknown, Yuy2, Uyvy, Yvyu, Nv12, Nv21, I420, Yv12, P010, P016, Bgr32, Bgra32, Bgr24, Rgb555, Rgb565, V210, Rgb10xLE };
 constexpr DWORD captureFourcc(char a,char b,char c,char d){return DWORD(uint8_t(a))|(DWORD(uint8_t(b))<<8)|(DWORD(uint8_t(c))<<16)|(DWORD(uint8_t(d))<<24);}
 inline bool captureIsFourcc(const GUID& id,DWORD code){
     const GUID expected{code,0,0x10,{0x80,0,0,0xaa,0,0x38,0x9b,0x71}};return id==expected;

@@ -21,6 +21,18 @@ Popup {
     // Optional local-window bottom boundary for upward menus. The fullscreen
     // cinema bar uses this to keep a popover clear of the 92px playback pill.
     property real aboveLimit: -1
+    readonly property real menuAvailableWidth: Math.max(1, (parent ? parent.width : 640) - 16)
+    readonly property real measuredWidth: {
+        let widest = titleMetrics.advanceWidth(title) + 44
+        for (const o of items) {
+            const extra = 52 + (o.icon ? 28 : 0) + (o.tag ? labelMetrics.advanceWidth(o.tag) + 30 : 0)
+            widest = Math.max(widest, labelMetrics.advanceWidth(o.label || o.head || "") + extra)
+        }
+        return widest
+    }
+    width: Math.min(menuAvailableWidth, Math.max(220, anchorItem ? anchorItem.width : 0, Math.min(720, measuredWidth)))
+    FontMetrics { id: labelMetrics; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody; font.weight: Font.Medium }
+    FontMetrics { id: titleMetrics; font.family: Theme.fontUi; font.pixelSize: 11; font.weight: Font.Medium }
     signal picked(int index, var item)
 
     // The design's local copy of the checked flags, so the tick moves on click
@@ -64,12 +76,22 @@ Popup {
         anchorItem = anchor
         placement = place
         checks = items.map(o => o.checked === true)
-        width = place === "at" ? 220 : Math.max(220, anchor.width)
         positionAtAnchor()
         open()
         Qt.callLater(positionAtAnchor)
     }
     onHeightChanged: if (visible && anchorItem) positionAtAnchor()
+    onWidthChanged: if (visible && anchorItem) positionAtAnchor()
+    Connections {
+        target: pop.parent
+        function onWidthChanged() { if (pop.visible) Qt.callLater(pop.positionAtAnchor) }
+        function onHeightChanged() { if (pop.visible) Qt.callLater(pop.positionAtAnchor) }
+    }
+    Connections {
+        target: pop.anchorItem
+        function onXChanged() { if (pop.visible) Qt.callLater(pop.positionAtAnchor) }
+        function onYChanged() { if (pop.visible) Qt.callLater(pop.positionAtAnchor) }
+    }
     property real originX: width / 2
     // For the motion probe.
     readonly property real motionScale: motion.s
@@ -80,7 +102,7 @@ Popup {
     // Takes focus so Esc closes it (CloseOnEscape needs the popup focused).
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-    implicitHeight: Math.min(420, col.implicitHeight + 12)
+    implicitHeight: Math.min(420, Math.max(1, (parent ? parent.height : 640) - 16), col.implicitHeight + 12)
     background: null
 
     enter: Transition {
@@ -156,6 +178,9 @@ Popup {
                 // .pop h6
                 Text {
                     visible: pop.title.length > 0
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    wrapMode: Text.Wrap
                     Layout.margins: 6
                     Layout.leftMargin: 10
                     text: pop.title
@@ -189,6 +214,7 @@ Popup {
                                 font.family: Theme.fontUi
                                 font.pixelSize: 11
                                 font.weight: Font.Medium
+                                wrapMode: Text.Wrap
                             }
                         }
                         Component {
@@ -208,15 +234,18 @@ Popup {
                                     VIcon { visible: !!row.modelData.icon; name: row.modelData.icon || ""; color: Theme.t1 }
                                     ColumnLayout {
                                         Layout.fillWidth: true
+                                        Layout.minimumWidth: 0
                                         spacing: 3
                                         Text {
+                                            objectName: "vmenu-option-label"
                                             Layout.fillWidth: true
+                                            Layout.minimumWidth: 0
                                             text: row.modelData.label
                                             color: Theme.t1
                                             font.family: Theme.fontUi
                                             font.pixelSize: Theme.fsBody
                                             font.weight: Font.Medium
-                                            elide: Text.ElideRight
+                                            wrapMode: Text.Wrap
                                         }
                                         Text {
                                             visible: !!row.modelData.note
@@ -225,7 +254,7 @@ Popup {
                                             color: Theme.t3
                                             font.family: Theme.fontUi
                                             font.pixelSize: 11
-                                            wrapMode: Text.WordWrap
+                                            wrapMode: Text.Wrap
                                         }
                                     }
                                     VTag { visible: !!row.modelData.tag; text: row.modelData.tag || ""; kind: row.modelData.tagKind || "" }

@@ -90,8 +90,10 @@ inline uint32_t captureUploadPixelBytes(AVPixelFormat format) {
 
 // Returns nullptr when the format is not supported or the buffer cannot be
 // created; the caller then allocates an ordinary frame.
-inline AVFrame* allocCaptureUploadFrame(ID3D12Device* device, AVPixelFormat format, unsigned width, unsigned height) {
-    const uint32_t pixelBytes = captureUploadPixelBytes(format);
+inline AVFrame* allocCaptureUploadFrame(ID3D12Device* device, AVPixelFormat format, unsigned width, unsigned height, bool packed10Carrier=false) {
+    // BGRA is only a four-byte storage carrier for explicitly identified
+    // DeckLink packing. It is never interpreted as BGRA pixels by the graph.
+    const uint32_t pixelBytes = packed10Carrier&&format==AV_PIX_FMT_BGRA?4:captureUploadPixelBytes(format);
     if (!device || !width || !height || !pixelBytes) return nullptr;
     const bool semiplanar = format == AV_PIX_FMT_NV12 || format == AV_PIX_FMT_P010 || format == AV_PIX_FMT_P016;
     // Packed rows are uploaded as RGBA8 texels, so a row is a whole number of texels.
@@ -170,6 +172,23 @@ inline void sampleCaptureUploadProxy(AVFrame& frame, const uint8_t* source, size
         }
     }
     info->proxyValid = true;
+}
+
+// v210 stores six pixels in four words, not one four-byte word per pixel.
+// Copy complete groups from the driver sample; never read width*4 bytes from
+// its shorter packed row. Analysis remains a bounded coarse source sample.
+inline void sampleCaptureV210Proxy(AVFrame& frame,const uint8_t* source,size_t pitch,bool flip){
+    auto* info=captureUploadFrame(&frame);if(!info||!source)return;
+    for(unsigned y=0;y<CaptureUploadFrame::kProxyHeight;++y){
+        const unsigned row=y*info->height/CaptureUploadFrame::kProxyHeight;
+        const auto* line=source+size_t(flip?info->height-1-row:row)*pitch;
+        auto* out=info->proxy+size_t(y)*info->proxyPitch();
+        for(unsigned x=0;x<CaptureUploadFrame::kProxyWidth;x+=6){
+            const unsigned group=(x*info->width/CaptureUploadFrame::kProxyWidth)/6;
+            std::memcpy(out+(x/6)*16,line+size_t(group)*16,16);
+        }
+    }
+    info->proxyValid=true;
 }
 
 // Planar 4:2:0 (I420 / YV12) driver sample -> NV12 frame. u/v point at the

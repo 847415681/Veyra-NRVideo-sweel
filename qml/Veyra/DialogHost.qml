@@ -345,7 +345,9 @@ Item {
                 label: qsTr("驱动设置")
                 hint: captureDialog.live ? qsTr("先断开采集，再配置驱动")
                       : veyra.captureBlackmagicDevice
-                        ? qsTr("Blackmagic 两个条目可能属于同一张卡。确认 HDMI/SDI 输入口，格式须匹配信号的分辨率、59.94/60 和逐行/隔行；驱动默认格式不是自动检测。")
+                        ? (veyra.preferences.blackmagicNativeCapture === true
+                           ? qsTr("原生采集跟随 Desktop Video Setup 的 HDMI/SDI 输入。支持自动检测的卡建议选择自动；信号未锁定时会明确提示。")
+                           : qsTr("Blackmagic 两个条目可能属于同一张卡。DirectShow 黑屏可尝试下方原生采集开关；手动格式须匹配实际信号。"))
                         : qsTr("配置驱动公开的输入与视频属性；其他采集应用占用设备时请先关闭")
                 RowLayout {
                     spacing: 6
@@ -362,6 +364,18 @@ Item {
                         enabled: !veyra.captureQueryBusy && !captureDialog.live && !veyra.liveOpeningText.length
                         onClicked: veyra.openCaptureDriverSettings(true)
                     }
+                }
+            }
+            VRow {
+                objectName: "capture-blackmagic-native-row"
+                label: qsTr("Blackmagic 原生采集")
+                hint: qsTr("默认关闭。开启使用 DeckLink 原生接口，关闭使用 DirectShow。需安装 Desktop Video 驱动；切换后重新选择设备和格式并连接，不写入驱动永久配置。")
+                VSwitch {
+                    objectName: "capture-blackmagic-native"
+                    enabled: !veyra.captureQueryBusy && (veyra.captureBlackmagicDevice || veyra.preferences.blackmagicNativeCapture === true)
+                    opacity: enabled ? 1 : 0.35
+                    checked: veyra.preferences.blackmagicNativeCapture === true
+                    onToggled: checked => veyra.setPreference("blackmagicNativeCapture", checked)
                 }
             }
             VRow {
@@ -1284,7 +1298,7 @@ Item {
         DGroup {
             VRow {
                 label: qsTr("主字幕")
-                hint: veyra.subtitleTracks.length === 0 ? (veyra.hasSource ? qsTr("当前片源没有字幕") : qsTr("打开视频后显示可用字幕")) : ""
+                hint: veyra.subtitleTracks.length === 0 ? (veyra.subtitleStatus.length > 0 ? veyra.subtitleStatus : (veyra.hasSource ? qsTr("当前片源没有字幕") : qsTr("打开视频后显示可用字幕"))) : ""
                 VSelect {
                     objectName: "subtitle-primary"
                     implicitWidth: 220
@@ -1306,7 +1320,7 @@ Item {
             }
             VRow {
                 label: qsTr("外挂字幕")
-                hint: "SRT / ASS / SSA / WebVTT"
+                hint: qsTr("文本字幕 · PGS/SUP · VobSub（IDX+SUB）")
                 VButton { objectName: "subtitle-load"; text: qsTr("加载文件…"); onClicked: veyra.loadSubtitleDialog() }
             }
             VRow {

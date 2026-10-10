@@ -18,7 +18,8 @@ Rectangle {
     property int maxTextWidth: 0
     signal clicked()
 
-    implicitWidth: icon ? Theme.ctlHeight : (content.implicitWidth + 24)
+    implicitWidth: icon ? Theme.ctlHeight : (Math.min(label.implicitWidth, maxTextWidth > 0 ? maxTextWidth : label.implicitWidth)
+        + (iconName.length ? 25 : 0) + (trailingIcon.length ? 19 : 0) + 24)
     implicitHeight: Theme.ctlHeight
     radius: Theme.rCtl
     color: primary ? Theme.accent
@@ -46,7 +47,8 @@ Rectangle {
         Text {
             id: label
             visible: text.length > 0
-            width: btn.maxTextWidth > 0 ? Math.min(implicitWidth, btn.maxTextWidth) : implicitWidth
+            width: Math.max(0, Math.min(implicitWidth, btn.maxTextWidth > 0 ? btn.maxTextWidth : implicitWidth,
+                btn.width - 24 - (btn.iconName.length ? 25 : 0) - (btn.trailingIcon.length ? 19 : 0)))
             elide: Text.ElideMiddle
             anchors.verticalCenter: parent.verticalCenter
             text: btn.glyph.length > 0 ? btn.glyph + (btn.text.length > 0 ? "  " + btn.text : "") : btn.text
@@ -64,9 +66,9 @@ Rectangle {
             color: Theme.t3
         }
     }
-    ToolTip.visible: tip.length > 0 && hover.hovered
+    ToolTip.visible: (tip.length > 0 || label.truncated) && hover.hovered
     ToolTip.delay: 500
-    ToolTip.text: tip
+    ToolTip.text: tip.length > 0 ? tip : label.text
     HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
     TapHandler { id: tap; gesturePolicy: TapHandler.WithinBounds; onTapped: btn.clicked() }
 }

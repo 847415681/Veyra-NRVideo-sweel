@@ -93,7 +93,11 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     desc.workWidth=plan.base.width;desc.workHeight=plan.base.height;
     desc.nrWidth=plan.nr.width;desc.nrHeight=plan.nr.height;
     desc.flowWidth=plan.flow.width;desc.flowHeight=plan.flow.height;
-    desc.enableSr=plan.srApplied&&(request.nvidiaAdapter||settings.videoSrQuality==kVideoSrFsr);
+    // RTX Video SR can restore compressed video at its original resolution.
+    // ResolutionPlan::srApplied describes enlargement, not SDK execution.
+    const bool nativeVideoRestore=request.sr&&!request.stillImage&&request.nvidiaAdapter&&
+        settings.videoSrQuality>=1&&settings.videoSrQuality<=4;
+    desc.enableSr=(plan.srApplied||nativeVideoRestore)&&(request.nvidiaAdapter||settings.videoSrQuality==kVideoSrFsr);
     desc.enableNr=request.nr&&(request.nvidiaAdapter||request.amdNr)&&(!settings.nrLayerCount||settings.activeNrLayerCount()>0);
     desc.nrBeforeSr=!request.stillImage&&!request.exportJob&&lowLatency&&desc.enableNr&&desc.enableSr;
     desc.enableNvofStandalone=desc.enableNr;

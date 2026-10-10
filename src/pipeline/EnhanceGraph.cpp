@@ -63,8 +63,10 @@ constexpr int64_t usPerSecond = 1000000;
 float uintBits(uint32_t v) { return std::bit_cast<float>(v); }
 
 // N1 packed capture ingress helpers. Codes match pipeline::packedInputCode:
-// 1 BGR24, 2 RGB555, 3 RGB565, 4 UYVY, 5 YVYU.
+// 1 BGR24, 2 RGB555, 3 RGB565, 4 UYVY, 5 YVYU, 6 v210, 7 RGBXLE10.
 unsigned packedIngressRowBytes(uint32_t code,unsigned width){
+    if(code==6)return ((width+5)/6)*16;
+    if(code==7)return width*4;
     return code==1?width*3:width*2;
 }
 unsigned packedIngressTexels(uint32_t code,unsigned width){
@@ -77,6 +79,7 @@ AVPixelFormat packedIngressFormat(uint32_t code){
     case 3:return AV_PIX_FMT_RGB565LE;
     case 4:return AV_PIX_FMT_UYVY422;
     case 5:return AV_PIX_FMT_YVYU422;
+    case 6:case 7:return AV_PIX_FMT_BGRA; // raw storage carrier, explicitly unpacked
     default:break;
     }
     return AV_PIX_FMT_NONE;
@@ -92,6 +95,9 @@ uint8_t packedIngressLuma(const uint8_t* data,ptrdiff_t linesize,uint32_t code,u
         const unsigned r=(w>>11)&31,g=(w>>5)&63,b=w&31;return uint8_t((54*(r<<3|r>>2)+183*(g<<2|g>>4)+19*(b<<3|b>>2)+128)>>8);}
     case 4:return p[x*2+1]; // UYVY: Y0 follows U
     case 5:return p[x*2];   // YVYU: Y0 leads
+    case 6:{const auto* q=p+(x/6)*16;uint32_t words[4];std::memcpy(words,q,16);
+        constexpr unsigned word[]={0,1,1,2,3,3},shift[]={10,0,20,10,0,20};return uint8_t(((words[word[x%6]]>>shift[x%6])&1023)>>2);}
+    case 7:{uint32_t word;std::memcpy(&word,p+x*4,4);const auto r=(word>>22)&1023,g=(word>>12)&1023,b=(word>>2)&1023;return uint8_t(std::min(255u,(54*r+183*g+19*b+512)>>10));}
     default:break;
     }
     return 0;
@@ -438,7 +444,8 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     veyra::log::info("resolution",std::format("source={}x{} base={}x{} nr={}x{} flow={}x{} fg={}x{} output={}x{}",srcW_,srcH_,workW_,workH_,nrW_,nrH_,nvofW_,nvofH_,workW_,workH_,workW_,workH_));
     veyra::log::info("pipeline-order",desc.splitNrAcrossSr()?"NR(source) -> SR -> NR(work) -> FG (node preview)":desc.nrBeforeSr?"NR -> residual(source) -> SR -> FG (experimental preview)":"SR -> NR -> residual -> FG");
     if(!desc.videoHdr.valid()||(desc.hdrOutput&&!desc.hdrInput&&!desc.convertVideoHdr())){veyra::log::error("hdr","HDR output requires native HDR input or explicit Video HDR conversion");return false;}
-    srEnabled_ = desc.enableSr && (srcW_ != workW_ || srcH_ != workH_);
+    const bool videoRestore=!desc.stillImage&&desc.videoSrQuality>=1&&desc.videoSrQuality<=4;
+    srEnabled_ = desc.enableSr && (srcW_ != workW_ || srcH_ != workH_ || videoRestore);
     lmxxfNr_ = context_.adapter().vendorId == 0x1002 || desc.nrRuntime == engine::NrRuntime::LmxxfAmd;
     if(context_.adapter().vendorId==0x1002 && desc_.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia)
         desc_.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;
@@ -1517,7 +1524,7 @@ bool EnhanceGraph::createComputePasses()
     const UINT ingressUavCount = preGradeRgba_ ? 2u : 1u;
     if (!yuvPass_.loadShader("YuvToLinearRgb.dxil", cs) || !yuvPass_.create(context_.device(), cs, 12, 2, ingressUavCount, 12+kColorGradeConstantCount, 4)) return false;
     const char* rgbShader=desc_.packedInput?"PackedCaptureToLinear.dxil":desc_.yuy2Input?"Yuy2ToLinear.dxil":"RgbToLinear.dxil";
-    if((desc_.rgbInput||desc_.yuy2Input||desc_.packedInput)&&(!rgbPass_.loadShader(rgbShader,cs)||!rgbPass_.create(context_.device(),cs,12,1,ingressUavCount,8+kColorGradeConstantCount,4)))return false;
+    if((desc_.rgbInput||desc_.yuy2Input||desc_.packedInput)&&(!rgbPass_.loadShader(rgbShader,cs)||!rgbPass_.create(context_.device(),cs,12,1,ingressUavCount,(desc_.packedInput?12:8)+kColorGradeConstantCount,4)))return false;
     // Descriptor budget grows with the NR stack: encode needs one SRV+UAV pair
     // per layer, decode needs three SRVs and one UAV per layer. The base 8
     // slots the single-layer graph always used are kept as the floor.
@@ -1919,7 +1926,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     }
     const bool gpuRgb=desc_.rgbInput&&frame->format==AV_PIX_FMT_D3D11&&hardwareSurface&&hardwareSurface->present();
     if(resolved.scRgb&&(!gpuRgb||resolved.transfer!=TransferFunction::Linear||resolved.primaries!=ColorPrimaries::BT709||hardwareSurface->texture->GetDesc().Format!=DXGI_FORMAT_R16G16B16A16_FLOAT))return false;
-    if (resolved.isHdrPath()&&(!desc_.hdrInput||(!resolved.scRgb&&desc_.rgbInput)||desc_.yuy2Input||desc_.packedInput)) {
+    const bool packedHdr=desc_.packedInput==6||desc_.packedInput==7;
+    if (resolved.isHdrPath()&&(!desc_.hdrInput||(!resolved.scRgb&&desc_.rgbInput)||desc_.yuy2Input||(desc_.packedInput&&!packedHdr))) {
         veyra::log::error("graph", "HDR input requires an explicit YUV HDR contract; RGB/YUY2 HDR ingress is unsupported"); return false;
     }
     if(std::abs(ptsMs)>9e13){veyra::log::error("timeline","PTS outside representable range");return false;}
@@ -2013,7 +2021,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         // (CaptureUploadFrame.h): the GPU copies from the frame's own buffer.
         if(auto* upload=(packed||desc_.yuy2Input)?captureUploadFrame(frame):nullptr;upload&&upload->direct&&upload->proxyValid&&upload->planes==1&&
            upload->device.Get()==context_.device()&&frame->data[0]==upload->mapped&&upload->width==srcW_&&upload->height==srcH_&&
-           upload->pitch>=ingressTexels*4&&upload->pixelBytes==(packed&&desc_.packedInput==1?3u:2u))gpuDirectFrame=upload;
+           upload->pitch>=ingressTexels*4&&upload->pixelBytes==(packed&&desc_.packedInput>=6?4u:packed&&desc_.packedInput==1?3u:2u))gpuDirectFrame=upload;
         if(!gpuDirectFrame)for(uint32_t y=0;y<srcH_;++y){
             auto* dst=mappedRgb_[parity]+y*rgbPitch_;const auto* src=frame->data[0]+ptrdiff_t(y)*frame->linesize[0];
             if(packed||desc_.yuy2Input||frame->format==AV_PIX_FMT_RGBA)std::memcpy(dst,src,size_t(ingressRowBytes));
@@ -2210,9 +2218,10 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     auto convertInput=[&](bool grade, ID3D12Resource* target, UINT uavSlot){
     tracker_.transition(list, target, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     if(desc_.rgbInput||desc_.yuy2Input||desc_.packedInput){
-        float c[8+kColorGradeConstantCount]={uintBits(srcW_),uintBits(srcH_),uintBits(workingTransferCode(resolved)),uintBits(resolved.range==ColorRange::Limited?1u:0u),
+        float c[12+kColorGradeConstantCount]={uintBits(srcW_),uintBits(srcH_),uintBits(resolved.transfer==TransferFunction::PQ?4u:resolved.transfer==TransferFunction::HLG?5u:workingTransferCode(resolved)),uintBits(resolved.range==ColorRange::Limited?1u:0u),
             resolved.range==ColorRange::Full?0.0f:1.0f,resolved.matrix==YuvMatrix::BT2020NCL?2.0f:resolved.matrix==YuvMatrix::BT601?0.0f:1.0f,resolved.primaries==ColorPrimaries::BT2020?1.0f:0.0f,uintBits(desc_.packedInput)};
-        if(grade)packColorGradeConstants(colorTables_,c+8);
+        if(desc_.packedInput){c[8]=desc_.hdrWorking()?1.f:0.f;c[9]=toneMapPeakNits_;c[10]=203.f;}
+        if(grade)packColorGradeConstants(colorTables_,c+(desc_.packedInput?12:8));
         if(resolved.scRgb){c[4]=desc_.hdrWorking()?1.f:2.f;c[5]=toneMapPeakNits_;}
         rgbPass_.bind(list,c,gpuHandleOf(rgbPass_,gpuRgb?3+parity:0).ptr,gpuHandleOf(rgbPass_,1+uavSlot).ptr,gpuHandleOf(rgbPass_,8).ptr);
         list->Dispatch((srcW_+15)/16,(srcH_+15)/16,1);
@@ -2382,23 +2391,25 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     out.batch.b100ns=static_cast<int64_t>(std::llround(ptsMs*10000));gpuTimer_.identity(out.batch.identity);
     auto runSr=[&]()->bool{
     if(desc_.splitNrAcrossSr())tracker_.transition(list,srStageInput(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    if(srEnabled_&&fsrSrEnabled()&&(haveFlow||!desc_.srUsesFlow())){
+    if(srEnabled_&&fsrSrEnabled()){
         // AMD FSR upscaling: FidelityFX effect, render-extent color + guidance
         // motion (previous = current + motion, same convention as the frame
-        // generator) straight into the working texture. A frame without valid
-        // motion falls through to the plain blit below instead of guessing.
+        // generator) straight into the working texture. With no valid motion,
+        // reset temporal accumulation and reconstruct this frame using zero
+        // guidance; never silently replace the effect with an ordinary resize.
         gpuTimer_.mark(list,GpuStage::Sr);
         const double deltaMs = (prevPtsMs_>=0.0&&ptsMs>prevPtsMs_)?(ptsMs-prevPtsMs_):16.6;
         // The shared boundary includes ordinary NR-first output as well as
         // split-node/color output. Reading srcRgba_ here discards completed NR.
         auto* srInput=srStageInput();
         tracker_.transition(list,srInput,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        auto* srMotion=desc_.srUsesFlow()?flowTex_.Get():fsrSrZeroMotion_.Get();
+        const bool validMotion=desc_.srUsesFlow()&&haveFlow;
+        auto* srMotion=validMotion?flowTex_.Get():fsrSrZeroMotion_.Get();
         tracker_.transition(list,srMotion,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         tracker_.transition(list,fsrSrDepth_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         tracker_.transition(list,workRgba_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         if(!fsrSrBackend_->evaluate(list,srInput,srMotion,fsrSrDepth_.Get(),workRgba_.Get(),
-                                    srcW_,srcH_,workW_,workH_,reset,float(deltaMs))){
+                                    srcW_,srcH_,workW_,workH_,reset||(desc_.srUsesFlow()&&!haveFlow),float(deltaMs))){
             failedBackend_=engine::FailedBackend::Sr;
             return false;
         }
@@ -3044,14 +3055,18 @@ uint64_t EnhanceGraph::failedNgxResult() const {
 
 bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if(!s.validate().empty())return false;
-    if(s.hdrOutputMode!=desc_.hdrOutputMode||s.fgMotion!=desc_.fgMotion||s.srMotion!=desc_.srMotion||s.nrMotion!=desc_.nrMotion)return false;
+    if(s.hdrOutputMode!=desc_.hdrOutputMode||
+       (desc_.enableFg&&s.fgMotion!=desc_.fgMotion)||
+       (desc_.enableSr&&s.srMotion!=desc_.srMotion)||
+       (desc_.enableNr&&s.nrMotion!=desc_.nrMotion))return false;
     // These change the admitted split topology/reference contract. Refuse
     // before mutating any live parameter; the controller must rebuild.
     if((desc_.splitNrAcrossSr()||interNrProtectionRgba_)&&(!s.nr||s.protection.enabled!=desc_.protection.enabled||
        (s.protection.enabled&&!desc_.protectionBeforeSr()&&!interNrProtectionRgba_)))return false;
     auto nextNr=desc_;engine::describeNrLayers(s,nextNr);
-    if(!desc_.nrLayersSizePolicy.empty()&&nextNr.nrLayersSizePolicy!=desc_.nrLayersSizePolicy)return false;
-    if(nextNr.nrTemporal!=desc_.nrTemporal||nextNr.nrAntiFlicker!=desc_.nrAntiFlicker)return false;
+    if(desc_.enableNr&&!desc_.nrLayersSizePolicy.empty()&&nextNr.nrLayersSizePolicy!=desc_.nrLayersSizePolicy)return false;
+    if(desc_.enableNr&&(nextNr.nrTemporal!=desc_.nrTemporal||
+       (nextNr.nrTemporal&&nextNr.nrAntiFlicker!=desc_.nrAntiFlicker)))return false;
     if(s.nr&&desc_.enableNr){
         if(s.activeNrLayerCount()!=nrInstances_.size())return false;
         for(size_t i=0;i<nrInstances_.size();++i){
@@ -3059,7 +3074,7 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
             if(temporal!=nrInstances_[i]->temporalEnabled)return false;
             const auto tier=i<nextNr.nrLayersAntiFlicker.size()?nextNr.nrLayersAntiFlicker[i]:nextNr.nrAntiFlicker;
             const auto previousTier=i<desc_.nrLayersAntiFlicker.size()?desc_.nrLayersAntiFlicker[i]:desc_.nrAntiFlicker;
-            if(tier!=previousTier)return false;
+            if(temporal&&tier!=previousTier)return false;
         }
     }
     // A non-NVIDIA adapter keeps the user's requested NR setting in the UI
@@ -3068,18 +3083,24 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if(s.nr&&desc_.enableNr&&!nrCreated())return false;
     const auto requestedFlow=context_.adapter().vendorId==0x1002&&s.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia
         ?engine::OpticalFlowBackend::AmdFidelityFx:s.opticalFlowBackend;
-    if(requestedFlow!=desc_.opticalFlowBackend||s.amdFlowHalfResolution!=desc_.amdFlowHalfResolution)return false;
+    const bool usesSharedFlow=nvofStandalone_||(desc_.enableFg&&desc_.fgUsesFlow())||
+        (srEnabled_&&desc_.srUsesFlow()&&(desc_.videoSrQuality==0||desc_.videoSrQuality==engine::kVideoSrFsr));
+    if(usesSharedFlow&&(requestedFlow!=desc_.opticalFlowBackend||s.amdFlowHalfResolution!=desc_.amdFlowHalfResolution))return false;
     // DLSS allocates multiplier-specific feature/output resources.
     // XeSS has a fixed 2X proxy swapchain contract. Settings callers must
     // rebuild instead of accepting a change that cannot take effect in place.
-    if(s.nrRuntime!=desc_.nrRuntime||std::max(2u,s.multiplier)!=desc_.fgMultiplier||s.frameGenerationBackend!=desc_.frameGenerationBackend||s.vfgQuality!=desc_.vfgQuality||s.videoSrQuality!=desc_.videoSrQuality||!s.validate().empty()||(s.multiplier>1&&s.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&(!fgCapsAvailable_||s.multiplier-1>uint32_t(fgMultiFrameMax_))))return false;
+    if((desc_.enableNr&&s.nrRuntime!=desc_.nrRuntime)||
+       (desc_.enableFg&&(std::max(2u,s.multiplier)!=desc_.fgMultiplier||s.frameGenerationBackend!=desc_.frameGenerationBackend||
+        (desc_.frameGenerationBackend==engine::FrameGenerationBackend::Vfg&&s.vfgQuality!=desc_.vfgQuality)))||
+       (desc_.enableSr&&s.videoSrQuality!=desc_.videoSrQuality)||
+       (s.multiplier>1&&s.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&(!fgCapsAvailable_||s.multiplier-1>uint32_t(fgMultiFrameMax_))))return false;
     // The colour master switch changes the graph shape (tables + shader branch)
     // and must rebuild; every other colour field is a live uniform update.
     if(s.color.enabled!=desc_.color.enabled)return false;
     if(s.additionalColorCount!=desc_.additionalColorCount)return false;
     for(unsigned i=0;i<s.additionalColorCount;++i){
         const auto& a=s.additionalColors[i];const auto& b=desc_.additionalColors[i];
-        if(a.enabled!=b.enabled||a.lutName!=b.lutName||a.lutInputSpace!=b.lutInputSpace)return false;
+        if(a.enabled!=b.enabled||(a.enabled&&(a.lutName!=b.lutName||a.lutInputSpace!=b.lutInputSpace)))return false;
     }
     if(s.videoHdr.enabled!=desc_.videoHdr.enabled)return false;
     // Output stabiliser: its pass is allocated at build time, so on/off rebuilds; strength and
@@ -3088,7 +3109,7 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if((s.nrHoldStrength>0.0f)!=(desc_.nrHoldStrength>0.0f))return false;
     // Switching the referenced .cube re-stages a descriptor, which needs the
     // queue drained: treat it as a rebuild (parameters stay live).
-    if(s.color.lutNameString()!=desc_.color.lutNameString()||s.color.lutInputSpace!=desc_.color.lutInputSpace)return false;
+    if(s.color.enabled&&(s.color.lutNameString()!=desc_.color.lutNameString()||s.color.lutInputSpace!=desc_.color.lutInputSpace))return false;
     pausedNrResidualOnly_=false;
     if(pausedNrSettings_){
         auto residualEdit=*pausedNrSettings_;residualEdit.revision=s.revision;
@@ -3110,13 +3131,17 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     desc_.hdrCurve=s.hdrCurve;desc_.hdrMetadata=s.hdrMetadata;
     if(!(s.color==desc_.color)){
         desc_.color=s.color;
-        if(nodeColorInstances_[0])nodeColorInstances_[0]->refresh(s.color);
-        else refreshColorTables();
+        if(s.color.enabled){
+            if(nodeColorInstances_[0])nodeColorInstances_[0]->refresh(s.color);
+            else refreshColorTables();
+        }
     }
     for(unsigned i=0;i<s.additionalColorCount;++i)if(!(s.additionalColors[i]==desc_.additionalColors[i])){
         desc_.additionalColors[i]=s.additionalColors[i];
-        if(additionalColorInstances_[i])additionalColorInstances_[i]->refresh(s.additionalColors[i]);
-        if(nodeColorInstances_[i+1])nodeColorInstances_[i+1]->refresh(s.additionalColors[i]);
+        if(s.additionalColors[i].enabled){
+            if(additionalColorInstances_[i])additionalColorInstances_[i]->refresh(s.additionalColors[i]);
+            if(nodeColorInstances_[i+1])nodeColorInstances_[i+1]->refresh(s.additionalColors[i]);
+        }
     }
     desc_.contentRate=s.content;desc_.model=s.model;desc_.residual=s.residual;desc_.protection=s.protection;desc_.settingsRevision=s.revision;
     desc_.nrHoldStrength=s.nrHoldStrength;desc_.nrHoldTolerance=s.nrHoldTolerance;

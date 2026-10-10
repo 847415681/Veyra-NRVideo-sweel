@@ -129,10 +129,29 @@ def source_snapshot(output, label, app_sha):
     return dict(name=archive.name, sha256=digest(archive), files=len(records), completeCorrespondingSource=False)
 
 
+def audit_ffmpeg(prefix):
+    """Publisher check: an old cache must not silently drop compressed PGS."""
+    build = json.loads((prefix / 'share/ffmpeg/veyra-local-build.json').read_text(encoding='utf-8-sig'))
+    if '--enable-zlib' not in build.get('configuration', ''):
+        raise ValueError('FFmpeg lacks compressed Matroska subtitle support; use the tested zlib-enabled prefix')
+    if build['patchSha256'].lower() != digest(ROOT / 'scripts/ffmpeg/ps5-h264-slices.patch'):
+        raise ValueError('PS5 FFmpeg patch provenance mismatch')
+    for record in build['files']:
+        if Path(record['name']).name != record['name'] or not record['name'].endswith('.dll'):
+            raise ValueError('Invalid FFmpeg publisher manifest path')
+        if digest(prefix / 'bin' / record['name']) != record['sha256'].lower():
+            raise ValueError('Patched FFmpeg binary mismatch: ' + record['name'])
+    for name in ('copyright','vcpkg.spdx.json'):
+        if not (prefix / 'share/zlib' / name).is_file():
+            raise ValueError('Missing zlib license or build provenance')
+    return build
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('--verify', type=Path)
     p.add_argument('--build', type=Path)
+    p.add_argument('--ffmpeg-root', type=Path, help='Tested patched FFmpeg prefix; overrides a historical build cache')
     p.add_argument('--runtime-source', type=Path)
     p.add_argument('--original-nr', type=Path, help='Approved original NR DLL, audited against the version runtime lock')
     p.add_argument('--legacy-licenses', type=Path)
@@ -163,6 +182,9 @@ def main():
     notes = 'RELEASE_NOTES_' + version + '.md' if (ROOT / 'docs' / ('RELEASE_NOTES_' + version + '.md')).is_file() else 'RELEASE_NOTES_2.0.0.md'
     if not args.output.resolve().is_relative_to(ARTIFACTS.resolve()):
         raise ValueError('Candidate output must stay in the E: artifact tree')
+    cache = (args.build / 'CMakeCache.txt').read_text(encoding='utf8')
+    ffmpeg = args.ffmpeg_root or Path(re.search(r'^VEYRA_FFMPEG_ROOT:[^=]+=(.+)$', cache, re.M).group(1))
+    ffbuild = audit_ffmpeg(ffmpeg)
     stage = args.output / ('Veyra-' + args.label + '-win64-portable')
     archive = Path(str(stage) + '.zip')
     if stage.exists() or archive.exists():
@@ -202,8 +224,6 @@ def main():
     for option in ('VEYRA_BUILD_QML_UI', 'VEYRA_ENABLE_REMOTEPLAY', 'VEYRA_ENABLE_MOONLIGHT', 'VEYRA_ENABLE_XBOX'):
         if not re.search(r'^' + option + r':BOOL=ON$', cache, re.M):
             raise ValueError('Missing full product build option: ' + option)
-    ffmpeg = Path(re.search(r'^VEYRA_FFMPEG_ROOT:[^=]+=(.+)$', cache, re.M).group(1))
-    ffbuild = json.loads((ffmpeg / 'share/ffmpeg/veyra-local-build.json').read_text(encoding='utf-8-sig'))
     if ffbuild['patchSha256'].lower() != digest(ROOT / 'scripts/ffmpeg/ps5-h264-slices.patch'):
         raise ValueError('PS5 FFmpeg patch provenance mismatch')
     for record in ffbuild['files']:
@@ -265,6 +285,8 @@ foreach($f in $lock.files) {
     tree(args.qt_licenses, 'licenses/qt')
     tree(args.qt / 'sbom', 'licenses/qt/sbom')
     copy(ffmpeg / 'share/ffmpeg/veyra-local-build.json', 'licenses/FFMPEG-VEYRA-BUILD.json')
+    copy(ffmpeg / 'share/zlib/copyright', 'licenses/ZLIB-COPYRIGHT.txt')
+    copy(ffmpeg / 'share/zlib/vcpkg.spdx.json', 'licenses/ZLIB-SPDX.json')
     # Use a known Microsoft redistributable installation, not arbitrary PATH DLLs.
     redist = Path('C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Redist/MSVC')
     crt = sorted((f for f in redist.iterdir() if re.fullmatch(r'\d+\.\d+\.\d+', f.name)),

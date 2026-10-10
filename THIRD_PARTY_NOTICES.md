@@ -1,5 +1,17 @@
 # Third-party dependencies
 
+## Compressed Matroska subtitles (2026-10-09)
+
+The subtitle candidate rebuilds the existing LGPL FFmpeg n9.0.1 with zlib
+enabled, retaining the Veyra PS5 H.264 slices256 patch and dav1d 1.5.4.
+It statically links zlib 1.3.2 (zlib license; Jean-loup Gailly, Mark Adler and
+contributors), using the existing external dependency built with the dynamic
+MSVC CRT. FFmpeg handles compressed Matroska PGS/DVD and text subtitle packets;
+Veyra does not implement another decompressor. The original runtime files are
+preserved. Candidate DLL hashes, actual configuration, LGPL/zlib notices and
+the matching FFmpeg/dav1d/zlib source archive accompany the local candidate.
+No dependency source, model, SDK, library or DLL is added to Veyra source Git.
+
 NVIDIA SDKs and runtimes are excluded from source control. The publisher-authorized experimental Release package contains only selected runtime DLLs and applicable notices, as documented in `docs/RUNTIME_COMPONENTS_0.0.2.md`. This is not vendor endorsement or a general redistribution grant. ReShade/RenoDX add-ons are not loaded or distributed by the product.
 
 ## NVIDIA Video Frame Generation (local integration, 2026-10-03)
@@ -774,3 +786,28 @@ quantization-aware neutral-tint guard, source-color gamut-ray lightness bound,
 independent lightness/shadow controls, style-specific automatic coefficients
 and an automatic amount slider. These additions are Veyra code; the upstream
 port and public-domain matrix attribution above remain unchanged.
+
+## Blackmagic native capture (2026-10-09)
+
+The DeckLink capture lifecycle in `src/source/DeckLinkDriver.cpp` and
+`src/source/DeckLinkCapture.cpp` follows OBS Studio's
+`plugins/decklink/decklink-device-instance.cpp`,
+`decklink-device.cpp` and `win/platform.cpp`, pinned to
+[e7f0b0d43c538f5d108aa4cbea473d57b3012a1a](https://github.com/obsproject/obs-studio/tree/e7f0b0d43c538f5d108aa4cbea473d57b3012a1a/plugins/decklink)
+(OBS Project contributors, GPL-2.0-or-later; Veyra uses GPLv3).
+Veyra moves Pause/Enable/Flush/Start to the owner thread, validates the first
+real frame, distinguishes no-input frames from valid black pixels, preserves
+source timestamps and HDR metadata, and reuses its bounded upload mailbox and
+audio session. Device selection uses persistent/topological IDs plus subdevice
+identity. No OBS binary, driver, EDID writes or VideoProcessor code is included.
+
+Build-time COM declarations come from the unmodified Blackmagic DeckLink SDK
+12.0 Win IDL files supplied by OBS 31.0.3, pinned to
+[fcd1910bf5116b69404a6ecdda6efedd1d00ebdf](https://github.com/obsproject/obs-studio/tree/fcd1910bf5116b69404a6ecdda6efedd1d00ebdf/plugins/decklink/win/decklink-sdk).
+Copyright (c) 2021 Blackmagic Design; the permissive license is retained in
+those external SDK files. They and generated headers remain outside the source
+repository. Build with `VEYRA_DECKLINK_SDK_DIR` pointing at the Win IDL directory;
+without it, the native backend is unavailable and DirectShow remains usable.
+The runtime uses the user's installed Desktop Video COM server; no driver DLL
+or SDK is bundled. `PackedCaptureToLinear.hlsl` implements the documented v210
+and R10l layouts using Veyra's existing HDR color functions and GPU ingress.

@@ -368,21 +368,30 @@ VPage {
             // .nv-bar: transport, then the stats strip.
             Rectangle {
                 id: statsBar
+                readonly property bool compact: width < nodeSourceBtn.implicitWidth + nodePresetBtn.implicitWidth
+                    + nodeModeSwitch.implicitWidth + nodeOrbs.implicitWidth + 3 * 32 + 32 + 8 * 8 + 360
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
-                height: 40
+                height: compact ? 72 : 40
                 color: Theme.card
 
-                RowLayout {
+                GridLayout {
+                    objectName: "node-transport-layout"
                     anchors.fill: parent
                     anchors.leftMargin: 8
                     anchors.rightMargin: 8
-                    spacing: 8
+                    columns: statsBar.compact ? 8 : 9
+                    columnSpacing: 8
+                    rowSpacing: 0
 
                     // pages-node.js .nv-bar: the source first, as on the list page.
                     VButton {
                         id: nodeSourceBtn
+                        Layout.row: 0; Layout.column: 0
+                        Layout.minimumWidth: 100
+                        Layout.maximumWidth: implicitWidth
+                        Layout.fillWidth: statsBar.compact
                         objectName: "node-source-button"
                         iconName: veyra.sourceKind === "ps5" ? "gamepad" : veyra.sourceKind === "moonlight" ? "cast" : veyra.sourceKind === "xbox" ? "gamepad" : veyra.sourceKind === "screen" ? "monitor"
                                 : veyra.sourceKind === "image" ? "image" : veyra.sourceKind === "file" ? "film" : "video"
@@ -392,20 +401,39 @@ VPage {
                         onClicked: nodeSourceMenu.openAt(this, "down")
                     }
                     VButton {
+                        Layout.row: 0; Layout.column: 1
                         icon: true
                         iconName: (veyra.running && !veyra.paused) ? "pause" : "play"
                         onClicked: veyra.togglePlayPause()
                     }
-                    VButton { icon: true; iconName: "back10"; onClicked: veyra.seekBy(-10) }
-                    VButton { icon: true; iconName: "fwd10"; onClicked: veyra.seekBy(10) }
+                    VButton { Layout.row: 0; Layout.column: 2; icon: true; iconName: "back10"; onClicked: veyra.seekBy(-10) }
+                    VButton { Layout.row: 0; Layout.column: 3; icon: true; iconName: "fwd10"; onClicked: veyra.seekBy(10) }
 
                     // .nv-stats: each entry separated by a hairline, mono numbers.
-                    RowLayout {
+                    Flickable {
+                        objectName: "node-stats-scroll"
+                        Layout.row: statsBar.compact ? 1 : 0
+                        Layout.column: statsBar.compact ? 0 : 4
+                        Layout.columnSpan: statsBar.compact ? 8 : 1
                         Layout.fillWidth: true
                         Layout.minimumWidth: 0
+                        Layout.preferredHeight: 30
                         clip: true
+                        contentWidth: statItems.implicitWidth
+                        contentHeight: height
+                        flickableDirection: Flickable.HorizontalFlick
+                        boundsBehavior: Flickable.StopAtBounds
+                        ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
+                        HoverHandler { id: statsHover }
+                        ToolTip.visible: statsHover.hovered && contentWidth > width
+                        ToolTip.delay: 400
+                        ToolTip.text: statRepeater.model.map(x => x.k + ": " + (x.v.length ? x.v : "—")).join("\n")
+                        RowLayout {
+                        id: statItems
+                        height: parent.height
                         spacing: 0
                         Repeater {
+                            id: statRepeater
                             model: [
                                 { k: qsTr("输入"), v: veyra.sourceSummary, hi: false },
                                 { k: qsTr("输出"), v: veyra.outputSummary.length > 0 ? veyra.outputSummary : qsTr("未测"), hi: false },
@@ -437,11 +465,13 @@ VPage {
                                 }
                             }
                         }
+                        }
                     }
 
                     // Total time / GPU / output-vs-target orbs (replace "已测增强 P95").
-                    ProPage.PerfOrbs { objectName: "node-perf-orbs"; size: 32; showLabels: false; spacing: 6 }
+                    ProPage.PerfOrbs { id: nodeOrbs; Layout.row: 0; Layout.column: statsBar.compact ? 4 : 5; objectName: "node-perf-orbs"; size: 32; showLabels: false; spacing: 6 }
                     VButton {
+                        Layout.row: 0; Layout.column: statsBar.compact ? 5 : 6
                         objectName: "node-fullscreen"
                         icon: true; iconName: "max"
                         tip: qsTr("全屏画面（双击画面 / F11）")
@@ -449,6 +479,8 @@ VPage {
                     }
                     // .viewtog: 列表 asks first (the list configuration comes back).
                     VSeg {
+                        id: nodeModeSwitch
+                        Layout.row: 0; Layout.column: statsBar.compact ? 6 : 7
                         objectName: "node-mode-switch"
                         options: [{ id: "list", label: qsTr("列表"), icon: "list" }, { id: "node", label: qsTr("节点"), icon: "nodes" }]
                         current: "node"
@@ -457,6 +489,10 @@ VPage {
                     VButton { objectName: "node-return-list"; visible: false; text: qsTr("返回列表"); onClicked: returnDialog.open() }
                     VButton {
                         id: nodePresetBtn
+                        Layout.row: 0; Layout.column: statsBar.compact ? 7 : 8
+                        Layout.minimumWidth: 120
+                        Layout.maximumWidth: implicitWidth
+                        Layout.fillWidth: statsBar.compact
                         objectName: "node-preset-button"
                         iconName: "nodes"
                         trailingIcon: "down"
@@ -530,8 +566,10 @@ VPage {
             Text {
                 objectName: "node-canvas-tip"
                 anchors.left: parent.left
+                anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.leftMargin: 12
+                anchors.rightMargin: 12
                 anchors.topMargin: 10
                 z: 4
                 text: root.wireFrom >= 0 ? qsTr("请选择输入端口完成连接 · Esc 取消") :
@@ -539,6 +577,7 @@ VPage {
                 color: Theme.t3
                 font.family: Theme.fontUi
                 font.pixelSize: 11
+                wrapMode: Text.Wrap
             }
 
             Canvas {
@@ -1378,7 +1417,9 @@ VPage {
                 }
                 VRow {
                     label: qsTr("目标尺寸")
-                    hint: qsTr("决定输出分辨率")
+                    hint: veyra.videoSrQuality >= 1 && veyra.videoSrQuality <= 4
+                        ? qsTr("放大时重建细节；原尺寸时修复压缩伪影。效果取决于片源。")
+                        : qsTr("目标须大于片源尺寸；已达到目标时不执行超分。")
                     VSeg {
                         options: [{ id: "1", label: "2K" }, { id: "2", label: "4K" }, { id: "4", label: "5K" }, { id: "5", label: "6K" }, { id: "6", label: "7K" }, { id: "3", label: "8K" }]
                         current: String(veyra.srTargetIndex)
