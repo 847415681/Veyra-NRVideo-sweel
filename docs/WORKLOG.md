@@ -8994,3 +8994,21 @@ media, SDK files or runtime binaries.
 产物统一`E:/项目/Veyra/{build,tests,logs,tmp,reports,archives}/settings-sr-ui-20261010`，仅单份私有运行目录和当前构建，不打包或复制整工程。最后control.py final-audit核对旧树/main/范围，源码commit/checkpoint/source-after.bundle、构建和各回执哈希、磁盘占用与清理记录存reports同名/final.json。现场5070Ti+overlay/AMD9070未复测，未重验全部编码器/封装，不宣称所有用户已根治；保存证据后按本次用户请求安排非强制关机，动作另存shutdown回执。
 
 收尾缓存删除被自动审批拒绝：PowerShell已解析并检查`E:/项目/Veyra/tmp/settings-sr-ui-20261010`绝对范围，Remove-Item请求仍返回`blocked by policy`，命令未执行；未更换工具绕过。2773文件/284748097逻辑字节保留，非磁盘已释放。cleanup.json与disk-before-cleanup.json如实记录，修复/构建/源码收尾继续。
+
+## 2026-10-10 SR画质实验、全部撤回及本地测试包
+
+用户纠正三个SR均画质改善不明显，主要1080p或更低→2K/4K；最后要求停止优化、去掉负优化并汇报，又明确“弄好了打个测试包给我”。从c664a675c7b7a5c6cb54ed79c07b8a72127f4dfb隔离codex/sr-visual-quality-20261010，独立不可变start保护45旧工作树/495脏文件/main0e7018ad。当前源码在E:/项目/Veyra/worktrees/sr-visual-quality-20261010，产物统一E:/项目/Veyra/{build,tests,logs,tmp,reports,archives}/sr-visual-quality-20261010，包单独在test-packages/fixes-20261010。没有子Agent、main合并、push/Release或新关机。
+
+新增SrQualityTests共同参考模式；用户GTA6 4K原图→Lanczos1080p→4K，NR/FG关闭，普通缩放/VSR1/VSR4/DLSS/FSR，同参考SHA、精确前解码PTS、明确BT.709/源range。基线tests-20261010-143134与143421，静态第60秒、运动90/300/900/1200秒各32帧、输出1/8/32。早期142741后关键帧/默认矩阵试跑不作最终证据；质量测试墙钟不作性能数字。官方SDK/指南一手核对、方法与逐项实际结果详见docs/SR_VISUAL_QUALITY_REPORT_2026-10-10.md。用户停止后没有继续720p试验。
+
+DLSS Quality档输出相同，FSR曝光没有可靠收益，离线RCAS参考误差更大，均恢复/拒绝。零运动静态MSE下降但真实运动恶化；局部3×3的0.5/255容差使DLSS运动误差增加18.19%，完全一致阈值仍增加11.31%，均撤回。整帧完全重复检测在四个运动窗口72张PNG与基线字节一致，却每帧增加两个GPU pass、额外纹理，只改善重复帧，故也撤回。生产CMake/EnhanceGraph/后端/shader均与基点一致，新SrMotion/SrStaticDetect源码及自产dxil从本轮产品/构建删除；patch和两个shader保存在archives同名/withdrawal.json对应清单，未删除他人文件。保留此前真实执行、设置/焦点/布局/关闭项编辑等有效修复，不宣称本次一般画质提升或FPS收益。
+
+命令均以py -3.11 -B运行。sr-visual-build.py撤回后最终16EXE构建通过，logs同名/build-20261010-152739/receipt.json；cmake-check的153030原生/no-SDK配置、驱动/当前测试对象通过。此前测试编译缺fstream等已经修正重验；所有失败日志保留。实际GUI仍完整PS5/Moonlight/Xbox/libass，配置检查关闭串流不冒充最终GUI能力。build.py ui-only仅更新测试显示标签/Windows资源，153535回执18.344秒，GUI SHA870623fec3b265bf9f3ce0837449e90934ec47164d22eb8b484e33ee95dbfc4c，版本2.0.6-fixes-20261010；受影响18对象按源/依赖SHA重编或重用，旧缓存输入未改。
+
+sr-visual-test.py sr presenter slider menu components lifecycle video rollback inactive inactive-node chain contracts hdr：logs同名/tests-20261010-152929/receipt.json全部13组通过，包括三SR合同、设置SDR/HDR事务、真实数字键盘13项、菜单8/组件22、生命周期、GTA6热切/失败回退、关闭项列表/节点各70、chain287/repair259/HDR。用户播放器已经自行关闭，不终止或修改其进程/配置。每个测试<300秒。正常产品不新增回读、逐pass等待或无界队列。
+
+sr-visual-package.py stage：1614文件已审NVIDIA母包清单硬链接暂存，原子替换当前EXE/QML/必要PackedCaptureToLinear shader及已验zlib FFmpeg；不从运行过的APP复制。FFmpeg保留PS5 slices256/dav1d、zlib许可证/构建清单；已有FFmpeg-9.0.1-slices256-dav1d-zlib-source.zip SHA49db22049f072bd5448faa664aa736074dccfe6e72b4a933f673d8ae954b0bb6作为对应源码。未变依赖沿2.0.6对应源码链接；运行库身份原样，社区HashMismatch/NotSigned明确，不恢复软件哈希锁。源码ZIP仅clean commit文件、明确排除历史pycache，不含SDK/runtime/模型/测试媒体。
+
+package.py smoke：未改生产QML，私有data-dir、系统PATH、缓存/日志外置；GPU/软件QML两个冷启动和GTA6实际播放均通过、包文件SHA前后相同。第一次误匹配不存在frames日志字段而失败，实际realPresented=460；改核对realPresented≥100重跑两种模式通过，不冒称初次脚本也通过。真实播放计数/命令在test-packages/fixes-20261010/package-smoke.json。源码commit后seal封装并逐文件SHA/CRC、manifest唯一性/路径/私密产物排除、runtime清单核对；实际最终包路径/SHA/字节/源码提交与审计状态写同目录package.json和reports同名/package-current.json，收尾final.json链接本次全部回执及保护守卫/bundle结果。
+
+本地候选包含此前字幕、播放列表/PR31、BMD原生开关、HDR补帧默认关闭开关、设置切换/输入/布局/关闭项编辑/保存及既有VFG修复。没有本轮SR生产实验；未重测所有编码器/串流，无AMD/BMD实卡，不宣称NV显存增长/现场黑屏全根治。原件、45工作树/495脏文件/main继续由sr-visual-control.py守卫核对；不处理先前被自动审批拒绝的其它任务缓存。
