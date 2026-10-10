@@ -501,15 +501,20 @@ void PresentSink::sampleDisplayLatency(){
         refreshQpc_=double(stats.SyncQPCTime.QuadPart-lastSyncQpc_)/double(stats.SyncRefreshCount-lastSyncRefresh_);
     lastSyncQpc_=stats.SyncQPCTime.QuadPart;lastSyncRefresh_=stats.SyncRefreshCount;
     if(stats.PresentCount==lastDisplayedPresent_)return;
+    const UINT previous=lastDisplayedPresent_;
     lastDisplayedPresent_=stats.PresentCount;
     const double period=refreshQpc_>0?refreshQpc_:displayRefreshHz_>=1?frequency/displayRefreshHz_:0;
     if(period<=0||stats.SyncRefreshCount<stats.PresentRefreshCount||stats.SyncRefreshCount-stats.PresentRefreshCount>16)return;
     const double scanout=double(stats.SyncQPCTime.QuadPart)-double(stats.SyncRefreshCount-stats.PresentRefreshCount)*period;
+    // Presents shown since the previous sample are only dated through the
+    // newest one: under VSync each holds at least one vblank, so present p was
+    // on screen no later than (PresentCount - p) vblanks earlier. Counting them
+    // with that bound keeps bursts of late frames in the sample instead of
+    // keeping only the newest (and least delayed) one of each burst.
     for(const auto& pending:pendingPresents_){
-        if(pending.id!=stats.PresentCount||!pending.qpc)continue;
-        const double ms=(scanout-double(pending.qpc))*1000.0/frequency;
+        if(!pending.qpc||pending.id>stats.PresentCount||(previous&&pending.id<=previous)||stats.PresentCount-pending.id>=pendingPresents_.size())continue;
+        const double ms=(scanout-double(stats.PresentCount-pending.id)*period-double(pending.qpc))*1000.0/frequency;
         if(ms>=0&&ms<1000&&displayLatencyMs_.size()<4096)displayLatencyMs_.push_back(ms);
-        break;
     }
 }
 PresentSink::DisplayLatencySummary PresentSink::takeDisplayLatency(){
