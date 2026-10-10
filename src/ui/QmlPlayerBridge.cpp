@@ -6280,6 +6280,26 @@ void QmlPlayerBridge::updateRunStatus() {
         else detail << tr("未补帧");
         if (s.applied.multiplier > 1 && impl_->compareMode != 0) detail << tr("补帧暂停");
         else if (s.applied.multiplier > 1 && (s.fgBudgetLimited || s.xessGenerationSuppressed)) detail << tr("调度降档");
+        // Why VFG cannot hold the requested multiplier. One VFG interpolation
+        // costs about the same at any resolution, so what fits follows from its
+        // measured cost, the rest of the chain and the source interval; the
+        // display refresh caps what can be shown. A hint only: no setting changes.
+        if (s.applied.multiplier > 1 && s.applied.frameGenerationBackend == engine::FrameGenerationBackend::Vfg && i.compareMode == 0) {
+            const double source = s.nominalSourceFps * (s.captureHalfRate ? 0.5 : 1.0);
+            const auto perRun = f.gpuTiming[size_t(diagnostics::GpuStage::Fg1)].p95;
+            const auto batch = f.gpuTiming[size_t(diagnostics::GpuStage::FgBatch)].p95;
+            const auto whole = f.enhancementProcessing.p95;
+            if (s.fgBudgetLimited && source > 1 && perRun && *perRun > 0 && batch && whole) {
+                const double base = std::max(0.0, *whole - *batch);
+                const int fits = std::clamp(1 + int(std::floor((1000.0 / source - base) / *perRun)), 1, int(s.applied.multiplier));
+                if (fits < int(s.applied.multiplier)) detail << tr("VFG 每张约 %1 ms，当前负载约可稳定 %2X").arg(*perRun, 0, 'f', 1).arg(fits);
+            }
+            double refresh = 0;
+            for (auto* window : QGuiApplication::topLevelWindows())
+                if (window->isVisible() && window->screen()) { refresh = window->screen()->refreshRate(); break; }
+            if (refresh > 1 && source > 1 && source * s.applied.multiplier > refresh * 1.02)
+                detail << tr("屏幕 %1 Hz 最多显示约 %2X").arg(refresh, 0, 'f', 0).arg(std::max(1, int(refresh / source)));
+        }
         if (s.nominalSourceFps > 0.01) detail << tr("源 %1 fps").arg(s.nominalSourceFps, 0, 'f', 2);
         const auto autoState=nrAutoStatus();if(!autoState.isEmpty())detail<<autoState;
     }
