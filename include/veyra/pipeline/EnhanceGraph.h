@@ -459,14 +459,7 @@ public:
     // interpolation positions). The pair keeps its true A/B PTS; only the
     // number of outputs changes, and it is reported as previewFgMultiplier.
     enum class FgDecision { Skip, Evaluate, Seed, Reduced };
-    // reducedMultiplier sizes a Reduced group (default the 2X midpoint). VFG
-    // sets its multiplier per pair, so live VFG admission may pick the largest
-    // smaller group that fits; other backends always reduce to 2X.
-    struct FgAdmissionResult {
-        FgDecision decision;unsigned reducedMultiplier;
-        FgAdmissionResult(FgDecision value=FgDecision::Skip,unsigned reduced=2):decision(value),reducedMultiplier(reduced){}
-    };
-    using FgAdmission=std::function<FgAdmissionResult(const FrameBatch&,bool warmingHistory)>;
+    using FgAdmission=std::function<FgDecision(const FrameBatch&,bool warmingHistory)>;
     // `hardwareSurface` carries the decoded texture for paths whose surface
     // does not travel inside the AVFrame (D3D11VA). It must be provided exactly
     // when frame->format == AV_PIX_FMT_D3D11 and is unused otherwise.

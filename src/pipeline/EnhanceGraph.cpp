@@ -2838,8 +2838,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // VEYRA_TEST_VFG_SKIP_RESETS_HISTORY=1 restores the pre-2026-10-10 rule
     // (a VFG pair skipped for budget resets history) for same-EXE A/B runs.
     static const bool vfgSkipResetsHistory=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_SKIP_RESETS_HISTORY",nullptr,0)>0;
-    const auto admission=fgBackendAvailable?(admitFg?admitFg(out.batch,resetFg):FgAdmissionResult{FgDecision::Evaluate}):FgAdmissionResult{FgDecision::Skip};
-    auto decision=admission.decision;
+    auto decision=fgBackendAvailable?(admitFg?admitFg(out.batch,resetFg):FgDecision::Evaluate):FgDecision::Skip;
     // For VFG a budget seed is a hidden reset Run whose only purpose is to keep
     // history; recording B below keeps it without any Run.
     if(vfgBackend_&&decision==FgDecision::Seed&&historyValid&&!vfgSkipResetsHistory)decision=FgDecision::Skip;
@@ -2853,11 +2852,10 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // seed path already runs a single evaluation.
     const bool reduced=decision==FgDecision::Reduced&&!resetFg;
     out.fgReduced=reduced;
-    const unsigned reducedMultiplier=vfgBackend_&&fgMultiplier>2?std::clamp(admission.reducedMultiplier,2u,fgMultiplier-1):2u;
     // A reset has no usable A/B pair. Seed one complete 2X evaluation group;
     // all later subframes would repeat reset work and cannot be presented.
-    const uint32_t fgCalls=resetFg?1:reduced?reducedMultiplier-1:fgMultiplier-1;
-    const unsigned outputMultiplier=reduced?reducedMultiplier:fgMultiplier;
+    const uint32_t fgCalls=(resetFg||reduced)?1:fgMultiplier-1;
+    const unsigned outputMultiplier=reduced?2u:fgMultiplier;
     if(runFg&&resetFg){
         if(reseedRejected)out.fgSkippedBeforeEval=out.fgCandidates-fgCalls;
         else out.fgSkippedForReset=out.fgCandidates-fgCalls;
