@@ -12,6 +12,7 @@
 #include "veyra/engine/PresentationSettings.h"
 #include "veyra/diagnostics/FrameMetrics.h"
 #include "veyra/engine/PreviewView.h"
+#include "veyra/engine/EngineWatchdog.h"
 #include "veyra/sink/CaptureAudioSession.h"
 #include "veyra/remoteplay/SessionInbox.h"
 #ifdef VEYRA_ENABLE_MOONLIGHT
@@ -194,6 +195,7 @@ private:
     void post(std::function<void()>);
     void dispatch();
     void status(const std::wstring&,bool failed=false);
+    void noteEngineHang(uint64_t stalledMs);
     mutable std::mutex mutex_;
     PlayerSnapshot snapshot_;
     PresentationSettings presentation_;
@@ -208,6 +210,10 @@ private:
     std::unique_ptr<PreviewGpuSession> prewarmed_; // engine dispatcher only
     std::atomic<bool> prewarmEnabled_{false}; // off until the saved preference enables it (default off since 2026-10-05)
     std::condition_variable wake_;std::function<void()> pending_;bool shutdown_=false,busy_=false;
+    // Owner-thread stall detection (field logs(15)); created before worker_ starts.
+    std::unique_ptr<EngineWatchdog> watchdog_;
+    std::condition_variable dispatchDone_;bool dispatchExited_=false; // mutex_
+    std::wstring hangPreviousStatus_; // mutex_
     EnhancementSettings desired_;uint64_t nextRevision_=1;
     std::optional<ChainRuntimeOrder> desiredNodeOrder_; // protected by mutex_, paired with desired_
     std::atomic<bool> stop_{false},paused_{false},muted_{false};

@@ -667,6 +667,9 @@ public:
     bool overlayCompatActive() const;
     // RivaTuner Statistics Server is running now (gfx::rivaTunerRunning).
     Q_INVOKABLE bool rivaTunerRunning() const;
+    // An overlay that 监控软件兼容 reacts to is running now: RTSS, NVIDIA's in-game overlay
+    // or GamePP (gfx/PresentationHooks.h).
+    Q_INVOKABLE bool presentationOverlayRunning() const;
     Q_INVOKABLE void openFeedbackPage();
     Q_INVOKABLE void openReleasesPage();
     QVariantList audioDevices() const;
@@ -1115,9 +1118,10 @@ signals:
     // User-facing notices the UI shows as a transient message: a rejected
     // chain edit, an export that finished, a failed open.
     void notice(const QString& text, bool isError);
-    // RivaTuner injected into a run whose interface draws on the GPU: its OSD is kept out
-    // of this process until a restart switches the interface to software drawing.
-    void overlayRestartSuggested();
+    // A presentation-hooking overlay appeared in a run whose interface draws on the GPU
+    // ("rtss": its OSD is kept out of this process; "nvidia": NVIDIA's in-game overlay and
+    // "gamepp": GamePP, which cannot be kept out); a restart draws the interface in software.
+    void overlayRestartSuggested(const QString& kind);
     // The UI moves to a page by name when a command implies it.
     void navigate(const QString& page);
 

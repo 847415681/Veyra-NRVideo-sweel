@@ -80,6 +80,51 @@ inline bool rivaTunerRunning() {
     return live;
 }
 
+// A running process whose image name satisfies match.
+template <class Match> inline bool processRunning(Match match) {
+    const HANDLE raw = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (raw == INVALID_HANDLE_VALUE) return false;
+    struct Snapshot { HANDLE handle; ~Snapshot() { CloseHandle(handle); } } snapshot{raw};
+    PROCESSENTRY32W process{};
+    process.dwSize = sizeof(process);
+    for (BOOL found = Process32FirstW(snapshot.handle, &process); found;
+         found = Process32NextW(snapshot.handle, &process))
+        if (match(process.szExeFile)) return true;
+    return false;
+}
+
+// NVIDIA's in-game overlay is switched on: NVIDIA App's "NVIDIA 信息浮窗" runs
+// NVIDIA Overlay.exe, GeForce Experience's in-game overlay runs NVIDIA Share.exe; both
+// exit when the overlay is switched off. nvspcap64.dll alone says nothing: the driver
+// loads it into every Direct3D process whether or not the overlay is on.
+//
+// Why it matters (field logs(15), 2026-10-10, RTX 5060 Ti, driver 617.42): during
+// capture the engine's video thread and the interface thread stopped at the same moment
+// in 10 of 12 freezes (a deadlock between the two presenting threads), and users report
+// that 2.0+ freezes within seconds of starting capture with the overlay on and never
+// with it off; 1.4.4, whose interface had no swapchain, did not. Like RTSS, the overlay
+// hooks every swapchain in the process; with the interface drawn in software only the
+// video's swapchain remains. Not reproduced on an RTX 5070 / 616.56 (overlay on, D3D12
+// interface, DLSS frame generation, HDR output, 45 s).
+inline bool nvidiaOverlayRunning() {
+    return processRunning([](const wchar_t* name) {
+        return _wcsicmp(name, L"NVIDIA Overlay.exe") == 0 || _wcsicmp(name, L"NVIDIA Share.exe") == 0;
+    });
+}
+
+// GamePP (游戏加加, GamePP.exe and its GamePP* helpers) injects GPP64.dll (overlay),
+// GameTracker64.dll and shade64.dll (filters) into programs it treats as games. Field
+// dump 2026-10-01: with them injected, the video's and the interface's swapchains both
+// failed every ResizeBuffers and the driver crashed on a window change; the same
+// two-swapchain hooking as RTSS and NVIDIA's overlay. Detected by process at start,
+// since the modules only arrive after the interface's window exists.
+inline bool gamePPRunning() {
+    return processRunning([](const wchar_t* name) { return _wcsnicmp(name, L"GamePP", 6) == 0; });
+}
+inline bool gamePPInjected() {
+    return GetModuleHandleW(L"GPP64.dll") || GetModuleHandleW(L"GameTracker64.dll") || GetModuleHandleW(L"shade64.dll");
+}
+
 // RTSS reads this variable from the process it hooks whenever it (re)loads its profile for
 // it ("Name,value[,Name,value…]", RTSSHooks64.dll); EnableOSD is one of the properties it
 // accepts. With EnableOSD,0 it still counts frames but never draws in this process.

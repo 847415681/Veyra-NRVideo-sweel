@@ -680,12 +680,17 @@ Window {
         }
     }
 
-    // RivaTuner started after Veyra: its OSD is kept out until a restart (QmlPlayerBridge).
+    // RivaTuner, NVIDIA's overlay or GamePP started after Veyra (QmlPlayerBridge): RTSS's
+    // OSD is kept out until a restart; the other two cannot be, and froze 2.0 in the field.
     VConfirm {
         id: overlayRestart
         objectName: "overlay-restart-confirm"
-        title: qsTr("检测到 RTSS 屏显服务")
-        text: qsTr("检测到 RTSS 屏显服务正在运行。开启兼容绘制需重启 Veyra，重启后 OSD 仅显示在视频上。现在重启吗？当前播放或串流将停止。")
+        property string kind: "rtss"
+        readonly property string product: kind === "nvidia" ? qsTr("NVIDIA 信息浮窗") : qsTr("游戏加加（GamePP）")
+        title: kind === "rtss" ? qsTr("检测到 RTSS 屏显服务") : qsTr("检测到 %1").arg(product)
+        text: kind === "rtss"
+              ? qsTr("检测到 RTSS 屏显服务正在运行。开启兼容绘制需重启 Veyra，重启后 OSD 仅显示在视频上。现在重启吗？当前播放或串流将停止。")
+              : qsTr("%1 正在运行。它会同时挂接界面和视频两个画面，可能让 Veyra 卡死；开启兼容绘制需重启 Veyra，重启后界面改用软件绘制，它只作用在视频上。现在重启吗？当前播放或串流将停止。").arg(product)
         acceptText: qsTr("重启")
         rejectText: qsTr("稍后")
         onAccepted: veyra.restartForOverlayCompatibility()
@@ -695,7 +700,7 @@ Window {
         target: veyra
         function onPlaylistRequested() { playlistWindow.open() }
         function onNotice(text, isError) { toast.show(text, isError) }
-        function onOverlayRestartSuggested() { overlayRestart.open() }
+        function onOverlayRestartSuggested(kind) { overlayRestart.kind = kind; overlayRestart.open() }
         function onNavigate(p) {
             // A dialog key opens the dialog; anything else is a page.
             if (p === "capture" || p === "ps5" || p === "moonlight" || p === "xbox" || p === "screen"
