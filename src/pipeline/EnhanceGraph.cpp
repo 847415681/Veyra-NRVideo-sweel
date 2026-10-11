@@ -3427,4 +3427,42 @@ void EnhanceGraph::shutdown()
     (void)st;
 }
 
+bool EnhanceGraph::lumaSignature(const AVFrame* frame,uint8_t* out)const{
+    if(!frame||!out||!frame->data[0]||desc_.stillImage)return false;
+    const auto format=AVPixelFormat(frame->format);
+    if(format==AV_PIX_FMT_D3D12||format==AV_PIX_FMT_D3D11)return false;
+    const bool bgr=format==AV_PIX_FMT_BGRA||format==AV_PIX_FMT_BGR0;
+    const auto rgb=[&](const uint8_t* p){return uint8_t((54*unsigned(p[bgr?2:0])+183*unsigned(p[1])+19*unsigned(p[bgr?0:2])+128)>>8);};
+    // Upload-backed capture frames: the callback's proxy, never the write-combined buffer.
+    if(const auto* upload=captureUploadFrame(frame);upload&&upload->proxyValid&&upload->pixelBytes>=1&&upload->pixelBytes<=CaptureUploadFrame::kMaxPixelBytes){
+        const unsigned bytes=upload->pixelBytes;const int pitch=upload->proxyPitch();
+        for(unsigned y=0;y<36;++y)for(unsigned x=0;x<64;++x){
+            const uint8_t* p=upload->proxy+ptrdiff_t(y)*pitch+x*bytes;
+            out[y*64+x]=upload->planes==2?p[bytes-1]:desc_.packedInput?packedIngressLuma(upload->proxy,pitch,desc_.packedInput,x,y):
+                        desc_.yuy2Input?p[0]:bytes>=4?rgb(p):p[bytes-1];
+        }
+        return true;
+    }
+    if(frame->width<64||frame->height<36)return false;
+    const auto* data=frame->data[0];const ptrdiff_t pitch=frame->linesize[0];
+    for(unsigned y=0;y<36;++y)for(unsigned x=0;x<64;++x){
+        const unsigned sx=x*unsigned(frame->width)/64,sy=y*unsigned(frame->height)/36;
+        const uint8_t* row=data+ptrdiff_t(sy)*pitch;uint8_t v=0;
+        switch(format){
+        case AV_PIX_FMT_NV12:case AV_PIX_FMT_NV21:case AV_PIX_FMT_YUV420P:case AV_PIX_FMT_YUVJ420P:case AV_PIX_FMT_YUV422P:
+        case AV_PIX_FMT_YUVJ422P:case AV_PIX_FMT_YUV444P:case AV_PIX_FMT_YUVJ444P:case AV_PIX_FMT_GRAY8:v=row[sx];break;
+        case AV_PIX_FMT_P010LE:case AV_PIX_FMT_P016LE:v=row[sx*2+1];break;
+        case AV_PIX_FMT_YUV420P10LE:case AV_PIX_FMT_YUV422P10LE:case AV_PIX_FMT_YUV444P10LE:
+            v=uint8_t(std::min(1023u,unsigned(row[sx*2])|(unsigned(row[sx*2+1])<<8))>>2);break;
+        case AV_PIX_FMT_YUYV422:case AV_PIX_FMT_YVYU422:v=row[sx*2];break;
+        case AV_PIX_FMT_UYVY422:v=row[sx*2+1];break;
+        case AV_PIX_FMT_RGBA:case AV_PIX_FMT_BGRA:case AV_PIX_FMT_RGB0:case AV_PIX_FMT_BGR0:v=rgb(row+sx*4);break;
+        default:
+            if(desc_.packedInput&&format==packedIngressFormat(desc_.packedInput)){v=packedIngressLuma(data,pitch,desc_.packedInput,sx,sy);break;}
+            return false;
+        }
+        out[y*64+x]=v;
+    }
+    return true;
+}
 } // namespace veyra::pipeline

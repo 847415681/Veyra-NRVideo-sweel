@@ -105,6 +105,35 @@ int inactiveEffectsTest(const wchar_t* input,const wchar_t* output,bool nodeMode
     return failures?1:0;
 }
 }
+// --dedup-* replay (ContentDedup.h). Not inlined, snapshots built on the heap:
+// wmain already holds many PlayerSnapshot locals, and two more overflowed its
+// 1 MiB stack before the first line ran.
+__declspec(noinline) static int runContentCadenceReplay(engine::EngineController& engine,const std::wstring& mode){
+    using namespace std::chrono_literals;
+    auto pumpUntil=[&](auto predicate,std::chrono::seconds limit){
+        const auto deadline=std::chrono::steady_clock::now()+limit;
+        while(std::chrono::steady_clock::now()<deadline){
+            MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}
+            if(predicate())return true;std::this_thread::sleep_for(20ms);
+        }
+        return false;
+    };
+    std::unique_ptr<engine::PlayerSnapshot> start,end;
+    const bool started=pumpUntil([&]{start.reset(new engine::PlayerSnapshot(engine.snapshot()));return start->frames>30&&start->fgActive;},25s);
+    std::cout<<(started?"PASS ":"FAIL ")<<"replay starts with DLSS 2X"<<std::endl;
+    const auto begin=std::chrono::steady_clock::now();
+    pumpUntil([&]{end.reset(new engine::PlayerSnapshot(engine.snapshot()));return end->failed||std::chrono::steady_clock::now()-begin>=20s;},25s);
+    std::wcout<<L"DEDUP_RESULT mode="<<mode;
+    std::cout<<" frames="<<end->frames-start->frames<<" skipped="<<end->captureRateSkipped-start->captureRateSkipped<<" generated="<<end->generated-start->generated
+             <<" contentFps="<<end->contentFps<<" realPresented="<<end->metrics.flow.counters.realPresented-start->metrics.flow.counters.realPresented
+             <<" generatedPresented="<<end->metrics.flow.counters.generatedPresented-start->metrics.flow.counters.generatedPresented
+             <<" fgInvalid="<<end->metrics.flow.counters.fgInvalid-start->metrics.flow.counters.fgInvalid<<std::endl;
+    const bool ran=started&&!end->failed&&end->frames>start->frames+300;
+    std::cout<<(ran?"PASS ":"FAIL ")<<"content-cadence replay runs"<<std::endl;
+    engine.stop();const bool drained=pumpUntil([&]{return engine.idle();},8s);
+    std::cout<<(drained?"PASS ":"FAIL ")<<"content-cadence replay drains"<<std::endl;
+    return started&&ran&&drained?0:1;
+}
 int wmain(int argc,wchar_t**argv){
     if(argc==4&&(wcscmp(argv[3],L"--inactive-effects")==0||wcscmp(argv[3],L"--inactive-effects-node")==0))return inactiveEffectsTest(argv[1],argv[2],wcscmp(argv[3],L"--inactive-effects-node")==0);
 #ifdef VEYRA_ENABLE_REMOTEPLAY
@@ -192,7 +221,7 @@ int wmain(int argc,wchar_t**argv){
 #endif
     SetEnvironmentVariableW(L"VEYRA_VERBOSE_FRAME_LOGS",L"1");
     const bool settingsRebuild=argc==4&&wcscmp(argv[3],L"--settings-rebuild")==0;
-    if(!settingsRebuild&&argc!=3&&!(argc==4&&(wcscmp(argv[3],L"--backend-recovery")==0||wcscmp(argv[3],L"--nr-first")==0||wcscmp(argv[3],L"--seek-stress")==0||wcscmp(argv[3],L"--half-rate")==0||wcscmp(argv[3],L"--overload")==0||wcscmp(argv[3],L"--file-overload")==0||wcscmp(argv[3],L"--source-gap")==0||wcscmp(argv[3],L"--file-endpoint")==0||wcscmp(argv[3],L"--file-continuity")==0||wcscmp(argv[3],L"--file-fg-recovery")==0||wcscmp(argv[3],L"--reset-rollback")==0)))return 2;SetProcessDPIAware();CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+    if(!settingsRebuild&&argc!=3&&!(argc==4&&(wcscmp(argv[3],L"--backend-recovery")==0||wcscmp(argv[3],L"--nr-first")==0||wcscmp(argv[3],L"--seek-stress")==0||wcscmp(argv[3],L"--half-rate")==0||wcscmp(argv[3],L"--overload")==0||wcscmp(argv[3],L"--file-overload")==0||wcscmp(argv[3],L"--source-gap")==0||wcscmp(argv[3],L"--file-endpoint")==0||wcscmp(argv[3],L"--file-continuity")==0||wcscmp(argv[3],L"--file-fg-recovery")==0||wcscmp(argv[3],L"--reset-rollback")==0||std::wstring(argv[3]).rfind(L"--dedup-",0)==0)))return 2;SetProcessDPIAware();CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     std::filesystem::create_directories(argv[2]);Logger::instance().openFile((std::filesystem::path(argv[2])/"engine.log").wstring());Logger::instance().setConsoleEnabled(false);
     HWND window=CreateWindowExW(0,L"STATIC",L"Live scheduler replay",WS_POPUP,0,0,960,540,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
     if(!window)return 3;engine::EngineController engine;engine::PlayerOptions options;options.nr=false;options.fg=false;options.captureReplayForTest=true;
@@ -222,10 +251,22 @@ int wmain(int argc,wchar_t**argv){
     if(fileEndpoint){options.captureReplayForTest=false;SetEnvironmentVariableW(L"VEYRA_TEST_FILE_ENDPOINT_LOSS",L"1");engine.setVolume(0,true);}
     if(overload){options.nr=options.sr=options.fg=true;options.realtime=false;options.fgMultiplier=4;options.settings.videoSrQuality=4;SetEnvironmentVariableW(L"VEYRA_VERBOSE_FRAME_LOGS",nullptr);}
     if(halfRate)options.settings.content=engine::ContentRate::Capture60To30;
+    // --dedup-transport|auto|half|fps30: file replay through the live capture path
+    // with CPU decode and DLSS 2X, for content-cadence A/B runs (ContentDedup.h).
+    const bool dedupRun=argc==4&&std::wstring(argv[3]).rfind(L"--dedup-",0)==0;
+    const std::wstring dedupMode=dedupRun?std::wstring(argv[3]).substr(8):L"";
+    if(dedupRun){
+        options.softwareDecode=true;options.fg=true;options.fgMultiplier=2;
+        options.settings.frameGenerationBackend=engine::FrameGenerationBackend::Dlss;
+        options.settings.content=dedupMode==L"auto"?engine::ContentRate::Auto:dedupMode==L"half"?engine::ContentRate::Capture60To30:
+            dedupMode==L"fps30"?engine::ContentRate::Fps30:engine::ContentRate::Transport;
+        engine.setVolume(0,true);ShowWindow(window,SW_SHOWNOACTIVATE);
+    }
     if(fileOverload){options.captureReplayForTest=false;options.nr=options.sr=options.fg=true;options.realtime=false;options.fgMultiplier=4;options.settings.videoSrQuality=4;}
     int failures=0;auto check=[&](bool pass,const char* s){std::cout<<(pass?"PASS ":"FAIL ")<<s<<std::endl;if(!pass)++failures;};
     auto until=[&](auto predicate,int seconds=8){auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(seconds);while(std::chrono::steady_clock::now()<deadline){MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}auto s=engine.snapshot();if(s.failed){std::wcerr<<s.status<<'\n';return false;}if(predicate(s))return true;std::this_thread::sleep_for(5ms);}return false;};
     engine.open(window,argv[1],options);
+    if(dedupRun){const int result=runContentCadenceReplay(engine,dedupMode);DestroyWindow(window);CoUninitialize();return result;}
     if(settingsRebuild){
         check(until([](const auto& s){return s.frames>20&&s.nrActive&&s.fgActive;},30),"original NR 1080p and DLSS 2X start on the actual video");
         for(unsigned round=0;round<8&&!failures;++round){

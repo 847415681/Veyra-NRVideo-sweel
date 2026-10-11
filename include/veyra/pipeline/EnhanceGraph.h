@@ -463,6 +463,10 @@ public:
     // `hardwareSurface` carries the decoded texture for paths whose surface
     // does not travel inside the AVFrame (D3D11VA). It must be provided exactly
     // when frame->format == AV_PIX_FMT_D3D11 and is unused otherwise.
+    // 64x36 luma points of a CPU frame (a capture upload's callback proxy or the
+    // frame's own luma plane), the points scene/cadence analysis samples; no GPU
+    // work. False for hardware surfaces and layouts it does not know.
+    bool lumaSignature(const AVFrame* frame, uint8_t* out) const;
     bool process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId = 0, const ColorDescription* color = nullptr, const HardwareSurfaceInput* hardwareSurface = nullptr, bool retainReferences = true, const FgAdmission& admitFg = {}, unsigned previewMultiplier = 0, bool pausedResidualRefresh = false);
     bool nextFrameSlotAvailable()const {
         const unsigned slot=unsigned(realFrameIndex_%2);
