@@ -9147,3 +9147,5 @@ harness/regress.py video rollback在logs/cadence-status-20261011/cadence-status/
 seal.py validate逐项核对源码/输入/EXE/QML/原包1626文件及旧树；证据reports/merge-current-fixes-20261011/validation.json，各过程logs/merge-current-fixes-20261011。全产物E盘，私有配置和缓存，生产Main恢复，无新DLL/SDK/模型入Git，不派Agent，不重跑无新依据的性能A/B，不把软件提交FPS冒充物理上屏，不宣称其它显卡/实卡/长期显存已通过。详见docs/MERGE_CURRENT_FIXES_REPORT_2026-10-11.md。接下来冻结实测树并本地main合并，收尾结果追加记录；不push/打包/Release/关机。
 
 2026-10-11 本地合并收尾：实测产品4904b73，补报告/WORKLOG后tip adcf509；main功能merge d2e1396无冲突，完整Git树与adcf509相同。后续仅四份收尾文档。seal.py final核对833源码/配置、13EXE、所有回执及来源祖先、main clean、其它58旧树/504脏文件和原包1626文件，最终main提交/增量bundle/标签见reports/merge-current-fixes-20261011/final.json。本轮无推送/打包/发布/关机，来源分支均保留，不把原正式/测试包说成已经更新。
+
+首次final raw-SHA核对停止于旧main ColorDetailPass.h；逐项排查只有9个旧文件LF/CRLF差异，去除CRLF后字节完全相同，Git树仍仅四份文档差异。保留final-raw-hash-attempt.json，核对器改为对这类差异额外验证唯一换行转换及完整Git内容，并记录两份checkout SHA；未改任何产品/旧源文件。后续final.json记录最终通过结果。
