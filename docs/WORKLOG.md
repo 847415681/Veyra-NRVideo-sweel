@@ -42,6 +42,28 @@
 - 测试：capture-color 270/270（Elgato 13 项），hdr GPU 等价测试（全范围色度解码与换算码值误差 1.7%，旧解码红色高 27%），chain/contracts/timing/lifecycle/video 通过。无 Elgato 实卡；真实颜色与 RGB 黑屏需反馈者日志确认。详见 docs/ELGATO_HDR_PARITY_2026-10-11.md。
 - 不 merge/push/Release，不改其它采集卡、默认设置、运行库、驱动、用户配置。
 
+## 2026-10-11 VFG 混合档（高+中 / 高+低 / 中+低）与 GPU 镜头切换判断（Claude）
+
+- 授权：用户看完调研 reports/vfg-deep-opt-20261011/方案选项.md 后，要求“先做1+2吧，创建存档开分支，然后直接做好，混合档位要做三档 一个高+中 一个高+低 一个中+低 适配各种机型”。
+- 存档：checkpoint/pre-claude-vfg-mixed-20261011（main 049902b）；archives/claude-vfg-mixed-20261011（bundle 已 verify，start.json 记录 55 工作树、495 脏文件）。分支 claude/vfg-mixed-20261011。
+- 构建：py -3.11 -I E:/项目/Veyra/tmp/claude-vfg-mixed-20261011/build.py。复用 vfg-next 图，以及 Codex 为 main 构建的对象（logs/merge-claude-fixes-20261011/build-20261011-160333；592 个源文件哈希已核对与 049902b 相同）。第二次构建时补编 main 的 YuvToLinearRgb，产物与 main 构建逐字节相同。
+- 修改：
+  - VfgBackend 在混合档加载第二个 NvVFX 实例（同一条 CUDA 流）。每对原帧中间那张子帧用前一档，其余用后一档。
+  - 新着色器 VfgShotChange.hlsl：每对 A/B 做一次 GPU 镜头切换判断，与 CPU SceneCadenceAnalyzer 同指标、同阈值；copyOutput 通过 predication 在切换时显示 B。
+  - 关闭 SDK 自带检测；VEYRA_TEST_VFG_AUTO_SHOT_CHANGE=1 恢复旧行为。
+  - vfgQuality 取值 0–5，涉及 bridge、两页 QML、四语翻译（catalog 只插 5 条）和状态提示。
+  - 图里 capture 传 !resetFg。
+- 测试：
+  - veyra_vfg_settings_tests：683 项全过。
+  - veyra_vfg_gpu_tests 1280×720 async（D3D12 调试层）：2425 项全过。三种混合档的每张子帧都与对应单模型输出逐位相同；未声明的硬切换，12 种组合下子帧都等于 B（误差 0）；切换计数恰好 2，没有误判。
+  - 播放器同一 EXE A/B（GTA 4K30 文件 + NR + VFG，RTX 5070）：
+    - 4X：每次 Run 3.66→3.24 ms；中+低整组 p95 12.6→6.9 ms，GPU 60→45%。
+    - 8X：提交帧率 210（旧）→228（仅换检测）→240（中+低，满帧，GPU 64%，拒绝/跳过/降档/过期全部为 0）。
+    - 4X 高+低满 120 帧（GPU 82%）；高+中在边缘（GPU 95%，过期 22 张）。
+  - 回归（regress.py）：inactive、chain、contracts、hdr、vfg-gpu-sync、vfg-settings 6 项全部通过，见 logs/claude-vfg-mixed-20261011/vfgmix/tests-20261011-201448。
+  - 证据在 logs/claude-vfg-mixed-20261011/。代码提交 58dc123。
+- 未验证：各档的实际观感（混合档在细纹理上可能有“呼吸”感，需要用户判断）、其他显卡、采集卡和 60fps 片源、HDR 实际播放。旧版打开含混合档的预设库会拒绝并保留原文件。不 merge/push/Release。详见 docs/VFG_MIXED_TIERS_2026-10-11.md。
+
 ## 2026-10-10 关闭效果器编辑卡顿
 
 - 用户反馈关闭效果器时仅调整内部设置也顿一下；从30c6f60隔离codex/inactive-effects-20261010，start保护44既有工作树/495脏文件和main0e7018ad，未派Agent。根因是完整视频设置比较导致无效GPU revision/排空/重建，同revision的applySettings还会重置NR。新增仅比较开启参数的视图，完整保存值不丢；关闭项更新跳过GPU/暂停帧处理，开启后应用新值。多NR/共享光流/HDR元数据依赖及混合事务保留有效更新。

@@ -47,6 +47,19 @@ constexpr bool presentSinkFrameGeneration(FrameGenerationBackend backend) {
 // exposes 2/3/4/6 and MFG buyers pick from those; 1 = generation off.
 inline constexpr uint32_t kFgMultiplierChoices[]={1,2,3,4,6};
 inline constexpr uint32_t kVfgMultiplierChoices[]={1,2,3,4,5,6,7,8};
+// VFG quality: 0-2 run one NvVFX model (Low/Medium/High) for every subframe.
+// 3-5 are mixed tiers (3 High+Medium, 4 High+Low, 5 Medium+Low): one subframe
+// per source pair, the one nearest the middle where interpolation is hardest,
+// uses the first model; the others, closer to a real frame, use the second.
+// Every subframe is a full VFG inference (the SDK shares nothing between
+// them), so a pair costs one first-model run plus N-2 second-model runs.
+inline constexpr uint32_t kVfgQualityCount=6;
+constexpr bool vfgMixedQuality(uint32_t quality){return quality>=3&&quality<kVfgQualityCount;}
+constexpr uint32_t vfgPrimaryMode(uint32_t quality){return quality<3?quality:quality==5?1u:2u;}
+constexpr uint32_t vfgSecondaryMode(uint32_t quality){return quality==3?1u:quality==4||quality==5?0u:vfgPrimaryMode(quality);}
+// The subframe of a multiplier-M group that uses the first model: t=1/2 for
+// even M, the one just after the middle for odd M (2X: its only subframe).
+constexpr uint32_t vfgPrimarySubframe(uint32_t multiplier){return (multiplier+1)/2;}
 inline constexpr size_t kFgMultiplierChoiceCount=sizeof(kFgMultiplierChoices)/sizeof(kFgMultiplierChoices[0]);
 // Export bitrate presets in Mbps; index 0 keeps the encoder's constant-quality
 // default. Labels are the UI strings for the same order.
@@ -309,7 +322,8 @@ struct EnhancementSettings {
     uint32_t dlssSrModel=0;    // DLSS SR only; see kDlssSrModelCount
     uint32_t multiplier=1;
     FrameGenerationBackend frameGenerationBackend=FrameGenerationBackend::Dlss;
-    uint32_t vfgQuality=1; // NvVFX Mode: Low=0, Medium=1 (default), High=2
+    // NvVFX Mode: Low=0, Medium=1 (default), High=2; mixed tiers 3-5, see vfgPrimaryMode().
+    uint32_t vfgQuality=1;
     // Export target bitrate in Mbps; 0 keeps the encoder's constant-quality
     // default (NVENC CONSTQP / MFT quality mode). Only the export job consumes
     // it: preview never re-encodes.
@@ -468,7 +482,7 @@ struct EnhancementSettings {
         }
         if(nr&&nrLayerCount&&!activeNrLayerCount())return "enabled NR stack has no active layer";
         if(frameGenerationBackend<FrameGenerationBackend::Dlss||frameGenerationBackend>FrameGenerationBackend::Vfg)return "invalid frame generation backend";
-        if(vfgQuality>2)return "invalid VFG quality";
+        if(vfgQuality>=kVfgQualityCount)return "invalid VFG quality";
         // The XeSS provider reports its own generated-frame ceiling at session
         // start; the engine clamps/rejects above it, so validation only guards
         // the absolute API range here.

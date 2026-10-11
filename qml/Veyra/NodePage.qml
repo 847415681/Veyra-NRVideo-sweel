@@ -1539,10 +1539,10 @@ VPage {
                 VRow {
                     label: qsTr("VFG 质量")
                     visible: veyra.fgBackendName === "vfg"
-                    hint: qsTr("高质量需要更多处理时间")
+                    hint: qsTr("高质量更耗时；混合档：每对原帧的中间帧用前一档，其余用后一档")
                     VSelect {
                         objectName: "node-vfg-quality"
-                        options: [{id:"0",label:qsTr("低")},{id:"1",label:qsTr("中")},{id:"2",label:qsTr("高")}]
+                        options: [{id:"0",label:qsTr("低")},{id:"1",label:qsTr("中")},{id:"2",label:qsTr("高")},{id:"3",label:qsTr("高+中")},{id:"4",label:qsTr("高+低")},{id:"5",label:qsTr("中+低")}]
                         value: options[veyra.vfgQuality].label
                         onPicked: id => veyra.vfgQuality = Number(id)
                     }

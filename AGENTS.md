@@ -1,8 +1,12 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-11 当前修复本地合并授权**：用户明确要求将 Codex 与 Claude 当前修复合入 main。按 docs/MERGE_CURRENT_FIXES_PLAN_2026-10-11.md，在 codex/merge-current-fixes-20261011 整合已验4557ab6（含e8300d9）与Claude1d4c33f，必要冲突适配后构建/定向回归，再本地main合并；覆盖这些接点历史no-merge。59旧工作树/504脏文件及来源tip由独立start/bundle保护，main仅按本次授权更新。默认档位、33ms统计/250ms状态节奏保持，不派Agent，不改运行库/模型/驱动/真实配置。产物全E盘，每测试≤300秒、构建≤900秒；不push/Release/打包/关机，不恢复已撤回负优化或旧未完成实验。
+
 > **2026-10-11 内容节奏/显示限速状态授权**：用户要求纠正去重、垂直同步等正常运行误报“输出未达标”，状态上方显示选项与原因。按 docs/CADENCE_STATUS_PLAN_2026-10-11.md，从已验e8300d9在codex/cadence-status-20261011隔离实施共享状态判定/bridge/QML/翻译及定向测试；覆盖这些UI接点旧冻结。58旧树/504脏文件与运行库原件保护；不派Agent，不改采集/去重/补帧/NR/SR/呈现算法、不加Timer或提高UI刷新率/GPU优先级，不改用户配置。产物全E盘，测试≤300秒/构建≤900秒；无main合并/push/打包/Release/关机。
 
 > **2026-10-11 DLSS 4.5 SR 接手授权**：用户要求接手 Claude 最新未完成的超分接入并启动软件供测试。按 docs/DLSS45_SR_PLAN_2026-10-11.md，在 codex/dlss45-sr-handoff-20261011 从049902b继承已封存的9文件patch，完成 K/M/L 模型选择的必要 settings/NGX/graph、预设/session、bridge/QML/翻译及定向构建验收接点；此范围覆盖历史冻结。原57工作树/504脏文件由独立start保护，Claude原树不改；不派Agent、不改运行库/模型/驱动/用户配置，不改变33ms UI统计/GPU优先级，不顺手合入VFG mixed。全产物E盘，每测试≤300秒、构建≤900秒；本轮不main合并/push/Release，画质由用户验收，不把Create成功当画质提升。
+
+> **2026-10-11 VFG 混合档与 GPU 镜头切换判断（Claude）**：用户看完调研 reports/vfg-deep-opt-20261011/方案选项.md 后要求“先做1+2吧，创建存档开分支，然后直接做好，混合档位要做三档 一个高+中 一个高+低 一个中+低 适配各种机型”。存档 `checkpoint/pre-claude-vfg-mixed-20261011`（main 049902b）与 E 盘 `archives/claude-vfg-mixed-20261011`（bundle 已 verify，start.json 记录 55 工作树/495 脏文件）。分支 `claude/vfg-mixed-20261011` 只改 VfgBackend（第二个 NvVFX 实例、每对 A/B 的 GPU 镜头切换判断 shaders/VfgShotChange.hlsl + predicated 拷贝、关闭 SDK 自带检测；`VEYRA_TEST_VFG_AUTO_SHOT_CHANGE=1` 恢复旧行为）、图中 capture 的一个参数、vfgQuality 取值 0–5（bridge/两页 QML/翻译/状态提示）、CMake 着色器登记与 VFG 测试。默认“中”不变；DLSS/XeSS/FSR、NR/SR、运行库/模型/驱动/用户配置不改。旧版打开含混合档的预设库会拒绝并保留原文件。无 merge/push/Release。详见 docs/VFG_MIXED_TIERS_2026-10-11.md。
 
 > **2026-10-11 Claude修复合并完成**：已验整合tip `9c14ee2` 通过本地main功能merge `3a08ce8` 合入，完整Git树相同，随后只补收尾文档。六Claude分支、UI29e33df和退出回调竞态修复在main；26项回归、滚动clip0、卡死诊断/恢复/有界退出及普通class2 NR性能核对通过。软件CPU首次+15.09%触发守卫，倒序复测及双顺序平均+6.52%通过同一阈值，完整失败/复测数据保留，不宣传普遍性能收益。保持33ms统计、负优化回退和未实卡边界；54旧工作树/496脏文件、七来源tip及原包1626文件保持，唯main按授权更新。没有push/新包/Release/关机；最终回执reports/merge-claude-fixes-20261011/final.json。
 

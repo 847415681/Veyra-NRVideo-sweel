@@ -2874,7 +2874,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         // therefore includes actual cross-queue work, not CPU wall time.
         if(runFg){gpuTimer_.mark(list,GpuStage::FgBatch);gpuTimer_.mark(list,GpuStage::Fg1);}
         tracker_.transition(list,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
-        if(!vfgBackend_->capture(list,videoFrame_[parity].Get(),parity)){failedBackend_=engine::FailedBackend::Fg;return false;}
+        // The same list tests A/B for a shot change on the GPU (VfgBackend);
+        // a reset pair has no valid A and is bypassed by ShotChange instead.
+        if(!vfgBackend_->capture(list,videoFrame_[parity].Get(),parity,!resetFg)){failedBackend_=engine::FailedBackend::Fg;return false;}
         tracker_.transition(list,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
     }
     if(!runFg)gpuTimer_.resolve(list);

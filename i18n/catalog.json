@@ -15240,6 +15240,41 @@
    "zh-TW": "擷取 60→30",
    "en": "Capture 60→30",
    "ja": "キャプチャ 60→30"
+  },
+  {
+   "zh": "高+中",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "高+中",
+   "en": "High+Medium",
+   "ja": "高+中"
+  },
+  {
+   "zh": "高+低",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "高+低",
+   "en": "High+Low",
+   "ja": "高+低"
+  },
+  {
+   "zh": "中+低",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "中+低",
+   "en": "Medium+Low",
+   "ja": "中+低"
+  },
+  {
+   "zh": "高质量更耗时；混合档：每对原帧的中间帧用前一档，其余用后一档",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "高品質更耗時；混合檔：每對原始影格的中間影格用前一檔，其餘用後一檔",
+   "en": "Higher quality takes longer. Mixed tiers: the middle frame of each source pair uses the first model, the others the second.",
+   "ja": "高品質ほど時間がかかります。混合：各元フレーム間の中央の 1 枚に前者、残りに後者を使います。"
+  },
+  {
+   "zh": "VFG 中间帧约 %1 ms、其余每张约 %2 ms，当前负载约可稳定 %3X",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "VFG 中間影格約 %1 ms、其餘每張約 %2 ms，目前負載約可穩定 %3X",
+   "en": "VFG takes about %1 ms for the middle frame and %2 ms for each other frame; about %3X holds at the current load",
+   "ja": "VFG は中央の 1 枚が約 %1 ms、その他は 1 枚あたり約 %2 ms、現在の負荷で安定するのは約 %3X"
   }
  ]
 }
