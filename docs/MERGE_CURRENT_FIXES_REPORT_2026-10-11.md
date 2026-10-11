@@ -28,3 +28,9 @@ UI没有新增生产Timer或整窗重绘，33ms统计/250ms状态节奏及GPU默
 所有新产物位于 `E:/项目/Veyra/{build,tests,logs,tmp,reports,archives}/merge-current-fixes-20261011`。`seal.py validate`核对833份源码/配置、595份构建源输入、327份不可变构建输入、13份EXE、56份实际部署QML/JS、1626个原包文件，以及59原工作树/504脏文件；最终main更新后其余58旧树仍须完全相同。每进程测试≤300秒，生产Main.qml已恢复，所有测试用私有data-dir/TEMP/CUDA缓存，真实用户配置与运行库原件不变。源码Git不含新增SDK、DLL或模型。
 
 AMD/其它NVIDIA型号、真实采集卡、HDR实际导出及长期显存没有在本次重验；VFG混合档的主观观感仍由用户测试，NVIDIA长期显存问题没有被本次合并宣称根治。原正式/测试包没有更新。
+
+## 合并收尾
+
+实测产品 `4904b73a12308a9f98ba0b3bffd20aa470b41fec` 通过后，仅追加报告/WORKLOG得到整合记录tip `adcf509e8a752d8a60645c894262cd5dd43f33ad`。本地main执行 `git merge --no-ff codex/merge-current-fixes-20261011` 得到功能merge `d2e1396cbfafe7137829ec5f4264c86e7ce6b519`，无冲突；`git diff --exit-code codex/merge-current-fixes-20261011 HEAD`核对完整Git树相同。随后只补AGENTS/CURRENT_STATUS/WORKLOG/本报告四份文档，没有修改实测产品。
+
+`seal.py final`复查833份源码/配置、13份EXE、所有通过/失败回执SHA、原包1626文件，验证来源tip均为main祖先、main clean、其它58旧工作树/504脏文件保持。开工/实测/合并标签保留，最终main提交与增量源码bundle及SHA写入 `E:/项目/Veyra/reports/merge-current-fixes-20261011/final.json`。原分支保留；无推送、打包、发布或关机。
