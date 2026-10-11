@@ -312,7 +312,9 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString runStatus READ runStatus NOTIFY perfChanged)
     Q_PROPERTY(QString runStatusLevel READ runStatusLevel NOTIFY perfChanged)
     Q_PROPERTY(QString runStatusDetail READ runStatusDetail NOTIFY perfChanged)
-    // Achieved output rate / target (source x multiplier); -1 while unknown.
+    Q_PROPERTY(QStringList runOptions READ runOptions NOTIFY perfChanged)
+    Q_PROPERTY(double effectiveOutputFps READ effectiveOutputFps NOTIFY perfChanged)
+    // Achieved output rate / effective policy target; -1 while unknown.
     Q_PROPERTY(double outputRateRatio READ outputRateRatio NOTIFY perfChanged)
     // Frame interval history (ms, newest last) for the frame-time line.
     Q_PROPERTY(QVariantList frameTimes READ frameTimes NOTIFY perfChanged)
@@ -819,6 +821,8 @@ public:
     QString runStatus() const;
     QString runStatusLevel() const;
     QString runStatusDetail() const;
+    QStringList runOptions() const;
+    double effectiveOutputFps() const;
     double outputRateRatio() const;
     QVariantList frameTimes() const;
     int flowQuality() const;

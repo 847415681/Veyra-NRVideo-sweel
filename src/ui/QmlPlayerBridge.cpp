@@ -384,6 +384,8 @@ struct QmlPlayerBridge::Impl {
     ui::live_status::DashboardHistory history;
     int historyTicks = 0;
     QString runStatus, runLevel, runDetail;
+    QStringList runOptions;
+    double effectiveOutputFps=-1;
     std::atomic<double> gpuUtil{-1.0};
     // Hardware adapters in Windows' high-performance order (discrete first). The
     // sampler only counts engines of the adapter whose LUID is in gpuMonitorLuid
@@ -1648,12 +1650,12 @@ QVariantMap QmlPlayerBridge::nodeTimings() const {
 }
 
 double QmlPlayerBridge::stageBudgetMs() const {
-    // One source period: the budget a stage has to stay inside. Zero when the
-    // source rate is unknown, which the UI shows as unmeasured.
-    // With 60->30 capture half rate only every other frame is enhanced, so each has two
-    // source periods; dividing by one read 19 ms of 8K work as 115-130 % while it kept up
-    // (logs8, 2026-10-01).
-    const double fps = impl_->snapshot.nominalSourceFps * (impl_->snapshot.captureHalfRate ? 0.5 : 1.0);
+    // Budget per content frame entering enhancement. Intentional dedup and
+    // playback speed change that interval; a presentation cap alone does not.
+    // Reuse the bounded status sample, without sampling or repainting faster.
+    const auto& s=impl_->snapshot;const auto& h=impl_->history;
+    const double fps=h.session==s.sessionId&&h.revision==s.applied.revision&&h.output.contentFps>0
+        ?h.output.contentFps:s.nominalSourceFps*(s.captureHalfRate?.5:1.0);
     return fps > 0.01 ? 1000.0 / fps : 0.0;
 }
 
@@ -6244,6 +6246,8 @@ bool QmlPlayerBridge::gpuUtilizationKnown() const { return impl_->gpuUtil.load()
 QString QmlPlayerBridge::runStatus() const { return impl_->runStatus; }
 QString QmlPlayerBridge::runStatusLevel() const { return impl_->runLevel; }
 QString QmlPlayerBridge::runStatusDetail() const { return impl_->runDetail; }
+QStringList QmlPlayerBridge::runOptions() const { return impl_->runOptions; }
+double QmlPlayerBridge::effectiveOutputFps() const { return impl_->effectiveOutputFps; }
 double QmlPlayerBridge::outputRateRatio() const { return impl_->rateRatio; }
 
 void QmlPlayerBridge::startGpuSampler() {
@@ -6291,15 +6295,19 @@ void QmlPlayerBridge::startGpuSampler() {
 void QmlPlayerBridge::updateRunStatus() {
     auto& i = *impl_;
     const auto& s = i.snapshot;
-    i.history.sample(s);
+    // QScreen's cached rate for the actual video host, not an arbitrary popup
+    // or another monitor. This uses the existing bounded status cadence.
+    double refresh=0;
+    const HWND owner=i.videoWindow?GetAncestor(i.videoWindow,GA_ROOT):nullptr;
+    for(auto* window:QGuiApplication::topLevelWindows())
+        if(window->isVisible()&&window->screen()&&reinterpret_cast<HWND>(window->winId())==owner){refresh=window->screen()->refreshRate();break;}
+    i.history.sample(s,{refresh,i.compareMode!=0});
+    const auto& rate=i.history.output;
     const auto& f = s.metrics.flow;
     const bool active = s.running && !s.image && s.transport == engine::TransportState::Playing;
     QString status = tr("待机"), level = QStringLiteral("idle");
     if (s.failed) { status = tr("错误"); level = QStringLiteral("err"); }
     else if (s.remoteRecovering) { status = tr("恢复中"); level = QStringLiteral("warn"); }
-    // Comparison pauses frame generation by design; the output then runs at the source
-    // rate, which the rate check would call 输出未达标 (a field user read that as broken FG).
-    else if (active && i.compareMode != 0 && s.applied.multiplier > 1) { status = tr("对比中"); level = QStringLiteral("ok"); }
     else if (active && !s.applying && f.rateWindowReady) {
         // Judged on the engine's own words, shown in the interface language.
         const std::wstring rate = i.history.rateStatus(s);
@@ -6309,6 +6317,38 @@ void QmlPlayerBridge::updateRunStatus() {
     else if (s.applying && s.running) { status = tr("调整中"); level = QStringLiteral("warn"); }
     else if (active) status = tr("采样中");
     else if (s.transport == engine::TransportState::Paused) status = tr("已暂停");
+    QStringList options;
+    const auto chosen=settings();
+    if(chosen.content!=engine::ContentRate::Transport){
+        QString cadence;
+        switch(chosen.content){
+        case engine::ContentRate::Auto:cadence=tr("自动识别内容节奏");break;
+        case engine::ContentRate::Fps30:cadence=tr("识别 %1 fps 内容").arg(30);break;
+        case engine::ContentRate::Fps50:cadence=tr("识别 %1 fps 内容").arg(50);break;
+        case engine::ContentRate::Fps60:cadence=tr("识别 %1 fps 内容").arg(60);break;
+        case engine::ContentRate::Capture60To30:cadence=tr("采集 60→30");break;
+        default:break;
+        }
+        if(s.running&&rate.halfRate)options<<tr("%1 · 当前约 %2 fps").arg(cadence).arg(rate.contentFps,0,'f',0);
+        else if(s.running&&rate.deduplicating)options<<tr("%1 · 去重后约 %2 fps").arg(cadence).arg(rate.contentFps,0,'f',0);
+        else if(s.running&&!s.capture)options<<tr("%1 · 当前来源未去重").arg(cadence);
+        else if(s.running)options<<tr("%1 · 尚未观察到去重").arg(cadence);
+        else options<<cadence;
+    }
+    if(i.presentation.display!=engine::DisplaySync::Tearing){
+        const auto sync=i.presentation.display==engine::DisplaySync::Vsync?tr("垂直同步"):tr("自动显示同步");
+        options<<((refresh>0)?tr("%1 · 屏幕 %2 Hz").arg(sync).arg(refresh,0,'f',1):sync);
+    }
+    if(i.presentation.outputRate!=engine::OutputRateMode::Off){
+        if(s.running&&s.presentationEffective.outputRate==engine::OutputRateMode::Off)
+            options<<tr("输出限帧 · 当前未生效");
+        else if(i.presentation.outputRate==engine::OutputRateMode::FollowDisplay)
+            options<<tr("输出限帧 · 跟随屏幕");
+        else options<<tr("输出限帧 · %1 fps").arg(i.presentation.customFps,0,'f',1);
+    }
+    if(i.presentation.enabled)options<<(s.running&&!s.presentationEffective.enabled?tr("低延迟队列 · 当前未生效"):tr("低延迟队列"));
+    if(!s.capture&&std::abs(s.playbackRate-1.0)>.001)options<<tr("播放速度 %1×").arg(s.playbackRate,0,'f',2);
+    if(i.compareMode!=0)options<<tr("画面对比 · 补帧暂停");
     QStringList detail;
     if (s.running && !s.image) {
         if (s.applied.multiplier > 1) {
@@ -6325,41 +6365,31 @@ void QmlPlayerBridge::updateRunStatus() {
         }
         else detail << tr("未补帧");
         if (s.applied.multiplier > 1 && impl_->compareMode != 0) detail << tr("补帧暂停");
-        else if (s.applied.multiplier > 1 && (s.fgBudgetLimited || s.xessGenerationSuppressed)) detail << tr("调度降档");
+        else if (s.applied.multiplier > 1 && (s.fgBudgetLimited || s.xessGenerationSuppressed) &&
+                 (!rate.policyLimited()||i.history.overloaded)) detail << tr("调度降档");
         // Why VFG cannot hold the requested multiplier. One VFG interpolation
         // costs about the same at any resolution, so what fits follows from its
         // measured cost, the rest of the chain and the source interval; the
         // display refresh caps what can be shown. A hint only: no setting changes.
         if (s.applied.multiplier > 1 && s.applied.frameGenerationBackend == engine::FrameGenerationBackend::Vfg && i.compareMode == 0) {
-            const double source = s.nominalSourceFps * (s.captureHalfRate ? 0.5 : 1.0);
+            const double source = rate.contentFps;
             const auto perRun = f.gpuTiming[size_t(diagnostics::GpuStage::Fg1)].p95;
             const auto batch = f.gpuTiming[size_t(diagnostics::GpuStage::FgBatch)].p95;
             const auto whole = f.enhancementProcessing.p95;
-            if (s.fgBudgetLimited && source > 1 && perRun && *perRun > 0 && batch && whole) {
+            if (s.fgBudgetLimited && (!rate.policyLimited()||i.history.overloaded) && source > 1 && perRun && *perRun > 0 && batch && whole) {
                 const double base = std::max(0.0, *whole - *batch);
                 const int fits = std::clamp(1 + int(std::floor((1000.0 / source - base) / *perRun)), 1, int(s.applied.multiplier));
                 if (fits < int(s.applied.multiplier)) detail << tr("VFG 每张约 %1 ms，当前负载约可稳定 %2X").arg(*perRun, 0, 'f', 1).arg(fits);
             }
-            double refresh = 0;
-            for (auto* window : QGuiApplication::topLevelWindows())
-                if (window->isVisible() && window->screen()) { refresh = window->screen()->refreshRate(); break; }
             if (refresh > 1 && source > 1 && source * s.applied.multiplier > refresh * 1.02)
                 detail << tr("屏幕 %1 Hz 最多显示约 %2X").arg(refresh, 0, 'f', 0).arg(std::max(1, int(refresh / source)));
         }
         if (s.nominalSourceFps > 0.01) detail << tr("源 %1 fps").arg(s.nominalSourceFps, 0, 'f', 2);
+        if(active&&f.rateWindowReady&&rate.targetFps>0)detail<<tr("有效目标 %1 fps").arg(rate.targetFps,0,'f',1);
         const auto autoState=nrAutoStatus();if(!autoState.isEmpty())detail<<autoState;
     }
-    // 1.4.4 DashboardHistory: target = source x multiplier (half-rate capture
-    // halves it); actual = what reached present (XeSS: its SDK submit rate).
     double ratio = -1.0;
-    if (active && f.rateWindowReady) {
-        const bool measuredInput = s.capture && s.captureReceived > 30 && s.captureFps > 0;
-        const double source = measuredInput ? std::min(s.nominalSourceFps, s.captureFps) : s.nominalSourceFps;
-        const bool xessSink = s.applied.multiplier > 1 && engine::presentSinkFrameGeneration(s.applied.frameGenerationBackend);
-        const double actual = xessSink ? f.xessSdkSubmitFps : f.presentSubmitFps;
-        const double target = source * (s.captureHalfRate ? 0.5 : 1.0) * (i.compareMode != 0 ? 1u : s.applied.multiplier);
-        if (target > 0) ratio = actual / target;
-    }
+    if (active && f.rateWindowReady && rate.targetFps>0)ratio=rate.actualFps/rate.targetFps;
     const bool ratioChanged = std::abs(ratio - i.rateRatio) > 0.005;
     i.rateRatio = ratio;
     // Frame-time line: the submit interval while playing (a real display rate is
@@ -6370,8 +6400,10 @@ void QmlPlayerBridge::updateRunStatus() {
     } else if (!s.running && !i.frameTimes.empty()) i.frameTimes.clear();
     const QString text = detail.join(QStringLiteral(" · "));
     const double gpu = i.gpuUtil.load();
-    const bool changed = ratioChanged || active || status != i.runStatus || level != i.runLevel || text != i.runDetail || std::abs(gpu - i.gpuPublished) > 0.05;
+    const double target=active&&f.rateWindowReady&&rate.targetFps>0?rate.targetFps:-1;
+    const bool changed = ratioChanged || active || status != i.runStatus || level != i.runLevel || text != i.runDetail || options!=i.runOptions || std::abs(target-i.effectiveOutputFps)>.05 || std::abs(gpu - i.gpuPublished) > 0.05;
     i.runStatus = status; i.runLevel = level; i.runDetail = text; i.gpuPublished = gpu;
+    i.runOptions=options;i.effectiveOutputFps=target;
     if (changed) emit perfChanged();
 }
 

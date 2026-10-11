@@ -14,8 +14,93 @@
 #include <vector>
 #include <stdexcept>
 void require(bool value,const char* why){if(!value)throw std::runtime_error(why);}
+// Judge intentional rate changes against policy, never against measured output.
+void outputRateContracts(){
+    using namespace veyra;
+    using ui::live_status::DashboardHistory;
+    using ui::live_status::RateContext;
+    const auto live=[](){
+        engine::PlayerSnapshot s;s.running=s.capture=true;s.transport=engine::TransportState::Playing;
+        s.sessionId=1;s.applied.revision=1;s.captureReceived=120;s.captureFps=s.nominalSourceFps=60;
+        s.metrics.flow.rateWindowReady=true;s.presentationEffective.display=engine::DisplaySync::Tearing;
+        return s;
+    };
+    const auto settle=[](DashboardHistory& h,engine::PlayerSnapshot& s,double skipHz,RateContext c={}){
+        for(int i=0;i<24;++i){c.nowSeconds=i*.25;s.captureRateSkipped=uint64_t(skipHz*c.nowSeconds);h.sample(s,c);}
+    };
+    DashboardHistory h;auto s=live();
+    s.applied.content=engine::ContentRate::Auto;s.contentFps=30;s.metrics.flow.presentSubmitFps=30;
+    settle(h,s,30);
+    require(std::abs(h.output.targetFps-30)<.01&&!h.overloaded&&std::wstring(h.rateStatus(s))==L"正常","60Hz transport with 30 unique frames is healthy at 30fps");
+    require(h.output.deduplicating,"dedup reason requires observed intentional skips");
+    s.metrics.flow.presentSubmitFps=15;settle(h,s,30);
+    require(h.overloaded,"real output deficit remains visible after dedup");
+    h={};s=live();s.applied.content=engine::ContentRate::Auto;s.contentFps=30;s.metrics.flow.presentSubmitFps=30;
+    settle(h,s,0);
+    require(h.overloaded&&!h.output.deduplicating&&h.output.targetFps==60,"enabling Auto or a learned hint alone cannot excuse missing frames");
+    h={};s=live();s.applied.content=engine::ContentRate::Auto;s.contentFps=4;s.metrics.flow.presentSubmitFps=4;
+    settle(h,s,56);
+    require(!h.overloaded&&h.output.targetFps==4,"intentional static-picture dedup is healthy");
+    s.metrics.flow.presentSubmitFps=0;settle(h,s,60);
+    require(h.overloaded&&h.output.targetFps>=1,"even maximal skip counts cannot hide a stopped presenter");
+    h={};s=live();s.applied.content=engine::ContentRate::Capture60To30;s.captureHalfRate=true;s.contentFps=30;
+    s.metrics.flow.presentSubmitFps=30;settle(h,s,30);
+    require(h.output.targetFps==30&&!h.overloaded,"60-to-30 and its skip counter are counted once");
+    h={};s=live();s.captureFps=40;s.applied.content=engine::ContentRate::Auto;s.contentFps=20;
+    s.metrics.flow.presentSubmitFps=20;settle(h,s,20);
+    require(!h.overloaded&&h.inputLimited&&std::wstring(h.rateStatus(s))==L"输入帧率不足","dedup never hides a deficient input");
+    h={};s=live();s.applied.multiplier=4;s.presentationEffective.display=engine::DisplaySync::Vsync;
+    s.metrics.flow.presentSubmitFps=60;settle(h,s,0,{60});
+    require(h.output.targetFps==60&&h.output.displayLimited&&!h.overloaded,"VSync target is bounded by the actual display");
+    s.fgBudgetLimited=true;settle(h,s,0,{60});
+    require(std::wstring(h.rateStatus(s))==L"正常","meeting a display-limited target is normal despite redundant FG admission being reduced");
+    s.metrics.flow.presentSubmitFps=45;settle(h,s,0,{60});
+    require(h.overloaded&&std::wstring(h.rateStatus(s))!=L"正常","VSync cannot hide output below its effective target");
+    h={};s=live();s.applied.multiplier=4;s.presentationEffective.display=engine::DisplaySync::Automatic;
+    s.metrics.flow.presentSubmitFps=60;settle(h,s,0,{60});
+    require(!h.overloaded&&h.output.displayLimited,"Automatic display sync also uses the refresh limit");
+    s.presentationEffective.display=engine::DisplaySync::Tearing;++s.presentationRevision;settle(h,s,0,{60});
+    require(h.overloaded&&h.output.targetFps==240&&!h.output.displayLimited,"Tearing does not inherit a display cap");
+    h={};s=live();s.applied.multiplier=4;s.presentationEffective.display=engine::DisplaySync::Vsync;
+    s.metrics.flow.presentSubmitFps=60;settle(h,s,0);
+    require(h.overloaded&&!h.output.displayLimited,"unknown monitor refresh is never guessed");
+    h={};s=live();s.applied.multiplier=4;s.presentationEffective.outputRate=engine::OutputRateMode::Custom;
+    s.presentationEffective.customFps=30;s.metrics.flow.presentSubmitFps=30;settle(h,s,0);
+    require(!h.overloaded&&h.output.outputLimited&&h.output.targetFps==30,"effective custom output cap is a normal target");
+    s.metrics.flow.presentSubmitFps=15;settle(h,s,0);
+    require(h.overloaded,"real deficit below a custom cap remains visible");
+    h={};s=live();s.applied.multiplier=4;s.presentationEffective.outputRate=engine::OutputRateMode::FollowDisplay;
+    s.metrics.flow.presentSubmitFps=144;settle(h,s,0,{144});
+    require(!h.overloaded&&h.output.targetFps==144&&h.output.outputLimited,"follow-display cap is applied even with unsynchronized present");
+    h={};s=live();s.applied.multiplier=2;s.applied.frameGenerationBackend=engine::FrameGenerationBackend::XeSS;
+    s.presentation.outputRate=engine::OutputRateMode::Custom;s.presentation.customFps=30;
+    s.presentationEffective.outputRate=engine::OutputRateMode::Off;s.metrics.flow.xessSdkSubmitFps=120;
+    settle(h,s,0);
+    require(!h.overloaded&&h.output.targetFps==120&&!h.output.outputLimited,"provider-disabled requested cap cannot lower the target");
+    s.metrics.flow.xessSdkSubmitFps=30;settle(h,s,0);
+    require(h.overloaded,"requested but ineffective provider cap cannot conceal missing SDK submissions");
+    h={};s=live();s.capture=false;s.nominalSourceFps=30;s.playbackRate=.5;s.metrics.flow.presentSubmitFps=15;
+    settle(h,s,0);require(!h.overloaded&&h.output.targetFps==15&&h.output.speedAdjusted,"half-speed file playback is healthy at half the source rate");
+    s.playbackRate=1.5;s.metrics.flow.presentSubmitFps=45;settle(h,s,0);
+    require(!h.overloaded&&h.output.targetFps==45,"faster file playback raises rather than lowers the target");
+    h={};s=live();s.applied.multiplier=4;s.metrics.flow.presentSubmitFps=60;
+    settle(h,s,0,{0,true});require(!h.overloaded&&h.output.targetFps==60,"comparison suspends FG and is judged at the original-frame rate");
+    s.metrics.flow.presentSubmitFps=30;settle(h,s,0,{0,true});
+    require(h.overloaded,"comparison still reports original-frame starvation");
+    h={};s=live();s.presentationEffective.enabled=true;s.metrics.flow.presentSubmitFps=30;
+    settle(h,s,0);require(h.overloaded&&h.output.targetFps==60,"low-latency queue alone is not a rate cap");
+    s.presentationEffective.outputRate=engine::OutputRateMode::Custom;s.presentationEffective.customFps=30;++s.presentationRevision;
+    h.sample(s,{0,false,6});require(!h.overloaded,"changing the effective presentation policy revokes stale output warnings");
+    h={};s=live();s.applied.content=engine::ContentRate::Auto;s.contentFps=30;s.metrics.flow.presentSubmitFps=30;
+    settle(h,s,30);s.applied.content=engine::ContentRate::Transport;++s.applied.revision;
+    h.sample(s,{0,false,6});require(h.skipped.empty()&&!h.output.deduplicating&&h.output.targetFps==60,"source-timestamp mode revokes dedup history");
+    s.applied.multiplier=2;s.fgBudgetLimited=true;settle(h,s,0);
+    require(std::wstring(h.rateStatus(s))==L"补帧调度降档","uncapped FG admission shortfall retains its own warning");
+    std::cout<<"PASS output-rate policy: dedup, static, half-rate, display sync, caps, provider, speed, comparison, real deficits and resets\n";
+}
 int wmain(int argc,wchar_t** argv){try{
     using namespace veyra;
+    outputRateContracts();
     {source::CaptureAudioClock c;require(c.observe({},100,10,false)==100,"untimed audio anchors to arrival");require(c.observe({},170,10,false)==110,"driver arrival jitter cannot stretch untimed PCM");require(c.observe(120,180,10,false)==120,"valid driver timestamp takes precedence");require(c.observe({},190,10,false)==130,"missing timestamps continue from valid samples");require(c.observe({},500,10,true)==500,"discontinuity reanchors untimed audio");require(c.observe(0,510,10,true)==0,"timestamp zero remains valid");}
     {
         ui::live_status::DashboardHistory history;engine::PlayerSnapshot s;
