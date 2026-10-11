@@ -1,6 +1,6 @@
 # Claude 修复整合验收记录（2026-10-11）
 
-本次只执行用户授权的本地 main 整合。起点 `5ba186a91e868c28b4b5ec46c9166aa321d90998`，隔离分支 `codex/merge-claude-fixes-20261011`。六个已完成 Claude 分支及已验 UI 完整 tip 依次 --no-ff 合入，所有负优化 revert 随完整分支保留；来源和顺序见 [方案](MERGE_CLAUDE_FIXES_PLAN_2026-10-11.md)。本文件记录实测候选；main 合并与最终提交另由本任务 final.json 和后续工作记录确认。
+本次只执行用户授权的本地 main 整合。起点 `5ba186a91e868c28b4b5ec46c9166aa321d90998`，隔离分支 `codex/merge-claude-fixes-20261011`。六个已完成 Claude 分支及已验 UI 完整 tip 依次 --no-ff 合入，所有负优化 revert 随完整分支保留；来源和顺序见 [方案](MERGE_CLAUDE_FIXES_PLAN_2026-10-11.md)。实测候选 `9c14ee28a9175aa326fb0aa09c15bfa5808e0f0e` 已通过功能 merge `3a08ce8cf28de6d0f83c7b025bd4a7f54fe37b27` 合入本地 main，完整 Git 树相同；随后仅更新四份收尾文档，产品源码与实测输入保持一致。最终 main、checkpoint/bundle 和保护核对由 `E:/项目/Veyra/reports/merge-claude-fixes-20261011/final.json` 确认。
 
 ## 保留的修复与适配
 

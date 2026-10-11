@@ -9084,3 +9084,6 @@ ui-software-damage-test.py performance-final四例顺序40秒有效播放、各5
 ## 2026-10-11 Claude六分支及UI整合验收
 
 用户授权本地main整合，隔离codex/merge-claude-fixes-20261011从5ba186a依次完整合入六Claude修复tip及UI29e33df，负优化revert保留；仅历史文档冲突，源码无冲突。补看门狗回调先于相关成员析构的退出竞态。全产物E盘同名目录，54旧树/496脏文件和七来源保持。构建50依赖闭包/19EXE，76.6秒，GUI d4e5aa25cf78120c51eb7793165452101b10798bfd67e1c6cdc724f6ba9d078a，不是clean全量重编；完整CMake保留PS5/Moonlight/Xbox/DeckLink。26项回归、150%滚动clip0/37图标、两种卡死注入/一次dump/恢复及3015ms有界退出、GTA普通class2四例性能守卫通过。i18n旧29空翻译保持/placeholder0。配置protoc路径遗漏、Ninja路径检查断言和Python隔离依赖失败均已如实记录，详见docs/MERGE_CLAUDE_FIXES_REPORT_2026-10-11.md与reports同名/validation.json。冻结实测候选后执行main合并；最终提交/保护核对见后续收尾。无push/打包/发布/关机，实卡和NV显存边界保持。
+
+
+2026-10-11 本地main整合收尾：实测tip 9c14ee28a9175aa326fb0aa09c15bfa5808e0f0e，main功能merge 3a08ce8cf28de6d0f83c7b025bd4a7f54fe37b27。`git merge --no-ff codex/merge-claude-fixes-20261011`无冲突，`git diff --exit-code codex/merge-claude-fixes-20261011 HEAD`通过，完整Git树相同；后续仅AGENTS/CURRENT_STATUS/本WORKLOG/MERGE_CLAUDE_FIXES_REPORT四份文档更新。六Claude来源和UItip全为main祖先，负优化revert保持。首轮软件CPU +15.09%超过15%守卫，保留失败后不改产品、不改数值阈值，以新→旧倒序追加两例；倒序CPU 0.238783→0.235530秒/秒，双顺序平均0.229344→0.244308（+6.52%），NR/UI守卫保持，故最终六例性能核对完成；不将单次差异当严格等价/普遍提升。finalize.py seal逐项复查595产品/测试输入、19EXE、证据SHA、原包1626文件、54旧树/496脏文件（main按授权例外）、七来源分支不变及仅文档差异，结果与最终提交/标签/增量bundle写入reports同名/final.json。所有新产物E盘，不清理其它任务文件/用户数据，没有push/打新包/发布/关机。

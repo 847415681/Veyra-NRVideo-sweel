@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-11 Claude修复合并完成**：已验整合tip `9c14ee2` 通过本地main功能merge `3a08ce8` 合入，完整Git树相同，随后只补收尾文档。六Claude分支、UI29e33df和退出回调竞态修复在main；26项回归、滚动clip0、卡死诊断/恢复/有界退出及普通class2 NR性能核对通过。软件CPU首次+15.09%触发守卫，倒序复测及双顺序平均+6.52%通过同一阈值，完整失败/复测数据保留，不宣传普遍性能收益。保持33ms统计、负优化回退和未实卡边界；54旧工作树/496脏文件、七来源tip及原包1626文件保持，唯main按授权更新。没有push/新包/Release/关机；最终回执reports/merge-claude-fixes-20261011/final.json。
+
 > **2026-10-11 Claude 修复本地整合**：用户明确要求将目前 Claude 分支修复合入 main。按 docs/MERGE_CLAUDE_FIXES_PLAN_2026-10-11.md，在 codex/merge-claude-fixes-20261011 从 main5ba186a 整合六个已提交的 Claude 修复分支及已验 UI29e33df；保留分支内负优化回退，只做必要冲突/生命周期适配、构建与定向回归，覆盖这些接点的历史冻结及 no-merge。通过后允许本地 main 合并，不 push/Release/打包/关机。独立 start/bundle 保护54旧工作树/496脏文件，来源分支不改；不派Agent、不改运行库/驱动/模型/真实配置，保持33ms统计和普通GPU优先级。所有产物E盘；每测试≤300秒、构建≤900秒，现场未验边界如实记录，不把各分支历史通过冒充合并验证。
 
 > **2026-10-10 VFG 优化（Claude，任务一）**：用户“开始进行优化吧，全部搞定掉”“开始之前先创建存档，然后开分支弄，如果是结果是性能反而倒退，直接退回”。存档 `checkpoint/pre-claude-perf-20261010`（main 5ba186a）与 E 盘 `archives/claude-perf-20261010`（bundle 已 verify、46 工作树/495 脏文件 start.json）；在 `claude/vfg-20261010` 只改 VFG 后端/图内 VFG 分支/实时 VFG 准入/状态提示，软件链路在独立分支，二者不互相依赖。同 EXE 测试开关 A/B，负优化当场退回并留证：V1 保留（4X 201→215 fps），V2、V3 退回，V5 状态提示保留。不改 DLSS/XeSS/FSR、运行库/模型/驱动/用户配置；无 merge/push/Release，测试≤300 秒、构建≤900 秒。详见 docs/VFG_TASK_2026-10-10.md。
