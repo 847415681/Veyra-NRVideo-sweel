@@ -9136,3 +9136,12 @@ GUI实际复现同回调FG关闭+0.5X触发seek，缓存帧被discardBefore跳�
 harness/regress.py video rollback在logs/cadence-status-20261011/cadence-status/tests-20261011-215330分别43.0/17.8秒通过：8轮NR/SR/FG热切换、新增事务+seek确认、失败回滚恢复出帧。原4K GTA输入、内部1080NR。所有本轮失败与修复详见docs/CADENCE_STATUS_REPORT_2026-10-11.md；213650卡片越界、213826/213957/214052夹具等待、214312/214630真实事务确认错误的原证据保留，没有冒称通过。i18n --check占位符0错误，原29条未译保持，diff --check通过。
 
 最终GUI SHA be00985661932e578f305e454589999c1dc8117f45bad787f10c1eee0a0ac442，tests/cadence-status-20261011/app，版本2.0.6-cadence-status-test-20261011。生产Main.qml恢复原字节，GUI夹具移除；用户测试profile复制已正常退出的上一私有测试实例，实际用户配置不动。所有源码/构建/测试/日志/临时缓存/归档在E:/项目/Veyra下本轮子目录；失败GUI的临时JIT/Qt缓存已清理，仅留成功缓存供运行与原失败日志。最后源文件/构建输入/10EXE/QML/原包1626文件/58旧树504脏文件校验及启动见logs/cadence-status-20261011/final.json。未进行性能A/B、未接真实去重采集卡或验其它显卡/provider，不宣称提速/物理屏幕FPS/全硬件通过。无main合并、push、打包、Release或关机。
+
+
+## 2026-10-11 当前Codex与Claude修复本地整合验收
+
+用户授权两边当前修复合入main。从049902b建立codex/merge-current-fixes-20261011，完整合入4557ab6（含e8300d9）及Claude1d4c33f，实测产品tip 4904b73a12308a9f98ba0b3bffd20aa470b41fec。59旧树/504脏文件独立start/bundle保护；没有改原脏补丁，六个旧Claude修复已在main，两份旧RTSS研究/已结束圆刚诊断保持原分支。三处合并冲突保留历史、(zh,ctx)翻译键和实际内容帧率+正常限速判定，模型默认值/UI刷新/GPU优先级/已撤回负优化保持。
+
+实际命令python -X utf8 -B -I tmp/merge-current-fixes-20261011/build.py：42依赖闭包/13EXE，67.9秒，非全量重编；configure.py完整CMake/私有probe通过，新VFG shader、DeckLink、既有patched FFmpeg保留。GUI SHA 05721e1676ef29841ab204a24f46858c7ed4ab17313a0f169f4f8a9ce2eaaddd。harness/regress.py两批16项全通过，VFG async/sync各2425项、设置683项；最长99.8秒。ui-smoke.py真实12状态/6布局60.3秒通过，三种混合档实际出帧；sr-ui-smoke.py selection restart用29.8/5.3秒通过M/L+混合VFG组合预设与独立session重启恢复。首次SR GUI因夹具缺FG节点失败，修夹具用新私有profile回归，原日志与失败receipt保留；翻译准备脚本漏ctx断言也保留并修正，不改产品迁就测试。
+
+seal.py validate逐项核对源码/输入/EXE/QML/原包1626文件及旧树；证据reports/merge-current-fixes-20261011/validation.json，各过程logs/merge-current-fixes-20261011。全产物E盘，私有配置和缓存，生产Main恢复，无新DLL/SDK/模型入Git，不派Agent，不重跑无新依据的性能A/B，不把软件提交FPS冒充物理上屏，不宣称其它显卡/实卡/长期显存已通过。详见docs/MERGE_CURRENT_FIXES_REPORT_2026-10-11.md。接下来冻结实测树并本地main合并，收尾结果追加记录；不push/打包/Release/关机。
