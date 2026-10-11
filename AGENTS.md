@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-11 Elgato HDR/RGB 对齐 Nitlink 与 OBS（Claude）**：用户反馈 1.x 接入 Nitlink 修好的 Elgato HDR 红色溢出又出现、RGB 黑屏。核查确认 2.0 保留了 be3e2e6，但它只覆盖 4K60 Pro MK.2 + P010。分支 `claude/elgato-hdr-20261011`（存档同 logs16 任务）只改 Elgato 厂商控制（全部 Elgato 名称、8 位格式打开卡内色调映射、关闭时恢复）、非 MK.2 P010 的全范围色度开关（`fullRangeChroma` / YuvToLinearRgb 模式 2）及测试。其它采集卡、默认设置、运行库、驱动、用户配置不变；无 Elgato 实卡，现场需反馈者日志确认。无 merge/push/Release。详见 docs/ELGATO_HDR_PARITY_2026-10-11.md。
+
 > **2026-10-10 已验修复合入本地main**：用户在完整测试包交付后明确“合并到main吧”。已将codex/sr-visual-quality-20261010的48d8f34及其11个未合入提交通过--no-ff整合，功能merge为ff80a49，Git树与实测分支完全相同；随后仅更新合并记录/当前状态。本地main包含PGS字幕、播放列表/PR31、BMD原生开关、设置恢复/输入焦点/布局/关闭项编辑等已验修复，SR画质实验保持撤回。范围与验收见docs/MERGE_MAIN_2026-10-10.md；46工作树/495脏文件存档到E盘archives/merge-fixes-20261010/start.json，除本轮main外均保持。新构建明确配置DeckLink SDK，打包使用已验zlib/PS5 slices256版FFmpeg，不无意退回旧依赖。此次只本地合并和文档收尾，不push/Release/换版本/重打包/关机，不改运行库原件/用户配置，不删旧分支或工作树；历史“尚未合并”仅代表当时。
 
 > **2026-10-10 超分实验撤回与本地测试包**：用户要求停止超分继续优化、去掉负优化并汇报，随后明确“弄好了打个测试包给我”。本轮所有SR生产实验（局部/整帧静态运动校验、额外纹理/pass、DLSS档位及FSR曝光实验）全部撤回到c664a67，保留此前已验功能修复和共同参考测试工具。本地制作2.0.6-fixes-20261010完整NVIDIA测试包与对应源码，逐文件核对既有批准runtime、patched FFmpeg的zlib/PS5 slices256、许可证、私有配置冷启动与ZIP；覆盖下条“不打测试包”。不新发正式版、不merge/push/Release/关机，不派Agent，不动45既有工作树/495脏文件/main或真实配置。不得把重复帧误差改善说成一般视频画质提升。
