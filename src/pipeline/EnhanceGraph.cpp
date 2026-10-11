@@ -1298,7 +1298,7 @@ bool EnhanceGraph::initNgxFeatures()
         ngx::DlssSrBackend::CreateDesc sd{};
         sd.inputWidth = srcW_; sd.inputHeight = srcH_;
         sd.outputWidth = workW_; sd.outputHeight = workH_;
-        sd.perfQuality = 1; sd.enableOutputSubrects = false;
+        sd.perfQuality = 1; sd.enableOutputSubrects = false; sd.model = desc_.dlssSrModel;
         ID3D12GraphicsCommandList* list = ring_.acquire(0, st);
         if (list == nullptr) { failedBackend_=engine::FailedBackend::Infrastructure; return false; }
         failedBackend_=engine::FailedBackend::Sr;
@@ -2874,7 +2874,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         // therefore includes actual cross-queue work, not CPU wall time.
         if(runFg){gpuTimer_.mark(list,GpuStage::FgBatch);gpuTimer_.mark(list,GpuStage::Fg1);}
         tracker_.transition(list,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
-        if(!vfgBackend_->capture(list,videoFrame_[parity].Get(),parity)){failedBackend_=engine::FailedBackend::Fg;return false;}
+        // The same list tests A/B for a shot change on the GPU (VfgBackend);
+        // a reset pair has no valid A and is bypassed by ShotChange instead.
+        if(!vfgBackend_->capture(list,videoFrame_[parity].Get(),parity,!resetFg)){failedBackend_=engine::FailedBackend::Fg;return false;}
         tracker_.transition(list,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
     }
     if(!runFg)gpuTimer_.resolve(list);
@@ -3104,7 +3106,7 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if((desc_.enableNr&&s.nrRuntime!=desc_.nrRuntime)||
        (desc_.enableFg&&(std::max(2u,s.multiplier)!=desc_.fgMultiplier||s.frameGenerationBackend!=desc_.frameGenerationBackend||
         (desc_.frameGenerationBackend==engine::FrameGenerationBackend::Vfg&&s.vfgQuality!=desc_.vfgQuality)))||
-       (desc_.enableSr&&s.videoSrQuality!=desc_.videoSrQuality)||
+       (desc_.enableSr&&(s.videoSrQuality!=desc_.videoSrQuality||(desc_.videoSrQuality==0&&s.dlssSrModel!=desc_.dlssSrModel)))||
        (s.multiplier>1&&s.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&(!fgCapsAvailable_||s.multiplier-1>uint32_t(fgMultiFrameMax_))))return false;
     // The colour master switch changes the graph shape (tables + shader branch)
     // and must rebuild; every other colour field is a live uniform update.

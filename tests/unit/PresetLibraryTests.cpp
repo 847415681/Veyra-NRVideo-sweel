@@ -1039,7 +1039,67 @@ __declspec(noinline) void testFlowApplication() {
     check(legacy.flow==source.flow&&legacy.opticalFlowBackend==source.opticalFlowBackend&&legacy.content==ContentRate::Transport,
           "flow apply: v1-v9 chain globals retain existing behavior");
 }
+__declspec(noinline) void testDlssSrModels() {
+    EnhancementSettings source;source.nr=false;source.sr=true;
+    const auto libraryPath=scratch(L"dlss-model-library.v1");
+    const auto legacyLibrary=std::filesystem::path(libraryPath).concat(L".field-render");
+    PresetLibrary writer(libraryPath);writer.setIncludeBuiltins(false);
+    PresetEntry entry;entry.name=L"SR models";entry.kind=ChainMode::List;
+    entry.contents=presetContentMask(PresetContent::Chain);entry.chain=toChain(source);
+    entry.globals=ChainGlobalSettings::capture(source);
+    check(writer.load()&&writer.put(entry),"DLSS presets: save original K library");
+    const auto rollback=readBytes(legacyLibrary);
+    check(!rollback.empty()&&rollback.starts_with("VEYRA_PRESET_LIBRARY 6"),"DLSS presets: K keeps the old format");
+    for(unsigned model=1;model<kDlssSrModelCount;++model){
+        entry.globals->dlssSrModel=model;
+        check(writer.put(entry,true),"DLSS presets: save M/L model");
+        check(readBytes(legacyLibrary)==rollback,"DLSS presets: original library is retained for rollback");
+        PresetLibrary reader(libraryPath);reader.setIncludeBuiltins(false);
+        check(reader.load()&&reader.entries().size()==1&&reader.entries()[0].globals->dlssSrModel==model,
+              "DLSS presets: fresh reader finds the model sidecar");
+        auto applied=source;
+        PresetLibrary::apply(reader.entries()[0],applied);
+        check(applied.dlssSrModel==model,
+              "DLSS presets: applying the chain restores its model");
+        auto colourOnly=reader.entries()[0];colourOnly.contents=presetContentMask(PresetContent::Color);
+        applied.dlssSrModel=0;
+        PresetLibrary::apply(colourOnly,applied);
+        check(applied.dlssSrModel==0,
+              "DLSS presets: colour-only application leaves the SR model alone");
+    }
+    const auto exported=scratch(L"dlss-model-export.v12");
+    check(writer.exportEntry(0,exported),"DLSS presets: export selected model");
+    const auto encoded=readBytes(exported);check(encoded.starts_with("VEYRA_PRESET_LIBRARY 12"),"DLSS presets: new model declares v12");
+    PresetLibrary imported(scratch(L"dlss-model-import.v1"));imported.setIncludeBuiltins(false);std::wstring name;
+    check(imported.load()&&imported.importFile(exported,name)&&imported.entries()[0].globals->dlssSrModel==2,
+          "DLSS presets: import preserves the selected model");
+    // Invalid model at the end of the rendering block must not corrupt a good library.
+    entry.name=L"invalid model";entry.globals->dlssSrModel=kDlssSrModelCount;
+    check(!writer.put(entry),"DLSS presets: invalid model is rejected atomically");
+
+    const auto sessionPath=scratch(L"dlss-model-session.v1");
+    auto session=std::make_unique<ChainSession>(ChainSession::initial(source));
+    check(session->select(ChainMode::Node),"DLSS session: initialize independent node configuration");
+    ChainSessionStore sessions(sessionPath);
+    check(sessions.save(*session),"DLSS session: save K rollback file");
+    const auto sessionRollback=readBytes(sessionPath);
+    session->configurations[0].dlssSrModel=1;
+    session->configurations[1].dlssSrModel=2;
+    auto document=std::make_shared<NodeEditorDocument>();document->nodes=session->configurations[1].chain;
+    check(document->layout.initialize(document->nodes).accepted,"DLSS session: create node editor document");
+    document->globals=static_cast<const ChainGlobalSettings&>(session->configurations[1]);
+    document->globals->dlssSrModel=1;session->configurations[1].editor=document;
+    check(sessions.save(*session)&&readBytes(sessionPath)==sessionRollback,"DLSS session: save new format beside original");
+    auto restored=std::make_unique<ChainSession>();ChainSessionStore reopened(sessionPath);
+    check(reopened.load(*restored)&&*restored==*session,"DLSS session: List, Node and editor draft round-trip independently");
+    // Opting back into K keeps using the sidecar, avoiding stale-model resurrection.
+    session->configurations[0].dlssSrModel=session->configurations[1].dlssSrModel=document->globals->dlssSrModel=0;
+    check(sessions.save(*session),"DLSS session: return to K");
+    ChainSessionStore finalReader(sessionPath);
+    check(finalReader.load(*restored)&&*restored==*session,"DLSS session: saved K wins over old M/L choices");
+}
 int main() {
+    testDlssSrModels();
     testFlowStorage();
     testFlowApplication();
     testNrCorrectionStorage();

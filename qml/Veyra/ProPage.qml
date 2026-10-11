@@ -2,7 +2,7 @@
 //
 // The design's grid: 1fr | 376px columns, rows auto | 1fr | auto, gap 10,
 // padding 14. The inspector spans rows 2-3 on the right; the three meters sit
-// under the video at a fixed 172px.
+// under the video with room for the active rate-policy explanation.
 //
 // The chain order is fixed (SR → NR layers → protect → HDR → 补帧) and is NOT
 // reorderable here: the user's reason was that dragging breaks the pipeline for
@@ -278,6 +278,7 @@ VPage {
                                     : veyra.runStatusLevel === "err" ? Theme.err : Qt.rgba(1, 1, 1, 0.3)
         Item {
             Layout.fillWidth: true
+            Layout.minimumWidth: 32
             Layout.preferredHeight: 4
             Rectangle {
                 id: strip
@@ -299,12 +300,44 @@ VPage {
             }
         }
         Text {
+            objectName: "run-status"
+            Layout.maximumWidth: Math.max(0, light.width - 40)
+            Layout.preferredWidth: Math.min(implicitWidth, light.width * 0.75)
             text: veyra.runStatus + (veyra.runStatusDetail.length > 0 ? " · " + veyra.runStatusDetail : "")
             color: light.tone
             font.family: Theme.fontUi
             font.pixelSize: 11
             font.weight: Font.Medium
+            horizontalAlignment: Text.AlignRight
+            wrapMode: Text.Wrap
+            maximumLineCount: 2
+            elide: Text.ElideRight
+            HoverHandler { id: statusHover }
+            ToolTip.visible: statusHover.hovered
+            ToolTip.delay: 400
+            ToolTip.text: text
         }
+    }
+
+    component StatusSummary: ColumnLayout {
+        spacing: 5
+        Text {
+            objectName: "run-active-options"
+            Layout.fillWidth: true
+            visible: veyra.runOptions.length > 0
+            text: qsTr("已开启：%1").arg(veyra.runOptions.join("；"))
+            color: Theme.t2
+            font.family: Theme.fontUi
+            font.pixelSize: 11
+            wrapMode: Text.Wrap
+            maximumLineCount: 3
+            elide: Text.ElideRight
+            HoverHandler { id: optionsHover }
+            ToolTip.visible: optionsHover.hovered
+            ToolTip.delay: 400
+            ToolTip.text: text
+        }
+        StatusLight { Layout.fillWidth: true }
     }
 
     component NrLayerCard: VAccordion {
@@ -454,7 +487,7 @@ VPage {
         anchors.top: head.bottom
         anchors.topMargin: 10
         width: root.width - insp.width - 14 * 2 - 10
-        height: root.height - 14 - head.height - 10 - 172 - 10 - 14
+        height: root.height - 14 - head.height - 10 - Math.max(172, meter3Content.implicitHeight + 28) - 10 - 14
         radius: Theme.rCard
         color: Theme.card
         border.width: 1
@@ -684,7 +717,7 @@ VPage {
         }
     }
 
-    // --- meters (fixed 172px, three cards) --------------------------------
+    // --- meters (at least 172px, three cards) -----------------------------
     RowLayout {
         id: meters
         visible: !root.overlay
@@ -883,6 +916,7 @@ VPage {
             border.width: 1
             border.color: Theme.stroke
             ColumnLayout {
+                id: meter3Content
                 anchors.fill: parent
                 anchors.margins: 14
                 spacing: 6
@@ -978,7 +1012,7 @@ VPage {
                     }
                     PerfOrbs { visible: meter3.wide; size: 50; Layout.alignment: Qt.AlignVCenter }
                 }
-                StatusLight { Layout.fillWidth: true }
+                StatusSummary { Layout.fillWidth: true }
             }
         }
     }
@@ -1268,6 +1302,18 @@ VPage {
                                     options: veyra.srBackendChoices || []
                                     value: options.find(o => o.id === String(veyra.videoSrQuality === 0 || veyra.videoSrQuality === 5 ? veyra.videoSrQuality : 4))?.label || ""
                                     onPicked: id => veyra.videoSrQuality = Number(id)
+                                }
+                            }
+                            VRow {
+                                label: qsTr("DLSS 模型")
+                                hint: qsTr("K 保留原有模型；M、L 为 DLSS 4.5。L 针对较低输入分辨率，实际画质与耗时取决于片源。")
+                                visible: veyra.videoSrQuality === 0
+                                enabled: Support.available(veyra, "sr0")
+                                VSelect {
+                                    objectName: "list-dlss-sr-model"
+                                    options: veyra.dlssSrModelChoices || []
+                                    value: options.find(o => o.id === String(veyra.dlssSrModel))?.label || ""
+                                    onPicked: id => veyra.dlssSrModel = Number(id)
                                 }
                             }
                             VRow {
@@ -1685,10 +1731,10 @@ VPage {
                             VRow {
                                 label: qsTr("VFG 质量")
                                 visible: veyra.fgBackendName === "vfg"
-                                hint: qsTr("高质量需要更多处理时间")
+                                hint: qsTr("高质量更耗时；混合档：每对原帧的中间帧用前一档，其余用后一档")
                                 VSelect {
                                     objectName: "list-vfg-quality"
-                                    options: [{id:"0",label:qsTr("低")},{id:"1",label:qsTr("中")},{id:"2",label:qsTr("高")}]
+                                    options: [{id:"0",label:qsTr("低")},{id:"1",label:qsTr("中")},{id:"2",label:qsTr("高")},{id:"3",label:qsTr("高+中")},{id:"4",label:qsTr("高+低")},{id:"5",label:qsTr("中+低")}]
                                     value: options[veyra.vfgQuality].label
                                     onPicked: id => veyra.vfgQuality = Number(id)
                                 }

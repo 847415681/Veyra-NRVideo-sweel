@@ -1033,6 +1033,32 @@ __declspec(noinline) void testInactiveEffectEdits(){
     check(resolved.maxCllNits==600&&!metadata.sameActiveVideoParameters(next),"display peak remains active for enabled metadata even with the pixel curve off");
 }
 int main() {
+    {
+        using namespace veyra;using namespace veyra::engine;
+        EnhancementSettings original;original.nr=false;original.sr=true;original.videoSrQuality=0;
+        check(original.dlssSrModel==0,"DLSS SR: original model remains the default");
+        for(unsigned model=1;model<kDlssSrModelCount;++model){
+            auto next=original;next.dlssSrModel=model;
+            check(next.validate().empty()&&requiresGraphRebuild(original,next),"DLSS SR: active model switch rebuilds the feature");
+            EnhancementSettings restored;ChainGlobalSettings::capture(next).apply(restored);
+            check(restored.dlssSrModel==model,"DLSS SR: chain globals retain the selected model");
+            StageRequest request;request.width=1920;request.height=1080;request.sr=true;request.nvidiaAdapter=true;
+            pipeline::EnhanceGraphDesc desc;describeStages(request,next,desc);
+            check(desc.enableSr&&desc.dlssSrModel==model&&desc.workWidth==3840&&desc.workHeight==2160,
+                  "DLSS SR: preview graph gets the model at actual upscale dimensions");
+            request.exportJob=true;describeStages(request,next,desc);
+            check(desc.dlssSrModel==model,"DLSS SR: export uses the same model contract");
+            for(unsigned backend:{0u,1u,kVideoSrFsr}){
+                auto before=original;before.videoSrQuality=backend;before.sr=false;
+                auto after=before;after.dlssSrModel=model;
+                check(!requiresGraphRebuild(before,after),"DLSS SR: disabled model edits do not rebuild the graph");
+                if(backend!=0){before.sr=after.sr=true;
+                    check(!requiresGraphRebuild(before,after),"DLSS SR: RTX Video SR and FSR ignore inactive model edits");}
+            }
+        }
+        auto invalid=original;invalid.dlssSrModel=kDlssSrModelCount;
+        check(!invalid.validate().empty(),"DLSS SR: invalid model is rejected");
+    }
     testInactiveEffectEdits();
     {
         using namespace veyra;using namespace veyra::engine;

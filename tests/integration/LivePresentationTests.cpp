@@ -283,6 +283,18 @@ int wmain(int argc,wchar_t**argv){
                 SetWindowPos(window,nullptr,monitor.rcMonitor.left,monitor.rcMonitor.top,monitor.rcMonitor.right-monitor.rcMonitor.left,monitor.rcMonitor.bottom-monitor.rcMonitor.top,SWP_NOZORDER|SWP_NOACTIVATE);
             }
         }
+        if(!failures){
+            // Rebuild and seek in the same owner-loop turn: the old cached
+            // frame is before the seek target and must not lose the applied
+            // acknowledgement when that frame is discarded.
+            const auto before=engine.snapshot();auto changed=before.applied;
+            changed.nr=changed.sr=false;changed.multiplier=1;
+            check(engine.requestSettings(changed),"all-effects-off transaction accepted before a seek");
+            const auto revision=engine.snapshot().desired.revision;
+            check(engine.setPlaybackRate(.5),"half-speed request accepted during the transaction");
+            engine.seek(before.position+1);
+            check(until([&](const auto& s){return !s.applying&&s.applied.revision==revision&&s.applied.multiplier==1&&!s.fgActive&&!s.nrActive&&!s.srActive&&s.frames>before.frames+12;},30),"discarded transaction frame still confirms the actual settings after rebuild plus seek");
+        }
         engine.stop();check(until([&](const auto&){return engine.idle();},8),"settings session drains");
         DestroyWindow(window);CoUninitialize();return failures?1:0;
     }

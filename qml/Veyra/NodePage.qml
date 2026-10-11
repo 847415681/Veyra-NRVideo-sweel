@@ -373,7 +373,7 @@ VPage {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
-                height: compact ? 72 : 40
+                height: (compact ? 72 : 40) + nodeStatus.implicitHeight + 8
                 color: Theme.card
 
                 GridLayout {
@@ -499,6 +499,14 @@ VPage {
                         maxTextWidth: 150
                         text: qsTr("节点预设：") + veyra.currentPresetName
                         onClicked: nodePresetMenu.openAt(this, "down")
+                    }
+                    ProPage.StatusSummary {
+                        id: nodeStatus
+                        Layout.row: statsBar.compact ? 2 : 1
+                        Layout.column: 0
+                        Layout.columnSpan: statsBar.compact ? 8 : 9
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: 4
                     }
                 }
             }
@@ -1416,6 +1424,18 @@ VPage {
                     }
                 }
                 VRow {
+                    label: qsTr("DLSS 模型")
+                    hint: qsTr("K 保留原有模型；M、L 为 DLSS 4.5。L 针对较低输入分辨率，实际画质与耗时取决于片源。")
+                    visible: veyra.videoSrQuality === 0
+                    enabled: Support.available(veyra, "sr0")
+                    VSelect {
+                        objectName: "node-dlss-sr-model"
+                        options: veyra.dlssSrModelChoices || []
+                        value: options.find(o => o.id === String(veyra.dlssSrModel))?.label || ""
+                        onPicked: id => veyra.dlssSrModel = Number(id)
+                    }
+                }
+                VRow {
                     label: qsTr("目标尺寸")
                     hint: veyra.videoSrQuality >= 1 && veyra.videoSrQuality <= 4
                         ? qsTr("放大时重建细节；原尺寸时修复压缩伪影。效果取决于片源。")
@@ -1519,10 +1539,10 @@ VPage {
                 VRow {
                     label: qsTr("VFG 质量")
                     visible: veyra.fgBackendName === "vfg"
-                    hint: qsTr("高质量需要更多处理时间")
+                    hint: qsTr("高质量更耗时；混合档：每对原帧的中间帧用前一档，其余用后一档")
                     VSelect {
                         objectName: "node-vfg-quality"
-                        options: [{id:"0",label:qsTr("低")},{id:"1",label:qsTr("中")},{id:"2",label:qsTr("高")}]
+                        options: [{id:"0",label:qsTr("低")},{id:"1",label:qsTr("中")},{id:"2",label:qsTr("高")},{id:"3",label:qsTr("高+中")},{id:"4",label:qsTr("高+低")},{id:"5",label:qsTr("中+低")}]
                         value: options[veyra.vfgQuality].label
                         onPicked: id => veyra.vfgQuality = Number(id)
                     }
