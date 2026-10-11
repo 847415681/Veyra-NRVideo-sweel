@@ -1089,13 +1089,16 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
     log::info("capture-color",std::format("driver controlFlags=0x{:08X} colorInfoPresent={} transfer={} matrix={} primaries={} chroma={} override={}",p.layout.colorControlFlags,bool(p.layout.colorControlFlags&AMCONTROL_COLORINFO_PRESENT),int(p.layout.color.transfer),int(p.layout.color.matrix),int(p.layout.color.primaries),int(p.layout.color.chromaLocation),colorOverride));
     if(!validCaptureColorOverride(colorOverride))return false;
     auto elgatoHdr=std::make_unique<ElgatoHdrControl>();
-    if(!compressedPath&&p.layout.format==AV_PIX_FMT_P010){
+    // Elgato cards: P010 takes the HDR path, 8-bit native formats ask the card
+    // to tone map (OBS parity). Other wide formats leave the card state alone.
+    const bool otherWide=p.layout.format==AV_PIX_FMT_P016||p.layout.packing==CapturePacking::V210||p.layout.packing==CapturePacking::Rgb10xLE;
+    if(!compressedPath&&!otherWide){
         std::wstring deviceName;
         const auto devices=monikers(false);
         for(size_t i=0;i<devices.size();++i){
             if(selection.stable?monikerPath(devices[i].Get())==selection.videoPath:i==index){deviceName=propertyString(devices[i].Get(),L"FriendlyName");break;}
         }
-        if(!elgatoHdr->configure(p.device.Get(),deviceName,true,colorOverride,p.layout.color)){
+        if(!elgatoHdr->configure(p.device.Get(),deviceName,p.layout.format==AV_PIX_FMT_P010,colorOverride,p.layout.color)){
             error_=L"Elgato HDR 输出模式设置失败，请关闭其他采集程序后重新连接，并检查日志中的 capture-elgato。";
             return false;
         }
