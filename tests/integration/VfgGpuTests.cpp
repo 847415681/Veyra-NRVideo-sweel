@@ -2,6 +2,7 @@
 // Product-library VFG test. Pixel readback and final CPU waits are diagnostic
 // only; production uses the same GPU handoff and leased textures without them.
 #include "veyra/pipeline/VfgBackend.h"
+#include "veyra/engine/EnhancementSettings.h"
 #include "veyra/pipeline/GpuPassUtils.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
@@ -42,7 +43,7 @@ int wmain(int argc,wchar_t** argv){
         const auto desc=textures[0]->GetDesc();D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp{};UINT rows=0;uint64_t rowBytes=0,total=0;
         ctx.device()->GetCopyableFootprints(&desc,0,1,0,&fp,&rows,&rowBytes,&total);
         const uint64_t bytes=uint64_t(fp.Footprint.RowPitch)*h;
-        auto upload=pipeline::makeUploadBuffer(ctx.device(),bytes*2);auto readback=makeReadback(ctx.device(),bytes*7);if(!upload||!readback)return 2;
+        auto upload=pipeline::makeUploadBuffer(ctx.device(),bytes*3);auto readback=makeReadback(ctx.device(),bytes*7);if(!upload||!readback)return 2;
         void* mapped=nullptr;if(FAILED(upload->Map(0,nullptr,&mapped)))return 2;
         std::array<double,2> inputCentroid{};
         for(unsigned p=0;p<2;++p){double sum=0,weighted=0;
@@ -55,8 +56,24 @@ int wmain(int argc,wchar_t** argv){
                 else{const uint32_t packed=(r*1023/255)|((g*1023/255)<<10)|((b*1023/255)<<20)|(3u<<30);std::memcpy(pixel,&packed,4);}
             }inputCentroid[p]=weighted/sum;
         }
+        // Frame 2: an unrelated bright checkerboard, i.e. a hard cut after either frame.
+        for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){
+            const unsigned v=((x/64)+(y/64))%2?220:60;auto* pixel=static_cast<uint8_t*>(mapped)+2*bytes+y*fp.Footprint.RowPitch+x*4;
+            if(format==DXGI_FORMAT_R8G8B8A8_UNORM){pixel[0]=uint8_t(v);pixel[1]=uint8_t(255-v);pixel[2]=uint8_t(v);pixel[3]=255;}
+            else{const uint32_t packed=(v*1023/255)|(((255-v)*1023/255)<<10)|((v*1023/255)<<20)|(3u<<30);std::memcpy(pixel,&packed,4);}
+        }
+        auto cutTexture=pipeline::makeTexture(ctx.device(),w,h,format,false);if(!cutTexture)return 2;
+        auto results=makeReadback(ctx.device(),256);if(!results)return 2;
+        {uint32_t slot=0;auto* l=ring.acquireNext(slot,st);if(!l)return 2;
+            transition(l,cutTexture.Get(),D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_DEST);
+            D3D12_TEXTURE_COPY_LOCATION src{};src.pResource=upload.Get();src.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;src.PlacedFootprint=fp;src.PlacedFootprint.Offset=2*bytes;
+            D3D12_TEXTURE_COPY_LOCATION dst{};dst.pResource=cutTexture.Get();dst.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+            l->CopyTextureRegion(&dst,0,0,0,&src,nullptr);transition(l,cutTexture.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_COMMON);
+            if(!ring.submitAndSignal(slot))return 2;}
+        // Hashes of every single-model subframe: a mixed tier must reproduce them exactly.
+        std::array<std::array<std::array<uint64_t,7>,9>,engine::kVfgQualityCount> modelHashes{};
         // Keep mapping for readback comparisons; upload memory is immutable.
-        for(unsigned quality=0;quality<3;++quality){
+        for(unsigned quality=0;quality<engine::kVfgQualityCount;++quality){
             pipeline::VfgBackend vfg;
             if(!vfg.initialize(ctx,argv[1],w,h,format,8,quality,asynchronous)){std::puts("FAIL native VFG initialization");return 3;}
             for(unsigned p=0;p<2;++p){uint32_t slot=0;auto* l=ring.acquireNext(slot,st);if(!l)return 2;
@@ -65,7 +82,7 @@ int wmain(int argc,wchar_t** argv){
                 D3D12_TEXTURE_COPY_LOCATION dst{};dst.pResource=textures[p].Get();dst.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
                 l->CopyTextureRegion(&dst,0,0,0,&src,nullptr);
                 transition(l,textures[p].Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_COPY_SOURCE);
-                check(vfg.capture(l,textures[p].Get(),p),"capture encoded GPU frame");
+                check(vfg.capture(l,textures[p].Get(),p,p!=0),"capture encoded GPU frame");
                 transition(l,textures[p].Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_COMMON);
                 if(!ring.submitAndSignal(slot))return 2;
             }
@@ -97,12 +114,16 @@ int wmain(int argc,wchar_t** argv){
                         const double value=red>40?red-16:0;sum+=value;weight+=value*x;
                     }
                     const auto center=sum?weight/sum:-1;std::printf("%.3f,",center);hashes.insert(hash);
-                    orderedHashes[sub-1]=hash;
+                    orderedHashes[sub-1]=hash;modelHashes[quality][multiplier][sub-1]=hash;
                     check(center>previous-1&&center>inputCentroid[0]-1&&center<inputCentroid[1]+1,"intermediate red block advances between A/B");previous=center;
                 }
                 std::printf(" distinct=%zu hashes=",hashes.size());
                 for(unsigned sub=1;sub<multiplier;++sub)std::printf("%016llx,",static_cast<unsigned long long>(orderedHashes[sub-1]));
                 std::puts("");check(hashes.size()==multiplier-1,"all generated subframes distinct");
+                if(engine::vfgMixedQuality(quality))for(unsigned sub=1;sub<multiplier;++sub){
+                    const unsigned model=sub==engine::vfgPrimarySubframe(multiplier)?engine::vfgPrimaryMode(quality):engine::vfgSecondaryMode(quality);
+                    check(orderedHashes[sub-1]==modelHashes[model][multiplier][sub-1],"mixed tier subframe equals the single-model output of its model");
+                }
                 D3D12_RANGE written{0,0};readback->Unmap(0,&written);
             }
             // Manual cut must not reuse the previous input; clear ShotChange on
@@ -213,6 +234,56 @@ int wmain(int argc,wchar_t** argv){
             std::printf("VFG_EDGE format=%u quality=%u centers=",unsigned(format),quality);for(double center:centers)std::printf("%.3f,",center);std::puts("");
             readback->Unmap(0,&written);
             check(!vfg.generate(1,8,8,false)&&!vfg.generate(2,1,2,false)&&!vfg.generate(0,1,9,false),"invalid slot/multiplier rejected");
+            // Hard cut A -> checkerboard with ShotChange unset: every subframe must
+            // show B (GPU pair test + predicated copy, or the SDK's own detection
+            // under VEYRA_TEST_VFG_AUTO_SHOT_CHANGE=1). Then cut back, and a normal
+            // pair must interpolate again (the predicate is per pair).
+            const auto capturePair=[&](ID3D12Resource* a,ID3D12Resource* b){
+                for(unsigned p=0;p<2;++p){auto* l=ring.acquireNext(slot,st);if(!l)return false;auto* texture=p?b:a;
+                    transition(l,texture,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE);
+                    if(!vfg.capture(l,texture,p,true))return false;
+                    transition(l,texture,D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_COMMON);
+                    if(!ring.submitAndSignal(slot))return false;}
+                return true;
+            };
+            const auto cutCount=[&]()->int{
+                auto* buffer=vfg.shotChangeResultsForTest();if(!buffer)return -1;
+                auto* l=ring.acquireNext(slot,st);if(!l)return -2;
+                transition(l,buffer,D3D12_RESOURCE_STATE_PREDICATION,D3D12_RESOURCE_STATE_COPY_SOURCE);l->CopyBufferRegion(results.Get(),0,buffer,0,256);
+                transition(l,buffer,D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_PREDICATION);
+                if(!ring.submitAndSignal(slot)||!ring.waitIdle())return -2;
+                void* data=nullptr;D3D12_RANGE all{0,256};if(FAILED(results->Map(0,&all,&data)))return -2;
+                const auto* words=static_cast<const uint32_t*>(data);const int count=int(words[12]);
+                float sad=0,histogram=0;std::memcpy(&sad,words+8,4);std::memcpy(&histogram,words+9,4);
+                std::printf("VFG_SHOT_CHANGE parity1 flag=%u sad=%.4f histogram=%.4f cuts=%d\n",words[2],sad,histogram,count);
+                results->Unmap(0,&written);return count;
+            };
+            check(capturePair(textures[0].Get(),cutTexture.Get()),"capture cut pair");
+            for(unsigned sub=1;sub<4;++sub)check(consume(sub,sub-1),"cut pair subframes queued");
+            check(ring.waitIdle(),"cut pair completion");
+            range={0,size_t(bytes*3)};if(FAILED(readback->Map(0,&range,&pixels)))return 2;
+            unsigned cutError=0;for(unsigned sub=0;sub<3;++sub)for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w*4;++x){
+                const auto a=static_cast<uint8_t*>(pixels)[sub*bytes+y*fp.Footprint.RowPitch+x];const auto b=static_cast<uint8_t*>(mapped)[2*bytes+y*fp.Footprint.RowPitch+x];
+                cutError=std::max(cutError,unsigned(std::abs(int(a)-int(b))));}
+            readback->Unmap(0,&written);std::printf("VFG_CUT format=%u quality=%u maxByteError=%u\n",unsigned(format),quality,cutError);
+            check(cutError<=2,"undeclared cut shows the current input in every subframe");
+            const int afterCut=cutCount();if(afterCut!=-1)check(afterCut==1,"GPU pair test found exactly the one cut");
+            check(capturePair(cutTexture.Get(),textures[1].Get())&&capturePair(textures[0].Get(),textures[1].Get()),"cut back, then a normal pair");
+            for(unsigned sub=1;sub<4;++sub)check(consume(sub,sub-1),"normal pair after cut queued");
+            check(ring.waitIdle(),"normal pair after cut completion");
+            range={0,size_t(bytes*3)};if(FAILED(readback->Map(0,&range,&pixels)))return 2;
+            for(unsigned sub=0;sub<3;++sub){double sum=0,weight=0;
+                for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){
+                    const auto* pixel=static_cast<uint8_t*>(pixels)+sub*bytes+y*fp.Footprint.RowPitch+x*4;
+                    unsigned red=pixel[0];if(format!=DXGI_FORMAT_R8G8B8A8_UNORM){uint32_t packed=0;std::memcpy(&packed,pixel,4);red=(packed&1023)*255/1023;}
+                    const double v=red>40?red-16:0;sum+=v;weight+=v*x;}
+                const double center=sum?weight/sum:-1;
+                check(center>inputCentroid[0]+1&&center<inputCentroid[1]-1,"normal pair after a cut is interpolated again");
+            }
+            readback->Unmap(0,&written);
+            // Pair tests that crossed a cut: into the checkerboard and out of it.
+            // Every other capture (identical or shifted frames) must stay unflagged.
+            const int afterReturn=cutCount();if(afterReturn!=-1)check(afterReturn==2,"cut back counted; normal pairs never flagged");
             vfg.shutdown();
         }
         D3D12_RANGE written{0,0};upload->Unmap(0,&written);

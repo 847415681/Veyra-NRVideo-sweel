@@ -1,5 +1,8 @@
 #include "veyra/pipeline/VfgBackend.h"
 #include "veyra/pipeline/FrameBatch.h"
+#include "veyra/pipeline/GpuPassUtils.h"
+#include "veyra/core/SceneCadenceAnalyzer.h"
+#include "veyra/engine/EnhancementSettings.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/Log.h"
 #include <Windows.h>
@@ -9,6 +12,7 @@
 #include <cmath>
 #include <atomic>
 #include <condition_variable>
+#include <cstring>
 #include <deque>
 #include <filesystem>
 #include <format>
@@ -23,6 +27,11 @@ namespace veyra::pipeline {
 namespace {
 namespace fs=std::filesystem;
 constexpr unsigned kOutputs=2*(FrameBatch::Capacity-1);
+constexpr unsigned kShotChangeConstants=12;  // VfgShotChange.hlsl cbuffer
+constexpr UINT64 kShotChangeBytes=256;       // flags, scores and a cut count
+void transition(D3D12_RESOURCE_BARRIER& barrier,ID3D12Resource* resource,D3D12_RESOURCE_STATES from,D3D12_RESOURCE_STATES to){
+    barrier={};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;barrier.Transition={resource,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,from,to};
+}
 constexpr DWORD kDllFlags=LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32|LOAD_LIBRARY_SEARCH_USER_DIRS;
 bool regularFile(const fs::path& path){std::error_code error;return fs::is_regular_file(path,error);}
 HMODULE load(const fs::path& path){
@@ -106,16 +115,31 @@ struct VfgBackend::Impl {
     CUexternalSemaphore inputSemaphore=nullptr,outputSemaphore=nullptr;
     CUcontext cudaContext=nullptr;CUstream stream=nullptr;CUdevice device=0;
     bool retained=false;
-    void* effect=nullptr;
+    // [0] runs every subframe, or only the middle one of a mixed tier; [1]
+    // (mixed tiers only) the others. Both share the stream, so their CUDA work
+    // stays serial and the producer/completion fences are unchanged.
+    struct Effect {void* handle=nullptr;unsigned mode=1;uint64_t boundPair=0;unsigned boundMultiplier=0;};
+    std::array<Effect,2> effects{};
+    bool mixed=false;
     std::vector<HMODULE> libraries;
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
     uint64_t bytes=0,signalValue=0;
     unsigned width=0,height=0,maxMultiplier=2;
     DXGI_FORMAT format=DXGI_FORMAT_UNKNOWN;
     bool ready=false;
-    uint64_t inputRevision=0,boundInputRevision=0;
-    unsigned boundParity=2,boundMultiplier=0;
-    bool boundReset=false;
+    // pairSerial advances when a new A/B pair starts; each effect rebinds its
+    // inputs once per pair (boundPair), whichever subframe reaches it first.
+    uint64_t inputRevision=0,pairSerial=0,lastRevision=0;
+    unsigned lastParity=2;
+    bool lastReset=false;
+    // GPU shot-change test (shaders/VfgShotChange.hlsl) instead of the SDK's
+    // AutomaticShotChangeDetection; VEYRA_TEST_VFG_AUTO_SHOT_CHANGE=1 restores
+    // the SDK detection (and skips this test) for same-EXE A/B runs.
+    bool gpuShotChange=false;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> cutRoot;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> cutPso;
+    Microsoft::WRL::ComPtr<ID3D12Resource> cutResults;
+    D3D12_RESOURCE_STATES cutState=D3D12_RESOURCE_STATE_COMMON;
     struct Job {unsigned parity,sub,multiplier;bool reset;uint64_t revision,value;};
     std::array<std::atomic<SubmissionState>,kOutputs> states{};
     std::atomic<bool> failed=false;
@@ -157,16 +181,16 @@ struct VfgBackend::Impl {
     // next one resolves; a full ring skips profiling and marks a gap.
     static constexpr unsigned kProfileJobs=32;
     std::array<CUevent,2*kProfileJobs> events{};
-    std::array<unsigned,kProfileJobs> profiledSub{};std::array<bool,kProfileJobs> profiledAfterGap{};
+    std::array<unsigned,kProfileJobs> profiledSub{};std::array<bool,kProfileJobs> profiledAfterGap{},profiledSecond{};
     uint64_t profileHead=0,profileTail=0;
-    std::array<double,3> gpuSum{},gpuMax{};std::array<unsigned,3> gpuSamples{};
+    std::array<double,4> gpuSum{},gpuMax{};std::array<unsigned,4> gpuSamples{};
     std::chrono::steady_clock::time_point nextGpuLog{};
     void resolveGpu(){
         while(profileTail<profileHead){
             const unsigned slot=unsigned(profileTail%kProfileJobs);
             if(cuEventQueryFn(events[2*slot+1])!=CUDA_SUCCESS)return;
             float ms=0;
-            if(cuEventElapsedTimeFn(&ms,events[2*slot],events[2*slot+1])==CUDA_SUCCESS)gpuSample(0,ms);
+            if(cuEventElapsedTimeFn(&ms,events[2*slot],events[2*slot+1])==CUDA_SUCCESS)gpuSample(profiledSecond[slot]?3:0,ms);
             if(!profiledAfterGap[slot]){
                 const unsigned previous=unsigned((profileTail-1)%kProfileJobs);
                 if(cuEventElapsedTimeFn(&ms,events[2*previous+1],events[2*slot])==CUDA_SUCCESS)gpuSample(profiledSub[slot]>1?1:2,ms);
@@ -180,7 +204,8 @@ struct VfgBackend::Impl {
     }
     void logGpu(){
         if(!profileGpu||std::chrono::steady_clock::now()<nextGpuLog)return;
-        static constexpr std::array<const char*,3> names={"run","handoffIdle","pairIdle"};
+        // "run": the first (or only) model; "runSecond": a mixed tier's second model.
+        static constexpr std::array<const char*,4> names={"run","handoffIdle","pairIdle","runSecond"};
         std::string message;
         for(unsigned i=0;i<names.size();++i)message+=std::format(" {}MeanMs={:.4f} {}MaxMs={:.4f} {}Calls={}",names[i],gpuSamples[i]?gpuSum[i]/gpuSamples[i]:0,names[i],gpuMax[i],names[i],gpuSamples[i]);
         log::info("vfg-gpu",message+" (CUDA events on the SDK stream; test profile)");
@@ -231,6 +256,58 @@ struct VfgBackend::Impl {
         if(!cv(imageInit(buffer.image,width,height,int(footprint.Footprint.RowPitch),reinterpret_cast<void*>(buffer.pointer),pixelFormat,componentType,layout,1),"NvCVImage_Init"))return false;
         return true;
     }
+    // Root signature: 12 constants (b0), the previous/current input buffers as
+    // raw root SRVs (t0/t1) and the result buffer as a raw root UAV (u0). The
+    // shared inputs are plain byte buffers, so no descriptor heap is involved.
+    bool createShotChangeTest(){
+        std::vector<uint8_t> cs;if(!loadShaderBytes("VfgShotChange.dxil",cs))return false;
+        D3D12_ROOT_PARAMETER1 parameters[4]{};
+        parameters[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;parameters[0].Constants.Num32BitValues=kShotChangeConstants;
+        parameters[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;parameters[1].Descriptor.ShaderRegister=0;
+        parameters[2].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;parameters[2].Descriptor.ShaderRegister=1;
+        parameters[3].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;parameters[3].Descriptor.ShaderRegister=0;
+        for(auto& parameter:parameters)parameter.ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
+        D3D12_VERSIONED_ROOT_SIGNATURE_DESC desc{};desc.Version=D3D_ROOT_SIGNATURE_VERSION_1_1;
+        desc.Desc_1_1.NumParameters=4;desc.Desc_1_1.pParameters=parameters;
+        Microsoft::WRL::ComPtr<ID3DBlob> blob,error;
+        if(!hr(D3D12SerializeVersionedRootSignature(&desc,&blob,&error),"serialize shot-change root signature")||
+           !hr(context->device()->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&cutRoot)),"CreateRootSignature shot change"))return false;
+        D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline{};pipeline.pRootSignature=cutRoot.Get();pipeline.CS={cs.data(),cs.size()};
+        if(!hr(context->device()->CreateComputePipelineState(&pipeline,IID_PPV_ARGS(&cutPso)),"CreateComputePipelineState shot change"))return false;
+        D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC buffer{};buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;buffer.Width=kShotChangeBytes;buffer.Height=1;
+        buffer.DepthOrArraySize=1;buffer.MipLevels=1;buffer.SampleDesc.Count=1;buffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        buffer.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+        if(!hr(context->device()->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&cutResults)),
+               "Create shot-change results"))return false;
+        cutState=D3D12_RESOURCE_STATE_COMMON;return true;
+    }
+    // Runs after the pair's current input was copied (COPY_DEST); leaves both
+    // inputs in COMMON for CUDA and the result in PREDICATION for copyOutput().
+    void recordShotChangeTest(ID3D12GraphicsCommandList* list,unsigned parity,bool compare){
+        auto* current=inputs[parity].resource.Get();auto* previous=inputs[1-parity].resource.Get();
+        std::array<D3D12_RESOURCE_BARRIER,3> barriers{};
+        transition(barriers[0],current,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        transition(barriers[1],previous,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        transition(barriers[2],cutResults.Get(),cutState,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        list->ResourceBarrier(UINT(barriers.size()),barriers.data());
+        // Same thresholds as the CPU scene analysis (core::SceneCadenceAnalyzer).
+        const core::SceneCadenceAnalyzer::Config scene{};
+        const std::array<float,6> thresholds={float(scene.sceneCutSadThreshold),float(scene.sceneCutHistogramThreshold),
+            float(scene.replacementSadThreshold),float(scene.replacementHistogramThreshold),float(scene.flashSadThreshold),float(scene.flashHistogramThreshold)};
+        std::array<uint32_t,kShotChangeConstants> constants={width,height,footprint.Footprint.RowPitch,format==DXGI_FORMAT_R10G10B10A2_UNORM?1u:0u,parity,compare?1u:0u};
+        std::memcpy(constants.data()+6,thresholds.data(),sizeof(thresholds));
+        list->SetComputeRootSignature(cutRoot.Get());list->SetPipelineState(cutPso.Get());
+        list->SetComputeRoot32BitConstants(0,kShotChangeConstants,constants.data(),0);
+        list->SetComputeRootShaderResourceView(1,previous->GetGPUVirtualAddress());
+        list->SetComputeRootShaderResourceView(2,current->GetGPUVirtualAddress());
+        list->SetComputeRootUnorderedAccessView(3,cutResults->GetGPUVirtualAddress());
+        list->Dispatch(1,1,1);
+        transition(barriers[0],current,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COMMON);
+        transition(barriers[1],previous,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COMMON);
+        transition(barriers[2],cutResults.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_PREDICATION);
+        list->ResourceBarrier(UINT(barriers.size()),barriers.data());cutState=D3D12_RESOURCE_STATE_PREDICATION;
+    }
     void releaseBuffer(Buffer& buffer){
         if(buffer.image){imageDestroy(buffer.image);buffer.image=nullptr;}
         if(buffer.pointer){cu(cuMemFreeFn(buffer.pointer),"cuMemFree external mapping");buffer.pointer=0;}
@@ -254,25 +331,30 @@ struct VfgBackend::Impl {
         // every subframe instead starts a new pair inside the SDK. Keep the
         // same pair bound while selecting its remaining intermediate frames.
         // capture() revisions also handle callers that start at another index.
-        if(ok&&(sub==1||revision!=boundInputRevision||parity!=boundParity||reset!=boundReset)){
-            ok=cv(cpuCall(3,[&]{return setImage(effect,"SrcImage0",inputs[reset?parity:1-parity].image);}),"SetImage previous")&&
-                cv(cpuCall(4,[&]{return setImage(effect,"SrcImage1",inputs[parity].image);}),"SetImage current")&&
-                cv(cpuCall(6,[&]{return setU32(effect,"ShotChange",reset?1u:0u);}),"SetU32 ShotChange");
-            if(ok){boundInputRevision=revision;boundParity=parity;boundReset=reset;}
+        if(sub==1||revision!=lastRevision||parity!=lastParity||reset!=lastReset){
+            ++pairSerial;lastRevision=revision;lastParity=parity;lastReset=reset;
         }
-        if(ok&&boundMultiplier!=multiplier){
-            ok=cv(cpuCall(7,[&]{return setU32(effect,"FrameMultiplier",multiplier);}),"SetU32 FrameMultiplier");
-            if(ok)boundMultiplier=multiplier;
+        const bool second=mixed&&sub!=engine::vfgPrimarySubframe(multiplier);
+        auto& e=effects[second?1:0];
+        if(ok&&e.boundPair!=pairSerial){
+            ok=cv(cpuCall(3,[&]{return setImage(e.handle,"SrcImage0",inputs[reset?parity:1-parity].image);}),"SetImage previous")&&
+                cv(cpuCall(4,[&]{return setImage(e.handle,"SrcImage1",inputs[parity].image);}),"SetImage current")&&
+                cv(cpuCall(6,[&]{return setU32(e.handle,"ShotChange",reset?1u:0u);}),"SetU32 ShotChange");
+            if(ok)e.boundPair=pairSerial;
         }
-        ok=ok&&cv(cpuCall(5,[&]{return setImage(effect,"DstImage0",outputs[parity+2*(sub-1)].image);}),"SetImage output")&&
-            cv(cpuCall(8,[&]{return setU32(effect,"FrameIndex",sub);}),"SetU32 FrameIndex");
+        if(ok&&e.boundMultiplier!=multiplier){
+            ok=cv(cpuCall(7,[&]{return setU32(e.handle,"FrameMultiplier",multiplier);}),"SetU32 FrameMultiplier");
+            if(ok)e.boundMultiplier=multiplier;
+        }
+        ok=ok&&cv(cpuCall(5,[&]{return setImage(e.handle,"DstImage0",outputs[parity+2*(sub-1)].image);}),"SetImage output")&&
+            cv(cpuCall(8,[&]{return setU32(e.handle,"FrameIndex",sub);}),"SetU32 FrameIndex");
         if(ok){
             if(rejectRun&&++runCount==rejectRun){log::warn("vfg","injected VFG Run rejection (test hook)");ok=false;}
-            else ok=cv(cpuCall(9,[&]{return run(effect,1);}),"NvVFX_Run async");
+            else ok=cv(cpuCall(9,[&]{return run(e.handle,1);}),"NvVFX_Run async");
         }
         if(profiling){
             if(ok&&cu(cuEventRecordFn(events[2*profileSlot+1],stream),"profile cuEventRecord")){
-                profiledSub[profileSlot]=sub;profiledAfterGap[profileSlot]=profileGap;profileGap=false;++profileHead;
+                profiledSub[profileSlot]=sub;profiledSecond[profileSlot]=second;profiledAfterGap[profileSlot]=profileGap;profileGap=false;++profileHead;
             }else profileGap=true;
         }
         // Publish rejection before releasing the consumer. Its GPU copy still
@@ -352,11 +434,14 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
     shutdown();
 #ifdef VEYRA_HAVE_CUDA_DRIVER_HEADERS
     auto& p=*impl_;
-    if(context.adapter().vendorId!=0x10DE||!runtimeAvailable(root)||!width||!height||multiplier<2||multiplier>FrameBatch::Capacity||quality>2||
+    if(context.adapter().vendorId!=0x10DE||!runtimeAvailable(root)||!width||!height||multiplier<2||multiplier>FrameBatch::Capacity||quality>=engine::kVfgQualityCount||
        (format!=DXGI_FORMAT_R8G8B8A8_UNORM&&format!=DXGI_FORMAT_R10G10B10A2_UNORM)){
         log::error("vfg","unsupported adapter/runtime/dimensions/multiplier/quality/encoding");return false;
     }
     p.context=&context;p.width=width;p.height=height;p.format=format;p.maxMultiplier=multiplier;
+    p.mixed=engine::vfgMixedQuality(quality);
+    p.effects[0].mode=engine::vfgPrimaryMode(quality);p.effects[1].mode=engine::vfgSecondaryMode(quality);
+    p.gpuShotChange=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_AUTO_SHOT_CHANGE",nullptr,0)==0;
     p.profileCpu=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_CPU_PROFILE",nullptr,0)>0;
     wchar_t reject[16]{};
     const auto rejectLength=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_REJECT_RUN",reject,16);
@@ -413,7 +498,10 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
     BIND_IMAGE(imageInit,"NvCVImage_Init");BIND_IMAGE(fromD3D,"NvCVImage_FromD3DFormat");BIND_IMAGE(errorString,"NvCV_GetErrorStringFromCode");
 #undef BIND_IMAGE
     unsigned version=0;if(!p.cv(p.getVersion(&version),"NvVFX_GetVersion"))return false;
-    log::info("vfg",std::format("SDK version=0x{:08X} LUID={} compute={}.{} size={}x{} multiplier={} quality={} async=1",version,context.adapter().luidString,major,minor,width,height,multiplier,quality));
+    log::info("vfg",std::format("SDK version=0x{:08X} LUID={} compute={}.{} size={}x{} multiplier={} quality={} models={}{} shotChange={} async=1",
+        version,context.adapter().luidString,major,minor,width,height,multiplier,quality,p.effects[0].mode,
+        p.mixed?std::format("+{} (middle subframe {} / others {})",p.effects[1].mode,p.effects[0].mode,p.effects[1].mode):std::string(),
+        p.gpuShotChange?"gpu-pair-test":"sdk-automatic"));
     D3D12_RESOURCE_DESC texture{};texture.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;texture.Width=width;texture.Height=height;texture.DepthOrArraySize=1;texture.MipLevels=1;texture.Format=format;texture.SampleDesc.Count=1;
     UINT rows=0;uint64_t rowBytes=0,total=0;context.device()->GetCopyableFootprints(&texture,0,1,0,&p.footprint,&rows,&rowBytes,&total);
     p.bytes=uint64_t(p.footprint.Footprint.RowPitch)*height;
@@ -431,14 +519,23 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
     if(!hr(context.device()->CreateFence(0,D3D12_FENCE_FLAG_SHARED,IID_PPV_ARGS(&p.producer)),"CreateFence producer")||
        !hr(context.device()->CreateFence(0,D3D12_FENCE_FLAG_SHARED,IID_PPV_ARGS(&p.completion)),"CreateFence completion")||
        !p.importFence(p.producer.Get(),p.inputSemaphore)||!p.importFence(p.completion.Get(),p.outputSemaphore))return false;
-    if(!p.cv(p.create("VideoFrameGeneration",&p.effect),"NvVFX_CreateEffect")||
-       !p.cv(p.setStream(p.effect,"CudaStream",p.stream),"SetCudaStream")||
-       !p.cv(p.setU32(p.effect,"InputWidth",width),"InputWidth")||!p.cv(p.setU32(p.effect,"InputHeight",height),"InputHeight")||
-       !p.cv(p.setU32(p.effect,"Mode",quality),"Mode")||!p.cv(p.setU32(p.effect,"AutomaticShotChangeDetectionEnabled",1),"AutomaticShotChangeDetectionEnabled")||
-       !p.cv(p.setImage(p.effect,"SrcImage0",p.inputs[0].image),"initial previous")||!p.cv(p.setImage(p.effect,"SrcImage1",p.inputs[1].image),"initial current")||
-       !p.cv(p.loadEffect(p.effect),"NvVFX_Load")||!p.cv(p.setImage(p.effect,"DstImage0",p.outputs[0].image),"initial output")||
-       !p.cv(p.setU32(p.effect,"FrameMultiplier",multiplier),"initial multiplier"))return false;
-    p.boundMultiplier=multiplier;
+    // With the GPU pair test the SDK's own detection is off: it made every
+    // NvVFX_Run wait on the GPU (measured 2026-10-11: host 3.5 ms -> 0.13 ms per
+    // 4K Run) and repeated per subframe (+0.2 ms GPU each).
+    const unsigned automaticShotChange=p.gpuShotChange?0u:1u;
+    const unsigned effectCount=p.mixed?2u:1u;
+    for(unsigned i=0;i<effectCount;++i){
+        auto& e=p.effects[i];
+        if(!p.cv(p.create("VideoFrameGeneration",&e.handle),"NvVFX_CreateEffect")||
+           !p.cv(p.setStream(e.handle,"CudaStream",p.stream),"SetCudaStream")||
+           !p.cv(p.setU32(e.handle,"InputWidth",width),"InputWidth")||!p.cv(p.setU32(e.handle,"InputHeight",height),"InputHeight")||
+           !p.cv(p.setU32(e.handle,"Mode",e.mode),"Mode")||!p.cv(p.setU32(e.handle,"AutomaticShotChangeDetectionEnabled",automaticShotChange),"AutomaticShotChangeDetectionEnabled")||
+           !p.cv(p.setImage(e.handle,"SrcImage0",p.inputs[0].image),"initial previous")||!p.cv(p.setImage(e.handle,"SrcImage1",p.inputs[1].image),"initial current")||
+           !p.cv(p.loadEffect(e.handle),i?"NvVFX_Load second model":"NvVFX_Load")||!p.cv(p.setImage(e.handle,"DstImage0",p.outputs[0].image),"initial output")||
+           !p.cv(p.setU32(e.handle,"FrameMultiplier",multiplier),"initial multiplier"))return false;
+        e.boundMultiplier=multiplier;
+    }
+    if(p.gpuShotChange&&!p.createShotChangeTest())return false;
     p.asynchronous=asynchronousSubmission;
     if(p.asynchronous){
         try{p.worker=std::thread([&p]{p.work();});}
@@ -458,7 +555,7 @@ bool VfgBackend::created()const{
     return false;
 #endif
 }
-bool VfgBackend::capture(ID3D12GraphicsCommandList* list,ID3D12Resource* texture,unsigned parity){
+bool VfgBackend::capture(ID3D12GraphicsCommandList* list,ID3D12Resource* texture,unsigned parity,bool comparePrevious){
 #ifdef VEYRA_HAVE_CUDA_DRIVER_HEADERS
     auto& p=*impl_;if(!p.ready||p.failed.load()||!list||!texture||parity>1)return false;
     const auto desc=texture->GetDesc();if(desc.Width!=p.width||desc.Height!=p.height||desc.Format!=p.format)return false;
@@ -468,9 +565,11 @@ bool VfgBackend::capture(ID3D12GraphicsCommandList* list,ID3D12Resource* texture
     D3D12_TEXTURE_COPY_LOCATION src{};src.pResource=texture;src.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     D3D12_TEXTURE_COPY_LOCATION dst{};dst.pResource=buffer;dst.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;dst.PlacedFootprint=p.footprint;
     list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);
-    std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);++p.inputRevision;return true;
+    if(p.gpuShotChange)p.recordShotChangeTest(list,parity,comparePrevious);
+    else{std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);}
+    ++p.inputRevision;return true;
 #else
-    (void)list;(void)texture;(void)parity;return false;
+    (void)list;(void)texture;(void)parity;(void)comparePrevious;return false;
 #endif
 }
 bool VfgBackend::generate(unsigned parity,unsigned sub,unsigned multiplier,bool reset){
@@ -493,14 +592,44 @@ bool VfgBackend::copyOutput(ID3D12GraphicsCommandList* list,ID3D12Resource* text
     auto& p=*impl_;if(!p.ready||!list||!texture||slot>=2*(p.maxMultiplier-1))return false;
     const auto desc=texture->GetDesc();if(desc.Width!=p.width||desc.Height!=p.height||desc.Format!=p.format)return false;
     auto* buffer=p.outputs[slot].resource.Get();
-    D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;barrier.Transition={buffer,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE};
-    list->ResourceBarrier(1,&barrier);
     D3D12_TEXTURE_COPY_LOCATION src{};src.pResource=buffer;src.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;src.PlacedFootprint=p.footprint;
     D3D12_TEXTURE_COPY_LOCATION dst{};dst.pResource=texture;dst.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    if(!p.gpuShotChange){
+        D3D12_RESOURCE_BARRIER barrier{};transition(barrier,buffer,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE);
+        list->ResourceBarrier(1,&barrier);
+        list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);
+        std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);return true;
+    }
+    // On a cut every subframe of the pair shows the current input B, as the
+    // SDK's own detection did. The GPU picks the copy source by predication on
+    // the pair test result: no readback, no CPU wait, no extra pass.
+    auto* current=p.inputs[slot%2].resource.Get();
+    std::array<D3D12_RESOURCE_BARRIER,3> barriers{};UINT count=2;
+    transition(barriers[0],buffer,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE);
+    transition(barriers[1],current,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE);
+    if(p.cutState!=D3D12_RESOURCE_STATE_PREDICATION){
+        transition(barriers[2],p.cutResults.Get(),p.cutState,D3D12_RESOURCE_STATE_PREDICATION);count=3;p.cutState=D3D12_RESOURCE_STATE_PREDICATION;
+    }
+    list->ResourceBarrier(count,barriers.data());
+    const UINT64 flag=(slot%2)*8;
+    list->SetPredication(p.cutResults.Get(),flag,D3D12_PREDICATION_OP_NOT_EQUAL_ZERO);   // skipped on a cut
     list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);
-    std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);return true;
+    src.pResource=current;
+    list->SetPredication(p.cutResults.Get(),flag,D3D12_PREDICATION_OP_EQUAL_ZERO);       // skipped unless a cut
+    list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);
+    list->SetPredication(nullptr,0,D3D12_PREDICATION_OP_EQUAL_ZERO);
+    transition(barriers[0],buffer,D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_COMMON);
+    transition(barriers[1],current,D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_COMMON);
+    list->ResourceBarrier(2,barriers.data());return true;
 #else
     (void)list;(void)texture;(void)slot;return false;
+#endif
+}
+ID3D12Resource* VfgBackend::shotChangeResultsForTest()const{
+#ifdef VEYRA_HAVE_CUDA_DRIVER_HEADERS
+    return impl_->gpuShotChange?impl_->cutResults.Get():nullptr;
+#else
+    return nullptr;
 #endif
 }
 void VfgBackend::shutdown(){
@@ -512,7 +641,7 @@ void VfgBackend::shutdown(){
             // This is teardown, not per-frame synchronization. The graph owner
             // drains its direct queue before destroying shared staging buffers.
             if(p.stream)p.cu(p.cuStreamSynchronizeFn(p.stream),"teardown cuStreamSynchronize");
-            if(p.effect){p.destroy(p.effect);p.effect=nullptr;log::info("vfg","NvVFX_DestroyEffect completed (void API)");}
+            for(auto& e:p.effects)if(e.handle){p.destroy(e.handle);e.handle=nullptr;log::info("vfg","NvVFX_DestroyEffect completed (void API)");}
             for(auto& b:p.outputs)p.releaseBuffer(b);for(auto& b:p.inputs)p.releaseBuffer(b);
             for(auto event:p.events)if(event)p.cu(p.cuEventDestroyFn(event),"cuEventDestroy profile");
             if(p.outputSemaphore)p.cu(p.cuDestroyExternalSemaphoreFn(p.outputSemaphore),"destroy output semaphore");

@@ -45,7 +45,12 @@ int wmain(int argc,wchar_t** argv){
     PresetStore legacyReader(root/L"legacy.txt");check(legacyReader.load()&&legacyReader.entries()[0].settings.vfgQuality==1,"old presets default to Medium");
     const auto original=bytes(root/L"legacy.txt");
     PresetStore store(root/L"settings.txt");check(store.load(),"new store");
-    for(unsigned quality=0;quality<3;++quality)for(unsigned m=2;m<=8;++m){
+    // Mixed tiers: the middle subframe runs the first model, the others the second.
+    check(!vfgMixedQuality(0)&&!vfgMixedQuality(2)&&vfgMixedQuality(3)&&vfgMixedQuality(5)&&!vfgMixedQuality(6),"mixed VFG tiers are 3-5");
+    check(vfgPrimaryMode(3)==2&&vfgSecondaryMode(3)==1&&vfgPrimaryMode(4)==2&&vfgSecondaryMode(4)==0&&vfgPrimaryMode(5)==1&&vfgSecondaryMode(5)==0,"High+Medium, High+Low, Medium+Low");
+    for(unsigned q=0;q<3;++q)check(vfgPrimaryMode(q)==q&&vfgSecondaryMode(q)==q,"single-model tiers keep their mode");
+    check(vfgPrimarySubframe(2)==1&&vfgPrimarySubframe(3)==2&&vfgPrimarySubframe(4)==2&&vfgPrimarySubframe(5)==3&&vfgPrimarySubframe(6)==3&&vfgPrimarySubframe(7)==4&&vfgPrimarySubframe(8)==4,"first model on the middle subframe");
+    for(unsigned quality=0;quality<kVfgQualityCount;++quality)for(unsigned m=2;m<=8;++m){
         EnhancementSettings s;s.frameGenerationBackend=FrameGenerationBackend::Vfg;s.multiplier=m;s.vfgQuality=quality;
         check(s.validate().empty(),"VFG legal multiplier/quality");
         const auto name=std::to_wstring(m)+L"x-q"+std::to_wstring(quality);
@@ -57,7 +62,7 @@ int wmain(int argc,wchar_t** argv){
         check(reloaded.load()&&reloaded.entries().size()==1&&reloaded.entries()[0]==*e,"library restores full VFG state");
         auto applied=legacy;PresetLibrary::apply(*e,applied);
         check(applied.multiplier==m&&applied.frameGenerationBackend==FrameGenerationBackend::Vfg&&applied.vfgQuality==quality,"preset applies multiplier backend quality");
-        e->contents=presetContentMask(PresetContent::Color);applied=s;applied.vfgQuality=(quality+1)%3;
+        e->contents=presetContentMask(PresetContent::Color);applied=s;applied.vfgQuality=(quality+1)%kVfgQualityCount;
         const auto kept=applied.vfgQuality;PresetLibrary::apply(*e,applied);
         check(applied.frameGenerationBackend==FrameGenerationBackend::Vfg&&applied.multiplier==m&&applied.vfgQuality==kept,"partial color preset preserves VFG");
         auto session=std::make_unique<ChainSession>(ChainSession::initial(s));check(session->select(ChainMode::Node),"VFG node mode initializes");
@@ -68,7 +73,7 @@ int wmain(int argc,wchar_t** argv){
         const auto sessionPath=root/(name+L".session");ChainSessionStore sessionWriter(sessionPath);
         check(sessionWriter.save(*session),"session atomic save");ChainSessionStore sessionReader(sessionPath);
         check(sessionReader.load(*restored)&&*session==*restored,"session restart finds VFG suffix");
-        auto bad=s;bad.multiplier=9;check(!bad.validate().empty(),"reject VFG 9X");bad=s;bad.vfgQuality=3;check(!bad.validate().empty(),"reject unknown quality");
+        auto bad=s;bad.multiplier=9;check(!bad.validate().empty(),"reject VFG 9X");bad=s;bad.vfgQuality=kVfgQualityCount;check(!bad.validate().empty(),"reject unknown quality");
         bad=s;bad.frameGenerationBackend=FrameGenerationBackend::Dlss;if(m>6)check(!bad.validate().empty(),"DLSS ceiling remains 6X");
         veyra::pipeline::FrameBatch batch;batch.identity={1,2,3};batch.a100ns=10000000;batch.b100ns=10333333;
         for(unsigned j=1;j<m;++j){veyra::pipeline::BatchFrame f;f.identity=batch.identity;f.subframe=j;f.pts100ns=batch.interpolate(batch.a100ns,batch.b100ns,j,m);f.kind=veyra::pipeline::FrameKind::Generated;batch.append(f);}
@@ -76,8 +81,8 @@ int wmain(int argc,wchar_t** argv){
         check(batch.count==m&&batch.frames[m-1].pts100ns==batch.b100ns,"2..8 ordered PTS with every source frame");
         if(m==8){bool rejected=false;try{real.pts100ns++;batch.append(real);}catch(const std::invalid_argument&){rejected=true;}check(rejected&&batch.count==8,"8X batch rejects ninth frame");}
     }
-    PresetStore restoredStore(root/L"settings.txt");check(restoredStore.load()&&restoredStore.entries().size()==21,"all VFG settings restored");
-    for(const auto& e:restoredStore.entries())check(e.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&e.settings.vfgQuality<3&&e.settings.multiplier>=2&&e.settings.multiplier<=8,"stored VFG values legal");
+    PresetStore restoredStore(root/L"settings.txt");check(restoredStore.load()&&restoredStore.entries().size()==7*kVfgQualityCount,"all VFG settings restored");
+    for(const auto& e:restoredStore.entries())check(e.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&e.settings.vfgQuality<kVfgQualityCount&&e.settings.multiplier>=2&&e.settings.multiplier<=8,"stored VFG values legal");
     check(bytes(root/L"legacy.txt")==original,"legacy file unchanged");
     std::cout<<"VFG settings "<<checks<<" checks, "<<failures<<" failures\n";return failures?1:0;
 }

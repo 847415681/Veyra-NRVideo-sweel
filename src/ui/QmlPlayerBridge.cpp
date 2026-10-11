@@ -1807,7 +1807,7 @@ QVariantList QmlPlayerBridge::fgMultiplierChoices() const {
 
 int QmlPlayerBridge::vfgQuality()const{return int(settings().vfgQuality);}
 void QmlPlayerBridge::setVfgQuality(int value){
-    if(value<0||value>2)return;auto s=settings();if(s.vfgQuality==uint32_t(value))return;
+    if(value<0||uint32_t(value)>=engine::kVfgQualityCount)return;auto s=settings();if(s.vfgQuality==uint32_t(value))return;
     s.vfgQuality=uint32_t(value);
     if(!impl_->commit(s)){emit notice(tr("VFG 质量设置未被接受，原设置保留"),true);return;}
     emit settingsChanged();emit chainChanged();
@@ -6318,10 +6318,21 @@ void QmlPlayerBridge::updateRunStatus() {
             const auto perRun = f.gpuTiming[size_t(diagnostics::GpuStage::Fg1)].p95;
             const auto batch = f.gpuTiming[size_t(diagnostics::GpuStage::FgBatch)].p95;
             const auto whole = f.enhancementProcessing.p95;
-            if (s.fgBudgetLimited && source > 1 && perRun && *perRun > 0 && batch && whole) {
-                const double base = std::max(0.0, *whole - *batch);
-                const int fits = std::clamp(1 + int(std::floor((1000.0 / source - base) / *perRun)), 1, int(s.applied.multiplier));
-                if (fits < int(s.applied.multiplier)) detail << tr("VFG 每张约 %1 ms，当前负载约可稳定 %2X").arg(*perRun, 0, 'f', 1).arg(fits);
+            // A mixed tier runs its first model once per pair (the middle
+            // subframe) and the second model for the others; Fg1 is then a
+            // second-model subframe whenever the group has more than one.
+            const bool mixed = engine::vfgMixedQuality(s.applied.vfgQuality) && s.applied.multiplier > 2;
+            const auto middleStage = diagnostics::GpuStage(unsigned(diagnostics::GpuStage::Fg1) + engine::vfgPrimarySubframe(s.applied.multiplier) - 1);
+            const auto middle = mixed ? f.gpuTiming[size_t(middleStage)].p95 : perRun;
+            if (s.fgBudgetLimited && source > 1 && perRun && *perRun > 0 && middle && *middle > 0 && batch && whole) {
+                const double base = std::max(0.0, *whole - *batch), budget = 1000.0 / source - base;
+                // generated = 1 middle + k others; fits = generated + the real frame.
+                const int generated = budget < *middle ? 0 : 1 + int(std::floor((budget - *middle) / *perRun));
+                const int fits = std::clamp(1 + generated, 1, int(s.applied.multiplier));
+                if (fits < int(s.applied.multiplier)) {
+                    if (mixed) detail << tr("VFG 中间帧约 %1 ms、其余每张约 %2 ms，当前负载约可稳定 %3X").arg(*middle, 0, 'f', 1).arg(*perRun, 0, 'f', 1).arg(fits);
+                    else detail << tr("VFG 每张约 %1 ms，当前负载约可稳定 %2X").arg(*perRun, 0, 'f', 1).arg(fits);
+                }
             }
             double refresh = 0;
             for (auto* window : QGuiApplication::topLevelWindows())
