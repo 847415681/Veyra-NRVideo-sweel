@@ -509,13 +509,8 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     const bool overlayCompat = !obsGameCapture && overlayCompatAuto
                                && (rivaTuner || nvidiaOverlay || gamePP || overlayCompatRestart) && !forcedRenderer[0];
     const bool softwareUi = obsGameCapture || overlayCompat;
-    if (softwareUi) {
-        // Partial software damage updates can leave transformed/clipped controls
-        // behind while scrolling. Repaint a complete UI frame when it changes;
-        // do not request continuous frames or alter the native video pipeline.
-        qputenv("QSG_SOFTWARE_RENDERER_FORCE_PARTIAL_UPDATES", "0");
-        veyra::log::info("app", "software UI partial updates disabled (scroll damage repair)");
-    }
+    if (softwareUi)
+        veyra::log::info("app", "software UI: cached raster paths; normal partial updates; no additional frame requests");
     if (obsGameCapture) {
         QQuickWindow::setSceneGraphBackend(QStringLiteral("software"));
         veyra::log::info("app", "OBS game capture compatibility: software UI; native D3D12 video unchanged");

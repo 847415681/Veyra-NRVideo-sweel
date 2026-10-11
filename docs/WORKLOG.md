@@ -9062,3 +9062,20 @@ package.py smoke：未改生产QML，私有data-dir、系统PATH、缓存/日志
 在E:/项目/Veyra/worktrees/main-merge-20261002执行`git merge --no-ff codex/sr-visual-quality-20261010 -m "Merge tested 2.0.6 subtitle, playlist, capture and settings fixes"`，功能merge ff80a49ad199334cafb79de79a8ee1b1f66c8aee，无冲突。`git diff --exit-code codex/sr-visual-quality-20261010 HEAD`通过，完整Git树与实测分支相同；因此复用已验证16EXE构建、13组回归、两种界面实际播放和ZIP核验，不声称新跑测试。之后只补AGENTS/CURRENT_STATUS/本WORKLOG/docs/MERGE_MAIN_2026-10-10.md四份文档。字幕/播放列表/PR31/BMD开关/设置恢复/焦点/布局/关闭项编辑等一并合入，SR画质实验仍全部撤回。
 
 合并完成/收尾标签、source-after.bundle verify与最终main在reports/merge-fixes-20261010/final.json。新守卫逐项核对其余45工作树/495脏文件、48d8f34源分支、产品与实测版本一致、仅四文档变化、main干净和原测试包SHA1350c723d56bd8aba13afbb09f959f591f1e6ce819f324e4b3fcb7dbc9103b9c，旧包714646109字节不动。后续构建明确外置DeckLink SDK，打包明确使用已验zlib/PS5 slices256/dav1d FFmpeg前缀与对应源码。没有push/Release/版本变更/重打包/删除分支工作树/关机，实卡与显存增长未解边界保持。
+
+## 2026-10-11 接手Claude软件UI残影与超分图标裁剪
+
+用户要求读取刚才Claude的UI修复记录并接手，避免回到2.0.4高频UI拖慢NR，随后补充超分图标滚动未被遮挡。只读取相关本机会话fea88e5a-198c-4f0f-b9db-ac275fa983ae，最后实际方案是beforeRendering扩大整窗damage，额度耗尽时只删无效环境变量/加私有头，未实现或构建。保存原补丁SHA fa64f180581d3aa5de2483bfcc65a1946c968b2e5dc958954202afd414749d31；独立不可变start保护53旧工作树/496脏文件/main5ba186a，开工tag/source-before.bundle通过。新树codex/ui-smear-handoff-20261011，全产物E:/项目/Veyra/{build,tests,logs,tmp,reports,archives}/ui-smear-handoff-20261011，不派Agent、不改真实配置/原件，不合并/推送/打包/发布/关机。
+
+固定Qt6.8.3源码和实际Qt6Quick.dll确认旧QSG_SOFTWARE_RENDERER_FORCE_PARTIAL_UPDATES没有读取点。完整/条件重绘原型已撤回：虽不加新帧请求，原型配对CPU 0.197661→0.325101秒/秒（+64.5%），而且完整重绘仍在父clip外绘制超分图标。软件Shape layer还出现位置异常，也撤回。实际问题指向Qt软件Shape在空clip时仍drawPath及RenderNode对空damage的处理；原型performance.json/withdrawn-adaptive-repaint.patch保留，不计最终通过。最终仅VIcon/添加NR层虚线在软件模式按DPR缓存相同SVG为普通Image，GPU原Shape不变；宿主删除无效变量/误导日志。CMake与所有engine/shader/source/NR/FG/GPU优先级字节保持，无QuickPrivate或绘制钩子、新Timer/动画/update请求。
+
+以py -3.11 -I运行scripts/acceptance/ui-software-damage-build.py：logs同名/build-20261011-153617/receipt.json，CMake实际配置/main编译/重链接均exit0，9秒，50项不可变输入SHA不变；只是本次main.cpp重编，不冒称clean全工程重编。GUI SHA bed99662e2be2dbde65fd41fd946cb5c4a627b42f50d305e0a47127e4356273a。--probe构建154018回执8秒，独立EXE SHA24e666a7e3af72caff67f5cfce4b6c66d4702e973fa302c143c7590ea159011f；生产EXE不含驱动。
+
+以py -3.11 -B运行ui-software-damage-test.py pixels-expanded及clipping：最终logs/pixels-*-raster2，实际Main/ProPage、150% DPI、3NR层/首层展开、80次滚动至100px；QScreen只读已呈现像素，不触发重画，contentY/contentHeight前后相同。原OBS残留1237相关像素、完整重绘后固定头部改变209；固定OBS/RTSS两路径均0。37个图标Ready，无QML错误；RTSS整窗62像素变化为独立GPU监控区域，不能当残影。人工核对超分图标、箭头和工具栏。没有重做RTSS真实注入或OBS捕获。早期expanded抓图时机错误的pixels-expanded-invalid-timing.json保留；第一版SVG同组sourceSize.height绑定width造成循环，已改为两个独立DPR表达式，失败raster日志保留，最终raster2没有循环。
+
+ui-software-damage-test.py performance-final四例顺序40秒有效播放、各53–56秒墙钟，用户GTA原4K30、原版NR1080p/单层/强度1/风格0，SR/FG/画面调控关，GPU实际class2。每例29个前台有效一秒样本；NR一秒均值中位数，GPU UI 5.919221→5.898998ms（-0.34%）、UI35→35次/秒、CPU0.265282→0.270664秒/秒（+2.03%）；软件UI 5.863204→5.835594ms（-0.47%）、UI38→37.5、CPU0.258953→0.223809（-13.57%）。四例视频提交30fps，不冒充物理刷新率；小幅差异仅本机短测，不宣称算法提速或跨机收益。普通GPU原包EXE/QML对照当前产品；软件用同一EXE仅原/新两个QML对照。统计VTelemetryValue SHA e88541114240fad417f7d1f08bde0b8236964ff7e9005c8fc8214743c006958b字节保持，未回到320Hz。
+
+原包1626文件每次测试前后SHA通过，私有运行目录硬链接复用不可变原件、变更文件原子替换，注入Main已恢复。reports同名/finalize.py逐项核对生产范围、50输入、最终EXE/源码/证据SHA、clip0、normal调度和29样本；短测保守守卫不允许UI额外>3次/秒、NR>3%、CPU>15%，全部通过，不将阈值内差异当普遍等效证明。validation.json保存构建回执/生产源/证据身份，最终控制检查、commit/checkpoint/bundle与本轮缓存整理另记final.json。只有本机生产页复现与短测通过，现场overlay/其它DPI/驱动/长时间播放未全部验收；NV显存问题不在此次范围。
+
+
+本轮临时缓存清理被自动审批拒绝：目标E:/项目/Veyra/tmp/ui-smear-handoff-20261011的PowerShell递归删除返回blocked by policy，命令未执行。560文件/80127256逻辑字节保留，未绕过重试，不计为已释放磁盘；cleanup.json如实记录。修复、构建和验收结果不受影响。
