@@ -508,7 +508,7 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
 
 ChainGlobalSettings ChainGlobalSettings::capture(const EnhancementSettings& s) {
     ChainGlobalSettings c;
-    c.srTarget = s.srTarget; c.videoSrQuality = s.videoSrQuality;
+    c.srTarget = s.srTarget; c.videoSrQuality = s.videoSrQuality; c.dlssSrModel = s.dlssSrModel;
     c.fgBackend = s.frameGenerationBackend; c.flow = s.flow;
     c.vfgQuality=s.vfgQuality;
     c.opticalFlowBackend = s.opticalFlowBackend; c.amdFlowHalfResolution = s.amdFlowHalfResolution;
@@ -522,7 +522,7 @@ void ChainGlobalSettings::apply(EnhancementSettings& s) const {
     s.nrPolicy = nrPolicy;
     s.hdrOutputMode=hdrOutputMode;s.fgMotion=fgMotion;s.srMotion=srMotion;s.nrMotion=nrMotion;
     s.hdrCurve=hdrCurve;s.hdrMetadata=hdrMetadata;
-    s.srTarget = srTarget; s.videoSrQuality = videoSrQuality;
+    s.srTarget = srTarget; s.videoSrQuality = videoSrQuality; s.dlssSrModel = dlssSrModel;
     s.frameGenerationBackend = fgBackend; s.flow = flow;
     s.vfgQuality=vfgQuality;
     s.opticalFlowBackend = opticalFlowBackend; s.amdFlowHalfResolution = amdFlowHalfResolution;
@@ -542,7 +542,7 @@ void ChainConfiguration::apply(EnhancementSettings& s) const {
 }
 
 bool ChainConfiguration::operator==(const ChainConfiguration& other) const {
-    return chain == other.chain && srTarget == other.srTarget && videoSrQuality == other.videoSrQuality &&
+    return chain == other.chain && srTarget == other.srTarget && videoSrQuality == other.videoSrQuality && dlssSrModel == other.dlssSrModel &&
         fgBackend == other.fgBackend && vfgQuality == other.vfgQuality && flow == other.flow && opticalFlowBackend == other.opticalFlowBackend &&
         amdFlowHalfResolution == other.amdFlowHalfResolution && nrPolicy == other.nrPolicy &&
         // The author's own rendering globals had the same blind spot: a change to
@@ -641,6 +641,8 @@ bool requiresGraphRebuild(const EnhancementSettings& savedPrevious, const Enhanc
     if ((previous.nrHoldStrength > 0.0f) != (next.nrHoldStrength > 0.0f)) return true;
     if (previous.nrPolicy != next.nrPolicy) return true;
     if (previous.srTarget != next.srTarget) return true;
+    // A different DLSS SR model (render preset) needs a new SR feature.
+    if (previous.dlssSrModel != next.dlssSrModel) return true;
     if (previous.frameGenerationBackend != next.frameGenerationBackend) return true;
     if (previous.vfgQuality != next.vfgQuality) return true;
     if (previous.opticalFlowBackend != next.opticalFlowBackend) return true;

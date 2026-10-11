@@ -296,6 +296,8 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool nrAutoMask READ nrAutoMask WRITE setNrAutoMask NOTIFY settingsChanged)
     Q_PROPERTY(bool nrUiCorrection READ nrUiCorrection WRITE setNrUiCorrection NOTIFY settingsChanged)
     Q_PROPERTY(int videoSrQuality READ videoSrQuality WRITE setVideoSrQuality NOTIFY settingsChanged)
+    Q_PROPERTY(int dlssSrModel READ dlssSrModel WRITE setDlssSrModel NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantList dlssSrModelChoices READ dlssSrModelChoices CONSTANT)
     Q_PROPERTY(bool protectionEnabled READ protectionEnabled WRITE setProtectionEnabled NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap protectionState READ protectionState NOTIFY chainChanged)
     Q_PROPERTY(bool colorEnabled READ colorEnabled WRITE setColorEnabled NOTIFY settingsChanged)
@@ -310,7 +312,9 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString runStatus READ runStatus NOTIFY perfChanged)
     Q_PROPERTY(QString runStatusLevel READ runStatusLevel NOTIFY perfChanged)
     Q_PROPERTY(QString runStatusDetail READ runStatusDetail NOTIFY perfChanged)
-    // Achieved output rate / target (source x multiplier); -1 while unknown.
+    Q_PROPERTY(QStringList runOptions READ runOptions NOTIFY perfChanged)
+    Q_PROPERTY(double effectiveOutputFps READ effectiveOutputFps NOTIFY perfChanged)
+    // Achieved output rate / effective policy target; -1 while unknown.
     Q_PROPERTY(double outputRateRatio READ outputRateRatio NOTIFY perfChanged)
     // Frame interval history (ms, newest last) for the frame-time line.
     Q_PROPERTY(QVariantList frameTimes READ frameTimes NOTIFY perfChanged)
@@ -797,6 +801,9 @@ public:
     void setNrUiCorrection(bool value);
     int videoSrQuality() const;
     void setVideoSrQuality(int value);
+    int dlssSrModel() const;
+    void setDlssSrModel(int value);
+    QVariantList dlssSrModelChoices() const;
     bool protectionEnabled() const;
     void setProtectionEnabled(bool value);
     QVariantMap protectionState() const;
@@ -814,6 +821,8 @@ public:
     QString runStatus() const;
     QString runStatusLevel() const;
     QString runStatusDetail() const;
+    QStringList runOptions() const;
+    double effectiveOutputFps() const;
     double outputRateRatio() const;
     QVariantList frameTimes() const;
     int flowQuality() const;

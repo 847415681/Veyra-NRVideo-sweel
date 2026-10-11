@@ -15114,6 +15114,132 @@
    "zh-TW": "螢幕 %1 Hz 最多顯示約 %2X",
    "en": "A %1 Hz display shows at most about %2X",
    "ja": "%1 Hz の画面で表示できるのは最大約 %2X"
+  },
+  {
+   "zh": "DLSS 模型",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "DLSS 模型",
+   "en": "DLSS model",
+   "ja": "DLSS モデル"
+  },
+  {
+   "zh": "K 保留原有模型；M、L 为 DLSS 4.5。L 针对较低输入分辨率，实际画质与耗时取决于片源。",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "K 保留原有模型；M、L 為 DLSS 4.5。L 針對較低輸入解析度，實際畫質與耗時取決於片源。",
+   "en": "K retains the original model; M and L use DLSS 4.5. L targets lower input resolutions. Quality and processing time depend on the source.",
+   "ja": "K は従来モデル、M・L は DLSS 4.5 です。L は低い入力解像度向けです。画質と処理時間は映像により異なります。"
+  },
+  {
+   "zh": "识别 %1 fps 内容",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "辨識 %1 fps 內容",
+   "en": "Detect %1 fps content",
+   "ja": "%1 fps のコンテンツを検出"
+  },
+  {
+   "zh": "%1 · 当前约 %2 fps",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "%1 · 目前約 %2 fps",
+   "en": "%1 · currently about %2 fps",
+   "ja": "%1 · 現在約 %2 fps"
+  },
+  {
+   "zh": "%1 · 去重后约 %2 fps",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "%1 · 去重後約 %2 fps",
+   "en": "%1 · about %2 fps after deduplication",
+   "ja": "%1 · 重複除去後は約 %2 fps"
+  },
+  {
+   "zh": "%1 · 当前来源未去重",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "%1 · 目前來源未去重",
+   "en": "%1 · deduplication inactive for this source",
+   "ja": "%1 · このソースでは重複除去は無効"
+  },
+  {
+   "zh": "%1 · 尚未观察到去重",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "%1 · 尚未觀察到去重",
+   "en": "%1 · no intentional frame skips observed yet",
+   "ja": "%1 · 重複除去によるスキップはまだありません"
+  },
+  {
+   "zh": "自动显示同步",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "自動顯示同步",
+   "en": "Automatic display sync",
+   "ja": "自動ディスプレイ同期"
+  },
+  {
+   "zh": "%1 · 屏幕 %2 Hz",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "%1 · 螢幕 %2 Hz",
+   "en": "%1 · display %2 Hz",
+   "ja": "%1 · ディスプレイ %2 Hz"
+  },
+  {
+   "zh": "输出限帧 · 当前未生效",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "輸出限幀 · 目前未生效",
+   "en": "Output cap · currently inactive",
+   "ja": "出力制限 · 現在無効"
+  },
+  {
+   "zh": "输出限帧 · 跟随屏幕",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "輸出限幀 · 跟隨螢幕",
+   "en": "Output cap · follow display",
+   "ja": "出力制限 · ディスプレイに合わせる"
+  },
+  {
+   "zh": "输出限帧 · %1 fps",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "輸出限幀 · %1 fps",
+   "en": "Output cap · %1 fps",
+   "ja": "出力制限 · %1 fps"
+  },
+  {
+   "zh": "低延迟队列 · 当前未生效",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "低延遲佇列 · 目前未生效",
+   "en": "Low-latency queue · currently inactive",
+   "ja": "低遅延キュー · 現在無効"
+  },
+  {
+   "zh": "播放速度 %1×",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "播放速度 %1×",
+   "en": "Playback speed %1×",
+   "ja": "再生速度 %1×"
+  },
+  {
+   "zh": "画面对比 · 补帧暂停",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "畫面對比 · 補幀暫停",
+   "en": "Image comparison · frame generation paused",
+   "ja": "映像比較 · フレーム生成は一時停止中"
+  },
+  {
+   "zh": "有效目标 %1 fps",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "有效目標 %1 fps",
+   "en": "Effective target %1 fps",
+   "ja": "実効目標 %1 fps"
+  },
+  {
+   "zh": "已开启：%1",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "已開啟：%1",
+   "en": "Enabled: %1",
+   "ja": "有効：%1"
+  },
+  {
+   "zh": "采集 60→30",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "擷取 60→30",
+   "en": "Capture 60→30",
+   "ja": "キャプチャ 60→30"
   }
  ]
 }

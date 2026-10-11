@@ -373,7 +373,7 @@ VPage {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
-                height: compact ? 72 : 40
+                height: (compact ? 72 : 40) + nodeStatus.implicitHeight + 8
                 color: Theme.card
 
                 GridLayout {
@@ -499,6 +499,14 @@ VPage {
                         maxTextWidth: 150
                         text: qsTr("节点预设：") + veyra.currentPresetName
                         onClicked: nodePresetMenu.openAt(this, "down")
+                    }
+                    ProPage.StatusSummary {
+                        id: nodeStatus
+                        Layout.row: statsBar.compact ? 2 : 1
+                        Layout.column: 0
+                        Layout.columnSpan: statsBar.compact ? 8 : 9
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: 4
                     }
                 }
             }
@@ -1413,6 +1421,18 @@ VPage {
                         options: veyra.srBackendChoices || []
                         value: options.find(o => o.id === String(veyra.videoSrQuality === 0 || veyra.videoSrQuality === 5 ? veyra.videoSrQuality : 4))?.label || ""
                         onPicked: id => veyra.videoSrQuality = Number(id)
+                    }
+                }
+                VRow {
+                    label: qsTr("DLSS 模型")
+                    hint: qsTr("K 保留原有模型；M、L 为 DLSS 4.5。L 针对较低输入分辨率，实际画质与耗时取决于片源。")
+                    visible: veyra.videoSrQuality === 0
+                    enabled: Support.available(veyra, "sr0")
+                    VSelect {
+                        objectName: "node-dlss-sr-model"
+                        options: veyra.dlssSrModelChoices || []
+                        value: options.find(o => o.id === String(veyra.dlssSrModel))?.label || ""
+                        onPicked: id => veyra.dlssSrModel = Number(id)
                     }
                 }
                 VRow {

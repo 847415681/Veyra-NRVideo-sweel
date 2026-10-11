@@ -9087,3 +9087,30 @@ ui-software-damage-test.py performance-final四例顺序40秒有效播放、各5
 
 
 2026-10-11 本地main整合收尾：实测tip 9c14ee28a9175aa326fb0aa09c15bfa5808e0f0e，main功能merge 3a08ce8cf28de6d0f83c7b025bd4a7f54fe37b27。`git merge --no-ff codex/merge-claude-fixes-20261011`无冲突，`git diff --exit-code codex/merge-claude-fixes-20261011 HEAD`通过，完整Git树相同；后续仅AGENTS/CURRENT_STATUS/本WORKLOG/MERGE_CLAUDE_FIXES_REPORT四份文档更新。六Claude来源和UItip全为main祖先，负优化revert保持。首轮软件CPU +15.09%超过15%守卫，保留失败后不改产品、不改数值阈值，以新→旧倒序追加两例；倒序CPU 0.238783→0.235530秒/秒，双顺序平均0.229344→0.244308（+6.52%），NR/UI守卫保持，故最终六例性能核对完成；不将单次差异当严格等价/普遍提升。finalize.py seal逐项复查595产品/测试输入、19EXE、证据SHA、原包1626文件、54旧树/496脏文件（main按授权例外）、七来源分支不变及仅文档差异，结果与最终提交/标签/增量bundle写入reports同名/final.json。所有新产物E盘，不清理其它任务文件/用户数据，没有push/打新包/发布/关机。
+
+## 2026-10-11 接手 Claude DLSS 4.5 SR 接入
+
+用户要求读取刚刚本机Claude聊天、完成新超分接入并启动测试。读取会话56393e4a-57bd-464c-a461-310bf74a3ad2，最后授权为只接入、用户判断画质；Claude留下9份未提交文件。不可变patch/9原文件/start.json保留于E:/项目/Veyra/archives/dlss45-sr-handoff-20261011；核验并复用其已有source-before.bundle，不重复备份整工程。main049902b与57个旧工作树/504脏文件保持。新树codex/dlss45-sr-handoff-20261011从相同基线应用原patch，无子Agent，不整合另一个VFG mixed分支。
+
+完成K默认/M/L可选模型设置贯通共享chain globals、graph与NGX的六个unsigned preset hints（11/13/12），显式拒绝非法值；关闭SR或其它SR后端时编辑该模型不要求重建。补齐旧PresetStore31、Library12、Session7、节点草稿、列表/节点预设及重置；新模型通过.dlss-sr旁文件保留旧配置。两个生产界面新增相同入口及两条四语文案，目录中其它翻译原样保留。不改UI频率/Timer/优先级/NR/FG/其它SR算法，不下载/修改运行库。
+
+命令`python -B -I E:/项目/Veyra/tmp/dlss45-sr-handoff-20261011/build.py`：依赖闭包34项/9EXE，成功构建204653为48.7秒；修正测试后的最终205014为19.4秒增量构建，不能冒称clean全量。保留已验DeckLink与patched FFmpeg。最终GUI SHA b064968ae42b1bb21175b137c9d1ceebc4915fc34acfd6e3e492440ccd6afe43，显示2.0.6-DLSS45-test-20261011，app在E:/项目/Veyra/tests/dlss45-sr-handoff-20261011/app。所有构建/日志/测试/缓存E盘同名任务目录，独立data-dir与TEMP/TMP/CUDA cache。
+
+`harness/regress.py chain contracts library presets models`首轮204842中chain/contracts/presets/models通过，library因新增夹具put未明确replace失败；修正后library独立205141通过。最初构建204538另因夹具把void apply当.accepted而失败；均保留原回执，不将失败批次冒称通过。RTX5070实际GTA原4K第12秒起降到1080p→4K，每模型32帧移动输入，3Create/96Evaluate/3Release全Success、SEH0。verify-output.py核对9张4K PNG非黑且非恒定、保存SHA与统计，不以此宣称画质更好。运行库310.7/58977904字节/Valid/SHA BE6E434A94CA32499515EB62CA0E6C274526055D568D0426E4C652DCDFB6EE6E保持。
+
+`harness/ui-smoke.py`实际生产列表/节点入口及bridge切换、保存/恢复M/L、K回退通过（ui-20261011-205634/selection，30.3秒）。无片源restart夹具错误地等待applying=false停在state0；仅修驱动后`ui-smoke.py restart`205851用5.2秒验证列表M/节点L独立恢复与预设持久化通过。生产Main.qml恢复为源码原字节，测试Loader移除。首次K Create8.84秒，在8.14秒触发既有无响应诊断，栈为NVIDIA JIT编译器，随后正常返回并恢复画面；不隐藏这项限制或靠提高看门狗阈值制造通过。最终以M、1080p GTA→4K、SR单独开启供用户测试。
+
+regress每轮前后核验donor1626文件原件SHA；原子替换私有app的变更文件，不向硬链接原件写入。`protect.py verify`核对原57工作树/504脏文件、Claude封存patch与9原文件通过。详细结果/失败/冷编译边界见docs/DLSS45_SR_REPORT_2026-10-11.md；最终源码归档、保护与软件启动见本轮logs/final.json。其它显卡/实卡/HDR/长期显存及主观画质未验，本轮未做性能对照，不声称提速。未合并main、push、打包、发布或关机。
+
+
+## 2026-10-11 内容节奏与显示限速状态修正（Codex）
+
+按用户要求在codex/cadence-status-20261011、e8300d9基线上修正常去重/同步/限帧误报，保留新超分，不合并main。archives/cadence-status-20261011/start.json与source-before.bundle保护58旧树/504脏文件。共享LiveStatusHistory以已有主动跳帧计数有界一秒窗口、已生效呈现设置、实际窗口屏幕、播放速度和对比状态算有效目标；勾选Auto但没有实际去重不降低目标，真输入不足/时间线异常/欠速/无正常限制的补帧降档继续告警。预算按内容帧而非输出上限计算，不改UI统计频率/新增Timer/优先级/实际GPU链路算法。列表和节点在状态上方显示选项及原因，长文本换行/悬停，修固定172px区越界，补16条四语翻译且保留原词条。
+
+GUI实际复现同回调FG关闭+0.5X触发seek，缓存帧被discardBefore跳过后局部transaction确认丢失，实际15fps但applied仍4X、永久调整中。仅补EngineController的pendingSettingsAck跨循环到首帧成功process再发布applied，不提前确认、不新增逐帧锁/等待/重建；新增永久集成回归覆盖全效果关闭+慢放+seek。
+
+命令py -3.11 -X utf8 -B -I tmp/cadence-status-20261011/build.py；最终logs/cadence-status-20261011/build-20261011-215110/receipt.json增量15.0秒，7依赖对象和资源/MOC、10EXE；复用已验缓存/DeckLink/patched FFmpeg，不称clean全量。harness/regress.py ui-contracts 213440通过27条新策略断言与原UI契约；harness/ui-smoke.py 215150用48.2秒通过9真实状态、6布局、简中/繁中/英/日，限帧15、DLSS4X+同步120、对比30、慢放15、组合上限12均正常。VSync实机屏幕320Hz，未触及刷新上限，60Hz限速由契约验证，不能混称实卡通过。
+
+harness/regress.py video rollback在logs/cadence-status-20261011/cadence-status/tests-20261011-215330分别43.0/17.8秒通过：8轮NR/SR/FG热切换、新增事务+seek确认、失败回滚恢复出帧。原4K GTA输入、内部1080NR。所有本轮失败与修复详见docs/CADENCE_STATUS_REPORT_2026-10-11.md；213650卡片越界、213826/213957/214052夹具等待、214312/214630真实事务确认错误的原证据保留，没有冒称通过。i18n --check占位符0错误，原29条未译保持，diff --check通过。
+
+最终GUI SHA be00985661932e578f305e454589999c1dc8117f45bad787f10c1eee0a0ac442，tests/cadence-status-20261011/app，版本2.0.6-cadence-status-test-20261011。生产Main.qml恢复原字节，GUI夹具移除；用户测试profile复制已正常退出的上一私有测试实例，实际用户配置不动。所有源码/构建/测试/日志/临时缓存/归档在E:/项目/Veyra下本轮子目录；失败GUI的临时JIT/Qt缓存已清理，仅留成功缓存供运行与原失败日志。最后源文件/构建输入/10EXE/QML/原包1626文件/58旧树504脏文件校验及启动见logs/cadence-status-20261011/final.json。未进行性能A/B、未接真实去重采集卡或验其它显卡/provider，不宣称提速/物理屏幕FPS/全硬件通过。无main合并、push、打包、Release或关机。
