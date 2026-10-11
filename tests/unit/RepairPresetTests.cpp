@@ -317,4 +317,13 @@ ok=ok&&b.entries().size()==1&&b.defaultSettings()==s;
   std::ifstream header(path);std::string magic;unsigned version=0;roundtrip=roundtrip&&bool(header>>magic>>version)&&version==(extended?30:29);
   ok&=roundtrip;std::cout<<"strength five correction mode "<<mode<<" schema="<<version<<" roundtrip="<<roundtrip<<'\n';
  }
+ for(unsigned model=0;model<kDlssSrModelCount;++model){
+  EnhancementSettings dlss;dlss.nr=false;dlss.sr=true;dlss.dlssSrModel=model;
+  auto path=p;path+=L"-dlss-model-"+std::to_wstring(model);
+  std::error_code ec;std::filesystem::remove(path,ec);
+  PresetStore writer(path);bool roundtrip=writer.load()&&writer.put(L"DLSS model",dlss);
+  PresetStore reader(path);roundtrip=roundtrip&&reader.load()&&reader.entries().size()==1&&reader.entries()[0].settings==dlss;
+  std::ifstream header(path);std::string magic;unsigned version=0;roundtrip=roundtrip&&bool(header>>magic>>version)&&version==(model?31:21);
+  ok&=roundtrip;std::cout<<"DLSS model="<<model<<" schema="<<version<<" roundtrip="<<roundtrip<<'\n';
+ }
  std::cout<<"preset roundtrip, all fields, duplicate, rename-default, delete, validation, unknown schema, corrupt-preservation="<<ok<<'\n';return ok?0:1;}

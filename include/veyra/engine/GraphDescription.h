@@ -108,6 +108,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
         : request.nvidiaAdapter||crossVendorFrameGeneration(settings.frameGenerationBackend));
     desc.fgMultiplier=request.fgMultiplier;
     desc.videoSrQuality=settings.videoSrQuality;
+    desc.dlssSrModel=settings.dlssSrModel;
     describeNrLayers(settings,desc);
     desc.frameGenerationBackend=settings.frameGenerationBackend;
     desc.vfgQuality=settings.vfgQuality;

@@ -14,15 +14,16 @@ namespace {
 // Six full grades per entry (plus the legacy first-grade field), up to 64
 // entries. Never remove the file-size guard as LUT names are external input.
 constexpr size_t kMaxPresetBytes = 2u * 1024u * 1024u;
-void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool vfg=false,bool tuning=false){out<<' '<<int(g.hdrOutputMode)<<' '<<int(g.fgMotion)<<' '<<int(g.srMotion)<<' '<<int(g.nrMotion);if(vfg)out<<' '<<g.vfgQuality;
+void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool vfg=false,bool tuning=false,bool dlss=false){out<<' '<<int(g.hdrOutputMode)<<' '<<int(g.fgMotion)<<' '<<int(g.srMotion)<<' '<<int(g.nrMotion);if(vfg)out<<' '<<g.vfgQuality;
     // Static HDR output tuning: library v11 / session v6.
     // Older mainline versions keep their original NR/Flow layout.
     if(tuning)out<<' '<<g.hdrCurve.shadowLiftEv100<<' '<<g.hdrCurve.shadowRangeNits<<' '<<g.hdrCurve.midGrayNits<<' '
         <<g.hdrCurve.highlightStartNits<<' '<<g.hdrCurve.rollOffPercent<<' '<<g.hdrCurve.peakCapNits<<' '
         <<g.hdrCurve.enabled<<' '<<(g.hdrMetadata.enabled?1:0)<<' '<<g.hdrMetadata.masteringPeakNits<<' '
         <<g.hdrMetadata.maxCllNits<<' '<<g.hdrMetadata.maxFallNits<<' '<<g.hdrMetadata.masteringMinNitsX10000
-        <<' '<<g.hdrCurve.strengthPercent<<' '<<g.hdrCurve.displayPeakNits;}
-bool readRendering(std::istream& in,ChainGlobalSettings& g,bool vfg=false,bool tuning=false){
+        <<' '<<g.hdrCurve.strengthPercent<<' '<<g.hdrCurve.displayPeakNits;
+    if(dlss)out<<' '<<g.dlssSrModel;}
+bool readRendering(std::istream& in,ChainGlobalSettings& g,bool vfg=false,bool tuning=false,bool dlss=false){
     int hdr,fg,sr,nr;
     if(!(in>>hdr>>fg>>sr>>nr))return false;
     g.hdrOutputMode=HdrOutputMode(hdr);g.fgMotion=MotionSource(fg);g.srMotion=MotionSource(sr);g.nrMotion=MotionSource(nr);
@@ -36,6 +37,7 @@ bool readRendering(std::istream& in,ChainGlobalSettings& g,bool vfg=false,bool t
         g.hdrMetadata={metaOn!=0,unsigned(mpeak),unsigned(mcll),unsigned(mfall),unsigned(mmin)};
         if(!g.hdrCurve.valid()||!g.hdrMetadata.valid())return false;
     }
+    if(dlss&&(!(in>>g.dlssSrModel)||g.dlssSrModel>=kDlssSrModelCount))return false;
     EnhancementSettings s;g.apply(s);return s.validate().empty();
 }
 void applyRenderingPreset(const PresetEntry& e,EnhancementSettings& s){
@@ -91,6 +93,7 @@ void PresetLibrary::addBuiltins() {
 bool PresetLibrary::load() {
     error_.clear();
     addBuiltins();
+    const auto directDlss=std::filesystem::path(path_).concat(L".dlss-sr");
     const auto directHdr=std::filesystem::path(path_).concat(L".hdr-output");
     const auto directFlow=std::filesystem::path(path_).concat(L".flow");
     const auto rootVfg=std::filesystem::path(path_).concat(L".vfg");
@@ -114,6 +117,9 @@ bool PresetLibrary::load() {
     const auto hdrPath=std::filesystem::path(path_).concat(L".hdr-output");
     if(std::filesystem::exists(directHdr))path_=directHdr;
     else if(std::filesystem::exists(hdrPath))path_=hdrPath;
+    const auto dlssPath=std::filesystem::path(path_).concat(L".dlss-sr");
+    if(std::filesystem::exists(directDlss))path_=directDlss;
+    else if(std::filesystem::exists(dlssPath))path_=dlssPath;
     if (!std::filesystem::exists(path_)) return true;
     std::error_code ec;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -207,6 +213,9 @@ bool PresetLibrary::save() {
     std::wstring checkedDefault;
     // Match PresetStore: never replace a valid file with one our reader rejects.
     if (!parse(data, checked, checkedDefault, error_)) return false;
+    // Opting into a new model must leave the older build's library intact.
+    if(data.starts_with("VEYRA_PRESET_LIBRARY 12")&&!path_.wstring().ends_with(L".dlss-sr"))path_=std::filesystem::path(path_).concat(L".dlss-sr");
+    if(!path_.wstring().ends_with(L".dlss-sr")){
     if(data.starts_with("VEYRA_PRESET_LIBRARY 11")&&!path_.wstring().ends_with(L".hdr-output"))path_=std::filesystem::path(path_).concat(L".hdr-output");
     if(!path_.wstring().ends_with(L".hdr-output")){
     if(data.starts_with("VEYRA_PRESET_LIBRARY 10")&&!path_.wstring().ends_with(L".flow"))path_=std::filesystem::path(path_).concat(L".flow");
@@ -220,6 +229,7 @@ bool PresetLibrary::save() {
             return e.nodeConfiguration && e.nodeConfiguration->editor && e.nodeConfiguration->editor->globals;
         }) && !path_.wstring().ends_with(L".field-render")&&!path_.wstring().ends_with(L".p3-globals"))
         path_ = std::filesystem::path(path_).concat(L".p3-globals");
+    }
     }
     }
     std::error_code ec;
@@ -642,7 +652,13 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
             return g.hdrCurve!=HdrCurveSettings{}||g.hdrMetadata!=HdrMetadataSettings{};}
         return false;};
     const bool tuning=std::any_of(entries_.begin(),entries_.end(),tuningOf);
-    const int version=std::max(minimumVersion, tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    const bool dlss=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
+        if(e.globals&&e.globals->dlssSrModel!=0)return true;
+        if(!e.nodeConfiguration)return false;
+        const auto& c=*e.nodeConfiguration;
+        return c.dlssSrModel!=0||(c.editor&&c.editor->globals&&c.editor->globals->dlssSrModel!=0);
+    });
+    const int version=std::max(minimumVersion, dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -686,7 +702,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         }
         if(version>=6){
             o<<' '<<e.globals.has_value();
-            if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g,version>=7,version>=11);}
+            if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g,version>=7,version>=11,version>=12);}
         }
         if(version>=10){
             o<<' '<<e.flow.has_value();
@@ -706,7 +722,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     std::string magic, quoted;
     int version = 0;
     size_t count = 0;
-    const int allowedVersion=maxVersion>0?std::min(maxVersion,11):11;
+    const int allowedVersion=maxVersion>0?std::min(maxVersion,12):12;
     if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > allowedVersion) { error = L"预设库格式或版本不支持"; return false; }
     if (!(in >> std::quoted(quoted) >> count) || count > 64) { error = L"预设库条目数非法"; return false; }
     def = wide(quoted);
@@ -807,7 +823,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             if(present){ChainGlobalSettings g;int target,backend,flow,optical,half,policy;
                 if(!(in>>target>>g.videoSrQuality>>backend>>flow>>optical>>half>>policy)||half<0||half>1)return false;
                 g.srTarget=pipeline::SrTarget(target);g.fgBackend=FrameGenerationBackend(backend);g.flow=FlowQuality(flow);g.opticalFlowBackend=OpticalFlowBackend(optical);g.amdFlowHalfResolution=half!=0;g.nrPolicy=pipeline::NrSizePolicy(policy);
-                if(!readRendering(in,g,version>=7,version>=11))return false;e.globals=g;
+                if(!readRendering(in,g,version>=7,version>=11,version>=12))return false;e.globals=g;
             }
         }
         if(version>=10){
@@ -842,7 +858,10 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
         return c.hdrCurve!=HdrCurveSettings{} || c.hdrMetadata!=HdrMetadataSettings{} ||
             (c.editor&&c.editor->globals&&(c.editor->globals->hdrCurve!=HdrCurveSettings{}||c.editor->globals->hdrMetadata!=HdrMetadataSettings{}));};
     const bool tuning=std::any_of(session.configurations.begin(),session.configurations.end(),tuningCustom);
-    const int version = tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
+    const bool dlss=std::any_of(session.configurations.begin(),session.configurations.end(),[](const auto& c){
+        return c.dlssSrModel!=0||(c.editor&&c.editor->globals&&c.editor->globals->dlssSrModel!=0);
+    });
+    const int version = dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
     out << "VEYRA_CHAIN_SESSION " << version << '\n' << int(session.active) << ' ' << session.initialized[0] << ' ' << session.initialized[1];
     if(version>=4)out<<' '<<bool(editor);out<<'\n';
     std::vector<PresetEntry> entries;
@@ -851,7 +870,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
         out << int(c.srTarget) << ' ' << c.videoSrQuality << ' ' << int(c.fgBackend) << ' '
             << int(c.flow) << ' ' << int(c.opticalFlowBackend) << ' ' << c.amdFlowHalfResolution << ' '
             << int(c.nrPolicy) << ' ' << c.selectedNr << ' ' << c.selectedColour;
-        if(version>=4)writeRendering(out,c,version>=5,version>=6);out<<'\n';
+        if(version>=4)writeRendering(out,c,version>=5,version>=6,version>=7);out<<'\n';
         PresetEntry entry;
         entry.name = i == 0 ? L"list" : L"node";
         entry.kind = ChainMode(i); entry.chain = c.chain;
@@ -869,7 +888,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
             const auto& g = *document.globals;
             out << int(g.srTarget) << ' ' << g.videoSrQuality << ' ' << int(g.fgBackend) << ' '
                 << int(g.flow) << ' ' << int(g.opticalFlowBackend) << ' ' << g.amdFlowHalfResolution << ' '
-                << int(g.nrPolicy);if(version>=4)writeRendering(out,g,version>=5,version>=6);out<<'\n';
+                << int(g.nrPolicy);if(version>=4)writeRendering(out,g,version>=5,version>=6,version>=7);out<<'\n';
         }
         out << graph.nextId << ' ' << graph.inputNext << ' ' << document.nodes.nodeCount << '\n';
         // The ordinary preset codec validates a linear runtime chain. Use a
@@ -896,7 +915,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     std::istringstream in(data); in.imbue(std::locale::classic());
     std::string magic, body; int version = 0, active = 0, list = 0, node = 0;
     if (!(in >> magic >> version >> active >> list >> node) || magic != "VEYRA_CHAIN_SESSION" ||
-        (version < 1 || version > 6) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
+        (version < 1 || version > 7) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
     int hasEditor=version>=2?1:0;
     if(version>=4&&(!(in>>hasEditor)||hasEditor<0||hasEditor>1))return false;
     ChainSession parsed; parsed.active = ChainMode(active); parsed.initialized = {true, node != 0};
@@ -907,7 +926,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
         c.srTarget = pipeline::SrTarget(target); c.fgBackend = FrameGenerationBackend(backend);
         c.flow = FlowQuality(flow); c.opticalFlowBackend = OpticalFlowBackend(optical);
         c.amdFlowHalfResolution = half != 0; c.nrPolicy = pipeline::NrSizePolicy(policy);
-        if(version>=4&&!readRendering(in,c,version>=5,version>=6))return false;
+        if(version>=4&&!readRendering(in,c,version>=5,version>=6,version>=7))return false;
     }
     if (!(in >> std::quoted(body))) return false;
     std::vector<PresetEntry> entries; std::wstring def, error;
@@ -932,7 +951,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
             g.srTarget = pipeline::SrTarget(target); g.fgBackend = FrameGenerationBackend(backend);
             g.flow = FlowQuality(flow); g.opticalFlowBackend = OpticalFlowBackend(optical);
             g.amdFlowHalfResolution = half != 0; g.nrPolicy = pipeline::NrSizePolicy(policy);
-            if(version>=4&&!readRendering(in,g,version>=5,version>=6))return false;
+            if(version>=4&&!readRendering(in,g,version>=5,version>=6,version>=7))return false;
             editor->globals = g;
         }
         uint32_t count = 0;
@@ -962,6 +981,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
 }
 
 bool ChainSessionStore::load(ChainSession& session) {
+    const auto directDlss=std::filesystem::path(path_).concat(L".dlss-sr");
     error_.clear();
     std::error_code ec;
     const auto directHdr=std::filesystem::path(path_).concat(L".hdr-output");
@@ -983,6 +1003,9 @@ bool ChainSessionStore::load(ChainSession& session) {
     const auto hdrPath=std::filesystem::path(path_).concat(L".hdr-output");
     if(std::filesystem::exists(directHdr,ec))path_=directHdr;
     else if(std::filesystem::exists(hdrPath,ec))path_=hdrPath;
+    const auto dlssPath=std::filesystem::path(path_).concat(L".dlss-sr");
+    if(std::filesystem::exists(directDlss,ec))path_=directDlss;
+    else if(std::filesystem::exists(dlssPath,ec))path_=dlssPath;
     const bool exists = std::filesystem::exists(path_, ec);
     if (!exists && !ec) return true;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -1012,6 +1035,8 @@ bool ChainSessionStore::save(const ChainSession& session) {
     const auto data = encode(session);
     ChainSession checked;
     if (!decode(data, checked)) { error_ = L"模式会话编码校验失败，未保存"; return false; }
+    if(data.starts_with("VEYRA_CHAIN_SESSION 7")&&!path_.wstring().ends_with(L".dlss-sr"))path_=std::filesystem::path(path_).concat(L".dlss-sr");
+    if(!path_.wstring().ends_with(L".dlss-sr")){
     if(data.starts_with("VEYRA_CHAIN_SESSION 6")&&!path_.wstring().ends_with(L".hdr-output"))path_=std::filesystem::path(path_).concat(L".hdr-output");
     if(!path_.wstring().ends_with(L".hdr-output")){
     if(data.starts_with("VEYRA_CHAIN_SESSION 5")&&!path_.wstring().ends_with(L".vfg"))path_=std::filesystem::path(path_).concat(L".vfg");
@@ -1025,6 +1050,7 @@ bool ChainSessionStore::save(const ChainSession& session) {
     if (session.configurations[1].editor && session.configurations[1].editor->globals &&
         !path_.wstring().ends_with(L".field-render")&&!path_.wstring().ends_with(L".p3-globals"))
         path_ = std::filesystem::path(path_).concat(L".p3-globals");
+    }
     }
     }
     std::error_code ec;

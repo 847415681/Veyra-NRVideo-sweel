@@ -296,6 +296,8 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool nrAutoMask READ nrAutoMask WRITE setNrAutoMask NOTIFY settingsChanged)
     Q_PROPERTY(bool nrUiCorrection READ nrUiCorrection WRITE setNrUiCorrection NOTIFY settingsChanged)
     Q_PROPERTY(int videoSrQuality READ videoSrQuality WRITE setVideoSrQuality NOTIFY settingsChanged)
+    Q_PROPERTY(int dlssSrModel READ dlssSrModel WRITE setDlssSrModel NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantList dlssSrModelChoices READ dlssSrModelChoices CONSTANT)
     Q_PROPERTY(bool protectionEnabled READ protectionEnabled WRITE setProtectionEnabled NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap protectionState READ protectionState NOTIFY chainChanged)
     Q_PROPERTY(bool colorEnabled READ colorEnabled WRITE setColorEnabled NOTIFY settingsChanged)
@@ -797,6 +799,9 @@ public:
     void setNrUiCorrection(bool value);
     int videoSrQuality() const;
     void setVideoSrQuality(int value);
+    int dlssSrModel() const;
+    void setDlssSrModel(int value);
+    QVariantList dlssSrModelChoices() const;
     bool protectionEnabled() const;
     void setProtectionEnabled(bool value);
     QVariantMap protectionState() const;

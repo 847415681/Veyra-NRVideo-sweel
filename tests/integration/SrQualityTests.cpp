@@ -11,6 +11,7 @@
 #include <fstream>
 #include <memory>
 #include <array>
+#include <vector>
 extern "C" {
 #include <libavutil/frame.h>
 #include <libavutil/pixfmt.h>
@@ -19,15 +20,18 @@ extern "C" {
 
 // Matched deterministic frames, actual SDK evaluation and output pixels.
 // Readbacks are restricted to this test; these are not playback timings.
-static int referenceTest(const std::filesystem::path& directory,const std::wstring& path,int seconds,bool moving,bool zeroMotion,int inputHeight,int outputHeight){
+static int referenceTest(const std::filesystem::path& directory,const std::wstring& path,int seconds,bool moving,bool zeroMotion,int inputHeight,int outputHeight,bool models=false){
     using namespace veyra;
     std::filesystem::create_directories(directory);Logger::instance().openFile((directory/L"engine.log").wstring());
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
     if(!ctx.initialize({},status)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status))return 2;
-    struct Case{const char* name;unsigned quality;bool reference,enabled;};
+    struct Case{const char* name;unsigned quality;bool reference,enabled;unsigned model=0;};
     bool ok=true;
-    for(const auto test:std::array<Case,6>{{{"reference",4,true,false},{"bilinear",4,false,false},
-            {"vsr1",1,false,true},{"vsr4",4,false,true},{"dlss",0,false,true},{"fsr",5,false,true}}}){
+    const std::vector<Case> cases=models
+        ?std::vector<Case>{{"dlss-K",0,false,true,0},{"dlss-M",0,false,true,1},{"dlss-L",0,false,true,2}}
+        :std::vector<Case>{{"reference",4,true,false},{"bilinear",4,false,false},
+            {"vsr1",1,false,true},{"vsr4",4,false,true},{"dlss",0,false,true},{"fsr",5,false,true}};
+    for(const auto test:cases){
         source::MediaFileSource media;source::SourceOpenDesc open;open.path=path;open.preferHardwareDecode=false;
         if(!media.open(open)||!media.seek({seconds,1}))return 2;
         pipeline::FramePacket packet;const AVFrame* natural=nullptr;
@@ -36,7 +40,7 @@ static int referenceTest(const std::filesystem::path& directory,const std::wstri
         }while(packet.pts.toDouble()+1e-6<seconds);
         const double startPts=packet.pts.toDouble();
         engine::EnhancementSettings settings;settings.nr=false;settings.sr=!test.reference;settings.multiplier=1;
-        settings.videoSrQuality=test.quality;settings.srTarget=outputHeight==1440?pipeline::SrTarget::Qhd:pipeline::SrTarget::Uhd4K;
+        settings.videoSrQuality=test.quality;settings.dlssSrModel=test.model;settings.srTarget=outputHeight==1440?pipeline::SrTarget::Qhd:pipeline::SrTarget::Uhd4K;
         settings.nrPolicy=pipeline::NrSizePolicy::Native;settings.srMotion=zeroMotion?engine::MotionSource::Zero:engine::MotionSource::OpticalFlow;
         engine::StageRequest request;request.height=test.reference?outputHeight:inputHeight;request.width=request.height*16/9;request.sr=settings.sr;
         pipeline::EnhanceGraphDesc desc;engine::describeStages(request,settings,desc);
@@ -89,11 +93,11 @@ int wmain(int argc,wchar_t** argv){
     if(argc<2)return 2;
     const HRESULT com=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     if(FAILED(com))return 2;
-    if(argc>5&&std::wstring_view(argv[2])==L"reference"){
+    if(argc>5&&(std::wstring_view(argv[2])==L"reference"||std::wstring_view(argv[2])==L"models")){
         const std::wstring_view mode=argv[5];
         if(mode.starts_with(L"legacy-"))return 2; // withdrawn experiment; no production toggle remains
         const int result=referenceTest(argv[1],argv[3],std::stoi(argv[4]),mode.ends_with(L"moving"),mode.starts_with(L"zero-"),
-            mode.find(L"p720")!=std::wstring_view::npos?720:1080,mode.find(L"qhd")!=std::wstring_view::npos?1440:2160);
+            mode.find(L"p720")!=std::wstring_view::npos?720:1080,mode.find(L"qhd")!=std::wstring_view::npos?1440:2160,std::wstring_view(argv[2])==L"models");
         CoUninitialize();return result;
     }
     const bool baseline=argc>2&&std::wstring_view(argv[2])==L"baseline";

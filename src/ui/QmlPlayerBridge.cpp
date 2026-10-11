@@ -709,6 +709,7 @@ struct QmlPlayerBridge::Impl {
             // A detached singleton owns editable values, not live resources.
             if (!projected->firstOf(engine::EffectType::SuperResolution)) {
                 s.srTarget = previous.srTarget; s.videoSrQuality = previous.videoSrQuality;
+                s.dlssSrModel = previous.dlssSrModel;
             }
             if (!projected->firstOf(engine::EffectType::FrameGeneration)){
                 s.frameGenerationBackend = previous.frameGenerationBackend;
@@ -3997,6 +3998,21 @@ QString QmlPlayerBridge::backendWarning() const { return uiText(impl_->snapshot.
     }
 
 int QmlPlayerBridge::videoSrQuality() const { return int(settings().videoSrQuality); }
+int QmlPlayerBridge::dlssSrModel() const { return int(settings().dlssSrModel); }
+QVariantList QmlPlayerBridge::dlssSrModelChoices() const {
+    return {QVariantMap{{"id", "0"}, {"label", "DLSS 4 · K"}},
+            QVariantMap{{"id", "1"}, {"label", "DLSS 4.5 · M"}},
+            QVariantMap{{"id", "2"}, {"label", "DLSS 4.5 · L"}}};
+}
+void QmlPlayerBridge::setDlssSrModel(int value) {
+    if (value < 0 || unsigned(value) >= engine::kDlssSrModelCount) return;
+    const auto cap = effectCapabilities().value("sr0").toMap();
+    if (!cap.value("available").toBool()) { emit notice(cap.value("reason").toString(), true); return; }
+    auto s = settings();
+    if (s.dlssSrModel == unsigned(value)) return;
+    s.dlssSrModel = unsigned(value);
+    if (impl_->commit(s)) emit settingsChanged();
+}
 void QmlPlayerBridge::setVideoSrQuality(int value) {
     if (value < 0 || value > 5) return;
     const auto cap = effectCapabilities().value("sr" + QString::number(value)).toMap();
@@ -5743,6 +5759,7 @@ bool QmlPlayerBridge::resetNode(uint id) {
         const engine::EnhancementSettings defaults;
         impl_->draftGlobals.srTarget = defaults.srTarget;
         impl_->draftGlobals.videoSrQuality = defaults.videoSrQuality;
+        impl_->draftGlobals.dlssSrModel = defaults.dlssSrModel;
     }
     if (!impl_->revalidate(true, &previous)) {
         const auto error = impl_->validation.message; node = before;

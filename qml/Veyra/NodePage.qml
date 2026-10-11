@@ -1416,6 +1416,18 @@ VPage {
                     }
                 }
                 VRow {
+                    label: qsTr("DLSS 模型")
+                    hint: qsTr("K 保留原有模型；M、L 为 DLSS 4.5。L 针对较低输入分辨率，实际画质与耗时取决于片源。")
+                    visible: veyra.videoSrQuality === 0
+                    enabled: Support.available(veyra, "sr0")
+                    VSelect {
+                        objectName: "node-dlss-sr-model"
+                        options: veyra.dlssSrModelChoices || []
+                        value: options.find(o => o.id === String(veyra.dlssSrModel))?.label || ""
+                        onPicked: id => veyra.dlssSrModel = Number(id)
+                    }
+                }
+                VRow {
                     label: qsTr("目标尺寸")
                     hint: veyra.videoSrQuality >= 1 && veyra.videoSrQuality <= 4
                         ? qsTr("放大时重建细节；原尺寸时修复压缩伪影。效果取决于片源。")

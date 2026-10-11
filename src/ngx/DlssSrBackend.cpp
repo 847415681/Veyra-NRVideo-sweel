@@ -78,6 +78,11 @@ bool DlssSrBackend::create(NgxCoreHost& coreHost,
                            Status& status)
 {
     (void)coreHost; // NGX core already initialized; SR creates through the core API
+    if (desc.model >= 3) {
+        log::error("ngx", std::format("sr-backend: invalid model={}", desc.model));
+        status = Status::InvalidArgument;
+        return false;
+    }
     if (handle_ != nullptr) {
         release();
     }
@@ -107,6 +112,19 @@ bool DlssSrBackend::create(NgxCoreHost& coreHost,
     createParams.InEnableOutputSubrects = desc.enableOutputSubrects ? 1 : 0;
 
     log::info("ngx",std::format("sr-backend: linearInput=true flags=0x{:X} exposure=auto mvUnits=output-pixels jitter=source-sampling",createParams.InFeatureCreateFlags));
+    // DLSS SR model. The runtime picks a preset per perf mode (310.7: K for
+    // DLAA/Quality/Balanced, M for Performance, L for Ultra Performance), so pin
+    // every mode to the chosen one. M and L are the DLSS 4.5 second-generation
+    // transformer (DLSS SDK 310.5+); K is the DLSS 4 model used until now.
+    static constexpr NVSDK_NGX_DLSS_Hint_Render_Preset kModelPresets[]={
+        NVSDK_NGX_DLSS_Hint_Render_Preset_K,NVSDK_NGX_DLSS_Hint_Render_Preset_M,NVSDK_NGX_DLSS_Hint_Render_Preset_L};
+    static constexpr const char* kModelNames[]={"DLSS 4 (preset K)","DLSS 4.5 (preset M)","DLSS 4.5 Ultra Performance (preset L)"};
+    const uint32_t model=desc.model;
+    for(const char* mode:{NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_DLAA,NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Quality,
+                          NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Balanced,NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Performance,
+                          NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_UltraPerformance,NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_UltraQuality})
+        NVSDK_NGX_Parameter_SetUI(params,mode,unsigned(kModelPresets[model]));
+    log::info("ngx",std::format("sr-backend: model={} renderPreset={} (all perf modes)",kModelNames[model],unsigned(kModelPresets[model])));
     uint32_t sehCode = 0;
     const NVSDK_NGX_Result result = CallCreateDlss(cmdList, 1, 1, &handle_,
         params, &createParams, sehCode);

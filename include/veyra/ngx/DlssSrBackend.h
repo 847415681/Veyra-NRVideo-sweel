@@ -31,6 +31,10 @@ public:
         uint32_t outputHeight;
         int perfQuality; // NVSDK_NGX_PerfQuality_Value
         bool enableOutputSubrects;
+        // engine::EnhancementSettings::dlssSrModel: 0 DLSS 4 transformer (preset K),
+        // 1 DLSS 4.5 second-generation transformer (preset M), 2 DLSS 4.5 Ultra
+        // Performance (preset L). Applied to every perf mode as a render preset hint.
+        uint32_t model = 0;
     };
 
     struct EvalDesc {

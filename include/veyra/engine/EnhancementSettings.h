@@ -57,6 +57,11 @@ inline size_t exportBitrateIndex(uint32_t mbps){for(size_t i=0;i<kExportBitrateC
 // videoSrQuality values: 0 = DLSS SR, 1..4 = RTX video SR quality steps,
 // 5 = AMD FSR upscaling (vendor neutral; verified on an NVIDIA adapter).
 inline constexpr uint32_t kVideoSrFsr=5;
+// DLSS SR model (videoSrQuality 0 only): 0 = DLSS 4 transformer (preset K,
+// what DLSS SR always used here), 1 = DLSS 4.5 second-generation transformer
+// (preset M), 2 = DLSS 4.5 Ultra Performance model (preset L). Both 4.5
+// models ship in the DLSS 310.5+ runtime already packaged (310.7).
+inline constexpr uint32_t kDlssSrModelCount=3;
 // Capture audio ingress policy. Automatic is what the pipeline did before the
 // manual selector existed; the other two exist because Dolby/DTS passthrough
 // negotiation depends on the device and the console, and users reported that
@@ -301,6 +306,7 @@ struct EnhancementSettings {
     bool useHdrPreview(bool hdrInput,bool hdrDisplayActive)const{return (hdrInput||videoHdr.enabled)&&hdrDisplayActive&&!forceSdrPreview;}
     pipeline::SrTarget srTarget=pipeline::SrTarget::Uhd4K;
     uint32_t videoSrQuality=0; // 0 DLSS SR; 1–4 RTX Video SR
+    uint32_t dlssSrModel=0;    // DLSS SR only; see kDlssSrModelCount
     uint32_t multiplier=1;
     FrameGenerationBackend frameGenerationBackend=FrameGenerationBackend::Dlss;
     uint32_t vfgQuality=1; // NvVFX Mode: Low=0, Medium=1 (default), High=2
@@ -354,6 +360,7 @@ struct EnhancementSettings {
         if(!nr||!sr)active.lowLatency=defaults.lowLatency;
         if(!nr||!protection.enabled)active.protection=defaults.protection;
         if(!sr){active.srTarget=defaults.srTarget;active.videoSrQuality=defaults.videoSrQuality;active.srMotion=defaults.srMotion;}
+        if(!sr||videoSrQuality!=0)active.dlssSrModel=defaults.dlssSrModel;
         if(multiplier<=1){
             active.frameGenerationBackend=defaults.frameGenerationBackend;active.vfgQuality=defaults.vfgQuality;
             active.fgMotion=defaults.fgMotion;active.fgStrictAdmission=defaults.fgStrictAdmission;
@@ -470,6 +477,7 @@ struct EnhancementSettings {
         // probe measured the same count for 2/3/4 requested frames.
         if(fsrFrameGeneration(frameGenerationBackend)&&multiplier>2)return "AMD FSR frame generation supports up to 2X";
         if(videoSrQuality>kVideoSrFsr)return "invalid video SR quality";
+        if(dlssSrModel>=kDlssSrModelCount)return "invalid DLSS SR model";
         if(!pipeline::validSrTarget(srTarget))return "invalid SR target";
         if(opticalFlowBackend!=OpticalFlowBackend::Nvidia&&opticalFlowBackend!=OpticalFlowBackend::AmdFidelityFx&&opticalFlowBackend!=OpticalFlowBackend::GpuDis)return "invalid optical flow backend";
         if(multiplier<1||multiplier>(frameGenerationBackend==FrameGenerationBackend::Vfg?8u:6u))return "unsupported multiplier";

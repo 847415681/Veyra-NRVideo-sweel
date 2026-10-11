@@ -15114,6 +15114,20 @@
    "zh-TW": "螢幕 %1 Hz 最多顯示約 %2X",
    "en": "A %1 Hz display shows at most about %2X",
    "ja": "%1 Hz の画面で表示できるのは最大約 %2X"
+  },
+  {
+   "zh": "DLSS 模型",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "DLSS 模型",
+   "en": "DLSS model",
+   "ja": "DLSS モデル"
+  },
+  {
+   "zh": "K 保留原有模型；M、L 为 DLSS 4.5。L 针对较低输入分辨率，实际画质与耗时取决于片源。",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "K 保留原有模型；M、L 為 DLSS 4.5。L 針對較低輸入解析度，實際畫質與耗時取決於片源。",
+   "en": "K retains the original model; M and L use DLSS 4.5. L targets lower input resolutions. Quality and processing time depend on the source.",
+   "ja": "K は従来モデル、M・L は DLSS 4.5 です。L は低い入力解像度向けです。画質と処理時間は映像により異なります。"
   }
  ]
 }
