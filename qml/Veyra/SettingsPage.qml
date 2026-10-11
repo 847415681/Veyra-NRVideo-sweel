@@ -685,19 +685,20 @@ VPage {
                             }
                         }
                         VRow {
-                            // RivaTuner (MSI Afterburner's OSD): see main.cpp. Auto draws the interface in
-                            // software when RTSS runs at start, so its OSD only sits on the video.
+                            // RivaTuner (MSI Afterburner's OSD), NVIDIA's in-game overlay and GamePP: see
+                            // main.cpp. Auto draws the interface in software when one runs at start, so
+                            // they only hook the video.
                             readonly property bool automatic: (veyra.preferences.overlayCompat || "auto") === "auto"
                             label: qsTr("监控软件兼容")
                             hint: veyra.obsGameCaptureActive
                                   ? qsTr("OBS 游戏采集兼容已让界面软件绘制，小飞机 OSD 只显示在视频上")
-                                  : (automatic !== veyra.overlayCompatActive && (veyra.overlayCompatActive || veyra.rivaTunerRunning()))
+                                  : (automatic !== veyra.overlayCompatActive && (veyra.overlayCompatActive || veyra.presentationOverlayRunning()))
                                     ? qsTr("重启后生效")
                                     : veyra.overlayCompatActive
                                       ? qsTr("监控兼容绘制已启用：OSD 只显示在视频上；部分阴影与模糊简化")
                                       : automatic
-                                        ? qsTr("启动时检测到小飞机（RTSS）就改用软件绘制界面，OSD 只显示在视频上")
-                                        : qsTr("界面始终用显卡绘制；为避免冲突，小飞机 OSD 不在 Veyra 里显示")
+                                        ? qsTr("启动时检测到小飞机（RTSS）、NVIDIA 信息浮窗或游戏加加就改用软件绘制界面，它们只显示在视频上")
+                                        : qsTr("界面始终用显卡绘制；小飞机 OSD 不在 Veyra 里显示；开着 NVIDIA 信息浮窗或游戏加加时可能卡死")
                             VSeg {
                                 objectName: "set-overlay-compat"
                                 options: [{ id: "auto", label: qsTr("自动") }, { id: "off", label: qsTr("关闭") }]
@@ -705,7 +706,7 @@ VPage {
                                 onPicked: id => {
                                     if (veyra.setPreference("overlayCompat", id) && !veyra.obsGameCaptureActive
                                             && (id === "auto") !== veyra.overlayCompatActive
-                                            && (veyra.overlayCompatActive || veyra.rivaTunerRunning()))
+                                            && (veyra.overlayCompatActive || veyra.presentationOverlayRunning()))
                                         obsRestart.open()
                                 }
                             }

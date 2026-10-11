@@ -1,6 +1,7 @@
 #pragma once
 #include "veyra/Log.h"
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <format>
@@ -11,9 +12,12 @@ namespace veyra::diagnostics {
 class CpuStallTrace {
     using Clock = std::chrono::steady_clock;
 public:
-    explicit CpuStallTrace(const char* component, uint64_t frame = 0, double thresholdMs = 80.0)
-        : component_(component), frame_(frame), thresholdMs_(thresholdMs) {}
+    // stage, when given, receives each mark (string literals) for a watchdog.
+    explicit CpuStallTrace(const char* component, uint64_t frame = 0, double thresholdMs = 80.0,
+                           std::atomic<const char*>* stage = nullptr)
+        : component_(component), frame_(frame), thresholdMs_(thresholdMs), stage_(stage) {}
     void mark(const char* stage) {
+        if (stage_) stage_->store(stage, std::memory_order_relaxed);
         const auto now = Clock::now();
         if (count_ < samples_.size()) samples_[count_++] = {stage, ms(now - last_)};
         last_ = now;
@@ -33,6 +37,7 @@ private:
     const char* component_;
     uint64_t frame_;
     double thresholdMs_;
+    std::atomic<const char*>* stage_;
     Clock::time_point start_ = Clock::now(), last_ = start_;
     std::array<Sample, 32> samples_{};
     size_t count_ = 0;

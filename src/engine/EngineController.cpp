@@ -73,14 +73,42 @@ void logFrameFlow(const diagnostics::FrameFlowMetrics& m,const char* state){
     veyra::log::info("frame-flow",std::format("state={} session={} revision={} epoch={} source={} batch={} readyFence={} consumerFence={} captureReceived={} mailboxOverwritten={} sourceAccepted={} sourceSkippedBeforeGraph={} realSubmitted={} fgCandidate={} fgSkippedBeforeEval={} fgEvaluated={} fgWarmup={} fgSkippedForReset={} fgReduced={} fgReadyValid={} fgInvalid={} realPresented={} generatedPresented={} generatedExpiredAfterEval={} cancelledBeforePresent={} commandSlots={} commandHighWater={} presentationHighWater={} slotWaitCount={} slotWaitMs={:.3f} generatedFps={:.2f} presentSubmitFps={:.2f} resetRevision={} resetEpoch={} resetReason={} resetOutcome={} resetDrainMs={:.3f} resetDestroyMs={:.3f} resetCreateMs={:.3f} resetWarmupMs={:.3f} resetFirstValidMs={:.3f} resetTotalMs={:.3f}",state,id.sessionId,id.frame.settingsRevision,id.frame.epoch,id.frame.sourceFrameId,id.batchId,id.readyFence,id.consumerFence,c.captureReceived,c.mailboxOverwritten,c.sourceAccepted,c.sourceSkippedBeforeGraph,c.realSubmitted,c.fgCandidate,c.fgSkippedBeforeEval,c.fgEvaluated,c.fgWarmup,c.fgSkippedForReset,c.fgReduced,c.fgReadyValid,c.fgInvalid,c.realPresented,c.generatedPresented,c.generatedExpiredAfterEval,c.cancelledBeforePresent,c.commandSlotsInFlight,c.commandSlotHighWater,c.presentationBatchHighWater,m.slotReuseWaitCount,m.slotReuseWaitMs.value_or(0),m.validGeneratedFps,m.presentSubmitFps,r.settingsRevision,r.epoch,unsigned(r.reason),unsigned(r.outcome),ms(diagnostics::ResetStage::Drain),ms(diagnostics::ResetStage::Destroy),ms(diagnostics::ResetStage::Create),ms(diagnostics::ResetStage::Warmup),ms(diagnostics::ResetStage::FirstValid),r.totalMs.value_or(-1.0)));
 }
 }
-EngineController::EngineController(){worker_=std::thread(&EngineController::dispatch,this);}
-EngineController::~EngineController(){ {std::lock_guard lock(mutex_);shutdown_=true;pending_={};stop_=true;}wake_.notify_one();if(worker_.joinable())worker_.join(); }
+EngineController::EngineController(){
+    watchdog_=std::make_unique<EngineWatchdog>([this](uint64_t stalledMs){noteEngineHang(stalledMs);});
+    worker_=std::thread(&EngineController::dispatch,this);
+}
+EngineController::~EngineController(){
+    {std::lock_guard lock(mutex_);shutdown_=true;pending_={};stop_=true;}wake_.notify_one();
+    if(!worker_.joinable())return;
+    // Field logs(15): an owner thread blocked inside a driver call never returns,
+    // and closing the app waited for it forever (the process had to be killed).
+    // Wait a bounded time, then end the process instead of hanging on exit.
+    const auto started=Clock::now();
+    {std::unique_lock lock(mutex_);
+        while(!dispatchDone_.wait_for(lock,std::chrono::milliseconds(100),[&]{return dispatchExited_;})){
+            const double waited=elapsedMs(started);
+            if(waited<(watchdog_->hung()?3000.0:20000.0))continue;
+            veyra::log::error("engine-hang",std::format("shutdown: owner thread still blocked after {:.0f} ms; ending the process instead of waiting",waited));
+            Logger::instance().flush();
+            TerminateProcess(GetCurrentProcess(),0);
+        }
+    }
+    worker_.join();
+}
 void EngineController::dispatch(){
     for(;;){std::function<void()> task;{std::unique_lock lock(mutex_);wake_.wait(lock,[&]{return shutdown_||bool(pending_);});if(shutdown_)break;task=std::move(pending_);pending_={};busy_=true;stop_=false;}
         try{task();}catch(const std::exception&){status(L"任务异常，已停止；请查看诊断",true);}
         {std::lock_guard lock(mutex_);busy_=false;snapshot_.running=false;if(snapshot_.transport==TransportState::Stopping)snapshot_.transport=TransportState::Empty;}
     }
     prewarmed_.reset();
+    {std::lock_guard lock(mutex_);dispatchExited_=true;}dispatchDone_.notify_all();
+}
+// Watchdog thread. try_lock: an owner stuck while holding mutex_ must not take
+// the watchdog down with it.
+void EngineController::noteEngineHang(uint64_t stalledMs){
+    std::unique_lock lock(mutex_,std::try_to_lock);if(!lock.owns_lock())return;
+    if(stalledMs){if(snapshot_.status!=kEngineHangStatus){hangPreviousStatus_=snapshot_.status;snapshot_.status=kEngineHangStatus;}}
+    else if(snapshot_.status==kEngineHangStatus)snapshot_.status=hangPreviousStatus_;
 }
 void EngineController::post(std::function<void()> task){ {std::lock_guard lock(mutex_);stop_=true;pending_=std::move(task);}wake_.notify_one(); }
 bool EngineController::idle()const{std::lock_guard lock(mutex_);return !busy_&&!pending_;}
@@ -1152,6 +1180,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 reset=true;pendingResetCause=pipeline::ResetReason::Settings;
                 return true;
             };
+            // Disarmed after stopPresentation's teardown, so a teardown that blocks is
+            // reported too.
+            OnExit leaveWatchdog{[&]{watchdog_->disarm();}};
+            // Test hook: block the owner once, after 120 loop frames, for the given ms
+            // (-1 = forever), to exercise the hang watchdog and bounded shutdown.
+            wchar_t testHangText[16]{};
+            int testHangMs=GetEnvironmentVariableW(L"VEYRA_TEST_ENGINE_HANG_MS",testHangText,16)?_wtoi(testHangText):0;
             // Declared LAST before the loop on purpose: it is destroyed first at
             // scope exit, so the scheduler (whose queued step/finish lambdas
             // capture the locals above by reference) is torn down before any of
@@ -1161,10 +1196,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             uint64_t autoNrRevision=options.settings.revision;int64_t autoNrLogAt=0;
             OnExit stopPresentation{[&]{liveScheduler.reset();finishReset(stop_?diagnostics::ResetOutcome::Cancelled:diagnostics::ResetOutcome::Failed);std::lock_guard lock(mutex_);if(snapshot_.sessionId==runSessionId){if(frameFlow)snapshot_.metrics.flow=frameFlow->snapshot(host100ns());activeFlow_.reset();}}};
             while(!stop_){
+                watchdog_->beat();
+                if(testHangMs&&frames>=120){veyra::log::warn("engine-test",std::format("blocking owner thread for {} ms",testHangMs));Sleep(testHangMs<0?INFINITE:DWORD(testHangMs));testHangMs=0;}
                 if(Clock::now()-cacheBudgetPolledAt>=std::chrono::milliseconds(500)){
                     (void)recentGraphCache.checkBudget();cacheBudgetPolledAt=Clock::now();
                 }
-                diagnostics::CpuStallTrace loopTrace("engine-stall",frames,45.0);
+                diagnostics::CpuStallTrace loopTrace("engine-stall",frames,45.0,watchdog_->stage());
                 collectTimings();
                 loopTrace.mark("collect");
                 if(captureRecovering){

@@ -4076,11 +4076,11 @@
    "ja": "起動時に前回の再生を再開"
   },
   {
-   "zh": "启动时检测到小飞机（RTSS）就改用软件绘制界面，OSD 只显示在视频上",
+   "zh": "启动时检测到小飞机（RTSS）、NVIDIA 信息浮窗或游戏加加就改用软件绘制界面，它们只显示在视频上",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "啟動時偵測到小飛機（RTSS）就改用軟體繪製介面，OSD 只顯示在影片上",
-   "en": "When RivaTuner (RTSS) is running at start, the interface is drawn in software and the OSD shows on the video only",
-   "ja": "起動時に RivaTuner（RTSS）を検出するとインターフェースをソフトウェア描画にし、OSD は映像にだけ表示します"
+   "zh-TW": "啟動時偵測到小飛機（RTSS）、NVIDIA 遊戲內覆疊或遊戲加加就改用軟體繪製介面，它們只顯示在影片上",
+   "en": "When RivaTuner (RTSS), NVIDIA's in-game overlay or GamePP is running at start, the interface is drawn in software and they show on the video only",
+   "ja": "起動時に RivaTuner（RTSS）、NVIDIA オーバーレイ、GamePP を検出するとインターフェースをソフトウェア描画にし、それらは映像にだけ表示されます"
   },
   {
    "zh": "启动时预热增强组件",
@@ -8438,11 +8438,39 @@
    "ja": "RTSS オンスクリーン表示サービスを検出"
   },
   {
+   "zh": "检测到 %1",
+   "src": "qml/Main.qml",
+   "zh-TW": "偵測到 %1",
+   "en": "%1 detected",
+   "ja": "%1 を検出"
+  },
+  {
+   "zh": "NVIDIA 信息浮窗",
+   "src": "qml/Main.qml",
+   "zh-TW": "NVIDIA 遊戲內覆疊",
+   "en": "NVIDIA in-game overlay",
+   "ja": "NVIDIA オーバーレイ"
+  },
+  {
+   "zh": "游戏加加（GamePP）",
+   "src": "qml/Main.qml",
+   "zh-TW": "遊戲加加（GamePP）",
+   "en": "GamePP",
+   "ja": "GamePP（游戏加加）"
+  },
+  {
    "zh": "检测到 RTSS 屏显服务正在运行。开启兼容绘制需重启 Veyra，重启后 OSD 仅显示在视频上。现在重启吗？当前播放或串流将停止。",
    "src": "qml/Main.qml",
    "zh-TW": "偵測到 RTSS 螢幕顯示服務正在執行。啟用相容繪製需重新啟動 Veyra，重新啟動後 OSD 僅顯示在影片上。現在重新啟動嗎？目前的播放或串流將停止。",
    "en": "The RTSS on-screen display service is running. Restart Veyra to enable compatible rendering and show the OSD on the video only. Restart now? Current playback or streaming will stop.",
    "ja": "RTSS オンスクリーン表示サービスが動作しています。互換描画を有効にするには Veyra を再起動してください。再起動後、OSD は映像にだけ表示されます。今すぐ再起動しますか？再生中の映像やストリーミングは停止します。"
+  },
+  {
+   "zh": "%1 正在运行。它会同时挂接界面和视频两个画面，可能让 Veyra 卡死；开启兼容绘制需重启 Veyra，重启后界面改用软件绘制，它只作用在视频上。现在重启吗？当前播放或串流将停止。",
+   "src": "qml/Main.qml",
+   "zh-TW": "%1 正在執行。它會同時掛接介面和影片兩個畫面，可能讓 Veyra 卡死；啟用相容繪製需重新啟動 Veyra，重新啟動後介面改用軟體繪製，它只作用在影片上。現在重新啟動嗎？目前的播放或串流將停止。",
+   "en": "%1 is running. It hooks both the interface and the video, which can freeze Veyra. Restart Veyra to enable compatible rendering: the interface is then drawn in software and %1 only affects the video. Restart now? Current playback or streaming will stop.",
+   "ja": "%1 が動作しています。インターフェースと映像の両方にフックするため、Veyra がフリーズすることがあります。互換描画を有効にするには Veyra を再起動してください。再起動後はインターフェースをソフトウェアで描画し、%1 は映像にだけ作用します。今すぐ再起動しますか？再生中の映像やストリーミングは停止します。"
   },
   {
    "zh": "检测到 RivaTuner（小飞机 OSD）注入了 Veyra。请把 设置 → 监控软件兼容 设为“自动”并在小飞机运行时重启 Veyra：界面改用兼容绘制，OSD 只显示在视频上",
@@ -9481,6 +9509,13 @@
    "ja": "映像はメインウィンドウで再生されます"
   },
   {
+   "zh": "画面引擎无响应，已记录诊断信息；如画面未恢复，请关闭软件后重新打开",
+   "src": "include/veyra/engine/EngineWatchdog.h",
+   "zh-TW": "畫面引擎無回應，已記錄診斷資訊；如畫面未恢復，請關閉軟體後重新開啟",
+   "en": "The picture engine stopped responding; diagnostics were recorded. If the picture does not recover, close and reopen Veyra.",
+   "ja": "映像エンジンが応答しません。診断情報を記録しました。映像が回復しない場合は、ソフトを閉じて開き直してください。"
+  },
+  {
    "zh": "画面比例",
    "src": "qml/ProPage.qml",
    "zh-TW": "畫面比例",
@@ -9502,11 +9537,11 @@
    "ja": "画質調整が時間方向の安定化を制御中。オフにするとこの設定に戻ります。"
   },
   {
-   "zh": "界面始终用显卡绘制；为避免冲突，小飞机 OSD 不在 Veyra 里显示",
+   "zh": "界面始终用显卡绘制；小飞机 OSD 不在 Veyra 里显示；开着 NVIDIA 信息浮窗或游戏加加时可能卡死",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "介面始終用顯示卡繪製；為避免衝突，小飛機 OSD 不在 Veyra 中顯示",
-   "en": "The interface always draws on the GPU; to avoid a conflict the RTSS OSD is not shown in Veyra",
-   "ja": "インターフェースは常に GPU で描画します。競合を避けるため RTSS の OSD は Veyra に表示しません"
+   "zh-TW": "介面始終用顯示卡繪製；小飛機 OSD 不在 Veyra 中顯示；開著 NVIDIA 遊戲內覆疊或遊戲加加時可能卡死",
+   "en": "The interface always draws on the GPU; the RTSS OSD is not shown in Veyra; with NVIDIA's in-game overlay or GamePP running, Veyra may freeze",
+   "ja": "インターフェースは常に GPU で描画します。RTSS の OSD は Veyra に表示しません。NVIDIA オーバーレイや GamePP が動作しているとフリーズすることがあります"
   },
   {
    "zh": "界面状态写入失败",
