@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-11 软件 UI 残影接手**：用户要求读取刚才 Claude 的 UI 修复聊天并接手，明确不得恢复 2.0.4 高频 UI 绘制导致的性能回退，随后补充超分图标滚动越界。按 docs/UI_SOFTWARE_DAMAGE_PLAN_2026-10-11.md，在 codex/ui-smear-handoff-20261011 从 main 5ba186a 隔离继续必要 QML 图标/虚线边框与宿主日志修复、定向构建测试，覆盖这些具体 UI 接点旧冻结。独立 start 保全 53 既有工作树/496 未提交文件与 Claude 未完成补丁；旧 start/guard 不改，不派 Agent，不动其它 Claude 修复、GPU 优先级、视频/NR/补帧算法、运行库原件/驱动/真实配置。最终使用软件路径缓存 SVG Image，撤回整窗重绘、QuickPrivate 与软件 Shape layer 原型，保持 33ms 有界统计，不增加持续绘制。产物全 E 盘，测试每进程≤300秒、构建≤900秒；无新打包/main合并/push/Release/关机授权。
+
 > **2026-10-10 已验修复合入本地main**：用户在完整测试包交付后明确“合并到main吧”。已将codex/sr-visual-quality-20261010的48d8f34及其11个未合入提交通过--no-ff整合，功能merge为ff80a49，Git树与实测分支完全相同；随后仅更新合并记录/当前状态。本地main包含PGS字幕、播放列表/PR31、BMD原生开关、设置恢复/输入焦点/布局/关闭项编辑等已验修复，SR画质实验保持撤回。范围与验收见docs/MERGE_MAIN_2026-10-10.md；46工作树/495脏文件存档到E盘archives/merge-fixes-20261010/start.json，除本轮main外均保持。新构建明确配置DeckLink SDK，打包使用已验zlib/PS5 slices256版FFmpeg，不无意退回旧依赖。此次只本地合并和文档收尾，不push/Release/换版本/重打包/关机，不改运行库原件/用户配置，不删旧分支或工作树；历史“尚未合并”仅代表当时。
 
 > **2026-10-10 超分实验撤回与本地测试包**：用户要求停止超分继续优化、去掉负优化并汇报，随后明确“弄好了打个测试包给我”。本轮所有SR生产实验（局部/整帧静态运动校验、额外纹理/pass、DLSS档位及FSR曝光实验）全部撤回到c664a67，保留此前已验功能修复和共同参考测试工具。本地制作2.0.6-fixes-20261010完整NVIDIA测试包与对应源码，逐文件核对既有批准runtime、patched FFmpeg的zlib/PS5 slices256、许可证、私有配置冷启动与ZIP；覆盖下条“不打测试包”。不新发正式版、不merge/push/Release/关机，不派Agent，不动45既有工作树/495脏文件/main或真实配置。不得把重复帧误差改善说成一般视频画质提升。
