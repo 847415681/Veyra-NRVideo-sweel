@@ -98,14 +98,22 @@ MIT adaptations in `src/source/ElgatoHdrControl.cpp` and its header:
 - https://github.com/nitlink-dev/nitlink at
   `4f8a723406f63c6e92832488a6022fcf25233871`,
   `src/capture/elgato_hdr_control.cpp` and `elgato_device_identity.h`:
-  exact MK.2 aliases, packet read size checks and hardware/native HDR pairing.
+  exact MK.2 aliases, packet read size checks and hardware/native HDR pairing;
+  `IsElgatoDevice` identity rule; `src/renderer/dx11_renderer.cpp`
+  `yuv2020ToRgb_Limited`: limited-range luma with full-range chroma for HDR
+  P010 from Elgato cards other than the MK.2 (MK.2 keeps 64..960 chroma).
   Copyright (c) 2026 NitLink Contributors.
 
 Veyra changes: use the already selected DirectShow filter instead of opening
-another device; scope to MK.2/P010; validate packet length/type/checksum;
-retain manual overrides; log HRESULT/readback and restore a readable initial
-tonemap value on close. No vendor shader, SDK header or binary is vendored.
-No global color/chroma formula change. Full license:
+another device; validate packet length/type/checksum; retain manual overrides;
+log HRESULT/readback and restore a readable initial tonemap value on close.
+2026-10-11: the vendor tonemap control covers every Elgato filter name (strict
+only for MK.2 P010; other models may lack the property set); 8-bit formats
+request the card's hardware tonemapper as OBS libdshowcapture
+(`SetVendorTonemapperUsage`, behaviour only, no code copied) does; the
+non-MK.2 P010 chroma rule is a per-source flag (`fullRangeChroma`) honoured by
+`YuvToLinearRgb.hlsl`, applied only when the user leaves range on auto. No
+vendor shader, SDK header or binary is vendored. Full license:
 `licenses/capture/ELGATO_NITLINK_MIT.txt`.
 
 ## NVENC API declarations

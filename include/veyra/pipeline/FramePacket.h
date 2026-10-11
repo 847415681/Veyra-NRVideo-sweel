@@ -138,6 +138,10 @@ struct ColorDescription {
     // declarations, not measured frame peaks or dynamic Dolby Vision metadata.
     float hdrMaxCllNits = 0, hdrMaxFallNits = 0, hdrMasteringPeakNits = 0;
     bool scRgb = false; // Explicit WGC FP16 linear BT.709, 1.0 = 80 nits.
+    // Limited-range luma with full-range chroma: Elgato cards other than the
+    // 4K60 Pro MK.2 encode HDR P010 this way (Nitlink, measured against the
+    // console on the TV). Decoding that chroma as limited over-saturates it.
+    bool fullRangeChroma = false;
 
     bool isHdrPath() const {
         return scRgb || transfer == TransferFunction::PQ || transfer == TransferFunction::HLG;

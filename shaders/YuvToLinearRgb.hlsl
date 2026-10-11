@@ -8,7 +8,7 @@
 
 cbuffer YuvParams : register(b0)
 {
-    float4 colorParams0; // x=limitedRange y=matrix709 z=transferSRGB w=padding
+    float4 colorParams0; // x=range (0 full, 1 limited, 2 limited luma/full chroma) y=matrix z=transfer w=bit depth class
     uint4 yuvDimensions; // x=width y=height z=bit0 nativeHDR, bit1 BT2020 primaries; w=chroma location
     float4 toneMapParams; // x=validated source peak nits, y=SDR target peak nits
     // Colour grade (plan v4): appended after the existing constants, packed by
@@ -38,10 +38,13 @@ float3 YuvToRgb(float y, float2 uv)
     float black=sixteen?4096.0:ten?64.0:16.0,white=sixteen?60160.0:ten?940.0:235.0;
     float middle=sixteen?32768.0:ten?512.0:128.0,span=sixteen?57344.0:ten?896.0:224.0;
     float maximum=sixteen?65535.0:ten?1023.0:255.0;
-    float yy=colorParams0.x>0.5?(y*scale-black)/(white-black):y*scale/maximum;
+    // colorParams0.x: 0 full range, 1 limited, 2 limited luma + full-range
+    // chroma (Elgato cards other than the MK.2 send HDR P010 that way).
+    bool limitedLuma=colorParams0.x>0.5,limitedChroma=limitedLuma&&colorParams0.x<1.5;
+    float yy=limitedLuma?(y*scale-black)/(white-black):y*scale/maximum;
     yy=saturate(yy);
-    float uu=(uv.x*scale-middle)/(colorParams0.x>0.5?span:maximum);
-    float vv=(uv.y*scale-middle)/(colorParams0.x>0.5?span:maximum);
+    float uu=(uv.x*scale-middle)/(limitedChroma?span:maximum);
+    float vv=(uv.y*scale-middle)/(limitedChroma?span:maximum);
 
     if(colorParams0.y>1.5){
         // BT.2020 non-constant-luminance coefficients.

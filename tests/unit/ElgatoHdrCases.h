@@ -39,6 +39,8 @@ template<class Check> void elgatoHdrCases(Check check) {
     constexpr auto name=L"Game Capture 4K60 Pro MK.2";
     const auto defaults=[] {pipeline::ColorDescription c;c.matrixAssumed=c.primariesAssumed=c.transferAssumed=true;c.transfer=pipeline::TransferFunction::SRGB;c.range=pipeline::ColorRange::Limited;return c;};
     check(source::isElgatoMk2(name)&&source::isElgatoMk2(L"elgato game capture 4k60 pro mk.2")&&!source::isElgatoMk2(L"Elgato 4K Pro"),"MK.2 exact device aliases only");
+    check(source::isElgatoDevice(name)&&source::isElgatoDevice(L"Elgato 4K X")&&source::isElgatoDevice(L"Game Capture HD60 X")&&
+          !source::isElgatoDevice(L"Other Capture")&&!source::isElgatoDevice(L"USB Video")&&!source::isElgatoDevice(L"AVerMedia Live Gamer 4K"),"Elgato identity: vendor names and the Game Capture family only");
     ElgatoProperties ps;ps.hdr();
     auto parsed=source::parseElgatoHdrPacket(ps.packet);
     check(parsed.valid&&parsed.eotf==2&&parsed.peak==1000&&parsed.maxCll==400&&parsed.maxFall==100,"HDR InfoFrame PQ and little endian mastering metadata");
@@ -50,7 +52,7 @@ template<class Check> void elgatoHdrCases(Check check) {
     ps.hdr();auto color=defaults();
     {
         source::ElgatoHdrControl control;
-        check(control.configure(&ps,name,true,0,color)&&ps.mode==0&&color.transfer==pipeline::TransferFunction::PQ&&color.range==pipeline::ColorRange::Limited&&color.hdrMaxCllNits==400,"auto HDR disables card tonemap and propagates metadata without changing range");
+        check(control.configure(&ps,name,true,0,color)&&ps.mode==0&&color.transfer==pipeline::TransferFunction::PQ&&color.range==pipeline::ColorRange::Limited&&color.hdrMaxCllNits==400&&!color.fullRangeChroma,"auto HDR disables card tonemap and propagates metadata without changing range (MK.2 keeps standard chroma)");
     }
     check(ps.mode==1&&ps.sets==2,"close restores readable initial hardware state");
     ps={};ps.hdr();ps.mode=0;color=defaults();
@@ -73,9 +75,41 @@ template<class Check> void elgatoHdrCases(Check check) {
         source::ElgatoHdrControl control;
         check(control.configure(&ps,L"Other Capture",true,1,color)&&ps.gets==0&&ps.sets==0,"other devices receive zero vendor calls");
     }
-    {
+    ps={};ps.hdr();ps.mode=0;color=defaults();{
+        // OBS libdshowcapture parity: 8-bit formats ask the card to tone map HDR.
         source::ElgatoHdrControl control;
-        check(control.configure(&ps,name,false,0,color)&&ps.gets==0,"non-P010 receives zero vendor calls");
+        check(control.configure(&ps,name,false,0,color)&&ps.mode==1&&!color.isHdrPath()&&!color.fullRangeChroma,"8-bit format enables the hardware tonemapper");
+    }
+    check(ps.mode==0,"8-bit close restores the original tonemapper state");
+    ps={};ps.mode=1;color=defaults();{
+        source::ElgatoHdrControl control;
+        check(control.configure(&ps,name,false,0,color)&&ps.sets==0,"8-bit with tonemapper already on writes nothing");
+    }
+    ps={};ps.hdr();ps.rejectSet=true;ps.readableMode=false;color=defaults();{
+        source::ElgatoHdrControl control;
+        check(control.configure(&ps,L"Elgato 4K X",false,0,color),"8-bit on a card without the vendor set still connects");
+    }
+    constexpr auto x4k=L"Elgato 4K X";
+    ps={};ps.hdr();color=defaults();{
+        source::ElgatoHdrControl control;
+        check(control.configure(&ps,x4k,true,0,color)&&ps.mode==0&&color.transfer==pipeline::TransferFunction::PQ&&color.range==pipeline::ColorRange::Limited&&color.fullRangeChroma,
+              "non-MK.2 P010: tonemapper off and limited luma with full-range chroma (Nitlink)");
+    }
+    ps={};ps.hdr();color=defaults();{
+        source::ElgatoHdrControl control;
+        check(control.configure(&ps,x4k,true,4,color)&&!color.fullRangeChroma,"explicit limited range keeps standard chroma on non-MK.2");
+    }
+    ps={};ps.hdr();color=defaults();color.range=pipeline::ColorRange::Full;color.rangeAssumed=false;{
+        source::ElgatoHdrControl control;
+        check(control.configure(&ps,x4k,true,0,color)&&!color.fullRangeChroma,"driver-declared full range is left as full");
+    }
+    ps={};ps.rejectSet=true;ps.readableMode=false;color=defaults();{
+        source::ElgatoHdrControl control;
+        check(control.configure(&ps,x4k,true,1,color)&&color.fullRangeChroma,"non-MK.2 without the vendor set connects with explicit PQ (control unavailable is not fatal)");
+    }
+    ps={};ps.hdr();color=defaults();{
+        source::ElgatoHdrControl control;
+        check(control.configure(&ps,L"Other Capture",false,0,color)&&ps.gets==0&&ps.sets==0&&!color.fullRangeChroma,"other devices receive zero vendor calls for 8-bit formats");
     }
     ps={};color=defaults();{
         source::ElgatoHdrControl control;

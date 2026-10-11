@@ -34,6 +34,13 @@
 - 修复：WasapiAudioSink 的 AudioPipeline 增加读包线程，稳定播放时预读本音轨包（2.5 秒有界队列），拖动/起播/声卡恢复时暂停并按原方式同步读取；avformat 中断回调；每秒 audio-continuity 摘要加 underruns/pcmMs/queuedPacketMs/maxReadMs/maxLoopMs。VEYRA_TEST_AUDIO_DIRECT_READ=1 恢复旧读法，VEYRA_TEST_AUDIO_READ_STALL_MS/_EVERY_MS 注入慢读。
 - 结果：同一 EXE 每 700 ms 一次 300 ms 慢读，旧读法 5 秒音频只走 3.84 秒、停顿 297 ms，新读法 5.009/5.009 秒、0 停顿；真实播放器 NR+XeSS 补帧加慢读，旧读法音频时钟 0.727 倍、4 次 ≥150 ms 引擎停顿，新读法 1.000 倍、0 次。音频 7 组与播放器 9 组回归通过（logs/claude-logs16-20261011/audio/tests-20261011-142349、-142812）。详见 docs/AUDIO_READ_AHEAD_2026-10-11.md。
 - 不 merge/push/Release，不改默认设置、补帧/NR/呈现、运行库、驱动、用户配置；现场盘未实测，需用户换新版确认。
+## 2026-10-11 Elgato HDR 红色溢出与 RGB 黑屏（对齐 Nitlink / OBS）
+
+- 用户反馈 1.x 接入 Nitlink 修好的 Elgato HDR 红色溢出又出现，且 Elgato 采 RGB 黑屏，Nitlink/OBS 正常。存档同日 logs16 任务（checkpoint/pre-claude-logs16-20261011，main 5ba186a）；分支 claude/elgato-hdr-20261011。
+- 核查：1.x 的 be3e2e6 仍在 2.0，只覆盖“4K60 Pro MK.2 + P010”。对比固定源码 Nitlink 4f8a723 / OBS libdshowcapture c13d4b7：其它型号未关卡内色调映射；8 位格式 OBS 会打开色调映射而 Veyra 不管；Nitlink 对 MK.2 以外的卡按“亮度有限、色度全范围”解 HDR P010。
+- 修改：isElgatoDevice；属性 722 覆盖全部 Elgato 名称（仅 MK.2 P010 严格失败），8 位格式请求打开卡内色调映射并在关闭时恢复；ColorDescription::fullRangeChroma + YuvToLinearRgb 范围模式 2（非 MK.2 的 P010、范围自动时）。
+- 测试：capture-color 270/270（Elgato 13 项），hdr GPU 等价测试（全范围色度解码与换算码值误差 1.7%，旧解码红色高 27%），chain/contracts/timing/lifecycle/video 通过。无 Elgato 实卡；真实颜色与 RGB 黑屏需反馈者日志确认。详见 docs/ELGATO_HDR_PARITY_2026-10-11.md。
+- 不 merge/push/Release，不改其它采集卡、默认设置、运行库、驱动、用户配置。
 
 ## 2026-10-10 关闭效果器编辑卡顿
 
