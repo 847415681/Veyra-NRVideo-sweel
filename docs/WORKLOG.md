@@ -1,5 +1,11 @@
 # Veyra 工作记录
 
+## 2026-10-11 采集格式拆成分辨率 / 帧率 / 像素格式
+
+首页采集卡对话框不再用一条合并格式列表。分辨率、帧率、像素格式三个下拉一起决定原来的 `captureFormatKey`；后两项只列出当前选择下设备真实枚举到的组合，逐行/隔行分属不同帧率，同名像素格式（场序不同）仍可分别选择。连接、继续上次、Blackmagic 驱动页回选仍保存并恢复这一条格式键。音频输入、设备帧率覆盖（0 = 沿用所选格式）、PQ/HLG/709 与 Limited/Full 未改。
+
+`g++ -std=c++20 -I include tests/unit/CaptureFormatSelectionTests.cpp -o /tmp/capture-format-selection-tests && /tmp/capture-format-selection-tests`：`failures=0`。本环境不是 Windows，未跑 VS2022/Qt 构建，未生成 Win64 包。
+
 ## 2026-10-07 2.0.6 正式发布完成
 
 [GitHub Release](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.6)已发布（ID 405696687，2026-10-07T11:47:13Z），5资产服务器SHA256/大小一致，最新正式版、对应源码、双QR和公开下载核对通过。新群5二维码原字节，赞助/Discord/Ko-fi保留。完整命令、结果、资产哈希、边界及路径见[发布回执](RELEASE_2.0.6_REPORT_2026-10-07.md)。标签e3aa842a00f693a4a17d1fc4c454d0ebc59428f6、源码e1f6952a6ab11483fc6ff67177d8d390a8faea2f；随后只追加三文件收尾文档。NV显存持续增长未修复。
