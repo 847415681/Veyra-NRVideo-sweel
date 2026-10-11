@@ -129,10 +129,59 @@ int underrate(const std::filesystem::path& dir) {
     pipe.stopThread();
     return failures?1:0;
 }
+int readStall(const std::filesystem::path& dir,bool direct) {
+    // Slow storage (logs16, RTX 3060 Ti, 4K HDR remuxes): a single file read on
+    // the audio thread took 250-600 ms, the 22 ms endpoint ran dry, the audio
+    // master clock stopped and video froze with it. Here one read in every
+    // 700 ms takes 300 ms. Direct reads (the old path) must reproduce the
+    // freeze; read-ahead must keep the clock running.
+    const auto file=dir/"read-stall.wav";fixture(file,48000,9000);
+    SetEnvironmentVariableW(L"VEYRA_TEST_AUDIO_READ_STALL_MS",L"300");
+    SetEnvironmentVariableW(L"VEYRA_TEST_AUDIO_READ_STALL_EVERY_MS",L"700");
+    SetEnvironmentVariableW(L"VEYRA_TEST_AUDIO_DIRECT_READ",direct?L"1":nullptr);
+    AudioPipeline pipe;AudioRenderer renderer;renderer.setGain(0);
+    check(pipe.open(file.wstring()),"open read-stall fixture");
+    pipe.holdForVideo();pipe.startThread(&renderer,true);
+    SetEnvironmentVariableW(L"VEYRA_TEST_AUDIO_READ_STALL_MS",nullptr);
+    SetEnvironmentVariableW(L"VEYRA_TEST_AUDIO_READ_STALL_EVERY_MS",nullptr);
+    SetEnvironmentVariableW(L"VEYRA_TEST_AUDIO_DIRECT_READ",nullptr);
+    check(until([&]{return renderer.started()&&!pipe.endpointRecovering()&&pipe.waitingForVideo();}),"prefill held before read-stall replay");
+    pipe.videoPresented(1e9);
+    check(until([&]{return std::isfinite(renderer.mediaTimeMs())&&renderer.mediaTimeMs()>20;}),"read-stall playback starts");
+    const auto begin=std::chrono::steady_clock::now();const double startMedia=renderer.mediaTimeMs();
+    const auto startUnderruns=renderer.underruns();
+    double lastMedia=startMedia,maxFreezeMs=0;auto lastAdvance=begin;
+    while(std::chrono::steady_clock::now()-begin<5s){
+        std::this_thread::sleep_for(2ms);
+        const double media=renderer.mediaTimeMs();const auto now=std::chrono::steady_clock::now();
+        if(std::isfinite(media)&&media>lastMedia+0.5){lastMedia=media;lastAdvance=now;}
+        maxFreezeMs=std::max(maxFreezeMs,std::chrono::duration<double,std::milli>(now-lastAdvance).count());
+    }
+    const double wall=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
+    const double media=renderer.mediaTimeMs()-startMedia;const auto underruns=renderer.underruns()-startUnderruns;
+    std::cout<<"READ_STALL directRead="<<direct<<" wallMs="<<wall<<" audioMs="<<media<<" maxClockFreezeMs="<<maxFreezeMs<<" underruns="<<underruns<<'\n';
+    if(direct){
+        check(maxFreezeMs>200,"old direct reads freeze the master clock on a 300 ms read (reproduces logs16)");
+    }else{
+        check(maxFreezeMs<60,"read-ahead keeps the master clock running through 300 ms reads");
+        check(underruns==0,"read-ahead never starves the endpoint");
+        check(std::abs(media-wall)<35,"audio stays at one-times speed through slow reads");
+    }
+    check(pipe.overruns()==0,"slow reads keep the PCM queue bounded");
+    const double seek=pipe.requestSeek(6000);
+    check(std::abs(seek-6000)<.05,"seek after read-ahead trims at sample precision");
+    pipe.videoPresented(1e9);
+    check(until([&]{return renderer.mediaTimeMs()>6050;}),"playback continues from the seek target with read-ahead");
+    pipe.stopThread();
+    return failures?1:0;
+}
 }
 int wmain(int argc, wchar_t** argv) {
-    if (argc!=2&&!(argc==3&&(wcscmp(argv[2],L"--jitter")==0||wcscmp(argv[2],L"--underrate")==0||wcscmp(argv[2],L"--startup-seek")==0))) return 2;
+    if (argc!=2&&!(argc==3&&(wcscmp(argv[2],L"--jitter")==0||wcscmp(argv[2],L"--underrate")==0||wcscmp(argv[2],L"--startup-seek")==0||
+        wcscmp(argv[2],L"--read-stall")==0||wcscmp(argv[2],L"--read-stall-direct")==0))) return 2;
     const std::filesystem::path dir=argv[1]; std::filesystem::create_directories(dir);
+    if(argc==3&&wcscmp(argv[2],L"--read-stall")==0)return readStall(dir,false);
+    if(argc==3&&wcscmp(argv[2],L"--read-stall-direct")==0)return readStall(dir,true);
     if(argc==3&&wcscmp(argv[2],L"--startup-seek")==0)return startupSeek(dir);
     if(argc==3&&wcscmp(argv[2],L"--underrate")==0)return underrate(dir);
     if(argc==3)return jitter(dir);
