@@ -1,5 +1,13 @@
 # WORKLOG
 
+## 2026-10-10 VFG 优化（Claude，任务一）
+
+- 授权：用户“开始进行优化吧，全部搞定掉”“开始之前先创建存档，然后开分支弄，如果是结果是性能反而倒退，直接退回”。开工前打标签 checkpoint/pre-claude-perf-20261010（main 5ba186a），E 盘 archives/claude-perf-20261010 存 source-before.bundle（已 verify）和 start.json（46 工作树、495 脏文件逐项 SHA）。分支 claude/vfg-20261010 只改 VFG；软件链路在 claude/pipeline-20261010 独立实施。
+- 构建：py -3.11 -I E:/项目/Veyra/tmp/claude-perf-20261010/build.py vfg（复用 vfg-next 图与 2.0.6-fixes-20261010 已验对象，只重编改动闭包，16–45 秒）。测试脚本 tests/claude-perf-20261010/harness/ab.py，私有副本、同 EXE 测试开关 A/B；采集 KUHAIMI 27P 2K60 NV12 + PS5，NR 1080 + VFG Medium，每组 20 秒。
+- 结果：P0 CUDA 事件测量（Run 3.20 ms，交接空等 0.30 ms/次）；V1 被放弃的组也记录 B，4X 201.2→215.3 fps、种子/复位跳过归零，保留；V2 降倍率回退 215.3→190.7 fps，已退回；V3 每对一次 producer 依赖 201.8/201.3→181.6/181.2 fps，已退回；V5 状态栏原因提示保留。中途换卡（MCS）两组源帧率不一致，标 invalid 作废。
+- 回归：regress.py vfg 14 组全部通过（logs/claude-perf-20261010/vfg/tests-20261010-222709，含 veyra_vfg_gpu_tests 1280×720 async）；donor 1614 文件逐项保持。
+- 详细数据与边界见 docs/VFG_TASK_2026-10-10.md。不 merge/push/Release，不改运行库/模型/驱动/用户配置；本机 5070 结果不代表其他显卡。
+
 ## 2026-10-10 关闭效果器编辑卡顿
 
 - 用户反馈关闭效果器时仅调整内部设置也顿一下；从30c6f60隔离codex/inactive-effects-20261010，start保护44既有工作树/495脏文件和main0e7018ad，未派Agent。根因是完整视频设置比较导致无效GPU revision/排空/重建，同revision的applySettings还会重置NR。新增仅比较开启参数的视图，完整保存值不丢；关闭项更新跳过GPU/暂停帧处理，开启后应用新值。多NR/共享光流/HDR元数据依赖及混合事务保留有效更新。

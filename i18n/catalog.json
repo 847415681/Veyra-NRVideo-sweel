@@ -15065,6 +15065,20 @@
    "zh-TW": "輸入尺寸切換呈現排空失敗",
    "en": "Could not drain presentation for the input size change.",
    "ja": "入力サイズ変更時に描画処理を完了できませんでした。"
+  },
+  {
+   "zh": "VFG 每张约 %1 ms，当前负载约可稳定 %2X",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "VFG 每張約 %1 ms，目前負載約可穩定 %2X",
+   "en": "VFG takes about %1 ms per frame; about %2X holds at the current load",
+   "ja": "VFG は 1 枚あたり約 %1 ms、現在の負荷で安定するのは約 %2X"
+  },
+  {
+   "zh": "屏幕 %1 Hz 最多显示约 %2X",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "螢幕 %1 Hz 最多顯示約 %2X",
+   "en": "A %1 Hz display shows at most about %2X",
+   "ja": "%1 Hz の画面で表示できるのは最大約 %2X"
   }
  ]
 }
