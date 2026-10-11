@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-11 VFG 混合档与 GPU 镜头切换判断（Claude）**：用户看完调研 reports/vfg-deep-opt-20261011/方案选项.md 后要求“先做1+2吧，创建存档开分支，然后直接做好，混合档位要做三档 一个高+中 一个高+低 一个中+低 适配各种机型”。存档 `checkpoint/pre-claude-vfg-mixed-20261011`（main 049902b）与 E 盘 `archives/claude-vfg-mixed-20261011`（bundle 已 verify，start.json 记录 55 工作树/495 脏文件）。分支 `claude/vfg-mixed-20261011` 只改 VfgBackend（第二个 NvVFX 实例、每对 A/B 的 GPU 镜头切换判断 shaders/VfgShotChange.hlsl + predicated 拷贝、关闭 SDK 自带检测；`VEYRA_TEST_VFG_AUTO_SHOT_CHANGE=1` 恢复旧行为）、图中 capture 的一个参数、vfgQuality 取值 0–5（bridge/两页 QML/翻译/状态提示）、CMake 着色器登记与 VFG 测试。默认“中”不变；DLSS/XeSS/FSR、NR/SR、运行库/模型/驱动/用户配置不改。旧版打开含混合档的预设库会拒绝并保留原文件。无 merge/push/Release。详见 docs/VFG_MIXED_TIERS_2026-10-11.md。
+
 > **2026-10-11 Claude修复合并完成**：已验整合tip `9c14ee2` 通过本地main功能merge `3a08ce8` 合入，完整Git树相同，随后只补收尾文档。六Claude分支、UI29e33df和退出回调竞态修复在main；26项回归、滚动clip0、卡死诊断/恢复/有界退出及普通class2 NR性能核对通过。软件CPU首次+15.09%触发守卫，倒序复测及双顺序平均+6.52%通过同一阈值，完整失败/复测数据保留，不宣传普遍性能收益。保持33ms统计、负优化回退和未实卡边界；54旧工作树/496脏文件、七来源tip及原包1626文件保持，唯main按授权更新。没有push/新包/Release/关机；最终回执reports/merge-claude-fixes-20261011/final.json。
 
 > **2026-10-11 Claude 修复本地整合**：用户明确要求将目前 Claude 分支修复合入 main。按 docs/MERGE_CLAUDE_FIXES_PLAN_2026-10-11.md，在 codex/merge-claude-fixes-20261011 从 main5ba186a 整合六个已提交的 Claude 修复分支及已验 UI29e33df；保留分支内负优化回退，只做必要冲突/生命周期适配、构建与定向回归，覆盖这些接点的历史冻结及 no-merge。通过后允许本地 main 合并，不 push/Release/打包/关机。独立 start/bundle 保护54旧工作树/496脏文件，来源分支不改；不派Agent、不改运行库/驱动/模型/真实配置，保持33ms统计和普通GPU优先级。所有产物E盘；每测试≤300秒、构建≤900秒，现场未验边界如实记录，不把各分支历史通过冒充合并验证。
