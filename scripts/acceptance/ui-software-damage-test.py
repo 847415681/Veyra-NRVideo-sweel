@@ -147,7 +147,7 @@ def focus(proc):
     user.SetForegroundWindow.argtypes = [wintypes.HWND]
     if windows: user.SetForegroundWindow(windows[0])
 
-def performance(final=False):
+def performance(final=False, candidate_main=None, cases_override=None, report_name=None):
     results = []; main = APP / 'qml/Veyra/Main.qml'; saved = main.read_bytes()
     perfQml = APP / 'qml/Veyra/RegressionPerf.qml'
     replace(ROOT / 'scripts/acceptance/stability-export-priority-perf.qml', perfQml)
@@ -156,11 +156,12 @@ def performance(final=False):
                  ('perf-obs-old', 'obs', True, False), ('perf-obs-fixed', 'obs', False, False)]
         if final: cases = [('perf-final-gpu-old', 'gpu', False, True), ('perf-final-gpu-fixed', 'gpu', False, False),
                            ('perf-final-obs-old', 'obs', True, False), ('perf-final-obs-fixed', 'obs', False, False)]
+        if cases_override is not None: cases = cases_override
         for name, mode, partial, old in cases:
             no_player(); out = LOG / name; out.mkdir(parents=True, exist_ok=False)
             replace(DONOR / 'veyra_qml_ui.exe' if old else BUILD / 'veyra_qml_ui.exe', APP / 'veyra_qml_ui.exe')
             qml_variant(partial or old)
-            saved = (DONOR / 'qml/Veyra/Main.qml').read_bytes()
+            saved = (DONOR / 'qml/Veyra/Main.qml' if old or candidate_main is None else candidate_main).read_bytes()
             config = {'modern':True, 'seconds':40, 'media':MEDIA.as_posix(), 'display':2, 'reducedMotion':False, 'page':'pro', 'oldUi':False}
             text = saved.decode('utf8'); at = text.rfind('}')
             write(main, (text[:at] + '\n Loader { source:"RegressionPerf.qml"; onLoaded:item.config=' + json.dumps(config, ensure_ascii=True) + ' }\n' + text[at:]).encode('utf8'))
@@ -207,7 +208,7 @@ def performance(final=False):
             results.append(row); print(json.dumps({k:v for k,v in row.items() if k != 'priorityReadings'}, ensure_ascii=False), flush=True)
     finally:
         write(main, saved); replace(BUILD / 'veyra_qml_ui.exe', APP / 'veyra_qml_ui.exe'); qml_variant(False)
-    (BASE / 'reports' / TASK / ('performance-final.json' if final else 'performance.json')).write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding='utf8')
+    (BASE / 'reports' / TASK / (report_name or ('performance-final.json' if final else 'performance.json'))).write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding='utf8')
 
 if __name__ == '__main__':
     assert sys.argv[1:] in (['pixels'], ['pixels-expanded'], ['clipping'], ['performance'], ['performance-final'])

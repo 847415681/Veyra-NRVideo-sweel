@@ -9079,3 +9079,8 @@ ui-software-damage-test.py performance-final四例顺序40秒有效播放、各5
 
 
 本轮临时缓存清理被自动审批拒绝：目标E:/项目/Veyra/tmp/ui-smear-handoff-20261011的PowerShell递归删除返回blocked by policy，命令未执行。560文件/80127256逻辑字节保留，未绕过重试，不计为已释放磁盘；cleanup.json如实记录。修复、构建和验收结果不受影响。
+
+
+## 2026-10-11 Claude六分支及UI整合验收
+
+用户授权本地main整合，隔离codex/merge-claude-fixes-20261011从5ba186a依次完整合入六Claude修复tip及UI29e33df，负优化revert保留；仅历史文档冲突，源码无冲突。补看门狗回调先于相关成员析构的退出竞态。全产物E盘同名目录，54旧树/496脏文件和七来源保持。构建50依赖闭包/19EXE，76.6秒，GUI d4e5aa25cf78120c51eb7793165452101b10798bfd67e1c6cdc724f6ba9d078a，不是clean全量重编；完整CMake保留PS5/Moonlight/Xbox/DeckLink。26项回归、150%滚动clip0/37图标、两种卡死注入/一次dump/恢复及3015ms有界退出、GTA普通class2四例性能守卫通过。i18n旧29空翻译保持/placeholder0。配置protoc路径遗漏、Ninja路径检查断言和Python隔离依赖失败均已如实记录，详见docs/MERGE_CLAUDE_FIXES_REPORT_2026-10-11.md与reports同名/validation.json。冻结实测候选后执行main合并；最终提交/保护核对见后续收尾。无push/打包/发布/关机，实卡和NV显存边界保持。

@@ -80,7 +80,7 @@ EngineController::EngineController(){
 }
 EngineController::~EngineController(){
     {std::lock_guard lock(mutex_);shutdown_=true;pending_={};stop_=true;}wake_.notify_one();
-    if(!worker_.joinable())return;
+    if(!worker_.joinable()){watchdog_.reset();return;}
     // Field logs(15): an owner thread blocked inside a driver call never returns,
     // and closing the app waited for it forever (the process had to be killed).
     // Wait a bounded time, then end the process instead of hanging on exit.
@@ -95,6 +95,10 @@ EngineController::~EngineController(){
         }
     }
     worker_.join();
+    // The watchdog callback reads snapshot_ and hangPreviousStatus_. Detach it
+    // while all controller members are still alive, before reverse destruction
+    // reaches hangPreviousStatus_ (declared after watchdog_).
+    watchdog_.reset();
 }
 void EngineController::dispatch(){
     for(;;){std::function<void()> task;{std::unique_lock lock(mutex_);wake_.wait(lock,[&]{return shutdown_||bool(pending_);});if(shutdown_)break;task=std::move(pending_);pending_={};busy_=true;stop_=false;}
