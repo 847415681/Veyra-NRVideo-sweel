@@ -142,6 +142,17 @@ private:
     void resetTempo();
     void decodeBlock();
     void closeAll();
+    // Packet read-ahead (2026-10-11, logs16): the audio thread pumps a 22 ms
+    // WASAPI buffer, so it must never wait on file I/O. During steady playback
+    // a reader thread owns av_read_frame and queues this track's packets; open,
+    // seek and endpoint recovery pause it and read directly as before.
+    bool readPacket(AVPacket* packet);   // av_read_frame with timing and test stall
+    void readerLoop();
+    void startReader();
+    void pauseReader();                  // returns once the reader is idle; drops queued packets
+    void resumeReader();
+    void stopReader();
+    bool takeQueuedPacket(bool& eof);    // non-blocking; moves the head packet into packet_
 
     friend class AudioThread;
 
@@ -194,6 +205,21 @@ private:
     std::atomic<bool> videoSync_{false},videoHold_{false},videoWaiting_{false};
     std::atomic<double> videoLimitMs_{std::numeric_limits<double>::infinity()};
     std::atomic<uint64_t> videoWaitCount_{0};
+
+    static constexpr double kReadAheadMs = 2500.0;
+    static constexpr size_t kReadAheadPackets = 4096, kReadAheadBytes = size_t(16) << 20;
+    std::thread reader_;
+    std::mutex readerMutex_;
+    std::condition_variable readerCv_;
+    std::deque<AVPacket*> queuedPackets_;
+    double queuedMs_ = 0;
+    size_t queuedBytes_ = 0;
+    bool readerStop_ = false, readerPaused_ = false, readerBusy_ = false, readerEof_ = false;
+    bool queueMode_ = false;             // audio thread only: packets come from the reader
+    bool directReadForTest_ = false;     // VEYRA_TEST_AUDIO_DIRECT_READ=1: pre-2026-10-11 behaviour
+    double readStallMs_ = 0, readStallEveryMs_ = 0;  // VEYRA_TEST_AUDIO_READ_STALL_MS / _EVERY_MS
+    std::chrono::steady_clock::time_point nextReadStall_{};
+    std::atomic<double> maxReadMs_{0};   // slowest av_read_frame since the last summary
 };
 
 class AudioRenderer {

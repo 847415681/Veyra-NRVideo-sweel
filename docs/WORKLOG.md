@@ -27,6 +27,13 @@
 - 新增 include/veyra/engine/ContentDedup.h：用采集回调已有的 64×36 亮度点与“上一张留下的画面”比较，重复画面在 GPU 工作前丢弃；留下的帧用回归周期预测、夹在采样时间窗内的内容时间戳。自动/识别 xx fps 模式去重，60→30 改为去重 + 30 帧上限（无 CPU 画面的硬解串流仍按时间戳减半）。VEYRA_TEST_CONTENT_DEDUP_LEGACY=1 恢复旧行为。
 - GTA6 渲染素材回放：30→60/58、40 帧放 60 Hz 新版 0 丢失、0 重复，内容间隔 99.6–100% 在 ±1 ms；旧 60→30 在 40 帧内容丢 189/761，58 Hz 下不起作用。回归 15 组全部通过（logs/claude-dedup-20261011/dedup/tests-20261011-034458）。详见 docs/CONTENT_CADENCE_2026-10-11.md。
 - 不 merge/push/Release，不改默认内容节奏、NR/SR/FG 模型、运行库、驱动、用户配置。
+## 2026-10-11 文件播放间歇卡顿（logs16，音频预读）
+
+- 用户提交 logs(16)：2.0.6、RTX 3060 Ti、4K HDR 电影开补帧间歇卡顿。存档 checkpoint/pre-claude-logs16-20261011（main 5ba186a）与 archives/claude-logs16-20261011；分支 claude/audio-reader-20261011。
+- 证据：20 次与设置/拖动无关的 0.25–0.59 秒引擎停顿，停在呈现背压；同时音频时钟停走、音频线程摘要迟到，视频读包正常；补帧关闭时也出现。原因：音频线程在喂 22 ms 声卡缓冲的同时自己读文件（要读过交错的 4K 视频包），慢读时声卡断粮，主时钟停住，视频随之停住。
+- 修复：WasapiAudioSink 的 AudioPipeline 增加读包线程，稳定播放时预读本音轨包（2.5 秒有界队列），拖动/起播/声卡恢复时暂停并按原方式同步读取；avformat 中断回调；每秒 audio-continuity 摘要加 underruns/pcmMs/queuedPacketMs/maxReadMs/maxLoopMs。VEYRA_TEST_AUDIO_DIRECT_READ=1 恢复旧读法，VEYRA_TEST_AUDIO_READ_STALL_MS/_EVERY_MS 注入慢读。
+- 结果：同一 EXE 每 700 ms 一次 300 ms 慢读，旧读法 5 秒音频只走 3.84 秒、停顿 297 ms，新读法 5.009/5.009 秒、0 停顿；真实播放器 NR+XeSS 补帧加慢读，旧读法音频时钟 0.727 倍、4 次 ≥150 ms 引擎停顿，新读法 1.000 倍、0 次。音频 7 组与播放器 9 组回归通过（logs/claude-logs16-20261011/audio/tests-20261011-142349、-142812）。详见 docs/AUDIO_READ_AHEAD_2026-10-11.md。
+- 不 merge/push/Release，不改默认设置、补帧/NR/呈现、运行库、驱动、用户配置；现场盘未实测，需用户换新版确认。
 
 ## 2026-10-10 关闭效果器编辑卡顿
 
