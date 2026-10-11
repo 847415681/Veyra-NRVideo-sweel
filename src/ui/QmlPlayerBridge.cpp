@@ -1219,6 +1219,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         const bool wasRunning = impl_->snapshot.running;
         const bool wasImage = impl_->snapshot.image;
         const bool wasFailed = impl_->snapshot.failed;
+        const bool wasEngineHung = impl_->snapshot.status == engine::kEngineHangStatus;
         const bool wasFullscreenUnsafe = impl_->snapshot.vramFullscreenUnsafe;
         const auto wasTransport = impl_->snapshot.transport;
         const uint64_t wasSession = impl_->snapshot.sessionId;
@@ -1316,6 +1317,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                 emit notice(text, true);
                 if (impl_->currentPage == QLatin1String("min")) emit navigate(QStringLiteral("home"));
             }
+            // Engine watchdog (field logs(15)): a frozen picture says why, once.
+            if (had && !wasEngineHung && s.status == engine::kEngineHangStatus) emit notice(uiText(s.status), true);
             emit snapshotChanged();
         }
         // An export in flight needs its own poll; it is a separate job and its
@@ -1369,7 +1372,30 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             const bool automatic = impl_->prefString("overlayCompat") != QLatin1String("off");
             veyra::log::warn("overlay-hooks", std::format("RivaTuner injected into a run with a GPU interface; its OSD is off in this process ({})",
                 automatic ? "active OSD server: compatibility restart suggested" : "monitoring compatibility off"));
-            if (automatic) emit overlayRestartSuggested();
+            if (automatic) emit overlayRestartSuggested(QStringLiteral("rtss"));
+        }
+        // NVIDIA's in-game overlay switched on after a start with the interface on the GPU
+        // (main.cpp checks at start). Unlike RTSS it cannot be kept out of this process,
+        // and with both swapchains hooked the video and interface threads deadlocked in
+        // the field (gfx/PresentationHooks.h); a restart draws the interface in software.
+        static bool nvidiaOverlayLate = false;
+        if (!nvidiaOverlayLate && !qApp->property("veyraSoftwareUi").toBool() && !qApp->property("veyraUiRendererForced").toBool()
+                && !GetEnvironmentVariableW(L"VEYRA_TEST_IGNORE_NVIDIA_OVERLAY", nullptr, 0) && gfx::nvidiaOverlayRunning()) {
+            nvidiaOverlayLate = true;
+            const bool automatic = impl_->prefString("overlayCompat") != QLatin1String("off");
+            veyra::log::warn("overlay-hooks", std::format("NVIDIA overlay is on in a run with a GPU interface ({})",
+                automatic ? "compatibility restart suggested" : "monitoring compatibility off"));
+            if (automatic) emit overlayRestartSuggested(QStringLiteral("nvidia"));
+        }
+        // GamePP (游戏加加) started after Veyra or injected into it: same as NVIDIA's overlay.
+        static bool gamePPLate = false;
+        if (!gamePPLate && !qApp->property("veyraSoftwareUi").toBool() && !qApp->property("veyraUiRendererForced").toBool()
+                && !GetEnvironmentVariableW(L"VEYRA_TEST_IGNORE_GAMEPP", nullptr, 0) && (gfx::gamePPInjected() || gfx::gamePPRunning())) {
+            gamePPLate = true;
+            const bool automatic = impl_->prefString("overlayCompat") != QLatin1String("off");
+            veyra::log::warn("overlay-hooks", std::format("GamePP is running or injected in a run with a GPU interface ({})",
+                automatic ? "compatibility restart suggested" : "monitoring compatibility off"));
+            if (automatic) emit overlayRestartSuggested(QStringLiteral("gamepp"));
         }
         // RivaTuner's default hooking keeps OBS game capture from hooking any Direct3D 12
         // program (2026-10-03, RTSS 7.3.5.28314 + OBS 32.1.2, a bare D3D12 window included;
@@ -5330,6 +5356,9 @@ void QmlPlayerBridge::resetShortcuts() {
 bool QmlPlayerBridge::obsGameCaptureActive() const { return qApp && qApp->property("veyraObsGameCapture").toBool(); }
 bool QmlPlayerBridge::overlayCompatActive() const { return qApp && qApp->property("veyraOverlayCompat").toBool(); }
 bool QmlPlayerBridge::rivaTunerRunning() const { return gfx::rivaTunerRunning(); }
+bool QmlPlayerBridge::presentationOverlayRunning() const {
+    return gfx::rivaTunerRunning() || gfx::nvidiaOverlayRunning() || gfx::gamePPRunning();
+}
 
 int QmlPlayerBridge::uiScaleActive() const { return qApp ? qApp->property("veyraUiScale").toInt() : 0; }
 void QmlPlayerBridge::openFeedbackPage() {
@@ -6280,6 +6309,26 @@ void QmlPlayerBridge::updateRunStatus() {
         else detail << tr("未补帧");
         if (s.applied.multiplier > 1 && impl_->compareMode != 0) detail << tr("补帧暂停");
         else if (s.applied.multiplier > 1 && (s.fgBudgetLimited || s.xessGenerationSuppressed)) detail << tr("调度降档");
+        // Why VFG cannot hold the requested multiplier. One VFG interpolation
+        // costs about the same at any resolution, so what fits follows from its
+        // measured cost, the rest of the chain and the source interval; the
+        // display refresh caps what can be shown. A hint only: no setting changes.
+        if (s.applied.multiplier > 1 && s.applied.frameGenerationBackend == engine::FrameGenerationBackend::Vfg && i.compareMode == 0) {
+            const double source = s.nominalSourceFps * (s.captureHalfRate ? 0.5 : 1.0);
+            const auto perRun = f.gpuTiming[size_t(diagnostics::GpuStage::Fg1)].p95;
+            const auto batch = f.gpuTiming[size_t(diagnostics::GpuStage::FgBatch)].p95;
+            const auto whole = f.enhancementProcessing.p95;
+            if (s.fgBudgetLimited && source > 1 && perRun && *perRun > 0 && batch && whole) {
+                const double base = std::max(0.0, *whole - *batch);
+                const int fits = std::clamp(1 + int(std::floor((1000.0 / source - base) / *perRun)), 1, int(s.applied.multiplier));
+                if (fits < int(s.applied.multiplier)) detail << tr("VFG 每张约 %1 ms，当前负载约可稳定 %2X").arg(*perRun, 0, 'f', 1).arg(fits);
+            }
+            double refresh = 0;
+            for (auto* window : QGuiApplication::topLevelWindows())
+                if (window->isVisible() && window->screen()) { refresh = window->screen()->refreshRate(); break; }
+            if (refresh > 1 && source > 1 && source * s.applied.multiplier > refresh * 1.02)
+                detail << tr("屏幕 %1 Hz 最多显示约 %2X").arg(refresh, 0, 'f', 0).arg(std::max(1, int(refresh / source)));
+        }
         if (s.nominalSourceFps > 0.01) detail << tr("源 %1 fps").arg(s.nominalSourceFps, 0, 'f', 2);
         const auto autoState=nrAutoStatus();if(!autoState.isEmpty())detail<<autoState;
     }

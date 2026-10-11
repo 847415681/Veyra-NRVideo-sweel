@@ -441,6 +441,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         (void)veyra::Logger::instance().openFile(logPath.wstring(), true);
     }
     g_crashDumpDirectory = logPath.parent_path().wstring();
+    veyra::engine::EngineWatchdog::setDumpDirectory(g_crashDumpDirectory);
     SetUnhandledExceptionFilter(crashFilter);
 
     // Interface scale (设置 → 界面缩放) has to be fixed before Qt starts, so the
@@ -498,23 +499,25 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     // changes in server detection cannot turn that restart into another prompt.
     const bool rivaTuner = !GetEnvironmentVariableW(L"VEYRA_TEST_IGNORE_RTSS", nullptr, 0)
                            && veyra::gfx::rivaTunerRunning();
+    // NVIDIA's in-game overlay and GamePP (游戏加加) hook every swapchain too; with the
+    // interface on D3D12 next to the video, the two presenting threads deadlocked in the
+    // field (logs(15)) and GamePP broke every resize (see gfx/PresentationHooks.h).
+    // VEYRA_TEST_IGNORE_NVIDIA_OVERLAY / VEYRA_TEST_IGNORE_GAMEPP start as if they were off.
+    const bool nvidiaOverlay = !GetEnvironmentVariableW(L"VEYRA_TEST_IGNORE_NVIDIA_OVERLAY", nullptr, 0)
+                               && veyra::gfx::nvidiaOverlayRunning();
+    const bool gamePP = !GetEnvironmentVariableW(L"VEYRA_TEST_IGNORE_GAMEPP", nullptr, 0) && veyra::gfx::gamePPRunning();
     const bool overlayCompat = !obsGameCapture && overlayCompatAuto
-                               && (rivaTuner || overlayCompatRestart) && !forcedRenderer[0];
+                               && (rivaTuner || nvidiaOverlay || gamePP || overlayCompatRestart) && !forcedRenderer[0];
     const bool softwareUi = obsGameCapture || overlayCompat;
-    if (softwareUi) {
-        // Partial software damage updates can leave transformed/clipped controls
-        // behind while scrolling. Repaint a complete UI frame when it changes;
-        // do not request continuous frames or alter the native video pipeline.
-        qputenv("QSG_SOFTWARE_RENDERER_FORCE_PARTIAL_UPDATES", "0");
-        veyra::log::info("app", "software UI partial updates disabled (scroll damage repair)");
-    }
+    if (softwareUi)
+        veyra::log::info("app", "software UI: cached raster paths; normal partial updates; no additional frame requests");
     if (obsGameCapture) {
         QQuickWindow::setSceneGraphBackend(QStringLiteral("software"));
         veyra::log::info("app", "OBS game capture compatibility: software UI; native D3D12 video unchanged");
     } else if (overlayCompat) {
         QQuickWindow::setSceneGraphBackend(QStringLiteral("software"));
-        veyra::log::info("app", std::format("RTSS compatibility: software UI; activeServer={} acceptedRestart={}; native D3D12 video unchanged",
-                                          rivaTuner, overlayCompatRestart));
+        veyra::log::info("app", std::format("RTSS compatibility: software UI; activeServer={} nvidiaOverlay={} gamePP={} acceptedRestart={}; native D3D12 video unchanged",
+                                          rivaTuner, nvidiaOverlay, gamePP, overlayCompatRestart));
     }
     {
         // A GPU interface keeps RTSS from drawing in this process at all, so a RivaTuner
@@ -529,6 +532,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         else if (!gpuD3d12 && ours) SetEnvironmentVariableW(veyra::gfx::kRivaTunerProfileOverride, nullptr);
         veyra::log::info("app", std::format("RivaTuner running={} injected={} compat={} OSD in this process={}", rivaTuner,
             GetModuleHandleW(L"RTSSHooks64.dll") != nullptr, overlayCompatAuto ? "auto" : "off", gpuD3d12 ? "off (GPU interface)" : "on"));
+        veyra::log::info("app", std::format("NVIDIA overlay running={} GamePP running={} interface={}", nvidiaOverlay, gamePP, softwareUi ? "software" : "GPU"));
     }
     QApplication app(argc, argv);
     // Qt does not automatically use the executable's Win32 icon for its windows.

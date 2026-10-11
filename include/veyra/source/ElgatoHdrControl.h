@@ -12,6 +12,8 @@ struct ElgatoHdrPacket {
     float peak=0, maxCll=0, maxFall=0;
 };
 bool isElgatoMk2(std::wstring_view name);
+// Any Elgato capture filter: "Elgato ..." names and the "Game Capture ..." family.
+bool isElgatoDevice(std::wstring_view name);
 ElgatoHdrPacket parseElgatoHdrPacket(const std::array<unsigned char,32>& bytes);
 
 // Session-scoped device control; release it after Stop and before the filter.
@@ -21,9 +23,12 @@ public:
     ElgatoHdrControl()=default;
     ElgatoHdrControl(const ElgatoHdrControl&)=delete;
     ElgatoHdrControl& operator=(const ElgatoHdrControl&)=delete;
+    // p010=true for the 10-bit HDR format, false for 8-bit formats (NV12, YUY2, RGB).
     bool configure(IUnknown* filter,std::wstring_view name,bool p010,
                    unsigned overrideValue,pipeline::ColorDescription& color);
 private:
+    // strict: a failed or contradicted write fails the connection (MK.2 P010).
+    bool setTonemap(DWORD desired,bool strict);
     Microsoft::WRL::ComPtr<IKsPropertySet> properties_;
     DWORD original_=0;
     bool restore_=false;

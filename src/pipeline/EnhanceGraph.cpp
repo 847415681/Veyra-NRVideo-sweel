@@ -2226,7 +2226,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         rgbPass_.bind(list,c,gpuHandleOf(rgbPass_,gpuRgb?3+parity:0).ptr,gpuHandleOf(rgbPass_,1+uavSlot).ptr,gpuHandleOf(rgbPass_,8).ptr);
         list->Dispatch((srcW_+15)/16,(srcH_+15)/16,1);
     }else{
-        float constants[12+kColorGradeConstantCount] = { resolved.range==ColorRange::Full?0.0f:1.0f,
+        // 0 full range, 1 limited, 2 limited luma with full-range chroma (Elgato non-MK.2 P010).
+        float constants[12+kColorGradeConstantCount] = { resolved.range==ColorRange::Full?0.0f:resolved.fullRangeChroma?2.0f:1.0f,
             resolved.matrix==YuvMatrix::BT2020NCL?2.0f:resolved.matrix==YuvMatrix::BT601?0.0f:1.0f,
             resolved.transfer==TransferFunction::HLG?5.0f:resolved.transfer==TransferFunction::PQ?4.0f:float(workingTransferCode(resolved)), (nv12Texture?(nv12Texture->GetDesc().Format==DXGI_FORMAT_P010?1.0f:0.0f):(desc_.captureBitDepth==16?2.0f:desc_.wideYuvInput()?1.0f:0.0f)),
             uintBits(srcW_), uintBits(srcH_), uintBits((desc_.hdrWorking()?1u:0u)|(resolved.primaries==ColorPrimaries::BT2020?2u:0u)),
@@ -2834,7 +2835,14 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     const unsigned fgMultiplier=previewMultiplier&&fgBackendAvailable?std::clamp(previewMultiplier,2u,desc_.fgMultiplier):desc_.fgMultiplier;
     out.fgCandidates=fgBackendAvailable?fgMultiplier-1:0;
     bool resetFg=reset||!prevValid_||fgHistorySkipped_;
-    const auto decision=fgBackendAvailable?(admitFg?admitFg(out.batch,resetFg):FgDecision::Evaluate):FgDecision::Skip;
+    const bool historyValid=!resetFg;
+    // VEYRA_TEST_VFG_SKIP_RESETS_HISTORY=1 restores the pre-2026-10-10 rule
+    // (a VFG pair skipped for budget resets history) for same-EXE A/B runs.
+    static const bool vfgSkipResetsHistory=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_SKIP_RESETS_HISTORY",nullptr,0)>0;
+    auto decision=fgBackendAvailable?(admitFg?admitFg(out.batch,resetFg):FgDecision::Evaluate):FgDecision::Skip;
+    // For VFG a budget seed is a hidden reset Run whose only purpose is to keep
+    // history; recording B below keeps it without any Run.
+    if(vfgBackend_&&decision==FgDecision::Seed&&historyValid&&!vfgSkipResetsHistory)decision=FgDecision::Skip;
     const bool runFg=decision!=FgDecision::Skip;
     // An overloaded preview pair may afford one reset evaluation now. Seed
     // on this real input so the following pair does not lose another group.
@@ -2855,12 +2863,16 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     }
     if(reduced)out.fgSkippedBeforeEval=out.fgCandidates-fgCalls;
     out.fgRecovery=runFg&&(fgHistorySkipped_||reseedRejected);
-    if(fgBackendAvailable&&!runFg){out.fgSkippedBeforeEval=out.fgCandidates;fgHistorySkipped_=true;}
-    if(runFg&&vfgBackend_){
+    // VFG history is our explicit A/B input pair, not provider state. A pair
+    // skipped for budget still records B, so the next pair interpolates from a
+    // valid A: no reset, no hidden seed Run, no second lost group.
+    const bool vfgRecordOnly=vfgBackend_&&fgBackendAvailable&&!runFg&&historyValid&&!vfgSkipResetsHistory;
+    if(fgBackendAvailable&&!runFg){out.fgSkippedBeforeEval=out.fgCandidates;fgHistorySkipped_=!vfgRecordOnly;}
+    if((runFg||vfgRecordOnly)&&vfgBackend_){
         // First timestamp precedes the producer signal/CUDA dependency wait;
         // the matching end follows the consumer copy. The direct-queue span
         // therefore includes actual cross-queue work, not CPU wall time.
-        gpuTimer_.mark(list,GpuStage::FgBatch);gpuTimer_.mark(list,GpuStage::Fg1);
+        if(runFg){gpuTimer_.mark(list,GpuStage::FgBatch);gpuTimer_.mark(list,GpuStage::Fg1);}
         tracker_.transition(list,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
         if(!vfgBackend_->capture(list,videoFrame_[parity].Get(),parity)){failedBackend_=engine::FailedBackend::Fg;return false;}
         tracker_.transition(list,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
@@ -3416,4 +3428,42 @@ void EnhanceGraph::shutdown()
     (void)st;
 }
 
+bool EnhanceGraph::lumaSignature(const AVFrame* frame,uint8_t* out)const{
+    if(!frame||!out||!frame->data[0]||desc_.stillImage)return false;
+    const auto format=AVPixelFormat(frame->format);
+    if(format==AV_PIX_FMT_D3D12||format==AV_PIX_FMT_D3D11)return false;
+    const bool bgr=format==AV_PIX_FMT_BGRA||format==AV_PIX_FMT_BGR0;
+    const auto rgb=[&](const uint8_t* p){return uint8_t((54*unsigned(p[bgr?2:0])+183*unsigned(p[1])+19*unsigned(p[bgr?0:2])+128)>>8);};
+    // Upload-backed capture frames: the callback's proxy, never the write-combined buffer.
+    if(const auto* upload=captureUploadFrame(frame);upload&&upload->proxyValid&&upload->pixelBytes>=1&&upload->pixelBytes<=CaptureUploadFrame::kMaxPixelBytes){
+        const unsigned bytes=upload->pixelBytes;const int pitch=upload->proxyPitch();
+        for(unsigned y=0;y<36;++y)for(unsigned x=0;x<64;++x){
+            const uint8_t* p=upload->proxy+ptrdiff_t(y)*pitch+x*bytes;
+            out[y*64+x]=upload->planes==2?p[bytes-1]:desc_.packedInput?packedIngressLuma(upload->proxy,pitch,desc_.packedInput,x,y):
+                        desc_.yuy2Input?p[0]:bytes>=4?rgb(p):p[bytes-1];
+        }
+        return true;
+    }
+    if(frame->width<64||frame->height<36)return false;
+    const auto* data=frame->data[0];const ptrdiff_t pitch=frame->linesize[0];
+    for(unsigned y=0;y<36;++y)for(unsigned x=0;x<64;++x){
+        const unsigned sx=x*unsigned(frame->width)/64,sy=y*unsigned(frame->height)/36;
+        const uint8_t* row=data+ptrdiff_t(sy)*pitch;uint8_t v=0;
+        switch(format){
+        case AV_PIX_FMT_NV12:case AV_PIX_FMT_NV21:case AV_PIX_FMT_YUV420P:case AV_PIX_FMT_YUVJ420P:case AV_PIX_FMT_YUV422P:
+        case AV_PIX_FMT_YUVJ422P:case AV_PIX_FMT_YUV444P:case AV_PIX_FMT_YUVJ444P:case AV_PIX_FMT_GRAY8:v=row[sx];break;
+        case AV_PIX_FMT_P010LE:case AV_PIX_FMT_P016LE:v=row[sx*2+1];break;
+        case AV_PIX_FMT_YUV420P10LE:case AV_PIX_FMT_YUV422P10LE:case AV_PIX_FMT_YUV444P10LE:
+            v=uint8_t(std::min(1023u,unsigned(row[sx*2])|(unsigned(row[sx*2+1])<<8))>>2);break;
+        case AV_PIX_FMT_YUYV422:case AV_PIX_FMT_YVYU422:v=row[sx*2];break;
+        case AV_PIX_FMT_UYVY422:v=row[sx*2+1];break;
+        case AV_PIX_FMT_RGBA:case AV_PIX_FMT_BGRA:case AV_PIX_FMT_RGB0:case AV_PIX_FMT_BGR0:v=rgb(row+sx*4);break;
+        default:
+            if(desc_.packedInput&&format==packedIngressFormat(desc_.packedInput)){v=packedIngressLuma(data,pitch,desc_.packedInput,sx,sy);break;}
+            return false;
+        }
+        out[y*64+x]=v;
+    }
+    return true;
+}
 } // namespace veyra::pipeline

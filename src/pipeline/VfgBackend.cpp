@@ -6,6 +6,7 @@
 #include <array>
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <atomic>
 #include <condition_variable>
 #include <deque>
@@ -90,6 +91,7 @@ struct VfgBackend::Impl {
     CU_FN(cuImportExternalMemory);CU_FN(cuExternalMemoryGetMappedBuffer);CU_FN(cuDestroyExternalMemory);CU_FN(cuMemFree);
     CU_FN(cuImportExternalSemaphore);CU_FN(cuDestroyExternalSemaphore);CU_FN(cuWaitExternalSemaphoresAsync);CU_FN(cuSignalExternalSemaphoresAsync);
     CU_FN(cuGetErrorName);CU_FN(cuGetErrorString);
+    CU_FN(cuEventCreate);CU_FN(cuEventRecord);CU_FN(cuEventQuery);CU_FN(cuEventElapsedTime);CU_FN(cuEventDestroy);
 #undef CU_FN
     struct Buffer {
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
@@ -143,6 +145,46 @@ struct VfgBackend::Impl {
         std::string message;
         for(unsigned i=0;i<names.size();++i)message+=std::format(" {}MeanMs={:.4f} {}MaxMs={:.4f} {}Calls={}",names[i],cpuSamples[i]?cpuSum[i]/cpuSamples[i]:0,names[i],cpuMax[i],names[i],cpuSamples[i]);
         log::info("vfg-cpu",message);cpuSum={};cpuMax={};cpuSamples={};nextCpuLog=std::chrono::steady_clock::now()+std::chrono::seconds(1);
+    }
+    // Test-only GPU split (VEYRA_TEST_VFG_GPU_PROFILE): CUDA events on the SDK
+    // stream around each Run. "handoff" is the stream idle time between two
+    // subframes of one pair (D3D copy/signal round trip); "pair" is the idle
+    // time before a pair's first Run, which includes the rest of the graph.
+    bool profileGpu=false,profileGap=true;
+    // Ring of per-job event pairs ([2*i] after the producer wait, [2*i+1]
+    // after Run), resolved in order whenever ready and never synchronized.
+    // One slot stays free so the previous job's end event survives until the
+    // next one resolves; a full ring skips profiling and marks a gap.
+    static constexpr unsigned kProfileJobs=32;
+    std::array<CUevent,2*kProfileJobs> events{};
+    std::array<unsigned,kProfileJobs> profiledSub{};std::array<bool,kProfileJobs> profiledAfterGap{};
+    uint64_t profileHead=0,profileTail=0;
+    std::array<double,3> gpuSum{},gpuMax{};std::array<unsigned,3> gpuSamples{};
+    std::chrono::steady_clock::time_point nextGpuLog{};
+    void resolveGpu(){
+        while(profileTail<profileHead){
+            const unsigned slot=unsigned(profileTail%kProfileJobs);
+            if(cuEventQueryFn(events[2*slot+1])!=CUDA_SUCCESS)return;
+            float ms=0;
+            if(cuEventElapsedTimeFn(&ms,events[2*slot],events[2*slot+1])==CUDA_SUCCESS)gpuSample(0,ms);
+            if(!profiledAfterGap[slot]){
+                const unsigned previous=unsigned((profileTail-1)%kProfileJobs);
+                if(cuEventElapsedTimeFn(&ms,events[2*previous+1],events[2*slot])==CUDA_SUCCESS)gpuSample(profiledSub[slot]>1?1:2,ms);
+            }
+            ++profileTail;
+        }
+    }
+    void gpuSample(unsigned index,double ms){
+        if(!std::isfinite(ms)||ms<0)return;
+        gpuSum[index]+=ms;gpuMax[index]=std::max(gpuMax[index],ms);++gpuSamples[index];
+    }
+    void logGpu(){
+        if(!profileGpu||std::chrono::steady_clock::now()<nextGpuLog)return;
+        static constexpr std::array<const char*,3> names={"run","handoffIdle","pairIdle"};
+        std::string message;
+        for(unsigned i=0;i<names.size();++i)message+=std::format(" {}MeanMs={:.4f} {}MaxMs={:.4f} {}Calls={}",names[i],gpuSamples[i]?gpuSum[i]/gpuSamples[i]:0,names[i],gpuMax[i],names[i],gpuSamples[i]);
+        log::info("vfg-gpu",message+" (CUDA events on the SDK stream; test profile)");
+        gpuSum={};gpuMax={};gpuSamples={};nextGpuLog=std::chrono::steady_clock::now()+std::chrono::seconds(1);
     }
     bool cv(int code,const char* name){
         if(code==0)return true;
@@ -200,6 +242,12 @@ struct VfgBackend::Impl {
         Current current(*this);if(!current.active)return false;
         CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS wait{};wait.params.fence.value=value;
         bool ok=cu(cpuCall(2,[&]{return cuWaitExternalSemaphoresAsyncFn(&inputSemaphore,&wait,1,stream);}),"cuWaitExternalSemaphoresAsync")&&!failed.load();
+        bool profiling=false;const unsigned profileSlot=unsigned(profileHead%kProfileJobs);
+        if(profileGpu){
+            resolveGpu();logGpu();
+            if(profileHead-profileTail<kProfileJobs-1)profiling=ok&&cu(cuEventRecordFn(events[2*profileSlot],stream),"profile cuEventRecord");
+            if(!profiling)profileGap=true;
+        }
         // NVIDIA MIT sample, commit 52011f89c1741d06b40ea312af1f20be8be9ec62,
         // VideoFrameGenerationEffectApp: both input images must be rebound for
         // each NEW pair, even when their pointers are unchanged. Rebinding for
@@ -221,6 +269,11 @@ struct VfgBackend::Impl {
         if(ok){
             if(rejectRun&&++runCount==rejectRun){log::warn("vfg","injected VFG Run rejection (test hook)");ok=false;}
             else ok=cv(cpuCall(9,[&]{return run(effect,1);}),"NvVFX_Run async");
+        }
+        if(profiling){
+            if(ok&&cu(cuEventRecordFn(events[2*profileSlot+1],stream),"profile cuEventRecord")){
+                profiledSub[profileSlot]=sub;profiledAfterGap[profileSlot]=profileGap;profileGap=false;++profileHead;
+            }else profileGap=true;
         }
         // Publish rejection before releasing the consumer. Its GPU copy still
         // drains, but resolveFrame must never present that slot as a success.
@@ -320,6 +373,11 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
     BIND_CU(cuImportExternalSemaphore,"cuImportExternalSemaphore");BIND_CU(cuDestroyExternalSemaphore,"cuDestroyExternalSemaphore");
     BIND_CU(cuWaitExternalSemaphoresAsync,"cuWaitExternalSemaphoresAsync");BIND_CU(cuSignalExternalSemaphoresAsync,"cuSignalExternalSemaphoresAsync");
     BIND_CU(cuGetErrorName,"cuGetErrorName");BIND_CU(cuGetErrorString,"cuGetErrorString");
+    p.profileGpu=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_GPU_PROFILE",nullptr,0)>0;
+    if(p.profileGpu){
+        BIND_CU(cuEventCreate,"cuEventCreate");BIND_CU(cuEventRecord,"cuEventRecord");BIND_CU(cuEventQuery,"cuEventQuery");
+        BIND_CU(cuEventElapsedTime,"cuEventElapsedTime");BIND_CU(cuEventDestroy,"cuEventDestroy_v2");
+    }
 #undef BIND_CU
     if(!p.cu(p.cuInitFn(0),"cuInit"))return false;
     int count=0;if(!p.cu(p.cuDeviceGetCountFn(&count),"cuDeviceGetCount"))return false;
@@ -336,6 +394,7 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
     if(!p.cu(p.cuDevicePrimaryCtxRetainFn(&p.cudaContext,p.device),"cuDevicePrimaryCtxRetain"))return false;p.retained=true;
     Impl::Current current(p);if(!current.active)return false;
     if(!p.cu(p.cuStreamCreateFn(&p.stream,CU_STREAM_NON_BLOCKING),"cuStreamCreate"))return false;
+    if(p.profileGpu)for(auto& event:p.events)if(!p.cu(p.cuEventCreateFn(&event,CU_EVENT_DEFAULT),"cuEventCreate profile"))return false;
     const fs::path runtime=runtimeDirectory(root);
     // VFG consumes our encoded shared CUDA buffers directly. Create/Init wrap
     // these pixels without NvCVImage_Transfer or other NPP conversion effects.
@@ -455,6 +514,7 @@ void VfgBackend::shutdown(){
             if(p.stream)p.cu(p.cuStreamSynchronizeFn(p.stream),"teardown cuStreamSynchronize");
             if(p.effect){p.destroy(p.effect);p.effect=nullptr;log::info("vfg","NvVFX_DestroyEffect completed (void API)");}
             for(auto& b:p.outputs)p.releaseBuffer(b);for(auto& b:p.inputs)p.releaseBuffer(b);
+            for(auto event:p.events)if(event)p.cu(p.cuEventDestroyFn(event),"cuEventDestroy profile");
             if(p.outputSemaphore)p.cu(p.cuDestroyExternalSemaphoreFn(p.outputSemaphore),"destroy output semaphore");
             if(p.inputSemaphore)p.cu(p.cuDestroyExternalSemaphoreFn(p.inputSemaphore),"destroy input semaphore");
             if(p.stream)p.cu(p.cuStreamDestroyFn(p.stream),"cuStreamDestroy");

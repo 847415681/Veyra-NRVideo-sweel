@@ -37,6 +37,10 @@ bool AudioPipeline::open(const std::wstring& path)
     const int length=WideCharToMultiByte(CP_UTF8,0,path.data(),static_cast<int>(path.size()),nullptr,0,nullptr,nullptr);
     std::string narrow(length,'\0');
     WideCharToMultiByte(CP_UTF8,0,path.data(),static_cast<int>(path.size()),narrow.data(),length,nullptr,nullptr);
+    fmt_=avformat_alloc_context();
+    if(!fmt_)return false;
+    // Lets stopThread() abort a read that waits on slow storage.
+    fmt_->interrupt_callback={[](void* self)->int{return static_cast<AudioPipeline*>(self)->stopFlag_.load()?1:0;},this};
     if (avformat_open_input(&fmt_, narrow.c_str(), nullptr, nullptr) != 0) return false;
     if (avformat_find_stream_info(fmt_, nullptr) < 0) return false;
     tracks_.clear();
@@ -144,6 +148,103 @@ void AudioPipeline::stopThread()
     stopFlag_ = true;
     wake_.notify_all();
     if (thread_.joinable()) thread_.join();
+    stopReader();
+}
+
+bool AudioPipeline::readPacket(AVPacket* packet)
+{
+    const auto begin=std::chrono::steady_clock::now();
+    if(readStallMs_>0&&begin>=nextReadStall_){
+        // Test-only slow storage: the first read schedules, later reads stall.
+        if(nextReadStall_!=std::chrono::steady_clock::time_point{})std::this_thread::sleep_for(std::chrono::duration<double,std::milli>(readStallMs_));
+        nextReadStall_=std::chrono::steady_clock::now()+std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double,std::milli>(readStallEveryMs_));
+    }
+    const int result=av_read_frame(fmt_,packet);
+    const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
+    for(double seen=maxReadMs_.load();ms>seen&&!maxReadMs_.compare_exchange_weak(seen,ms);){}
+    return result>=0;
+}
+
+void AudioPipeline::readerLoop()
+{
+    AVPacket* scratch=av_packet_alloc();
+    std::unique_lock lock(readerMutex_);
+    while(scratch){
+        readerCv_.wait(lock,[&]{return readerStop_||(!readerPaused_&&!readerEof_&&queuedMs_<kReadAheadMs&&
+            queuedBytes_<kReadAheadBytes&&queuedPackets_.size()<kReadAheadPackets);});
+        if(readerStop_)break;
+        readerBusy_=true;
+        lock.unlock();
+        const bool read=readPacket(scratch);
+        lock.lock();
+        readerBusy_=false;
+        if(readerPaused_||readerStop_){
+            // A seek or stop superseded this read position; the owner re-seeks.
+            av_packet_unref(scratch);readerCv_.notify_all();continue;
+        }
+        if(!read){readerEof_=true;continue;}
+        if(scratch->stream_index!=streamIndex_){av_packet_unref(scratch);continue;}
+        AVPacket* queued=av_packet_alloc();
+        if(!queued){av_packet_unref(scratch);readerEof_=true;continue;}
+        av_packet_move_ref(queued,scratch);
+        queuedMs_+=queued->duration>0?queued->duration*av_q2d(stream_->time_base)*1000.0:0.0;
+        queuedBytes_+=size_t(std::max(queued->size,0));
+        queuedPackets_.push_back(queued);
+    }
+    lock.unlock();
+    av_packet_free(&scratch);
+}
+
+void AudioPipeline::startReader()
+{
+    if(directReadForTest_||!fmt_||reader_.joinable())return;
+    {std::lock_guard lock(readerMutex_);readerStop_=readerPaused_=readerBusy_=readerEof_=false;}
+    queueMode_=true;
+    reader_=std::thread(&AudioPipeline::readerLoop,this);
+}
+
+void AudioPipeline::pauseReader()
+{
+    if(!reader_.joinable())return;
+    queueMode_=false;
+    std::unique_lock lock(readerMutex_);
+    readerPaused_=true;readerCv_.notify_all();
+    readerCv_.wait(lock,[&]{return !readerBusy_;});
+    for(auto*& packet:queuedPackets_)av_packet_free(&packet);
+    queuedPackets_.clear();queuedMs_=0;queuedBytes_=0;readerEof_=false;
+}
+
+void AudioPipeline::resumeReader()
+{
+    if(!reader_.joinable())return;
+    {std::lock_guard lock(readerMutex_);readerPaused_=readerEof_=false;}
+    queueMode_=true;
+    readerCv_.notify_all();
+}
+
+void AudioPipeline::stopReader()
+{
+    queueMode_=false;
+    if(!reader_.joinable())return;
+    {std::lock_guard lock(readerMutex_);readerStop_=true;}
+    readerCv_.notify_all();
+    reader_.join();
+    std::lock_guard lock(readerMutex_);
+    for(auto*& packet:queuedPackets_)av_packet_free(&packet);
+    queuedPackets_.clear();queuedMs_=0;queuedBytes_=0;
+}
+
+bool AudioPipeline::takeQueuedPacket(bool& eof)
+{
+    std::lock_guard lock(readerMutex_);
+    eof=false;
+    if(queuedPackets_.empty()){eof=readerEof_;return false;}
+    AVPacket* front=queuedPackets_.front();queuedPackets_.pop_front();
+    queuedMs_=std::max(0.0,queuedMs_-(front->duration>0?front->duration*av_q2d(stream_->time_base)*1000.0:0.0));
+    queuedBytes_-=std::min(queuedBytes_,size_t(std::max(front->size,0)));
+    av_packet_move_ref(packet_,front);av_packet_free(&front);
+    readerCv_.notify_all();
+    return true;
 }
 
 double AudioPipeline::requestSeek(double targetMs)
@@ -346,7 +447,13 @@ void AudioPipeline::decodeBlock()
             continue;
         }
         if (!havePacket_) {
-            if (av_read_frame(fmt_, packet_) < 0) {
+            if (queueMode_) {
+                bool eof = false;
+                if (!takeQueuedPacket(eof)) {
+                    if (eof) { demuxEof_ = true; continue; }
+                    break; // nothing read ahead yet: go back to pumping the endpoint
+                }
+            } else if (!readPacket(packet_)) {
                 demuxEof_ = true;
                 continue;
             }
@@ -831,6 +938,10 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
     };
     auto rewind = [&](double target) {
         const auto seekBegin=std::chrono::steady_clock::now();
+        // The seek and its prefill read synchronously, as before; read-ahead
+        // resumes from the new position afterwards.
+        pauseReader();
+        struct ResumeReader{AudioPipeline* self;~ResumeReader(){self->resumeReader();}} resumeReader{this};
         {
             std::lock_guard lock(mutex_);
             ring_.clear();ringFrames_=0;segments_.clear();
@@ -885,8 +996,17 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
         std::chrono::steady_clock::now() - t0).count() * 1000.0);
     veyra::log::info("audio", std::format("startup prefill done in {:.0f}ms firstPtsMs={:.1f} bufferedMs={:.0f}",
         lastPrefillMs_.load(), firstPts, bufferedMs()));
+    startReader();
+    veyra::log::info("audio", std::format("packet read-ahead {} (limit {:.0f} ms of audio packets; the endpoint thread never reads the file)",
+        reader_.joinable()?"on":directReadForTest_?"off (VEYRA_TEST_AUDIO_DIRECT_READ)":"off",kReadAheadMs));
 
+    double maxLoopMs=0;auto loopBegin=std::chrono::steady_clock::now();
     while (!stopFlag_.load()) {
+        {
+            // A long iteration means the endpoint went unfed for that long.
+            const auto now=std::chrono::steady_clock::now();
+            maxLoopMs=std::max(maxLoopMs,std::chrono::duration<double,std::milli>(now-loopBegin).count());loopBegin=now;
+        }
         const bool pauseNow = shouldPause();
         if(endpointReady){
             const double current=renderer->mediaTimeMs();
@@ -904,10 +1024,16 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
         if (videoSync_ && !pauseNow && std::chrono::steady_clock::now() >= nextContinuitySummary) {
             nextContinuitySummary = std::chrono::steady_clock::now() + std::chrono::milliseconds(1000);
             const double coverage = videoLimitMs_.load();
-            log::info("audio-continuity", std::format("event=summary clockMs={:.3f} coverageMs={:.3f} leadMs={:.3f} hold={} recovering={}",
+            double queuedMs=0;{std::lock_guard lock(readerMutex_);queuedMs=queuedMs_;}
+            // underruns: cumulative endpoint gaps (a starved endpoint stops the
+            // master clock, which freezes video). maxReadMs: slowest file read
+            // since the last summary, on the reader or (seek/legacy) audio thread.
+            log::info("audio-continuity", std::format("event=summary clockMs={:.3f} coverageMs={:.3f} leadMs={:.3f} hold={} recovering={} underruns={} pcmMs={:.0f} queuedPacketMs={:.0f} maxReadMs={:.1f} maxLoopMs={:.1f} readAhead={}",
                 lastClockMs, std::isfinite(coverage) ? coverage : -1.0,
                 std::isfinite(coverage) ? lastClockMs - coverage : -1.0,
-                videoHold_.load(), endpointRecovering_.load()));
+                videoHold_.load(), endpointRecovering_.load(), renderer ? renderer->underruns() : 0,
+                bufferedMs(), queuedMs, maxReadMs_.exchange(0), maxLoopMs, reader_.joinable()));
+            maxLoopMs=0;
         }
         // Seek request? Atomic re-sequence.
         {
@@ -978,6 +1104,9 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
         }
         if (bufferedMs() < kAudioHighWatermarkMs) {
             decodeBlock();
+            // Without an endpoint nothing paces this loop; wait for read-ahead.
+            if (!renderer && queueMode_ && !demuxEof_ && bufferedMs() < kAudioHighWatermarkMs)
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
         } else {
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
@@ -986,12 +1115,22 @@ void AudioPipeline::runOnAudioThread(AudioRenderer* renderer, bool ownEndpoint, 
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     }
+    stopReader();
     if(renderer&&ownEndpoint)renderer->shutdown();
 }
 
 void AudioPipeline::startThread(AudioRenderer* renderer, bool ownEndpoint, double initialMs)
 {
     if(thread_.joinable())return;
+    const auto envMs=[](const wchar_t* name,double fallback){
+        wchar_t text[32]{};const DWORD n=GetEnvironmentVariableW(name,text,32);
+        return n>0&&n<32?_wtof(text):fallback;
+    };
+    directReadForTest_=GetEnvironmentVariableW(L"VEYRA_TEST_AUDIO_DIRECT_READ",nullptr,0)>0;
+    readStallMs_=std::max(0.0,envMs(L"VEYRA_TEST_AUDIO_READ_STALL_MS",0));
+    readStallEveryMs_=std::max(10.0,envMs(L"VEYRA_TEST_AUDIO_READ_STALL_EVERY_MS",1000));
+    nextReadStall_={};maxReadMs_=0;
+    if(readStallMs_>0)log::warn("audio-test",std::format("injected file read stall {:.0f} ms every {:.0f} ms (test only) directRead={}",readStallMs_,readStallEveryMs_,directReadForTest_));
     stopFlag_=false;seekRequested_=false;seekDone_=true;discardUntilPtsMs_=-1;
     endpointRecovering_=renderer&&ownEndpoint;endpointError_=S_OK;endpointRecoveries_=0;clockExhausted_=false;
     thread_ = std::thread(&AudioPipeline::runOnAudioThread, this, renderer, ownEndpoint, initialMs);

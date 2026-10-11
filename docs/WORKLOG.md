@@ -1,5 +1,47 @@
 # WORKLOG
 
+## 2026-10-10 VFG 优化（Claude，任务一）
+
+- 授权：用户“开始进行优化吧，全部搞定掉”“开始之前先创建存档，然后开分支弄，如果是结果是性能反而倒退，直接退回”。开工前打标签 checkpoint/pre-claude-perf-20261010（main 5ba186a），E 盘 archives/claude-perf-20261010 存 source-before.bundle（已 verify）和 start.json（46 工作树、495 脏文件逐项 SHA）。分支 claude/vfg-20261010 只改 VFG；软件链路在 claude/pipeline-20261010 独立实施。
+- 构建：py -3.11 -I E:/项目/Veyra/tmp/claude-perf-20261010/build.py vfg（复用 vfg-next 图与 2.0.6-fixes-20261010 已验对象，只重编改动闭包，16–45 秒）。测试脚本 tests/claude-perf-20261010/harness/ab.py，私有副本、同 EXE 测试开关 A/B；采集 KUHAIMI 27P 2K60 NV12 + PS5，NR 1080 + VFG Medium，每组 20 秒。
+- 结果：P0 CUDA 事件测量（Run 3.20 ms，交接空等 0.30 ms/次）；V1 被放弃的组也记录 B，4X 201.2→215.3 fps、种子/复位跳过归零，保留；V2 降倍率回退 215.3→190.7 fps，已退回；V3 每对一次 producer 依赖 201.8/201.3→181.6/181.2 fps，已退回；V5 状态栏原因提示保留。中途换卡（MCS）两组源帧率不一致，标 invalid 作废。
+- 回归：regress.py vfg 14 组全部通过（logs/claude-perf-20261010/vfg/tests-20261010-222709，含 veyra_vfg_gpu_tests 1280×720 async）；donor 1614 文件逐项保持。
+- 详细数据与边界见 docs/VFG_TASK_2026-10-10.md。不 merge/push/Release，不改运行库/模型/驱动/用户配置；本机 5070 结果不代表其他显卡。
+## 2026-10-10 软件链路优化（Claude，任务二）
+
+- 授权与存档同 VFG 任务（checkpoint/pre-claude-perf-20261010、archives/claude-perf-20261010）。分支 claude/pipeline-20261010 只改采集→效果衔接→送显/上屏及其诊断/提示；VFG 在独立分支。
+- 构建：py -3.11 -I E:/项目/Veyra/tmp/claude-perf-20261010/build.py pipeline。同 EXE 测试开关 A/B；屏幕侧用 PresentMon 2.6.0（管理员，用户点 UAC）按 QPC 逐帧对齐（pm_join.py，logs/claude-perf-20261010/presentmon-prio.csv）。
+- 结果：C1 日志 Present→上屏与 PresentMon 同场一致（4X 3.59/6.36 对 3.58/6.35 ms），保留；C2 显示同步提示保留；C3 静止黑场 60→30 NR+VFG 2X 原帧 41.12→29.07 ms，保留（首版因 hasGenerated 被清空未生效，已修正并留证）；C7 交换链等待使 4X 帧率 191.0→170.9 且上屏不变，已退回；送显队列高优先级 PresentMon 4 次无差异，不采用；C4/C5/C6 实测无可得收益，未实施。方案里“4X 上屏 P95 50 ms”今天 4 次未复现（现为原帧采集→上屏 P50 28.8 / P95 35.5 ms）。
+- 回归：regress.py pipeline 13 组全部通过（最终 ade8af0：logs/claude-perf-20261010/pipeline/tests-20261010-223935）；donor 1614 文件逐项保持。
+- 不 merge/push/Release，不改 NR/SR/FG 模型、运行库、驱动、用户配置。
+## 2026-10-10 采集中卡死（logs(15)，Claude）
+
+- 用户：“经常玩着玩着卡死，排查修复这个问题”，后补线索“开 NVIDIA 信息浮窗后 2.0 以后的就要卡死”，要求按小飞机适配思路先按证据适配，游戏加加一起适配。存档 checkpoint/pre-claude-freeze-20261010（main 5ba186a）与 archives/claude-freeze-20261010；分支 claude/freeze-fix-20261010。
+- 证据：12 次卡死均为引擎线程无日志停住、采集/音频照常；10 次界面线程同时停住（两个出画面线程互锁）；关闭时进程不退出。全部在 HDR 输出 + NGX（DLSS 补帧/RTX HDR）时；“实时”和“高”优先级都卡，优先级方案放弃。nvspcap64.dll 浮窗关着也会被驱动加载，浮窗开启的可靠信号是 NVIDIA Overlay.exe。本机（5070/616.56）开浮窗 4 组共约 2.5 分钟未复现。
+- 改动：监控软件兼容“自动”在启动时遇到 NVIDIA 信息浮窗或游戏加加也让界面软件绘制，运行中出现则提示重启；新增引擎卡死监视（8 秒无进展记录调用栈、小转储、提示，10 秒复查）；退出最多等引擎 20 秒（已判定卡死时 3 秒）后结束进程。
+- 测试：浮窗开启自动切软件界面 + DLSS 2X 120 fps；模拟 12 秒/永久阻塞、模拟游戏加加启动前/中途出现均按预期；回归 13 组全部通过（logs/claude-freeze-20261010/freeze/tests-20261011-030000）。
+- 不 merge/push/Release，不改 GPU 优先级默认值、运行库、驱动、用户配置。
+## 2026-10-11 补帧内容节奏：去除重复帧重新设计（Claude）
+
+- 用户要求在补帧“内容节奏”里重新设计去重复帧，兼容 30/40 帧游戏用 60 帧采集及非整数倍率，避免原 60→30 误删真实帧导致鬼影，不增加明显耗时；用 GTA6 30 帧视频渲染 60/58 帧测试，做完汇报后关机。存档 checkpoint/pre-claude-dedup-20261011（main 5ba186a）与 archives/claude-dedup-20261011；分支 claude/dedup-cadence-20261011。
+- 新增 include/veyra/engine/ContentDedup.h：用采集回调已有的 64×36 亮度点与“上一张留下的画面”比较，重复画面在 GPU 工作前丢弃；留下的帧用回归周期预测、夹在采样时间窗内的内容时间戳。自动/识别 xx fps 模式去重，60→30 改为去重 + 30 帧上限（无 CPU 画面的硬解串流仍按时间戳减半）。VEYRA_TEST_CONTENT_DEDUP_LEGACY=1 恢复旧行为。
+- GTA6 渲染素材回放：30→60/58、40 帧放 60 Hz 新版 0 丢失、0 重复，内容间隔 99.6–100% 在 ±1 ms；旧 60→30 在 40 帧内容丢 189/761，58 Hz 下不起作用。回归 15 组全部通过（logs/claude-dedup-20261011/dedup/tests-20261011-034458）。详见 docs/CONTENT_CADENCE_2026-10-11.md。
+- 不 merge/push/Release，不改默认内容节奏、NR/SR/FG 模型、运行库、驱动、用户配置。
+## 2026-10-11 文件播放间歇卡顿（logs16，音频预读）
+
+- 用户提交 logs(16)：2.0.6、RTX 3060 Ti、4K HDR 电影开补帧间歇卡顿。存档 checkpoint/pre-claude-logs16-20261011（main 5ba186a）与 archives/claude-logs16-20261011；分支 claude/audio-reader-20261011。
+- 证据：20 次与设置/拖动无关的 0.25–0.59 秒引擎停顿，停在呈现背压；同时音频时钟停走、音频线程摘要迟到，视频读包正常；补帧关闭时也出现。原因：音频线程在喂 22 ms 声卡缓冲的同时自己读文件（要读过交错的 4K 视频包），慢读时声卡断粮，主时钟停住，视频随之停住。
+- 修复：WasapiAudioSink 的 AudioPipeline 增加读包线程，稳定播放时预读本音轨包（2.5 秒有界队列），拖动/起播/声卡恢复时暂停并按原方式同步读取；avformat 中断回调；每秒 audio-continuity 摘要加 underruns/pcmMs/queuedPacketMs/maxReadMs/maxLoopMs。VEYRA_TEST_AUDIO_DIRECT_READ=1 恢复旧读法，VEYRA_TEST_AUDIO_READ_STALL_MS/_EVERY_MS 注入慢读。
+- 结果：同一 EXE 每 700 ms 一次 300 ms 慢读，旧读法 5 秒音频只走 3.84 秒、停顿 297 ms，新读法 5.009/5.009 秒、0 停顿；真实播放器 NR+XeSS 补帧加慢读，旧读法音频时钟 0.727 倍、4 次 ≥150 ms 引擎停顿，新读法 1.000 倍、0 次。音频 7 组与播放器 9 组回归通过（logs/claude-logs16-20261011/audio/tests-20261011-142349、-142812）。详见 docs/AUDIO_READ_AHEAD_2026-10-11.md。
+- 不 merge/push/Release，不改默认设置、补帧/NR/呈现、运行库、驱动、用户配置；现场盘未实测，需用户换新版确认。
+## 2026-10-11 Elgato HDR 红色溢出与 RGB 黑屏（对齐 Nitlink / OBS）
+
+- 用户反馈 1.x 接入 Nitlink 修好的 Elgato HDR 红色溢出又出现，且 Elgato 采 RGB 黑屏，Nitlink/OBS 正常。存档同日 logs16 任务（checkpoint/pre-claude-logs16-20261011，main 5ba186a）；分支 claude/elgato-hdr-20261011。
+- 核查：1.x 的 be3e2e6 仍在 2.0，只覆盖“4K60 Pro MK.2 + P010”。对比固定源码 Nitlink 4f8a723 / OBS libdshowcapture c13d4b7：其它型号未关卡内色调映射；8 位格式 OBS 会打开色调映射而 Veyra 不管；Nitlink 对 MK.2 以外的卡按“亮度有限、色度全范围”解 HDR P010。
+- 修改：isElgatoDevice；属性 722 覆盖全部 Elgato 名称（仅 MK.2 P010 严格失败），8 位格式请求打开卡内色调映射并在关闭时恢复；ColorDescription::fullRangeChroma + YuvToLinearRgb 范围模式 2（非 MK.2 的 P010、范围自动时）。
+- 测试：capture-color 270/270（Elgato 13 项），hdr GPU 等价测试（全范围色度解码与换算码值误差 1.7%，旧解码红色高 27%），chain/contracts/timing/lifecycle/video 通过。无 Elgato 实卡；真实颜色与 RGB 黑屏需反馈者日志确认。详见 docs/ELGATO_HDR_PARITY_2026-10-11.md。
+- 不 merge/push/Release，不改其它采集卡、默认设置、运行库、驱动、用户配置。
+
 ## 2026-10-10 关闭效果器编辑卡顿
 
 - 用户反馈关闭效果器时仅调整内部设置也顿一下；从30c6f60隔离codex/inactive-effects-20261010，start保护44既有工作树/495脏文件和main0e7018ad，未派Agent。根因是完整视频设置比较导致无效GPU revision/排空/重建，同revision的applySettings还会重置NR。新增仅比较开启参数的视图，完整保存值不丢；关闭项更新跳过GPU/暂停帧处理，开启后应用新值。多NR/共享光流/HDR元数据依赖及混合事务保留有效更新。
@@ -9020,3 +9062,25 @@ package.py smoke：未改生产QML，私有data-dir、系统PATH、缓存/日志
 在E:/项目/Veyra/worktrees/main-merge-20261002执行`git merge --no-ff codex/sr-visual-quality-20261010 -m "Merge tested 2.0.6 subtitle, playlist, capture and settings fixes"`，功能merge ff80a49ad199334cafb79de79a8ee1b1f66c8aee，无冲突。`git diff --exit-code codex/sr-visual-quality-20261010 HEAD`通过，完整Git树与实测分支相同；因此复用已验证16EXE构建、13组回归、两种界面实际播放和ZIP核验，不声称新跑测试。之后只补AGENTS/CURRENT_STATUS/本WORKLOG/docs/MERGE_MAIN_2026-10-10.md四份文档。字幕/播放列表/PR31/BMD开关/设置恢复/焦点/布局/关闭项编辑等一并合入，SR画质实验仍全部撤回。
 
 合并完成/收尾标签、source-after.bundle verify与最终main在reports/merge-fixes-20261010/final.json。新守卫逐项核对其余45工作树/495脏文件、48d8f34源分支、产品与实测版本一致、仅四文档变化、main干净和原测试包SHA1350c723d56bd8aba13afbb09f959f591f1e6ce819f324e4b3fcb7dbc9103b9c，旧包714646109字节不动。后续构建明确外置DeckLink SDK，打包明确使用已验zlib/PS5 slices256/dav1d FFmpeg前缀与对应源码。没有push/Release/版本变更/重打包/删除分支工作树/关机，实卡与显存增长未解边界保持。
+
+## 2026-10-11 接手Claude软件UI残影与超分图标裁剪
+
+用户要求读取刚才Claude的UI修复记录并接手，避免回到2.0.4高频UI拖慢NR，随后补充超分图标滚动未被遮挡。只读取相关本机会话fea88e5a-198c-4f0f-b9db-ac275fa983ae，最后实际方案是beforeRendering扩大整窗damage，额度耗尽时只删无效环境变量/加私有头，未实现或构建。保存原补丁SHA fa64f180581d3aa5de2483bfcc65a1946c968b2e5dc958954202afd414749d31；独立不可变start保护53旧工作树/496脏文件/main5ba186a，开工tag/source-before.bundle通过。新树codex/ui-smear-handoff-20261011，全产物E:/项目/Veyra/{build,tests,logs,tmp,reports,archives}/ui-smear-handoff-20261011，不派Agent、不改真实配置/原件，不合并/推送/打包/发布/关机。
+
+固定Qt6.8.3源码和实际Qt6Quick.dll确认旧QSG_SOFTWARE_RENDERER_FORCE_PARTIAL_UPDATES没有读取点。完整/条件重绘原型已撤回：虽不加新帧请求，原型配对CPU 0.197661→0.325101秒/秒（+64.5%），而且完整重绘仍在父clip外绘制超分图标。软件Shape layer还出现位置异常，也撤回。实际问题指向Qt软件Shape在空clip时仍drawPath及RenderNode对空damage的处理；原型performance.json/withdrawn-adaptive-repaint.patch保留，不计最终通过。最终仅VIcon/添加NR层虚线在软件模式按DPR缓存相同SVG为普通Image，GPU原Shape不变；宿主删除无效变量/误导日志。CMake与所有engine/shader/source/NR/FG/GPU优先级字节保持，无QuickPrivate或绘制钩子、新Timer/动画/update请求。
+
+以py -3.11 -I运行scripts/acceptance/ui-software-damage-build.py：logs同名/build-20261011-153617/receipt.json，CMake实际配置/main编译/重链接均exit0，9秒，50项不可变输入SHA不变；只是本次main.cpp重编，不冒称clean全工程重编。GUI SHA bed99662e2be2dbde65fd41fd946cb5c4a627b42f50d305e0a47127e4356273a。--probe构建154018回执8秒，独立EXE SHA24e666a7e3af72caff67f5cfce4b6c66d4702e973fa302c143c7590ea159011f；生产EXE不含驱动。
+
+以py -3.11 -B运行ui-software-damage-test.py pixels-expanded及clipping：最终logs/pixels-*-raster2，实际Main/ProPage、150% DPI、3NR层/首层展开、80次滚动至100px；QScreen只读已呈现像素，不触发重画，contentY/contentHeight前后相同。原OBS残留1237相关像素、完整重绘后固定头部改变209；固定OBS/RTSS两路径均0。37个图标Ready，无QML错误；RTSS整窗62像素变化为独立GPU监控区域，不能当残影。人工核对超分图标、箭头和工具栏。没有重做RTSS真实注入或OBS捕获。早期expanded抓图时机错误的pixels-expanded-invalid-timing.json保留；第一版SVG同组sourceSize.height绑定width造成循环，已改为两个独立DPR表达式，失败raster日志保留，最终raster2没有循环。
+
+ui-software-damage-test.py performance-final四例顺序40秒有效播放、各53–56秒墙钟，用户GTA原4K30、原版NR1080p/单层/强度1/风格0，SR/FG/画面调控关，GPU实际class2。每例29个前台有效一秒样本；NR一秒均值中位数，GPU UI 5.919221→5.898998ms（-0.34%）、UI35→35次/秒、CPU0.265282→0.270664秒/秒（+2.03%）；软件UI 5.863204→5.835594ms（-0.47%）、UI38→37.5、CPU0.258953→0.223809（-13.57%）。四例视频提交30fps，不冒充物理刷新率；小幅差异仅本机短测，不宣称算法提速或跨机收益。普通GPU原包EXE/QML对照当前产品；软件用同一EXE仅原/新两个QML对照。统计VTelemetryValue SHA e88541114240fad417f7d1f08bde0b8236964ff7e9005c8fc8214743c006958b字节保持，未回到320Hz。
+
+原包1626文件每次测试前后SHA通过，私有运行目录硬链接复用不可变原件、变更文件原子替换，注入Main已恢复。reports同名/finalize.py逐项核对生产范围、50输入、最终EXE/源码/证据SHA、clip0、normal调度和29样本；短测保守守卫不允许UI额外>3次/秒、NR>3%、CPU>15%，全部通过，不将阈值内差异当普遍等效证明。validation.json保存构建回执/生产源/证据身份，最终控制检查、commit/checkpoint/bundle与本轮缓存整理另记final.json。只有本机生产页复现与短测通过，现场overlay/其它DPI/驱动/长时间播放未全部验收；NV显存问题不在此次范围。
+
+
+本轮临时缓存清理被自动审批拒绝：目标E:/项目/Veyra/tmp/ui-smear-handoff-20261011的PowerShell递归删除返回blocked by policy，命令未执行。560文件/80127256逻辑字节保留，未绕过重试，不计为已释放磁盘；cleanup.json如实记录。修复、构建和验收结果不受影响。
+
+
+## 2026-10-11 Claude六分支及UI整合验收
+
+用户授权本地main整合，隔离codex/merge-claude-fixes-20261011从5ba186a依次完整合入六Claude修复tip及UI29e33df，负优化revert保留；仅历史文档冲突，源码无冲突。补看门狗回调先于相关成员析构的退出竞态。全产物E盘同名目录，54旧树/496脏文件和七来源保持。构建50依赖闭包/19EXE，76.6秒，GUI d4e5aa25cf78120c51eb7793165452101b10798bfd67e1c6cdc724f6ba9d078a，不是clean全量重编；完整CMake保留PS5/Moonlight/Xbox/DeckLink。26项回归、150%滚动clip0/37图标、两种卡死注入/一次dump/恢复及3015ms有界退出、GTA普通class2四例性能守卫通过。i18n旧29空翻译保持/placeholder0。配置protoc路径遗漏、Ninja路径检查断言和Python隔离依赖失败均已如实记录，详见docs/MERGE_CLAUDE_FIXES_REPORT_2026-10-11.md与reports同名/validation.json。冻结实测候选后执行main合并；最终提交/保护核对见后续收尾。无push/打包/发布/关机，实卡和NV显存边界保持。

@@ -100,6 +100,45 @@ int wmain(int argc,wchar_t** argv){
   std::cout<<"HDR_COLOR hlg="<<hlg<<" native="<<native<<" planar="<<planar<<" full="<<full<<" error="<<error<<" pass="<<ok<<std::endl;if(!ok)++failures;
   out={};ring.drainQueue();graph.shutdown();av_frame_free(&f);
  }
+ {
+  // Elgato non-MK.2 P010 (limited luma, full-range chroma): chroma code c decoded
+  // as full range must equal the standard limited decode of 512+(c-512)*896/1023,
+  // and must be less saturated than decoding the same code as limited.
+  const auto decode=[&](unsigned vCode,bool fullChroma,float rgb[3])->bool{
+   pipeline::EnhanceGraph graph(ctx,ring);pipeline::EnhanceGraphDesc gd;
+   gd.sourceWidth=gd.workWidth=64;gd.sourceHeight=gd.workHeight=32;gd.enableNr=gd.enableFg=gd.enableSr=false;gd.noFeatures=true;gd.hdrInput=true;gd.hdrOutput=true;
+   gd.hdrOutputMode=engine::HdrOutputMode::ScRgb;
+   if(!graph.initialize(gd)||!graph.createViews())return false;
+   AVFrame* f=av_frame_alloc();f->width=64;f->height=32;f->format=AV_PIX_FMT_P010;f->color_range=AVCOL_RANGE_MPEG;f->colorspace=AVCOL_SPC_BT2020_NCL;f->color_trc=AVCOL_TRC_SMPTE2084;f->color_primaries=AVCOL_PRI_BT2020;
+   if(av_frame_get_buffer(f,32)<0){av_frame_free(&f);return false;}
+   for(unsigned y=0;y<32;++y)for(unsigned x=0;x<64;++x)reinterpret_cast<uint16_t*>(f->data[0]+y*f->linesize[0])[x]=uint16_t(509u<<6); // ~100 cd/m2
+   for(unsigned y=0;y<16;++y)for(unsigned x=0;x<32;++x){auto* row=reinterpret_cast<uint16_t*>(f->data[1]+y*f->linesize[1]);row[x*2]=uint16_t(512u<<6);row[x*2+1]=uint16_t(vCode<<6);}
+   pipeline::ColorDescription color;color.pixelFormat=pipeline::SourcePixelFormat::P010;color.transfer=pipeline::TransferFunction::PQ;color.matrix=pipeline::YuvMatrix::BT2020NCL;
+   color.range=pipeline::ColorRange::Limited;color.fullRangeChroma=fullChroma;
+   pipeline::EnhanceGraph::FrameOutputs out;bool ok=graph.process(f,0,true,out,1,&color);
+   if(ok){
+    auto* texture=graph.videoFrameResource(out.videoSlot);auto desc=texture->GetDesc();D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};UINT64 size=0;ctx.device()->GetCopyableFootprints(&desc,0,1,0,&footprint,nullptr,nullptr,&size);
+    D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_READBACK;D3D12_RESOURCE_DESC bd{};bd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;bd.Width=size;bd.Height=1;bd.DepthOrArraySize=1;bd.MipLevels=1;bd.SampleDesc.Count=1;bd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    Microsoft::WRL::ComPtr<ID3D12Resource> read;ok=SUCCEEDED(ctx.device()->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&read)));
+    uint32_t slot=0;auto* list=ok?ring.acquireNext(slot,st):nullptr;ok=list!=nullptr;
+    if(ok){pipeline::StateTracker states;states.transition(list,texture,D3D12_RESOURCE_STATE_COPY_SOURCE);
+     D3D12_TEXTURE_COPY_LOCATION a{},b{};a.pResource=texture;a.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;b.pResource=read.Get();b.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;b.PlacedFootprint=footprint;list->CopyTextureRegion(&b,0,0,0,&a,nullptr);states.transition(list,texture,D3D12_RESOURCE_STATE_COMMON);
+     ok=ring.submitAndSignal(slot)&&ring.waitIdle();}
+    void* ptr=nullptr;D3D12_RANGE range{0,size};
+    if(ok&&SUCCEEDED(read->Map(0,&range,&ptr))){const auto* values=reinterpret_cast<uint16_t*>(static_cast<uint8_t*>(ptr)+footprint.Offset+footprint.Footprint.RowPitch*16);
+     for(unsigned c=0;c<3;++c)rgb[c]=DirectX::PackedVector::XMConvertHalfToFloat(values[32*4+c]);D3D12_RANGE written{};read->Unmap(0,&written);}
+    else ok=false;
+   }
+   out={};ring.drainQueue();graph.shutdown();av_frame_free(&f);return ok;
+  };
+  float fullChroma[3]{},equivalent[3]{},limited[3]{};
+  const unsigned code=512+120,equivalentCode=512+unsigned(std::lround(120*896.0/1023.0)); // keeps red below the PQ ceiling
+  bool ok=decode(code,true,fullChroma)&&decode(equivalentCode,false,equivalent)&&decode(code,false,limited);
+  double sameError=0;for(unsigned c=0;c<3;++c)sameError=std::max(sameError,double(std::abs(fullChroma[c]-equivalent[c]))/std::max(.05,double(std::abs(equivalent[c]))));
+  ok=ok&&sameError<.02&&limited[0]>fullChroma[0]*1.05;
+  std::cout<<"HDR_P010_FULL_CHROMA full="<<fullChroma[0]<<","<<fullChroma[1]<<","<<fullChroma[2]<<" equivalentLimited="<<equivalent[0]<<","<<equivalent[1]<<","<<equivalent[2]
+           <<" sameCodeLimited="<<limited[0]<<","<<limited[1]<<","<<limited[2]<<" relativeError="<<sameError<<" pass="<<ok<<std::endl;if(!ok)++failures;
+ }
  if(argc>1)for(unsigned mode=0;mode<3;++mode)for(bool hardware:{false,true}){
   source::MediaFileSource source;source::SourceOpenDesc sd;sd.path=argv[1];sd.preferHardwareDecode=hardware;sd.d3d12Device=ctx.device();sd.d3d12Queue=ctx.directQueue();
   if(!source.open(sd))return 8;
