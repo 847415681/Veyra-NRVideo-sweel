@@ -7,6 +7,13 @@
 - 结果：P0 CUDA 事件测量（Run 3.20 ms，交接空等 0.30 ms/次）；V1 被放弃的组也记录 B，4X 201.2→215.3 fps、种子/复位跳过归零，保留；V2 降倍率回退 215.3→190.7 fps，已退回；V3 每对一次 producer 依赖 201.8/201.3→181.6/181.2 fps，已退回；V5 状态栏原因提示保留。中途换卡（MCS）两组源帧率不一致，标 invalid 作废。
 - 回归：regress.py vfg 14 组全部通过（logs/claude-perf-20261010/vfg/tests-20261010-222709，含 veyra_vfg_gpu_tests 1280×720 async）；donor 1614 文件逐项保持。
 - 详细数据与边界见 docs/VFG_TASK_2026-10-10.md。不 merge/push/Release，不改运行库/模型/驱动/用户配置；本机 5070 结果不代表其他显卡。
+## 2026-10-10 软件链路优化（Claude，任务二）
+
+- 授权与存档同 VFG 任务（checkpoint/pre-claude-perf-20261010、archives/claude-perf-20261010）。分支 claude/pipeline-20261010 只改采集→效果衔接→送显/上屏及其诊断/提示；VFG 在独立分支。
+- 构建：py -3.11 -I E:/项目/Veyra/tmp/claude-perf-20261010/build.py pipeline。同 EXE 测试开关 A/B；屏幕侧用 PresentMon 2.6.0（管理员，用户点 UAC）按 QPC 逐帧对齐（pm_join.py，logs/claude-perf-20261010/presentmon-prio.csv）。
+- 结果：C1 日志 Present→上屏与 PresentMon 同场一致（4X 3.59/6.36 对 3.58/6.35 ms），保留；C2 显示同步提示保留；C3 静止黑场 60→30 NR+VFG 2X 原帧 41.12→29.07 ms，保留（首版因 hasGenerated 被清空未生效，已修正并留证）；C7 交换链等待使 4X 帧率 191.0→170.9 且上屏不变，已退回；送显队列高优先级 PresentMon 4 次无差异，不采用；C4/C5/C6 实测无可得收益，未实施。方案里“4X 上屏 P95 50 ms”今天 4 次未复现（现为原帧采集→上屏 P50 28.8 / P95 35.5 ms）。
+- 回归：regress.py pipeline 13 组全部通过（最终 ade8af0：logs/claude-perf-20261010/pipeline/tests-20261010-223935）；donor 1614 文件逐项保持。
+- 不 merge/push/Release，不改 NR/SR/FG 模型、运行库、驱动、用户配置。
 
 ## 2026-10-10 关闭效果器编辑卡顿
 

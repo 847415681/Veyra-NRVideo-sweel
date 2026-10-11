@@ -11,9 +11,11 @@
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <optional>
+#include <vector>
 
 #include "veyra/Result.h"
 #include "veyra/gfx/XessPresenter.h"
@@ -111,6 +113,19 @@ public:
         HRESULT result=S_OK;
     };
     FrameStatisticsDelta sampleFrameStatistics();
+    // Present call -> the vblank that showed it, for VSync DXGI presents.
+    // Flip-model frame statistics name the last displayed present
+    // (PresentCount, same numbering as GetLastPresentCount) and its vblank
+    // (PresentRefreshCount); SyncQPCTime/SyncRefreshCount date that vblank.
+    // Sampled before every Present, summarised and cleared by the caller.
+    // compositionMode: DXGI_FRAME_PRESENTATION_MODE (0 composed, 1 overlay,
+    // 2 none, 3 composition failure), -1 when the query is unavailable.
+    struct DisplayLatencySummary {
+        uint64_t samples=0;
+        double p50Ms=-1,p95Ms=-1,maxMs=-1;
+        int compositionMode=-1;
+    };
+    DisplayLatencySummary takeDisplayLatency();
     double displayRefreshHz()const{return displayRefreshHz_;}
     bool configurePacing(bool enabled,bool vsync,bool tearing);
     bool presentationReady();
@@ -186,6 +201,15 @@ private:
     bool frameStatisticsBaseValid_=false;
     uint64_t frameStatisticsBasePresents_=0;
     UINT frameStatisticsBasePresentRefresh_=0,frameStatisticsBaseSyncRefresh_=0,frameStatisticsBaseDisplayed_=0;
+    void sampleDisplayLatency();
+    struct PendingPresent { UINT id=0; int64_t qpc=0; };
+    std::array<PendingPresent,16> pendingPresents_{};
+    unsigned pendingPresentNext_=0;
+    UINT lastDisplayedPresent_=0,lastSyncRefresh_=0;
+    int64_t lastSyncQpc_=0;
+    double refreshQpc_=0;
+    bool displayLatencyEnabled_=true;
+    std::vector<double> displayLatencyMs_;
 };
 
 } // namespace veyra::gfx
