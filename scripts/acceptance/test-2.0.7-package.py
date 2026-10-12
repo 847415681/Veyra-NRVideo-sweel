@@ -167,7 +167,7 @@ def cold():
     # These are playback/startup checks with effects off, not performance tests.
     # Preserve an already running user session; reject only this harness's own
     # unfinished verification processes and record shared-GPU conditions.
-    running=json.loads(subprocess.check_output(['powershell','-NoProfile','-Command',"ConvertTo-Json -Compress -InputObject @((Get-Process | Where-Object { $_.ProcessName -like 'veyra*' } | Select-Object Id,ProcessName,Path))"],text=True,encoding='utf8',errors='replace'))
+    running=json.loads(subprocess.check_output(['powershell','-NoProfile','-Command',"[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false); ConvertTo-Json -Compress -InputObject @((Get-Process | Where-Object { $_.ProcessName -like 'veyra*' } | Select-Object Id,ProcessName,Path))"],text=True,encoding='utf8'))
     own=B/'verify'/TASK
     assert not any(r.get('Path') and Path(r['Path']).resolve().is_relative_to(own.resolve()) for r in running),running
     rows=json.loads((OUT/'DELIVERY.json').read_text('utf8'))['packages'];results=[]
