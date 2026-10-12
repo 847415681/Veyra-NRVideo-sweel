@@ -723,10 +723,12 @@ std::vector<CaptureFormat> enumerateFormats(IAMStreamConfig* config,bool preferD
             const auto tier=valid?captureFormatTier(layout.packing):CaptureFormatTier::Decoded;
             const int rank=valid?captureFormatRank(layout.packing):captureFormatRank(CapturePacking::Unknown);
             const auto key=captureFormatIdentity(*type);const bool current=!currentKey.empty()&&key==currentKey;
-            std::wstring scan;
+            std::wstring scan;bool interlaced=false;
             if(type->formattype==FORMAT_VideoInfo2){const auto flags=reinterpret_cast<const VIDEOINFOHEADER2*>(type->pbFormat)->dwInterlaceFlags;
-                scan=(flags&AMINTERLACE_IsInterlaced)?std::format(L" · 隔行（{:.2f} 场/秒）",fps*((flags&AMINTERLACE_1FieldPerSample)?1:2)):L" · 逐行";}
-            out.push_back({i,width,height,fps,std::format(L"{} x {} @ {:.2f} fps{} · {} · {} · {}{} [format {}]",width,height,fps,scan,pixel,support,captureFormatTierLabel(tier),current?L" · 驱动默认":L"",i),key,rank,int(tier),current});
+                interlaced=(flags&AMINTERLACE_IsInterlaced)!=0;
+                scan=interlaced?std::format(L"隔行（{:.2f} 场/秒）",fps*((flags&AMINTERLACE_1FieldPerSample)?1:2)):L"逐行";}
+            const std::wstring scanMark=scan.empty()?std::wstring{}:L" · "+scan;
+            out.push_back({i,width,height,fps,std::format(L"{} x {} @ {:.2f} fps{} · {} · {} · {}{} [format {}]",width,height,fps,scanMark,pixel,support,captureFormatTierLabel(tier),current?L" · 驱动默认":L"",i),key,rank,int(tier),current,pixel,scan,interlaced});
         }
         freeType(type);
     }

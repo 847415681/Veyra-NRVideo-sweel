@@ -1,6 +1,7 @@
 #include "veyra/source/CaptureFormatSelection.h"
 #include <array>
 #include <iostream>
+#include <vector>
 
 int main(){
     using namespace veyra::source;
@@ -27,5 +28,46 @@ int main(){
     check(captureFrameRateMatches(60,166833),"nominal 59.94 allowed");
     check(!captureFrameRateMatches(60,200000),"60 to 50 renegotiation rejected");
     check(!captureFrameRateMatches(60,0),"unknown negotiated rate rejected");
+
+    auto media=[&](int index,unsigned width,unsigned height,double fps,std::wstring key,std::wstring pixel,bool interlaced,std::wstring scan){
+        CaptureFormat format;
+        format.index=index;format.width=width;format.height=height;format.fps=fps;
+        format.key=std::move(key);format.pixel=std::move(pixel);format.interlaced=interlaced;format.scan=std::move(scan);
+        return format;
+    };
+    std::vector<CaptureFormat> listed{
+        media(0,1920,1080,60,L"1080p60-nv12",L"NV12",false,L"逐行"),
+        media(1,1920,1080,60,L"1080p60-yuy2",L"YUY2",false,L"逐行"),
+        media(2,1920,1080,30,L"1080p30-nv12",L"NV12",false,L"逐行"),
+        media(3,1920,1080,30,L"1080i60-nv12",L"NV12",true,L"隔行（59.94 场/秒）"),
+        media(4,3840,2160,30,L"4k30-yuy2",L"YUY2",false,L"逐行"),
+        media(5,1920,1080,60,L"1080p60-nv12-bff",L"NV12",false,L"逐行"),
+        media(6,3840,2160,24,L"4k24-yuy2",L"YUY2",false,L"逐行"),
+    };
+    const auto resolutions=captureResolutionOptions(listed);
+    check(resolutions.size()==2&&resolutions[0].id==L"1920x1080"&&resolutions[1].id==L"3840x2160","resolutions stay unique and in list order");
+    const auto* p60=selectCaptureFormat(listed,-1,L"1080p60-nv12");
+    const auto rates=captureFrameRateOptions(listed,p60);
+    check(rates.size()==3,"1080p lists progressive 60, progressive 30 and interlaced 30 only");
+    check(captureFrameRateId(listed[2])!=captureFrameRateId(listed[3]),"same numeric rate keeps progressive and interlaced apart");
+    bool saw4kOnlyRate=false;for(const auto& rate:rates)if(rate.id==captureFrameRateId(listed[6]))saw4kOnlyRate=true;
+    check(!saw4kOnlyRate,"a frame rate that exists only at 4k is hidden while 1080p is selected");
+    const auto pixels=capturePixelOptions(listed,p60);
+    check(pixels.size()==3&&pixels[0].id==L"1080p60-nv12"&&pixels[1].id==L"1080p60-yuy2"&&pixels[2].id==L"1080p60-nv12-bff","pixel list is the concrete 1080p60 media types");
+    check(pixels[0].label.find(L"[format 0]")!=std::wstring::npos&&pixels[2].label.find(L"[format 5]")!=std::wstring::npos,"duplicate pixel names stay selectable");
+    check(pixels[1].label==L"YUY2","unique pixel name is not decorated");
+    const auto* to4k=retargetCaptureFormat(listed,p60,CaptureFormatAxis::Resolution,L"3840x2160");
+    check(to4k==&listed[4],"resolution change falls back to a real 4k media type");
+    const auto* keepNv12=retargetCaptureFormat(listed,p60,CaptureFormatAxis::FrameRate,captureFrameRateId(listed[2]));
+    check(keepNv12==&listed[2],"frame-rate change keeps NV12 instead of another pixel at that rate");
+    const auto* toInterlace=retargetCaptureFormat(listed,p60,CaptureFormatAxis::FrameRate,captureFrameRateId(listed[3]));
+    check(toInterlace==&listed[3],"interlaced rate selects the interlaced media type");
+    check(!retargetCaptureFormat(listed,p60,CaptureFormatAxis::FrameRate,L"50.000000|0"),"missing frame rate is rejected");
+    check(!retargetCaptureFormat(listed,p60,CaptureFormatAxis::Resolution,L"1280x720"),"missing resolution is rejected");
+    const auto* yuy2=selectCaptureFormat(listed,-1,L"1080p60-yuy2");
+    const auto* keptPixel=retargetCaptureFormat(listed,yuy2,CaptureFormatAxis::Resolution,L"3840x2160");
+    check(keptPixel==&listed[4],"resolution change keeps YUY2 when that pixel exists at the new size");
+    const auto interlacedPixels=capturePixelOptions(listed,&listed[3]);
+    check(interlacedPixels.size()==1&&interlacedPixels[0].id==L"1080i60-nv12","interlaced rate does not offer the progressive NV12 row");
     std::cout<<"capture format selection failures="<<failures<<'\n';return failures?1:0;
 }
