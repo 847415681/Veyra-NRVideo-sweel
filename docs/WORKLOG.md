@@ -9197,3 +9197,15 @@ seal.py validate逐项核对源码/输入/EXE/QML/原包1626文件及旧树；�
 原报告/计划的FSR排除语句已纠正并链接docs/FSR_FLOW_FOLLOWUP_2026-10-12.md；历史f468数字仍对应旧交付，不冒充联合版重测。本机RTX5070/FSR3.1及其AMD光流provider通过，Fsr4枚举覆盖不等于AMD/Intel或FSR4ML实卡验收。延迟研究、栏杆模型问题仍按用户要求暂缓；真实用户游戏观感/长期显存/屏幕延迟未验。
 
 seal.py检查代码/输入/16EXE/QML/原运行组件、全部回执、61旧树/509脏文件、原XeSS构建不变和改动范围；本地提交/增量源码bundle/检查点/最终保护回执见reports/fsr-flow-followup-20261012/final.json。没有新运行库压缩包、二进制入Git、main合并、push/Release、子Agent或关机。
+
+## 2026-10-12 用户要求 XeSS 复测幅度与直接贴图
+
+用户：“claude那边应该有做测试程序，你测测Xess改善了多少，然后把图贴给我看看”。使用Claude已有veyra_fg_xess_boundary_tests、e7af5d8联合构建，不重编/改产品。新产物统一E:/项目/Veyra/{logs,tests,tmp,reports,archives}/xess-visual-ab-20261012，旧目录/报告/运行组件保持。开工start.json保存main/HEAD、测试app全部原件与既有final/bundle/画质JSON哈希；同一隔离分支只新增docs/XESS_VISUAL_AB_2026-10-12.md及本记录，无子Agent。
+
+命令Python3.11 -X utf8 -B -I tmp/xess-visual-ab-20261012/run.py：同一EXE以VEYRA_TEST_FLOW_REFINE0/1切换旧/新光流，RTX5070、XeSS2X1440p、NVOF720p、NR/SR全关。run27/run80/orbit80/bars27各A/B，再加两组zero导出合成中点真值，共10项exit0，每项11/11目标插值帧、matchedReal0/debug0/capture0，3.69–4.22秒。诊断按30fps位移/时间构造，放慢送显抓帧，不测FPS性能。
+
+logs/.../results.json与reports/.../measurement.json：中速侧跑轮廓带MAE8 6.8755→6.3781（-7.23%），高速8.2148→7.4180（-9.70%），背景横移3.7651→3.0332（-19.44%），密集竖条10.1397→9.7037（-4.30%）。背景误差均下降，聚合结果与此前独立测试一致；不解释为真实游戏果冻减少比例。不是每个区域都好：高速人物内部0.2814→0.2849，横移内部0.0004→0.0483；不隐藏这一小幅负变化。代码模型未改，仍有轮廓残差/锯齿/弯曲。
+
+images.py生成reports/.../images/xess-side-run-comparison.png和xess-fast-error-comparison.png。固定帧对14→15中点14.5、448×448腿部、左合成真值/中旧光流/右精修；原像素未缩放或修饰，拼图每区域逐字节与原图验证。相同×4绝对RGB误差图（越黑越好）；该单帧高速整个裁切MAE6.6951→6.2269、中速7.0968→6.9294，不混淆为11帧轮廓带均值。原图、拼图、坐标及SHA见reports/.../images.json，已实际查看布局/文字/像素图。
+
+audit.py核对测试/GUI/所有app原件、两份旧final、旧JSON和源码bundle、当前两个文档范围、原61树/509脏文件、main及数据/图片原件，最终回执reports/.../final.json；诊断EXE SHA050740291e5cbb07a39da07da801dae03c192737a2f95b2a3bc07708f9ea49b7保持。没有真实游戏逐帧真值/观感或新性能验证，无main合并、push、打包、Release、二进制入Git或关机。
