@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-12 日志50补帧修复授权**：用户在完成 RTX5070Ti/Elgato 日志诊断后明确“尝试修复”。按 docs/FG_CAPTURE_RECOVERY_PLAN_2026-10-12.md 从 main a167831 在 codex/fg-capture-recovery-20261012 隔离修复异常短 PTS 污染节奏基线及有证据的必要接点，覆盖这些具体范围旧冻结。独立 start/bundle 保护64旧树/515脏文件；已有交换链复用先验证，不重复改写。保持真实 PTS、VRR、真正断点重置、容量上限、UI33ms/250ms、GPU默认优先级与用户配置，不派Agent、不改驱动/运行库/模型。全产物E盘，测试每进程≤300秒/构建≤900秒；无main合并/push/打包/Release/关机。本机回放不能冒充Elgato实卡或物理屏幕性能验收。
+
 > **2026-10-12 PR34 合并与采集设置授权**：用户明确合并 PR34、补齐当前卡全部设备格式及采集页自动保存/继续上次/启动自动恢复。按 docs/PR34_CAPTURE_SETTINGS_PLAN_2026-10-12.md 从 main76f41b3 在 codex/pr34-capture-settings-20261012 隔离适配必要 source/bridge/QML/preferences/测试接点，覆盖这些范围旧冻结。构建及定向验收后允许 main 合并与普通推送以完成 GitHub PR 合并。62 旧树/509 脏文件保持，main仅按授权更新；其它尚未合并分支不混入。保持 UI33ms/250ms、默认优先级与正常采集缓冲，不派Agent、不改驱动/运行库/真实配置。全产物E盘，测试≤300秒/构建≤900秒，无打包/Release/关机。
 
 > **2026-10-11 当前修复已合入本地main**：Codex4557ab6（含e8300d9）与Claude1d4c33f经隔离整合、42依赖闭包/13EXE构建、完整CMake、16组回归、12真实GUI状态/6布局及SR+VFG组合持久化/重启通过；实测产品4904b73、记录tip adcf509通过功能merge d2e1396进入main，完整Git树相同。VFG默认中档、DLSS K、33ms统计/250ms状态及负优化撤回保持。59开工树中唯main按授权更新，其余58树/504脏文件、来源分支及原包1626文件保持；final.json见reports/merge-current-fixes-20261011。首次组合GUI夹具漏FG节点失败，修夹具后通过，原证据保留；没有新的性能A/B或全硬件/长期显存通过声明。无push/打包/Release/关机。
