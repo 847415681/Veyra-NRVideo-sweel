@@ -17,9 +17,10 @@ Item {
         return null
     }
     function field(name) {const f=find(appWindow.contentItem,name);require(!!f,name);return f}
-    function pass() {console.log("CAPTURE_SAFETY_PASS",mode,JSON.stringify({resolution:veyra.captureResolutionId,rate:veyra.captureFrameRateId,format:veyra.captureFormatKey}));Qt.quit()}
+    function pass() {driver.stop();console.log("CAPTURE_SAFETY_PASS",mode,JSON.stringify({resolution:veyra.captureResolutionId,rate:veyra.captureFrameRateId,format:veyra.captureFormatKey}));Qt.quit()}
     Connections {target:veyra;function onNotice(message,error){if(error)probe.messages.push(String(message))}}
     Timer {
+        id: driver
         interval:400;running:true;repeat:true
         onTriggered:{try{
             require(++ticks<100,"deadline")
