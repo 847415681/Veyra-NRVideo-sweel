@@ -30,6 +30,7 @@
 #ifdef VEYRA_ENABLE_REMOTEPLAY
 #include "veyra/source/RemotePlaySessionSource.h"
 #endif
+#include "veyra/pipeline/CaptureUploadFrame.h"
 #include "veyra/pipeline/EnhanceGraph.h"
 #include "veyra/pipeline/ResetCoordinator.h"
 #include "veyra/gfx/XessMfgUnlock.h"
@@ -932,13 +933,20 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             uint64_t fedXessPresented=0,fedXessGenerated=0;
             double playbackSpeedLastPts=0;Clock::time_point playbackSpeedLastWall{};
             CaptureHalfRate captureSampler;
-            // Content cadence for live sources (ContentDedup.h): repeated pictures are
-            // dropped before any GPU work and kept frames get content timestamps.
-            // VEYRA_TEST_CONTENT_DEDUP_LEGACY=1 restores the blind 60->30 sampler and
-            // the report-only content modes for A/B runs.
+            // Content cadence for live sources (ContentDedup.h): in the auto / 30 / 50 /
+            // 60 fps content modes, repeated pictures (every component within the
+            // capture-noise band, PictureCompare.h) are dropped before any GPU work and
+            // kept frames get content timestamps. "60->30" is the plain
+            // every-second-sample CaptureHalfRate again (user 2026-10-12).
+            // VEYRA_TEST_CONTENT_DEDUP_LEGACY=1 restores the report-only content modes
+            // for A/B runs.
             ContentDedup contentDedup;uint64_t dedupRevision=0;
             ContentDedup::Stats dedupLogged{};
             static const bool legacyCadence=GetEnvironmentVariableW(L"VEYRA_TEST_CONTENT_DEDUP_LEGACY",nullptr,0)>0;
+            const auto dedupContent=[](ContentRate content){return content!=ContentRate::Transport&&content!=ContentRate::Capture60To30;};
+            // CPU frames are compared here; capture-card frames arrive numbered by the callback.
+            pipeline::PictureReference enginePictures{2};
+            unsigned dedupRepeatMax8=0;uint64_t dedupNewMinOver=UINT64_MAX;
             FrameLineageTracker lineageTracker;
             auto completedProcessing=[&](pipeline::FrameIdentity id){std::lock_guard lock(mutex_);if(snapshot_.applied.revision==id.settingsRevision)++snapshot_.processedCompleted;};
             auto host100ns=[](){return std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count()/100;};
@@ -1698,36 +1706,40 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(!isImage&&!isCapture&&seekSeconds_>=0)continue;
                 const bool halfRate=isCapture&&options.settings.content==ContentRate::Capture60To30&&
                     CaptureHalfRate::supported(activeSource->info().averageFps);
-                const bool dedupActive=isCapture&&!isImage&&!legacyCadence&&options.settings.content!=ContentRate::Transport;
+                const bool dedupActive=isCapture&&!isImage&&!legacyCadence&&dedupContent(options.settings.content);
+                // The callback compares whole pictures only while dedup needs them.
+                if(physicalCapture)captureSource.setPictureCompare(dedupActive);
                 if(reset||pipeline::breaksHistory(pkt.flags))captureSampler.reset();
                 const int64_t samplePts100ns=pkt.pts.isUnknown()?0:pkt.pts.to100ns();
-                if(dedupActive&&!rereadCached&&!pkt.pts.isUnknown()&&graph){
+                if(dedupActive&&!rereadCached&&!pkt.pts.isUnknown()){
                     const auto interval=liveSourceInterval100ns(pipeline::Rational::unknown(),activeSource->info().averageFps);
-                    std::array<uint8_t,ContentDedup::kPoints> signature;
-                    const auto signatureStart=Clock::now();
-                    const bool pictured=graph->lumaSignature(frame,signature.data());
+                    pipeline::PictureReference::Result picture;
+                    const auto compareStart=Clock::now();
+                    const bool pictured=pipeline::captureFramePicture(frame,enginePictures,gd.packedInput==6||gd.packedInput==7,picture);
+                    if(pictured&&picture.repeat)dedupRepeatMax8=std::max(dedupRepeatMax8,picture.max8);
+                    else if(pictured&&picture.over)dedupNewMinOver=std::min(dedupNewMinOver,picture.over);
                     const bool boundary=reset||pipeline::breaksHistory(pkt.flags)||dedupRevision!=options.settings.revision;
                     dedupRevision=options.settings.revision;
                     const auto content=options.settings.content;
-                    const int64_t cap=halfRate?interval*2:0;
-                    const int64_t hint=content==ContentRate::Fps30?333333:content==ContentRate::Fps50?200000:content==ContentRate::Fps60?166667:halfRate?interval*2:0;
-                    const auto decision=contentDedup.observe(pictured?signature.data():nullptr,pkt.pts.to100ns(),interval,boundary,cap,hint);
-                    const double dedupUs=elapsedMs(signatureStart)*1000;
-                    if(veyra::log::verboseFrameLogs())veyra::log::info("content-dedup-frame",std::format("source={} pts100ns={} keep={} reason={} median={} changed={} contentPts100ns={} intervalMs={:.3f} cpuUs={:.1f}",
-                        pkt.sequence,pkt.pts.to100ns(),decision.keep,decision.reason,decision.median,decision.changed,decision.contentPts,decision.interval/1e4,dedupUs));
+                    const int64_t hint=content==ContentRate::Fps30?333333:content==ContentRate::Fps50?200000:content==ContentRate::Fps60?166667:0;
+                    const auto decision=contentDedup.observe(pictured?&picture.id:nullptr,pkt.pts.to100ns(),interval,boundary,hint);
+                    const double dedupUs=elapsedMs(compareStart)*1000;
+                    if(veyra::log::verboseFrameLogs())veyra::log::info("content-dedup-frame",std::format("source={} pts100ns={} keep={} reason={} picture={:x} withinBand={} over={} maxDiff={} contentPts100ns={} intervalMs={:.3f} cpuUs={:.1f}",
+                        pkt.sequence,pkt.pts.to100ns(),decision.keep,decision.reason,pictured?picture.id:0,picture.repeat,picture.over,picture.max8,decision.contentPts,decision.interval/1e4,dedupUs));
                     if(!decision.keep){std::lock_guard lock(mutex_);++snapshot_.captureRateSkipped;continue;}
                     pkt.pts={decision.contentPts,10000000};
                     if(decision.interval>0)pkt.duration={decision.interval,10000000};
-                }else if(halfRate&&legacyCadence&&!rereadCached){
+                }else if(halfRate&&!rereadCached){
+                    // 60->30: every second sample by timestamp, original PTS, a steady 30.
                     const auto interval=liveSourceInterval100ns(pipeline::Rational::unknown(),activeSource->info().averageFps);
                     if(!pkt.pts.isUnknown()&&!captureSampler.accept(pkt.pts.to100ns(),interval,false)){
                         std::lock_guard lock(mutex_);++snapshot_.captureRateSkipped;continue;
                     }
                     pkt.duration={interval*2,10000000};
                 }
-                if(!halfRate||!legacyCadence)captureSampler.reset();
+                if(!halfRate)captureSampler.reset();
                 if(isCapture&&!rereadCached&&veyra::log::verboseFrameLogs())
-                    veyra::log::info("cadence-input",std::format("source={} samplePts100ns={} pts100ns={} dedup={} legacyHalf={}",pkt.sequence,samplePts100ns,pkt.pts.isUnknown()?0:pkt.pts.to100ns(),dedupActive,halfRate&&legacyCadence));
+                    veyra::log::info("cadence-input",std::format("source={} samplePts100ns={} pts100ns={} dedup={} halfRate={}",pkt.sequence,samplePts100ns,pkt.pts.isUnknown()?0:pkt.pts.to100ns(),dedupActive,halfRate));
                 if(isImage)pkt.sequence=1;
 #ifdef VEYRA_ENABLE_XBOX
                 if(xb&&!rereadCached)xboxReconnectBudget.decoded(monotonic100ns());
@@ -2455,7 +2467,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     snapshot_.srActive=gd.enableSr&&graphStats.srEvaluateCount>0;
                     snapshot_.fgActive=options.fg&&(graph->xessEnabled()?presenter.xessActive()&&graphStats.fgGeneratedFrames>0:graph->fgEnabled()&&measured.flow.counters.fgReadyValid>0);
                     if(transaction&&backendRecoveryWarning.empty()&&nvidiaAdapter&&(!graph->xessEnabled()||presenter.xessActive()))snapshot_.backendWarning.clear();
-                    snapshot_.flowPerf=graph->actualFlowPerf();snapshot_.contentFps=isCapture&&!legacyCadence&&options.settings.content!=ContentRate::Transport&&contentDedup.contentFps()>0?int(std::lround(contentDedup.contentFps())):out.measuredContentRate;
+                    snapshot_.flowPerf=graph->actualFlowPerf();snapshot_.contentFps=isCapture&&!legacyCadence&&dedupContent(options.settings.content)&&contentDedup.contentFps()>0?int(std::lround(contentDedup.contentFps())):out.measuredContentRate;
                     snapshot_.nrEvaluated=graphStats.nrEvaluateCount;snapshot_.nvofExecuted=graphStats.nvofExecuteCount;
                     snapshot_.captureReceived=captureStats.received;snapshot_.captureDropped=captureStats.dropped;snapshot_.captureFps=captureStats.callbackFps;snapshot_.captureReadAgeMs=captureStats.readAgeMs;snapshot_.captureAgeMs=liveScheduler?completed.ageMs:captureStats.frameAgeMs;snapshot_.captureAgeP95Ms=ageP95;
                     snapshot_.captureSampledBlack=captureStats.sampledBlack;
@@ -2484,12 +2496,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     // memory gets slower in every pass at once (field log 2026-10-01).
                     uint64_t vramBudget=0,vramUsage=0;ctx.videoMemoryInfo(vramBudget,vramUsage);watchVram(vramUsage,vramBudget);
                     veyra::log::info("frame-rate",std::format("revision={} gpuCompletedFps={:.2f} completedReal={} capture60To30={} rateSkipped={} presentSubmitFps={:.2f} windowMs=1000 vramMiB={} budgetMiB={} (not scanout FPS)",options.settings.revision,rates.fps,rates.processedCompleted,rates.captureHalfRate,rates.captureRateSkipped,rates.submissionFps.value_or(0),vramUsage>>20,vramBudget>>20));
-                    if(options.settings.content!=ContentRate::Transport&&!legacyCadence){
+                    if(isCapture&&dedupContent(options.settings.content)&&!legacyCadence){
                         const auto& st=contentDedup.stats();
-                        veyra::log::info("content-dedup",std::format("revision={} mode={} observed={} kept={} repeats={} rateCap={} held={} blind={} regular={} irregular={} contentFps={:.2f} noise={:.2f} maxShiftMs={:.2f} (per second; repeats are dropped before GPU work, kept frames carry content timestamps)",
-                            options.settings.revision,int(options.settings.content),st.observed-dedupLogged.observed,st.kept-dedupLogged.kept,st.repeats-dedupLogged.repeats,st.capped-dedupLogged.capped,st.held-dedupLogged.held,st.blind-dedupLogged.blind,
-                            st.regular-dedupLogged.regular,st.irregular-dedupLogged.irregular,contentDedup.contentFps(),contentDedup.noiseLevel(),st.maxShiftMs));
-                        dedupLogged=st;
+                        veyra::log::info("content-dedup",std::format("revision={} mode={} observed={} kept={} repeats={} held={} blind={} regular={} irregular={} contentFps={:.2f} maxShiftMs={:.2f} repeatMaxDiff={} newMinOver={} band={} (per second; a repeat has every component of the whole picture within the band of the last new one, dropped before GPU work; kept frames carry content timestamps)",
+                            options.settings.revision,int(options.settings.content),st.observed-dedupLogged.observed,st.kept-dedupLogged.kept,st.repeats-dedupLogged.repeats,st.held-dedupLogged.held,st.blind-dedupLogged.blind,
+                            st.regular-dedupLogged.regular,st.irregular-dedupLogged.irregular,contentDedup.contentFps(),st.maxShiftMs,dedupRepeatMax8,dedupNewMinOver==UINT64_MAX?0:dedupNewMinOver,pipeline::PictureReference::kBand8));
+                        dedupLogged=st;dedupRepeatMax8=0;dedupNewMinOver=UINT64_MAX;
                     }
                     veyra::log::info("capture-timing",std::format("revision={} received={} processed={} dropped={} callbackFps={:.2f} readAgeMs={:.3f} callbackToPresentReturnP95Ms={:.3f} processCpuP95Ms={:.3f} gpuReadyP95Ms={:.3f} schedulingWaitP95Ms={:.3f} presentCpuP95Ms={:.3f} gpuColorP95Ms={:.3f} gpuSrP95Ms={:.3f} gpuFlowP95Ms={:.3f} gpuNrP95Ms={:.3f} gpuResidualP95Ms={:.3f} gpuFgBatchP95Ms={:.3f} gpuBlitP95Ms={:.3f} slotWaits={} slotWaitMs={:.3f} commandSubmits={} displaySubmits={} expiredGenerated={} nr={} nvof={} generated={} historyResets={} presentationDrains={} presentationCompletedReal={} presentationSkippedGenerated={} presentationCancelledJobs={} singleGpuOwner=1 batchCapacity=2 (not HDMI-to-display latency)",options.settings.revision,captureStats.received,sourceFrames-statsSourceBase,captureStats.dropped,captureStats.callbackFps,captureStats.readAgeMs,ageP95,processTimes.p95(),liveScheduler?completed.readyP95:gpuReadyTimes.p95(),waitP95,presentP95,gpuP95(diagnostics::GpuStage::Color),gpuP95(diagnostics::GpuStage::Sr),gpuP95(diagnostics::GpuStage::Flow),gpuP95(diagnostics::GpuStage::Nr),gpuP95(diagnostics::GpuStage::Residual),gpuP95(diagnostics::GpuStage::FgBatch),gpuP95(diagnostics::GpuStage::Blit),slotWaitCount,slotWaitMilliseconds,commandSubmits,submitted,expired,graphStats.nrEvaluateCount,graphStats.nvofExecuteCount,graphStats.fgGeneratedFrames,historyResets.load(),presentationDrains.load(),presentationCompletedReal.load(),presentationSkippedGenerated.load(),presentationCancelledJobs.load()));
                     nextTimingLog=Clock::now()+std::chrono::seconds(1);

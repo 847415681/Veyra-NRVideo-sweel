@@ -56,6 +56,9 @@ public:
     // match the samples (RGB24 upside-down reports). Applies to the next
     // sample; works for RGB and YUV without touching the device.
     void setVerticalFlip(bool enabled);
+    // Content dedup: compare every sample's whole picture with the last new one and
+    // number the pictures (CaptureUploadFrame.h). Any thread; applies to the next sample.
+    void setPictureCompare(bool enabled);
     // N1 diagnostic: keep the legacy per-pixel CPU unpack (BGR0/YUY2 targets)
     // instead of the GPU unpack path. Applied on the next connect.
     void setCpuUnpack(bool enabled);
