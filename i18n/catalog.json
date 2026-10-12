@@ -15597,6 +15597,125 @@
    "zh-TW": "引擎未接受邊緣神盾，原設定保留",
    "en": "The engine did not accept Edge Aegis; previous setting kept",
    "ja": "エンジンがエッジイージスを受け付けなかったため、元の設定のままです"
+  },
+  {
+   "zh": "（不建议使用）",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "（不建議使用）",
+   "en": " (not recommended)",
+   "ja": "（非推奨）"
+  },
+  {
+   "zh": "先选择分辨率，再选择该分辨率支持的帧率和像素格式",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "先選擇解析度，再選擇該解析度支援的幀率和像素格式",
+   "en": "Choose a resolution first, then a frame rate and pixel format supported at that resolution.",
+   "ja": "先に解像度を選択し、その解像度で対応するフレームレートとピクセル形式を選択してください。"
+  },
+  {
+   "zh": "请先选择分辨率",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "請先選擇解析度",
+   "en": "Choose a resolution first",
+   "ja": "先に解像度を選択してください"
+  },
+  {
+   "zh": "请先选择分辨率和像素格式",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "請先選擇解析度和像素格式",
+   "en": "Choose a resolution and pixel format first",
+   "ja": "先に解像度とピクセル形式を選択してください"
+  },
+  {
+   "zh": "此采集卡无此格式，请重新选择分辨率、帧率和像素格式。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "此擷取卡無此格式，請重新選擇解析度、幀率和像素格式。",
+   "en": "This capture card does not offer this format. Choose a supported resolution, frame rate and pixel format.",
+   "ja": "このキャプチャカードにこの形式はありません。対応する解像度、フレームレート、ピクセル形式を選び直してください。"
+  },
+  {
+   "zh": "此采集卡无此格式：拒绝 {:.3f} FPS（0x{:08X}），请改用设备支持的帧率，或填 0 沿用所选格式。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "此擷取卡無此格式：拒絕 {:.3f} FPS（0x{:08X}），請改用裝置支援的幀率，或填 0 沿用所選格式。",
+   "en": "This capture card rejected the requested format at {:.3f} FPS (0x{:08X}). Choose a supported rate, or enter 0 to use the selected format rate.",
+   "ja": "キャプチャカードが {:.3f} FPS の指定形式を拒否しました（0x{:08X}）。対応するレートを選ぶか、0 を入力して選択形式のレートを使用してください。"
+  },
+  {
+   "zh": "此采集卡无此格式，驱动拒绝所选格式（0x{:08X}），请重新选择。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "此擷取卡無此格式，驅動拒絕所選格式（0x{:08X}），請重新選擇。",
+   "en": "This capture card rejected the selected format (0x{:08X}). Choose another supported format.",
+   "ja": "キャプチャカードのドライバーが選択形式を拒否しました（0x{:08X}）。対応する形式を選び直してください。"
+  },
+  {
+   "zh": "采集卡返回的压缩格式尺寸无效，请重新选择采集格式。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取卡回傳的壓縮格式尺寸無效，請重新選擇擷取格式。",
+   "en": "The capture card returned invalid compressed frame dimensions. Choose another capture format.",
+   "ja": "キャプチャカードが無効な圧縮フレームサイズを返しました。キャプチャ形式を選び直してください。"
+  },
+  {
+   "zh": "所选采集格式的解码器初始化失败，请选择其他格式。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "所選擷取格式的解碼器初始化失敗，請選擇其他格式。",
+   "en": "The decoder for the selected capture format could not initialize. Choose another format.",
+   "ja": "選択したキャプチャ形式のデコーダーを初期化できませんでした。別の形式を選択してください。"
+  },
+  {
+   "zh": "采集卡无法连接所选压缩格式（0x{:08X}），请重新选择。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取卡無法連接所選壓縮格式（0x{:08X}），請重新選擇。",
+   "en": "The selected compressed capture format could not connect (0x{:08X}). Choose another format.",
+   "ja": "選択した圧縮キャプチャ形式を接続できませんでした（0x{:08X}）。形式を選び直してください。"
+  },
+  {
+   "zh": "采集卡无法连接所选格式（0x{:08X}），请检查设备占用并重新选择。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取卡無法連接所選格式（0x{:08X}），請檢查裝置占用並重新選擇。",
+   "en": "The selected capture format could not connect (0x{:08X}). Check whether another app is using the device and choose the format again.",
+   "ja": "選択したキャプチャ形式を接続できませんでした（0x{:08X}）。他のアプリによるデバイス使用を確認し、形式を選び直してください。"
+  },
+  {
+   "zh": "HDR10 提示；系统或显示器可能忽略，让它的动态色调映射有依据。",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "HDR10 提示；系統或顯示器可能忽略，讓其動態色調映射有依據。",
+   "en": "HDR10 hints for dynamic tone mapping; the system or display may ignore them.",
+   "ja": "HDR10 のトーンマッピング用ヒントです。システムやディスプレイに無視される場合があります。"
+  },
+  {
+   "zh": "导出任务通信协议不匹配",
+   "src": "src/engine/ExportJobManager.cpp",
+   "zh-TW": "匯出工作通訊協定不符",
+   "en": "Export task protocol mismatch",
+   "ja": "エクスポートタスクの通信プロトコルが一致しません"
+  },
+  {
+   "zh": "导出任务的增强参数无效，请查看任务日志中的具体参数错误",
+   "src": "src/engine/ExportJobManager.cpp",
+   "zh-TW": "匯出工作的增強參數無效，請查看工作日誌中的具體參數錯誤",
+   "en": "Invalid export enhancement settings. See the task log for the parameter error.",
+   "ja": "エクスポートの補正設定が無効です。パラメーターエラーはタスクログで確認してください。"
+  },
+  {
+   "zh": "导出任务的路径、剪辑、封装或轨道参数无效",
+   "src": "src/engine/ExportJobManager.cpp",
+   "zh-TW": "匯出工作的路徑、剪輯、封裝或軌道參數無效",
+   "en": "Invalid export path, trim, container or track settings",
+   "ja": "エクスポートのパス、トリミング、コンテナ、トラック設定が無効です"
+  },
+  {
+   "zh": "导出任务的效果链与冻结参数不一致",
+   "src": "src/engine/ExportJobManager.cpp",
+   "zh-TW": "匯出工作的效果鏈與凍結參數不一致",
+   "en": "The export effect chain does not match the frozen settings",
+   "ja": "エクスポートのエフェクトチェーンが確定した設定と一致しません"
+  },
+  {
+   "zh": "{} {}X 补帧初始化失败，未替换后端或降低倍率；请查看任务诊断日志",
+   "src": "src/engine/ExportJobManager.cpp",
+   "zh-TW": "{} {}X 補幀初始化失敗，未替換後端或降低倍率；請查看工作診斷日誌",
+   "en": "{} {}X frame generation could not initialize. The backend and multiplier were retained; see the task diagnostic log.",
+   "ja": "{} {}X フレーム生成を初期化できませんでした。バックエンドと倍率は維持されています。タスク診断ログを確認してください。"
   }
  ]
 }

@@ -76,7 +76,7 @@ int main(){
     check(pixels[0].label.find(L"[format 0]")!=std::wstring::npos&&pixels[2].label.find(L"[format 5]")!=std::wstring::npos,"duplicate pixel names stay selectable");
     check(pixels[1].label==L"YUY2","unique pixel name is not decorated");
     const auto* to4k=retargetCaptureFormat(listed,p60,CaptureFormatAxis::Resolution,L"3840x2160");
-    check(to4k==&listed[4],"resolution change falls back to a real 4k media type");
+    check(!to4k,"missing 4k NV12 never silently switches to YUY2");
     const auto* keepNv12=retargetCaptureFormat(listed,p60,CaptureFormatAxis::FrameRate,captureFrameRateId(listed[2]));
     check(keepNv12==&listed[2],"frame-rate change keeps NV12 instead of another pixel at that rate");
     const auto* toInterlace=retargetCaptureFormat(listed,p60,CaptureFormatAxis::FrameRate,captureFrameRateId(listed[3]));
@@ -88,6 +88,24 @@ int main(){
     check(keptPixel==&listed[4],"resolution change keeps YUY2 when that pixel exists at the new size");
     const auto interlacedPixels=capturePixelOptions(listed,&listed[3]);
     check(interlacedPixels.size()==1&&interlacedPixels[0].id==L"1080i60-nv12","interlaced rate does not offer the progressive NV12 row");
+    {
+        const auto resolution=captureResolutionId(*p60),rate=captureFrameRateId(*p60);
+        check(!captureResolutionSample(listed,L""),"blank resolution cannot populate dependent menus");
+        check(!captureRateSample(listed,L"",rate)&&!captureRateSample(listed,resolution,L""),"rate requires a selected resolution and rate");
+        check(!selectCapturePixelFormat(listed,L"",rate,p60->key),"pixel cannot be selected before resolution");
+        check(!selectCapturePixelFormat(listed,resolution,L"",p60->key),"pixel cannot be selected before rate");
+        check(selectCapturePixelFormat(listed,resolution,rate,p60->key)==p60,"exact advertised combination accepted");
+        check(!selectCapturePixelFormat(listed,L"3840x2160",rate,p60->key),"stale 1080p pixel key cannot open at 4k");
+        check(!selectCapturePixelFormat(listed,resolution,captureFrameRateId(listed[2]),p60->key),"stale 60fps key cannot open at 30fps");
+        check(!selectCapturePixelFormat(listed,resolution,rate,L"not-advertised"),"unknown pixel key rejected without fallback");
+        for(auto pixel:{L"MJPEG",L"MJPG",L"mjpeg",L"mJpG"}){
+            auto jpeg=media(50,1920,1080,60,L"jpeg",pixel,false,L"逐行");
+            const std::array warningFormats{*p60,jpeg};
+            const auto choices=capturePixelOptions(warningFormats,p60);
+            check(choices.size()==2&&!choices[0].discouraged&&choices[1].discouraged,"only MJPEG/MJPG receives warning, regardless of case");
+            check(!choices[1].disabled,"MJPEG remains selectable with a warning");
+        }
+    }
     {
         RateDriver driver;driver.intervals={166667,333667,417083,100000,0,-1,333667};
         HRESULT hr=E_FAIL;auto* pin=reinterpret_cast<IPin*>(uintptr_t(1));
@@ -101,11 +119,12 @@ int main(){
     {
         auto unusual=media(25,1448,1086,47.952,L"unusual",L"CUSTOM",false,L"逐行");
         auto huge=media(30,7680,4320,120,L"8k",L"P010",false,L"逐行");huge.supported=false;
-        CaptureFormat automatic;automatic.key=L"decklink:auto";automatic.automatic=true;automatic.pixel=L"自动选择像素格式";
+        CaptureFormat automatic;automatic.index=-1;automatic.key=L"decklink:auto";automatic.automatic=true;automatic.pixel=L"自动选择像素格式";
         std::vector<CaptureFormat> all{automatic,unusual,huge,unusual};
         const auto sizes=captureResolutionOptions(all);
         check(sizes.size()==3&&sizes[0].id==L"auto"&&sizes[0].label.find(L"0")==std::wstring::npos&&sizes[1].id==L"1448x1086"&&sizes[2].id==L"7680x4320","automatic, nonstandard and oversized device modes all visible");
         check(captureFrameRateOptions(all,&all[0])[0].label==L"跟随实际信号","DeckLink automatic rate never displayed as zero fps");
+        check(!selectCapturePixelFormat(all,L"auto",L"auto",L""),"blank pixel key cannot select DeckLink automatic ordinal -1");
         check(capturePixelOptions(all,&all[1]).size()==1,"identical media keys are not duplicated");
         const auto unsupported=capturePixelOptions(all,&all[2]);
         check(unsupported.size()==1&&unsupported[0].disabled&&unsupported[0].label.find(L"不支持")!=std::wstring::npos,"unsupported driver format remains visible with explicit limit");

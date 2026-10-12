@@ -883,7 +883,7 @@ bool CaptureCardSource::configureDeckLink(const SourceOpenDesc& desc){
     auto& p=*p_;CaptureSelection selection;if(!parseCapturePath(desc.path,selection))return false;
     const auto formats=formatsByPath(selection.videoPath);
     const auto* selected=selectCaptureFormat(formats,selection.format,selection.formatKey);
-    if(!selected){error_=L"保存的 BMD 制式已不可用，请刷新并重新选择";return false;}
+    if(!selected){error_=L"此采集卡无此格式，请重新选择分辨率、帧率和像素格式。";return false;}
     p.decklink=std::make_unique<decklink::Capture>();
     if(!p.decklink->configure(selection.videoPath,selected->key,selection.audio==kCaptureAudioFromVideoDevice)){
         error_=p.decklink->error();p.decklink.reset();return false;
@@ -937,7 +937,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
     ComPtr<IPin> formatPin;p.builder->FindPin(p.device.Get(),PINDIR_OUTPUT,&PIN_CATEGORY_CAPTURE,&MEDIATYPE_Video,FALSE,0,&formatPin);
     const auto available=enumerateFormats(p.config.Get(),false,p.device.Get(),formatPin.Get());
     const auto* chosen=selectCaptureFormat(available,format,selection.formatKey);
-    if(!selection.formatKey.empty()&&!chosen){error_=L"保存的采集格式已不可用，请重新选择分辨率、帧率和像素格式。";return false;}
+    if(!chosen){error_=L"此采集卡无此格式，请重新选择分辨率、帧率和像素格式。";return false;}
     if(chosen)format=chosen->index;
     if(chosen&&!chosen->supported){error_=L"设备提供此格式，但当前播放器不支持其尺寸或像素布局，请选择其他格式";return false;}
     // Capture the advertised identity before SetFormat: some drivers mutate
@@ -967,7 +967,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
     configureAverToneMap(p.device.Get(),devicePath,native->subtype.Data1==MAKEFOURCC('P','0','1','0')||native->subtype.Data1==MAKEFOURCC('P','0','1','6'));
     log::info("capture-device",std::format("path={} selectedFormat={} requestedFps={} nativeSubtype=0x{:X}",narrowForLog(devicePath),format,expectedFps,native->subtype.Data1));
     HRESULT hr=p.config->SetFormat(native);const GUID requestedSubtype=native->subtype;
-    log::info("capture",std::format("SetFormat device={} nativeIndex={} subtype=0x{:08X} hr=0x{:08X}",index,format,native->subtype.Data1,uint32_t(hr)));freeType(native);if(FAILED(hr)){if(selection.requestedFps>0)error_=std::format(L"采集卡拒绝 {:.3f} FPS（0x{:08X}）；请改用设备支持的帧率，或填 0 恢复默认。",selection.requestedFps,uint32_t(hr));return false;}
+    log::info("capture",std::format("SetFormat device={} nativeIndex={} subtype=0x{:08X} hr=0x{:08X}",index,format,native->subtype.Data1,uint32_t(hr)));freeType(native);if(FAILED(hr)){error_=selection.requestedFps>0?std::format(L"此采集卡无此格式：拒绝 {:.3f} FPS（0x{:08X}），请改用设备支持的帧率，或填 0 沿用所选格式。",selection.requestedFps,uint32_t(hr)):std::format(L"此采集卡无此格式，驱动拒绝所选格式（0x{:08X}），请重新选择。",uint32_t(hr));return false;}
     // Read the driver-negotiated type back. Native YUY2/NV12/RGB32 connects
     // directly to our terminal filter: no intelligent-connect converter.
     native=nullptr;hr=p.config->GetFormat(&native);if(FAILED(hr)||!native){freeType(native);return false;}
@@ -1006,7 +1006,8 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
     unsigned compressedWidth=0,compressedHeight=0;int64_t compressedDuration=0;
     // MPEG chain: every compressed subtype (MJPEG/H.264/HEVC/AV1/VP9) now
     // bypasses the system decoder stack; our own backend decodes it. Any
-    // failure below falls back to the RGB32 compatibility path.
+    // failure below is explicit; a selected compressed format must never
+    // silently open another format or an intelligent-connect RGB converter.
     const bool compressedPath=!direct&&!nativeSupported&&codec!=CaptureCodec::None&&!desc.legacyCaptureRgbForDiagnostic;
     if(compressedPath){p.compressedPath=true;p.codec=codec;}
     AM_MEDIA_TYPE connected{};
@@ -1021,13 +1022,14 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
         if(SUCCEEDED(hr)){
             if(connected.formattype==FORMAT_VideoInfo2&&connected.cbFormat>=sizeof(VIDEOINFOHEADER2)){const auto& v=*reinterpret_cast<const VIDEOINFOHEADER2*>(connected.pbFormat);compressedWidth=unsigned(v.bmiHeader.biWidth);compressedHeight=unsigned(std::abs(int64_t(v.bmiHeader.biHeight)));compressedDuration=int64_t(v.AvgTimePerFrame);}
             else if(connected.formattype==FORMAT_VideoInfo&&connected.cbFormat>=sizeof(VIDEOINFOHEADER)){const auto& v=*reinterpret_cast<const VIDEOINFOHEADER*>(connected.pbFormat);compressedWidth=unsigned(v.bmiHeader.biWidth);compressedHeight=unsigned(std::abs(int64_t(v.bmiHeader.biHeight)));compressedDuration=int64_t(v.AvgTimePerFrame);}
-            if(!compressedWidth||!compressedHeight||compressedWidth%2||compressedHeight%2){log::warn("capture-decode","compressed dimensions unusable; falling back to the RGB32 compatibility path");hr=VFW_E_INVALIDMEDIATYPE;}
+            if(!compressedWidth||!compressedHeight||compressedWidth%2||compressedHeight%2){log::error("capture-decode","compressed dimensions unusable; refusing implicit RGB conversion");error_=L"采集卡返回的压缩格式尺寸无效，请重新选择采集格式。";hr=VFW_E_INVALIDMEDIATYPE;}
         }
         if(SUCCEEDED(hr)){
             const auto extradata=captureCompressedExtradata(*native,codec);
             if(!p.compressedDecoder.open(codec,compressedWidth,compressedHeight,extradata.data(),extradata.size(),
                 static_cast<ID3D12Device*>(desc.d3d12Device),static_cast<ID3D12CommandQueue*>(desc.d3d12Queue))){
-                log::warn("capture-decode",std::format("no usable decoder for codec={}; falling back to the RGB32 compatibility path",captureCodecKey(codec)));
+                log::error("capture-decode",std::format("no usable decoder for codec={}; refusing implicit RGB conversion",captureCodecKey(codec)));
+                error_=L"所选采集格式的解码器初始化失败，请选择其他格式。";
                 hr=VFW_E_INVALIDMEDIATYPE;
             }else{
                 // Keep the shared device/queue alive for the decode worker.
@@ -1036,7 +1038,10 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
             }
         }
         log::info("capture-decode",std::format("compressed ConnectDirect codec={} subtype=0x{:08X} size={}x{} hr=0x{:08X}",captureCodecKey(codec),native->subtype.Data1,compressedWidth,compressedHeight,uint32_t(hr)));
-        if(FAILED(hr)){log::warn("capture-decode","compressed direct connect failed; retrying the RGB32 compatibility path");SourceOpenDesc retry=desc;retry.legacyCaptureRgbForDiagnostic=true;return configure(retry);}
+        if(FAILED(hr)){
+            if(error_.empty())error_=std::format(L"采集卡无法连接所选压缩格式（0x{:08X}），请重新选择。",uint32_t(hr));
+            freeType(native);freeType(&connected,false);return false;
+        }
     }else if(direct){
         // N4: suggest the video-pin allocator size before ConnectDirect. The
         // suggestion is advisory; a refusal keeps the driver's defaults and is
@@ -1106,7 +1111,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
     }else{
         freeType(native);layoutValid=SUCCEEDED(hr)&&captureMediaLayout(connected,p.layout);freeType(&connected,false);
     }
-    if(!layoutValid){log::error("capture",std::format("unsupported negotiated layout/connect failure hr=0x{:08X}",uint32_t(hr)));return false;}
+    if(!layoutValid){log::error("capture",std::format("unsupported negotiated layout/connect failure hr=0x{:08X}",uint32_t(hr)));if(error_.empty())error_=std::format(L"采集卡无法连接所选格式（0x{:08X}），请检查设备占用并重新选择。",uint32_t(hr));return false;}
     if(p.cpuUnpack&&captureLegacyCpuLayout(p.layout))log::warn("capture-unpack",std::format("legacy CPU unpack path active packing={} format={} (per-pixel conversion stays on the callback thread)",int(p.layout.packing),int(p.layout.format)));
     const unsigned colorOverride=selection.colorOverride;
     log::info("capture-color",std::format("driver controlFlags=0x{:08X} colorInfoPresent={} transfer={} matrix={} primaries={} chroma={} override={}",p.layout.colorControlFlags,bool(p.layout.colorControlFlags&AMCONTROL_COLORINFO_PRESENT),int(p.layout.color.transfer),int(p.layout.color.matrix),int(p.layout.color.primaries),int(p.layout.color.chromaLocation),colorOverride));

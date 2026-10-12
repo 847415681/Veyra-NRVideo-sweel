@@ -9,6 +9,11 @@ Item {
     width: 900; height: 600
     Item { id: anchor; x: root.width - 24; y: root.height - 24; width: 1; height: 1 }
     VMenu { id: menu; title: "Long context menu" }
+    VSelect {
+        id: warningSelect; x: 12; y: 220; width: 250
+        value: "MJPEG（不建议使用）"
+        options: [{id:"nv12",label:"NV12"},{id:"jpeg",label:"MJPEG（不建议使用）",danger:true}]
+    }
     VRow {
         id: row; x: 12; y: 12; width: 285
         label: "The capture device's actual supported pixel format"
@@ -24,6 +29,19 @@ Item {
         name: "MenuAndRowLayout"
         when: windowShown
         function cleanup() { menu.close() }
+        function test_mjpeg_warning() {
+            compare(warningSelect.valueColor,Theme.err)
+            warningSelect.value="NV12"
+            compare(warningSelect.valueColor,Theme.t1)
+            warningSelect.value="MJPEG（不建议使用）"
+            menu.items=warningSelect.options
+            menu.openAt(warningSelect,"at");tryCompare(menu,"opened",true)
+            const items=labels(menu.contentItem,[])
+            compare(items.length,2)
+            compare(items[0].color,Theme.t1)
+            compare(items[1].color,Theme.err)
+            verify(!items[1].truncated)
+        }
         function test_text_data() {
             return [{tag:"English",label:"Duplicate the selected enhancement node and reconnect its downstream output",width:900},
                     {tag:"Chinese",label:"3840 × 2160 @ 59.94 fps · P010 · 原生格式 · HDR · 低延迟 · 驱动默认输入",width:900},

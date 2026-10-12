@@ -9284,3 +9284,7 @@ audit.py核对测试/GUI/所有app原件、两份旧final、旧JSON和源码bund
 ## 2026-10-12 2.0.7 本地整合测试包开工
 
 用户授权 main 合并与测试包。开工 main a167831，66旧树/509脏文件独立快照、增量 bundle verify；隔离 codex/test-2.0.7-20261012 合入 d883216 与 e46bbdf。三处冲突为 AGENTS/WORKLOG/catalog，保留双方记录和主线翻译，增加四条 Edge Aegis 翻译。其余旧分支以祖先/最终差异审核，不恢复旧实验。计划 docs/TEST_2.0.7_PLAN_2026-10-12.md；构建/验收尚未完成，不把来源分支通过冒充组合通过。实际产物 E:/项目/Veyra 的本轮 archives/build/tests/logs/tmp/reports/test-packages。
+
+### 2026-10-12 2.0.7 构建前采集格式追加修复（待本轮回归）
+- 用户追加先选分辨率、MJPEG 红色警示、不支持的格式不得自动路由。新增草稿两轴和严格像素 key 校验、联动选择禁用、无效格式错误通知；更改分辨率/帧率需重新确认像素格式。有效历史完整配置继续恢复，部分草稿存现有 JSON，不升级二进制配置。移除压缩格式连接/解码失败的隐式 RGB 重试，保留显式诊断开关；没有改采集缓冲、逐帧传输或 UI 刷新频率。
+- 首轮完整配置暴露最新 FFmpeg staging 无 import LIB，按对应 DEF 在 E 盘构建目录生成；DLL 未改。随后完整编译在 capture_format_selection_tests 缺 MSVC /utf-8 失败（中文源被按本机代码页解析），给该目标明确 /utf-8。失败证据 logs/test-2.0.7-20261012/build-20261012-163711、build-20261012-163842 保留；尚未宣称通过。
