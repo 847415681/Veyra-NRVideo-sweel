@@ -1,6 +1,6 @@
 # Veyra 项目 Agent 执行规则
 
-> **2026-10-12 补帧人物边缘果冻 J0（Claude）**：用户要求先排查果冻（延迟暂缓），按 reports/jelly-latency-20261012/方案选项.md 先做 J0 判定，只测 DLSS（XeSS 在送显端无法直接读回）。存档 `checkpoint/pre-claude-jelly-20261012`（main 76f41b3）与 E 盘 `archives/claude-jelly-20261012`；分支 `claude/jelly-20261012` 只新增诊断测试 `veyra_fg_motion_boundary_tests` 及文档，不改产品、默认设置、运行库/模型/驱动/用户配置；无 merge/push/Release。结论见 docs/JELLY_J0_2026-10-12.md。
+> **2026-10-12 补帧人物边缘果冻 J0（Claude）**：用户要求先排查果冻（延迟暂缓），按 reports/jelly-latency-20261012/方案选项.md 先做 J0 判定，先测 DLSS/FSR，随后按用户“主要是XESS”补测 XeSS（SDK 只显示插值帧加桌面复制抓屏）。存档 `checkpoint/pre-claude-jelly-20261012`（main 76f41b3）与 E 盘 `archives/claude-jelly-20261012`；分支 `claude/jelly-20261012` 新增诊断测试 `veyra_fg_motion_boundary_tests`、`veyra_fg_xess_boundary_tests` 及文档；产品代码只加默认不生效的测试开关（XeSS 只显示插值帧、fgMotionProbe 进 XeSS 链路、NVOF 网格），不改默认行为、运行库/模型/驱动/用户配置；无 merge/push/Release。结论见 docs/JELLY_J0_2026-10-12.md。
 
 > **2026-10-11 当前修复已合入本地main**：Codex4557ab6（含e8300d9）与Claude1d4c33f经隔离整合、42依赖闭包/13EXE构建、完整CMake、16组回归、12真实GUI状态/6布局及SR+VFG组合持久化/重启通过；实测产品4904b73、记录tip adcf509通过功能merge d2e1396进入main，完整Git树相同。VFG默认中档、DLSS K、33ms统计/250ms状态及负优化撤回保持。59开工树中唯main按授权更新，其余58树/504脏文件、来源分支及原包1626文件保持；final.json见reports/merge-current-fixes-20261011。首次组合GUI夹具漏FG节点失败，修夹具后通过，原证据保留；没有新的性能A/B或全硬件/长期显存通过声明。无push/打包/Release/关机。
 

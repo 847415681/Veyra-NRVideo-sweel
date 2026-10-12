@@ -664,6 +664,8 @@ bool EnhanceGraph::createResources()
     }
     nrZeroMotion_ = makeTexture(context_.device(), workW_, workH_, DXGI_FORMAT_R16G16_FLOAT, false);
     nrZeroDepth_ = makeTexture(context_.device(), workW_, workH_, DXGI_FORMAT_R32_FLOAT, false);
+    // Test-only grid override for flow-quality experiments (1/2/4 per the caps list).
+    nvofGrid_=4;if(wchar_t grid[4]{};GetEnvironmentVariableW(L"VEYRA_TEST_NVOF_GRID",grid,4)){const unsigned g=unsigned(_wtoi(grid));if(g==1||g==2||g==4)nvofGrid_=g;}
     rawW_ = (nvofW_ + nvofGrid_ - 1) / nvofGrid_;
     rawH_ = (nvofH_ + nvofGrid_ - 1) / nvofGrid_;
     nvofRawTex_ = makeTexture(context_.device(), rawW_, rawH_, DXGI_FORMAT_R16G16_SINT, false);
@@ -832,7 +834,7 @@ bool EnhanceGraph::initNvof()
     nd.width = nvofW_; nd.height = nvofH_;
     nd.inFence = context_.fence();
     nd.outFence = nvofOutFence_.Get();
-    nd.gridSize = 4;nd.quality=uint32_t(desc_.flowQuality);
+    nd.gridSize = nvofGrid_;nd.quality=uint32_t(desc_.flowQuality);
     // s6 contract: B8G8R8A8 inputs, raw R16G16_SINT + R8_UINT cost at grid
     // extent, passed explicitly; allocation failure = fail closed.
     Status st = Status::Ok;
@@ -2819,7 +2821,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
 
     }
     if(presentSinkFg()){
-        auto* input=desc_.fgUsesFlow()&&haveFlow&&!reset?baseFlow_.Get():nrZeroMotion_.Get();
+        // Test-only: fgMotionProbe (never set by the product) also feeds the XeSS
+        // present path, held in COMMON, same current->previous pixel convention.
+        auto* input=desc_.fgMotionProbe&&!reset?desc_.fgMotionProbe:desc_.fgUsesFlow()&&haveFlow&&!reset?baseFlow_.Get():nrZeroMotion_.Get();
         tracker_.transition(list,input,D3D12_RESOURCE_STATE_COPY_SOURCE);
         tracker_.transition(list,presentMotion_[parity].Get(),D3D12_RESOURCE_STATE_COPY_DEST);
         list->CopyResource(presentMotion_[parity].Get(),input);
@@ -2827,7 +2831,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         tracker_.transition(list,presentMotion_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
         // Zero guidance still has valid source history. Marking it invalid
         // would reset XeSS on every frame and suppress interpolation.
-        presentMotionValid_[parity]=(desc_.fgUsesFlow()?haveFlow:prevValid_)&&!reset;
+        presentMotionValid_[parity]=(desc_.fgUsesFlow()&&!desc_.fgMotionProbe?haveFlow:prevValid_)&&!reset;
         motionPreviousSource_[parity]=previousSource_;
     }
     previousSource_=sourceFrameId;
