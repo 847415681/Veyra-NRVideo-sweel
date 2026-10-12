@@ -51,7 +51,10 @@ extern "C" {
 using namespace veyra;
 using Microsoft::WRL::ComPtr;
 namespace {
-constexpr int W=2560,H=1440,FlowW=1280,FlowH=720,N=16,Warmup=4,Band=40,X0=480,CW=1600;
+constexpr int W=2560,H=1440,FlowW=1280,FlowH=720,Band=40,X0=480,CW=1600;
+// FidelityFX optical flow (VEYRA_TEST_FLOW_BACKEND=amd) zeroes its first frames while it
+// warms up: run longer and score only after it.
+int N=16,Warmup=4;
 
 float hash01(int x,int y,uint32_t seed){
     uint32_t v=uint32_t(x)*0x9e3779b9u^uint32_t(y)*0x85ebca6bu^seed*0xc2b2ae35u;
@@ -204,6 +207,7 @@ int wmain(int argc,wchar_t** argv){
     if(!window)return 2;ShowWindow(window,SW_SHOW);SetForegroundWindow(window);UpdateWindow(window);
     auto pump=[]{MSG m;while(PeekMessageW(&m,nullptr,0,0,PM_REMOVE)){TranslateMessage(&m);DispatchMessageW(&m);}};
     pump();
+    if(wchar_t b[8]{};GetEnvironmentVariableW(L"VEYRA_TEST_FLOW_BACKEND",b,8)&&std::wstring(b)==L"amd"){N=22;Warmup=10;}
     const Scene scene=makeScene(run,speed,bars);
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status st=Status::Ok;gfx::DeviceContextDesc dd;dd.enableDebugLayer=true;
     if(!ctx.initialize(dd,st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),6,st))return 2;

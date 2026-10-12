@@ -131,6 +131,9 @@ struct EnhanceGraphDesc {
     engine::FlowQuality flowQuality=engine::FlowQuality::Balanced;
     engine::OpticalFlowBackend opticalFlowBackend=engine::OpticalFlowBackend::Nvidia;
     bool amdFlowHalfResolution=false;
+    // XeSS motion refinement with the optical-flow source (UI "边缘神盾"): FlowRefine/
+    // FlowFill plus NVOF forward-backward or FidelityFX FlowClaim. Off: validated flow.
+    bool fgMotionRefine=true;
     engine::ContentRate contentRate=engine::ContentRate::Transport;
     engine::NrSettings model;
     engine::ResidualSettings residual;
@@ -704,9 +707,10 @@ private:
     uint32_t nrLayerCount_=1;
     ComPtr<ID3D12Resource> presentMotion_[2];
     bool presentMotionValid_[2]={};
-    // XeSS present-path motion with the optical-flow source: per-pixel refined NVOF
-    // vectors with disocclusion fill (FlowRefine/FlowFill), never zeroed. NR/SR keep
-    // the validated baseFlow_. VEYRA_TEST_FLOW_REFINE=0 restores the previous input.
+    // XeSS present-path motion with the optical-flow source: per-pixel refined NVOF or
+    // FidelityFX vectors with disocclusion fill (FlowRefine/FlowFill), never zeroed. NR/SR
+    // keep the validated baseFlow_. desc.fgMotionRefine=false (or VEYRA_TEST_FLOW_REFINE=0)
+    // restores the previous input.
     bool flowRefine_=false;
     ComPtr<ID3D12Resource> fgFlowRefined_,fgFlowFilled_,fgBaseFlow_;
     // NVOF backward output (previous->current) for the refinement's forward-backward check
@@ -714,6 +718,10 @@ private:
     // NVOF forward-only (photometric refinement). NR/SR never read it.
     bool flowConsistency_=false;
     ComPtr<ID3D12Resource> nvofReverseTex_,nvofReverseCostTex_;
+    // FidelityFX flow has no backward output: FlowClaim's previous-frame claims stand in
+    // for the forward-backward check (same VEYRA_TEST_FLOW_CONSISTENCY switch).
+    bool flowClaims_=false;
+    ComPtr<ID3D12Resource> fgFlowClaims_,fgFlowAgreement_;
     uint64_t motionPreviousSource_[2]={},previousSource_=0;
     ComPtr<ID3D12Resource> proxyTex_;
     ComPtr<ID3D12Resource> neuralTex_;
@@ -739,7 +747,7 @@ private:
     float toneMapPeakNits_=0; // latched per graph/source; never varies with frame brightness
     ComputePass rgbPass_,hdrVideoSrPass_;
     ComputePass downsamplePass_,residualPass_,stackProtectionPass_,flowAdaptPass_;
-    ComputePass flowRefinePass_,flowFillPass_,fgFlowAdaptPass_;
+    ComputePass flowRefinePass_,flowFillPass_,fgFlowAdaptPass_,flowClaimPass_;
     // Stage-5 output stabiliser (anti-flicker). Constructed only when the
     // setting is non-zero; a default (0) session never allocates it and the
     // dispatch is skipped, so the disabled path is unchanged.

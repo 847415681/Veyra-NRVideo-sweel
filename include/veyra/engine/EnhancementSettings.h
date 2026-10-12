@@ -347,6 +347,9 @@ struct EnhancementSettings {
     FlowQuality flow=FlowQuality::Balanced;
     OpticalFlowBackend opticalFlowBackend=OpticalFlowBackend::Nvidia;
     bool amdFlowHalfResolution=false;
+    // UI "边缘神盾": refined optical-flow motion for XeSS frame generation (edge refinement
+    // and the uncovered-background fill). A global control kept in shell preferences.
+    bool fgMotionRefine=true;
     ContentRate content=ContentRate::Transport;
     AudioSyncMode audioSync=AudioSyncMode::Automatic;
     int32_t audioOffsetMs=0;
@@ -398,6 +401,9 @@ struct EnhancementSettings {
             (sr&&(videoSrQuality==0||videoSrQuality==kVideoSrFsr)&&motionUsesFlow(srMotion))||
             (multiplier>1&&motionUsesFlow(fgMotion,frameGenerationBackend));
         if(!flowUsed){active.flow=defaults.flow;active.opticalFlowBackend=defaults.opticalFlowBackend;active.amdFlowHalfResolution=defaults.amdFlowHalfResolution;}
+        // Only XeSS frame generation with optical-flow motion reads the refined vectors.
+        if(!(multiplier>1&&frameGenerationBackend==FrameGenerationBackend::XeSS&&motionUsesFlow(fgMotion,frameGenerationBackend)))
+            active.fgMotionRefine=defaults.fgMotionRefine;
         return active;
     }
     bool sameActiveVideoParameters(const EnhancementSettings& other) const {

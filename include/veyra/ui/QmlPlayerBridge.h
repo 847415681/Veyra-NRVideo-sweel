@@ -322,6 +322,8 @@ class QmlPlayerBridge : public QObject {
     // AMD half-resolution flow, content cadence (engine::ContentRate order).
     Q_PROPERTY(int flowQuality READ flowQuality WRITE setFlowQuality NOTIFY settingsChanged)
     Q_PROPERTY(bool amdFlowHalf READ amdFlowHalf WRITE setAmdFlowHalf NOTIFY settingsChanged)
+    // 边缘神盾: refined optical-flow motion for XeSS (EnhancementSettings::fgMotionRefine).
+    Q_PROPERTY(bool edgeAegis READ edgeAegis WRITE setEdgeAegis NOTIFY settingsChanged)
     Q_PROPERTY(int contentRate READ contentRate WRITE setContentRate NOTIFY settingsChanged)
     Q_PROPERTY(int hdrOutputMode READ hdrOutputMode WRITE setHdrOutputMode NOTIFY settingsChanged)
     Q_PROPERTY(int fgMotionSource READ fgMotionSource WRITE setFgMotionSource NOTIFY settingsChanged)
@@ -837,6 +839,8 @@ public:
     void setFlowQuality(int value);
     bool amdFlowHalf() const;
     void setAmdFlowHalf(bool value);
+    bool edgeAegis() const;
+    void setEdgeAegis(bool value);
     int contentRate() const;
     void setContentRate(int value);
     int displaySync() const;

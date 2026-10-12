@@ -457,10 +457,13 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     if(desc_.opticalFlowBackend==engine::OpticalFlowBackend::AmdFidelityFx&&desc.amdFlowHalfResolution){nvofW_=std::max(1u,nvofW_/2);nvofH_=std::max(1u,nvofH_/2);}
     wchar_t refine[4]{};
     const bool refineDisabled=GetEnvironmentVariableW(L"VEYRA_TEST_FLOW_REFINE",refine,4)&&refine[0]==L'0';
-    flowRefine_=presentSinkFg()&&desc_.fgUsesFlow()&&
-        desc_.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia&&!refineDisabled;
+    const bool nvidiaFlow=desc_.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia,
+        fidelityFlow=desc_.opticalFlowBackend==engine::OpticalFlowBackend::AmdFidelityFx;
+    flowRefine_=presentSinkFg()&&desc_.fgUsesFlow()&&desc_.fgMotionRefine&&(nvidiaFlow||fidelityFlow)&&!refineDisabled;
     wchar_t consistency[4]{};
-    flowConsistency_=flowRefine_&&!(GetEnvironmentVariableW(L"VEYRA_TEST_FLOW_CONSISTENCY",consistency,4)&&consistency[0]==L'0');
+    const bool occlusionCheck=flowRefine_&&!(GetEnvironmentVariableW(L"VEYRA_TEST_FLOW_CONSISTENCY",consistency,4)&&consistency[0]==L'0');
+    flowConsistency_=occlusionCheck&&nvidiaFlow;
+    flowClaims_=occlusionCheck&&fidelityFlow;
     uint64_t budget=0,usage=0;
     // Every NR layer allocates its own full set of textures, and a stabilised
     // layer adds two history/guide pairs on top. The stack is bounded (16 nodes),
@@ -487,7 +490,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     const uint64_t estimate=uint64_t(workW_)*workH_*(76u+4u*generatedTextures)+vfgSharedBytes
         +nrTextureBytes+fullLayerBytes
         +uint64_t(srcW_)*srcH_*(32u+(desc_.protectionBeforeSr()?8u:0u))+temporalBytes+tailColorBytes+interProtectionBytes
-        +(flowRefine_?uint64_t(nvofW_)*nvofH_*(flowConsistency_?13u:12u)+uint64_t(workW_)*workH_*4u:0);
+        +(flowRefine_?uint64_t(nvofW_)*nvofH_*(flowConsistency_?13u:flowClaims_?18u:12u)+uint64_t(workW_)*workH_*4u:0);
     if(context_.videoMemoryInfo(budget,usage)){
         veyra::log::info("memory",std::format("graph lower-bound={}MiB budget={}MiB usage={}MiB; SDK allocations additional",estimate>>20,budget>>20,usage>>20));
         if(usage>=budget||estimate>budget-usage){veyra::log::error("memory","insufficient adapter budget for requested graph textures");return false;}
@@ -609,15 +612,22 @@ bool EnhanceGraph::createResources()
     baseFlow_=makeTexture(context_.device(),workW_,workH_,DXGI_FORMAT_R16G16_FLOAT,true);
     if(presentSinkFg())for(auto& motion:presentMotion_){motion=makeTexture(context_.device(),workW_,workH_,DXGI_FORMAT_R16G16_FLOAT,false);if(!motion)return false;}
     if(!residualRgba_||!nrFlow_||!baseFlow_)return false;
-    // XeSS with the optical-flow source: refined NVOF vectors (FlowRefine/FlowFill).
-    // NVOF only - the refinement reads NVOF's grid vectors.
+    // XeSS with the optical-flow source: refined NVOF or FidelityFX vectors (FlowRefine/
+    // FlowFill) - the refinement reads their grid vectors.
     if(flowRefine_){
         fgFlowRefined_=makeTexture(context_.device(),nvofW_,nvofH_,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
         fgFlowFilled_=makeTexture(context_.device(),nvofW_,nvofH_,DXGI_FORMAT_R16G16_FLOAT,true);
         fgBaseFlow_=makeTexture(context_.device(),workW_,workH_,DXGI_FORMAT_R16G16_FLOAT,true);
         if(!fgFlowRefined_||!fgFlowFilled_||!fgBaseFlow_)return false;
+        if(flowClaims_){
+            fgFlowClaims_=makeTexture(context_.device(),nvofW_,nvofH_,DXGI_FORMAT_R32_UINT,true);
+            fgFlowAgreement_=makeTexture(context_.device(),nvofW_,nvofH_,DXGI_FORMAT_R16_FLOAT,true);
+            if(!fgFlowClaims_||!fgFlowAgreement_)return false;
+        }
     }
-    if(presentSinkFg())veyra::log::info("graph",std::format("present-sink FG motion: {}",!desc_.fgUsesFlow()?"zero":flowConsistency_?"refined NVOF (FlowRefine+FlowFill, forward-backward)":flowRefine_?"refined NVOF (FlowRefine+FlowFill)":"validated flow"));
+    if(presentSinkFg())veyra::log::info("graph",std::format("present-sink FG motion: {}",!desc_.fgUsesFlow()?"zero":flowConsistency_?"refined NVOF (FlowRefine+FlowFill, forward-backward)":
+        flowClaims_?"refined FidelityFX (FlowRefine+FlowClaim+FlowFill)":!flowRefine_?"validated flow":
+        desc_.opticalFlowBackend==engine::OpticalFlowBackend::AmdFidelityFx?"refined FidelityFX (FlowRefine+FlowFill)":"refined NVOF (FlowRefine+FlowFill)"));
     // Colour grade tables (v4): only allocated when the stage is enabled.
     colorActive_=desc_.color.enabled&&!desc_.nodeColor(0);
     if(colorActive_){
@@ -1541,8 +1551,9 @@ bool EnhanceGraph::createComputePasses()
     if(!flowAdaptPass_.loadShader("FlowAdapt.dxil",cs)||!flowAdaptPass_.create(context_.device(),cs,3+UINT(nrInstances_.size()),1,1))return false;
     if(flowRefine_){
         if(!fgFlowAdaptPass_.create(context_.device(),cs,2,1,1))return false;
-        if(!flowRefinePass_.loadShader("FlowRefine.dxil",cs)||!flowRefinePass_.create(context_.device(),cs,5,4,1))return false;
-        if(!flowFillPass_.loadShader("FlowFill.dxil",cs)||!flowFillPass_.create(context_.device(),cs,3,2,1))return false;
+        if(!flowRefinePass_.loadShader("FlowRefine.dxil",cs)||!flowRefinePass_.create(context_.device(),cs,6,5,1))return false;
+        if(!flowFillPass_.loadShader("FlowFill.dxil",cs)||!flowFillPass_.create(context_.device(),cs,4,3,1))return false;
+        if(flowClaims_&&(!flowClaimPass_.loadShader("FlowClaim.dxil",cs)||!flowClaimPass_.create(context_.device(),cs,3,1,2)))return false;
     }
     // Stage-5 output stabiliser. Only allocated when the setting is non-zero:
     // a default session never pays for it and the dispatch is skipped below, so
@@ -1741,17 +1752,26 @@ bool EnhanceGraph::createViews()
     for(size_t i=0;i<nrInstances_.size();++i)
         makeUav(context_.device(),nrInstances_[i]->motion(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowAdaptPass_,3+UINT(i)));
     if(flowRefine_){
-        // FlowRefine: 0 raw grid vectors, 1 previous, 2 current, 3 backward grid vectors (null
-        // without flowConsistency_); 4 refined. FlowFill: 0 refined,
-        // 1 current; 2 filled. Adapt: 0 filled; 1 work-extent XeSS motion.
+        // FlowRefine: 0 raw grid vectors, 1 previous, 2 current, 3 NVOF backward grid vectors,
+        // 4 FidelityFX scene changes (3/4 null when unused); 5 refined. FlowClaim: 0 refined;
+        // 1 claims, 2 disagreement. FlowFill: 0 refined, 1 current, 2 FlowClaim disagreement
+        // (null without); 3 filled. Adapt: 0 filled; 1 work-extent XeSS motion.
         D3D12_SHADER_RESOURCE_VIEW_DESC raw{};raw.Format=DXGI_FORMAT_R16G16_SINT;raw.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;
         raw.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;raw.Texture2D.MipLevels=1;
         stager_.stageSrv(nvofRawTex_.Get(),&raw,flowRefinePass_.heap.Get(),0);
         stagedSrv(nvofInA_.Get(),DXGI_FORMAT_B8G8R8A8_UNORM,flowRefinePass_,1);stagedSrv(nvofInB_.Get(),DXGI_FORMAT_B8G8R8A8_UNORM,flowRefinePass_,2);
         stager_.stageSrv(nvofReverseTex_.Get(),&raw,flowRefinePass_.heap.Get(),3);
-        makeUav(context_.device(),fgFlowRefined_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,cpu(flowRefinePass_,4));
+        D3D12_SHADER_RESOURCE_VIEW_DESC single=raw;single.Format=DXGI_FORMAT_R32_UINT;
+        stager_.stageSrv(amdOf_?amdOf_->sceneChanges():nullptr,&single,flowRefinePass_.heap.Get(),4);
+        makeUav(context_.device(),fgFlowRefined_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,cpu(flowRefinePass_,5));
+        if(flowClaims_){
+            stagedSrv(fgFlowRefined_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,flowClaimPass_,0);
+            makeUav(context_.device(),fgFlowClaims_.Get(),DXGI_FORMAT_R32_UINT,cpu(flowClaimPass_,1));
+            makeUav(context_.device(),fgFlowAgreement_.Get(),DXGI_FORMAT_R16_FLOAT,cpu(flowClaimPass_,2));
+        }
         stagedSrv(fgFlowRefined_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,flowFillPass_,0);stagedSrv(nvofInB_.Get(),DXGI_FORMAT_B8G8R8A8_UNORM,flowFillPass_,1);
-        makeUav(context_.device(),fgFlowFilled_.Get(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowFillPass_,2));
+        single.Format=DXGI_FORMAT_R16_FLOAT;stager_.stageSrv(fgFlowAgreement_.Get(),&single,flowFillPass_.heap.Get(),2);
+        makeUav(context_.device(),fgFlowFilled_.Get(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowFillPass_,3));
         stagedSrv(fgFlowFilled_.Get(),DXGI_FORMAT_R16G16_FLOAT,fgFlowAdaptPass_,0);
         makeUav(context_.device(),fgBaseFlow_.Get(),DXGI_FORMAT_R16G16_FLOAT,cpu(fgFlowAdaptPass_,1));
     }
@@ -2360,7 +2380,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             gpuTimer_.mark(list,GpuStage::Flow);
             if(!amdOf_->dispatch(list,nvofInB_.Get(),!prevValid_))return false;
             ++metrics_.amdOfExecuteCount;haveFlow=prevValid_;
-            gpuTimer_.mark(list,GpuStage::Flow,true);
+            if(!flowRefine_||!haveFlow)gpuTimer_.mark(list,GpuStage::Flow,true);
         }
         if(gpuDis_ && prevValid_){
             gpuTimer_.mark(list,GpuStage::Flow);
@@ -2412,16 +2432,34 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                     // XeSS motion: per-pixel candidate choice, then disocclusion fill.
                     tracker_.transition(list,fgFlowRefined_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                     if(flowConsistency_)tracker_.transition(list,nvofReverseTex_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-                    const float rc[8]={uintBits(rawW_),uintBits(rawH_),uintBits(nvofW_),uintBits(nvofH_),uintBits(selectedGrid_),.004f,uintBits(flowConsistency_?1u:0u),0};
-                    flowRefinePass_.bind(list,rc,gpuHandleOf(flowRefinePass_,0).ptr,gpuHandleOf(flowRefinePass_,4).ptr);
+                    // Flags: 1 NVOF backward output, 2 FidelityFX vectors, 4 FidelityFX warming up.
+                    const uint32_t refineFlags=(flowConsistency_?1u:0u)|(amdOf_?2u:0u)|(amdOf_&&!amdOf_->warmedUp()?4u:0u);
+                    const float rc[8]={uintBits(rawW_),uintBits(rawH_),uintBits(nvofW_),uintBits(nvofH_),uintBits(selectedGrid_),.004f,uintBits(refineFlags),0};
+                    flowRefinePass_.bind(list,rc,gpuHandleOf(flowRefinePass_,0).ptr,gpuHandleOf(flowRefinePass_,5).ptr);
                     list->Dispatch((nvofW_+15)/16,(nvofH_+15)/16,1);
                     tracker_.uavBarrier(list,fgFlowRefined_.Get());
                     tracker_.transition(list,fgFlowRefined_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                    if(flowClaims_){
+                        // FidelityFX: clear, claim and resolve the previous-frame claims.
+                        tracker_.transition(list,fgFlowClaims_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                        tracker_.transition(list,fgFlowAgreement_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                        uint32_t indexBits=1;while((uint64_t(1)<<indexBits)<uint64_t(nvofW_)*nvofH_)++indexBits;
+                        for(uint32_t mode=0;mode<3;++mode){
+                            const float cc[8]={uintBits(nvofW_),uintBits(nvofH_),uintBits(mode),uintBits(indexBits),0,0,0,0};
+                            flowClaimPass_.bind(list,cc,gpuHandleOf(flowClaimPass_,0).ptr,gpuHandleOf(flowClaimPass_,1).ptr);
+                            list->Dispatch((nvofW_+15)/16,(nvofH_+15)/16,1);
+                            tracker_.uavBarrier(list,fgFlowClaims_.Get());
+                        }
+                        tracker_.uavBarrier(list,fgFlowAgreement_.Get());
+                        tracker_.transition(list,fgFlowAgreement_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                    }
                     tracker_.transition(list,fgFlowFilled_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-                    // A chosen vector off by more than 2 flow pixels forward-backward is filled, from
-                    // pixels within 0.5 (consistent background/body: ~0.2 at P90).
-                    const float fc[8]={uintBits(nvofW_),uintBits(nvofH_),.06f,.002f,flowConsistency_?2.f:0.f,flowConsistency_?.5f:0.f,0,0};
-                    flowFillPass_.bind(list,fc,gpuHandleOf(flowFillPass_,0).ptr,gpuHandleOf(flowFillPass_,2).ptr);
+                    // A chosen vector off by more than 2 flow pixels (forward-backward or from the
+                    // claim winner) is filled, from pixels within 0.5 (consistent background/body:
+                    // ~0.2 at P90).
+                    const bool occlusion=flowConsistency_||flowClaims_;
+                    const float fc[8]={uintBits(nvofW_),uintBits(nvofH_),.06f,.002f,occlusion?2.f:0.f,occlusion?.5f:0.f,uintBits(flowClaims_?1u:0u),0};
+                    flowFillPass_.bind(list,fc,gpuHandleOf(flowFillPass_,0).ptr,gpuHandleOf(flowFillPass_,3).ptr);
                     list->Dispatch((nvofW_+15)/16,(nvofH_+15)/16,1);
                     tracker_.uavBarrier(list,fgFlowFilled_.Get());
                     tracker_.transition(list,fgFlowFilled_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -3179,6 +3217,8 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     const bool usesSharedFlow=nvofStandalone_||(desc_.enableFg&&desc_.fgUsesFlow())||
         (srEnabled_&&desc_.srUsesFlow()&&(desc_.videoSrQuality==0||desc_.videoSrQuality==engine::kVideoSrFsr));
     if(usesSharedFlow&&(requestedFlow!=desc_.opticalFlowBackend||s.amdFlowHalfResolution!=desc_.amdFlowHalfResolution))return false;
+    // The XeSS motion refinement owns textures, passes and NVOF's direction.
+    if(presentSinkFg()&&desc_.fgUsesFlow()&&s.fgMotionRefine!=desc_.fgMotionRefine)return false;
     // DLSS allocates multiplier-specific feature/output resources.
     // XeSS has a fixed 2X proxy swapchain contract. Settings callers must
     // rebuild instead of accepting a change that cannot take effect in place.
@@ -3457,6 +3497,7 @@ void EnhanceGraph::shutdown()
     for(auto& layer:nrAutoPool_)layer.reset();nrAutoLevel_=0;nrAutoPoolReady_=nrAutoResetPending_=false;
     residualRgba_.Reset();preSrProtectionRgba_.Reset();interNrProtectionRgba_.Reset();nrFlow_.Reset();baseFlow_.Reset();
     fgFlowRefined_.Reset();fgFlowFilled_.Reset();fgBaseFlow_.Reset();flowRefinePass_={};flowFillPass_={};fgFlowAdaptPass_={};flowRefine_=flowConsistency_=false;
+    fgFlowClaims_.Reset();fgFlowAgreement_.Reset();flowClaimPass_={};flowClaims_=false;
     for(unsigned i=0;i<kGeneratedPoolSlots;++i){if(fgDisableMapped_[i]&&fgDisableReadback_[i]){D3D12_RANGE written{0,0};fgDisableReadback_[i]->Unmap(0,&written);}fgDisableMapped_[i]=nullptr;fgDisable_[i].Reset();fgDisableReadback_[i].Reset();generatedLeases_[i].reset();genFrame_[i].Reset();}for(auto& lease:realLeases_)lease.reset();fgDisableInit_.Reset();
     encPass_ = ComputePass{};
     blitPass_ = ComputePass{};hdrVideoSrPass_={};

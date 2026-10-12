@@ -15,9 +15,11 @@
 //        veyra_xess_motion_quality_tests <outDir> perf <frames> [tag]
 // perf: product extents (3840x2160 source/work, 1920x1080 flow, the run scene upscaled), GPU
 // time of the optical-flow stage (NVOF wait, densify, refinement, adaptation) and of the whole
-// graph per path; median and P95 after 8 warm-up frames.
+// graph per path; median and P95 after 8 warm-up frames. VEYRA_TEST_FLOW_BACKEND=amd times
+// FidelityFX flow (FlowClaim instead of NVOF's backward output).
 // Knobs (environment) as FgXessBoundaryTests: VEYRA_TEST_FLOW_FULL=1, VEYRA_TEST_FLOW_QUALITY,
-// VEYRA_TEST_FLOW_VALIDATE=0, VEYRA_TEST_NVOF_GRID (read by EnhanceGraph).
+// VEYRA_TEST_FLOW_VALIDATE=0, VEYRA_TEST_FLOW_BACKEND=amd (FidelityFX: 24 frames, the first 9
+// unscored while it warms up), VEYRA_TEST_NVOF_GRID (read by EnhanceGraph).
 #include "veyra/pipeline/EnhanceGraph.h"
 #include "veyra/pipeline/GpuPassUtils.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
@@ -46,7 +48,8 @@ extern "C" {
 using namespace veyra;
 using Microsoft::WRL::ComPtr;
 namespace {
-constexpr int W=2560,H=1440,FlowW=1280,FlowH=720,N=16,Warmup=2,Band=40,X0=480,CW=1600;
+constexpr int W=2560,H=1440,FlowW=1280,FlowH=720,Band=40,X0=480,CW=1600;
+int N=16,Warmup=2;
 
 float hash01(int x,int y,uint32_t seed){
     uint32_t v=uint32_t(x)*0x9e3779b9u^uint32_t(y)*0x85ebca6bu^seed*0xc2b2ae35u;
@@ -196,6 +199,8 @@ int perf(const std::filesystem::path& dir,int frames,const std::string& label){
         gd.sourceWidth=gd.workWidth=PW;gd.sourceHeight=gd.workHeight=PH;gd.flowWidth=PW/2;gd.flowHeight=PH/2;gd.rgbInput=true;
         gd.enableNr=false;gd.enableSr=false;gd.enableFg=true;gd.noNgx=true;gd.fgMultiplier=2;
         gd.frameGenerationBackend=engine::FrameGenerationBackend::XeSS;gd.fgMotion=engine::MotionSource::OpticalFlow;
+        if(wchar_t backend[8]{};GetEnvironmentVariableW(L"VEYRA_TEST_FLOW_BACKEND",backend,8)&&std::wstring(backend)==L"amd")
+            gd.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;
         gd.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
         if(!graph.initialize(gd)||!graph.createViews()){std::cerr<<"graph open failed"<<std::endl;ok=false;break;}
         graph.recordGpuTimings();std::vector<double> flow,span;
@@ -227,6 +232,8 @@ int wmain(int argc,wchar_t** argv){
     const bool run=sceneName==L"run",bars=sceneName==L"bars";if(!run&&!bars&&sceneName!=L"orbit")return 2;if(speed<1||speed>200)return 2;
     std::filesystem::create_directories(dir);CoInitializeEx(nullptr,COINIT_MULTITHREADED); // WIC image export
     const std::string label=std::format("motion-{}{}{}",bars?"bars":run?"run":"orbit",speed,argc==5?"-"+std::filesystem::path(argv[4]).string():std::string());
+    wchar_t backend[8]{};GetEnvironmentVariableW(L"VEYRA_TEST_FLOW_BACKEND",backend,8);
+    const bool fidelity=std::wstring(backend)==L"amd";if(fidelity){N=24;Warmup=9;}
     Logger::instance().openFile((dir/(label+".log")).wstring());
     const Scene scene=makeScene(run,speed,bars);
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status st=Status::Ok;gfx::DeviceContextDesc dd;dd.enableDebugLayer=true;
@@ -250,6 +257,7 @@ int wmain(int argc,wchar_t** argv){
         if(knob(L"VEYRA_TEST_FLOW_FULL")==L"1"){gd.flowWidth=W;gd.flowHeight=H;}
         if(const auto q=knob(L"VEYRA_TEST_FLOW_QUALITY");!q.empty())gd.flowQuality=engine::FlowQuality(std::clamp(_wtoi(q.c_str()),0,2));
         if(knob(L"VEYRA_TEST_FLOW_VALIDATE")==L"0")gd.validateMotion=false;
+        if(fidelity)gd.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;
         gd.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
         if(!graph.initialize(gd)||!graph.createViews()){std::cerr<<"graph open failed"<<std::endl;ok=false;break;}
         Region bgBand,uncovered,fgBand,outside,all,parts[6];std::vector<uint16_t> motion(size_t(W)*H*2);

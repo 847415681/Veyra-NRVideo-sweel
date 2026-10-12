@@ -9221,3 +9221,14 @@ audit.py核对测试/GUI/所有app原件、两份旧final、旧JSON和源码bund
 结果（XeSS 抓屏 11/11 帧、采集/D3D12 0 错误，Codex 版数字本构建逐位复现）：run27 6.3781→6.4016（+0.37%），run80 7.4180→7.3042（−1.53%），orbit80 3.0332→2.5901（−14.61%，距理想 2.0984 的差距缩小 47%），bars27 9.7037→9.6196（−0.87%）；侧跑场景 >32 级像素比例略增（7.96→8.88、9.01→9.63）。无窗口运动：露出区 run80 38.5→6.6、orbit80 41.9→7.5。成本：4K 无窗口光流阶段 1.52→2.27 ms；真实 GUI（GTA VI 4K30、原版 NR 1080p、XeSS 2X、class2、帧 300–840 共 541 帧）光流阶段 1.53→2.26 ms，整图 9.52→9.19 ms 属波动不声称提速，提交 60/60。回归：Codex 合同测试 160/0、debug 0；GUI 生命周期（Codex ProbeXess 原样复制）52.6s 通过，三种运动路径与 NVOF 双向仅在 XeSS 分支。
 
 本地测试版 tests/claude-xess-tune-20261012/delivery（Codex 测试包复制、去测试 EXE、换本版 EXE 与两个着色器；New/Codex/Original 三入口共用一份设置）。全部数字与来源见 reports/claude-xess-tune-20261012/results.json，报告 docs/XESS_FLOW_REVIEW_2026-10-12.md。四肢、栏杆残差，真实游戏观感、AMD/Intel、长期显存、屏幕延迟未验；无 merge/push/Release/子 Agent/关机。
+
+## 2026-10-12 边缘神盾开关与 AMD 光流（Claude）
+
+用户追问精修是否只对 NV 光流生效，要求给 AMD 光流也加上，做成独立开关放在补帧光流选择下面并起名。答：此前精修与前后向检查都只限 NVIDIA NVOF。同一分支 claude/xess-flow-tune-20261012 续做；Codex 期间运行 pro-video-geometry 等 GUI 测试，抓屏/GUI/GPU 计时脚本启动前检查其他 Veyra 进程，多次等待其结束。
+
+实现：EnhancementSettings::fgMotionRefine（默认开，非 XeSS 光流运动时视为非活动）→ GraphDescription → EnhanceGraphDesc；requiresGraphRebuild 与图的实时设置检查在其变化时重建。桥接 edgeAegis 存界面偏好（同 NR 抗闪烁/音频同步，启动时会话后恢复），会话/预设格式不变。列表页“光流 · 运动估算”与节点“输入 · 光流”卡在光流算法下加开关「边缘神盾」；catalog 只追加 4 条译文（本分支 catalog 与全量 extract.py 本就不同步，未全量重提取）。图：FlowRefine 增加 FidelityFX 向量（网格8、整像素、预热/场景切换零运动）；新 FlowClaim.hlsl（清零/认领/结算，InterlockedMax 按代价认领上一帧位置，与胜者向量差进 FlowFill，阈值同 NVIDIA）；CMake 登记。测试：EffectChainTests 加开关活动性/重建断言；运动质量与 XeSS 抓屏测试加 AMD 后端（多跑帧避开预热），运动质量测试 perf 模式支持 AMD。构建 build-20261012-160356（42 对象、全部 EXE）与 161421（测试）。
+
+结果：NVIDIA 运动误差与改动前逐位相同。AMD 无窗口露出区 EPE run80 71.7→67.3→19.7、run27 35.4→41.0→23.8、orbit80 68.0→63.3→17.4（修复前→只精修→精修+认领），密集竖条 FidelityFX 自身场景切换判定三路均零运动（原有行为）。AMD XeSS 抓屏轮廓带 MAE8：run27 7.5361→7.6048→7.2088，run80 8.2161→7.8578→7.2462，orbit80 3.8166→3.2447→2.6991，均 11/11 帧、采集/D3D12 0 错误。4K 无窗口光流阶段：AMD 0.41→0.91→1.01 ms，NVIDIA 1.03→1.58→2.29 ms。回归：效果链、预设库、Codex 合同 160/0、界面合同、修复合同 259/0、HDR 颜色、非活动效果 9/0、真实视频设置重建全部通过。GUI（gui_aegis.py，GTA VI 4K30）：默认开→NVOF 前后向、关→校验光流、AMD+开→FidelityFX 认领、重启保持关、再开写回偏好，截图 reports/claude-xess-tune-20261012/edge-aegis-ui.png；首两次运行因夹具期望序列未计入中间重建及截图前未切到补帧页而判失败，修夹具后通过，失败记录保留。
+
+测试版 tests/claude-xess-tune-20261012/delivery 更新为新 EXE/着色器/两个 QML 页，入口改为 New/Codex 两个（关开关即修复前）。AMD 实卡、真实游戏观感未验；无 merge/push/Release/子 Agent。
+

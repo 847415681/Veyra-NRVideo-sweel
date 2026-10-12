@@ -1752,7 +1752,7 @@ VPage {
                                 Layout.fillWidth: true
                                 Layout.topMargin: 6
                                 label: qsTr("光流 · 运动估算")
-                                count: veyra.opticalFlowChoice === 1 ? 4 : 3
+                                count: veyra.opticalFlowChoice === 1 ? 5 : 4
                                 expanded: true
                                 VRow {
                                     label: qsTr("光流算法")
@@ -1762,6 +1762,15 @@ VPage {
                                         options: [Support.option(veyra,"0","NVIDIA NVOF","flow0"),Support.option(veyra,"1","AMD FidelityFX","flow1")]
                                         value: options[veyra.opticalFlowChoice]?.label ?? (veyra.opticalFlowChoice === 2 ? qsTr("GPU DIS 已移除，请重选") : qsTr("未知配置"))
                                         onPicked: id => veyra.setOpticalFlowChoice(Number(id))
+                                    }
+                                }
+                                VRow {
+                                    label: qsTr("边缘神盾")
+                                    hint: qsTr("XeSS 补帧、运动来源选“光流”时生效：修人物边缘果冻，背景不再被人物拖着晃")
+                                    VSwitch {
+                                        objectName: "list-edge-aegis"
+                                        checked: veyra.edgeAegis
+                                        onToggled: checked => veyra.edgeAegis = checked
                                     }
                                 }
                                 VRow {

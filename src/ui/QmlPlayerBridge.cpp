@@ -1172,6 +1172,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             const int ms = p.value(QStringLiteral("audioOffsetMs")).toInt();
             if (ms >= -250 && ms <= 250 && s.audioOffsetMs != ms) { s.audioOffsetMs = ms; changed = true; }
         }
+        if (p.contains(QStringLiteral("edgeAegis"))) {
+            const bool on = p.value(QStringLiteral("edgeAegis")).toBool();
+            if (s.fgMotionRefine != on) { s.fgMotionRefine = on; changed = true; }
+        }
         if (!defaultFlowApplied && p.contains(QStringLiteral("contentRate"))) {
             const int rate = p.value(QStringLiteral("contentRate")).toInt();
             if (rate >= 0 && rate <= int(engine::ContentRate::Capture60To30) && int(s.content) != rate) { s.content = static_cast<engine::ContentRate>(rate); changed = true; }
@@ -6582,6 +6586,16 @@ void QmlPlayerBridge::setAmdFlowHalf(bool value) {
     if (s.amdFlowHalfResolution == value) return;
     s.amdFlowHalfResolution = value;
     if (!impl_->commit(std::move(s))) { emit notice(tr("引擎未接受 AMD 性能档，原设置保留"), true); return; }
+    emit settingsChanged();
+}
+bool QmlPlayerBridge::edgeAegis() const { return settings().fgMotionRefine; }
+void QmlPlayerBridge::setEdgeAegis(bool value) {
+    auto s = settings();
+    if (s.fgMotionRefine == value) return;
+    s.fgMotionRefine = value;
+    if (!impl_->commit(std::move(s))) { emit notice(tr("引擎未接受边缘神盾，原设置保留"), true); return; }
+    impl_->prefs[QStringLiteral("edgeAegis")] = value;
+    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "edge aegis not saved");
     emit settingsChanged();
 }
 int QmlPlayerBridge::contentRate() const { return int(settings().content); }
