@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-12 Claude 计划漏项补齐**：用户追问 FSR bug 和 Claude 其他工作完成情况。重新核对其最后获准的 JELLY_FIX_PLAN，FSR 单独开启补帧时初始化光流本来在接手范围内，初次接手排除它是 Agent 漏项。保留 f468dfb 和初次验收存档，在同一本地隔离分支按 docs/FSR_FLOW_FOLLOWUP_2026-10-12.md 补齐 FSR 光流消费者条件及真实 GPU/GUI 回归；不把 XeSS 精修扩到 FSR，不改自动选择规则、其他算法/UI节奏/默认优先级/运行组件/真实配置。新产物 E:/项目/Veyra/{用途}/fsr-flow-followup-20261012，初次所有回执和旧树基线保持。无子Agent、main合并、push、发布、关机。已证旧代码 NR/SR/standalone 全关时NVOF=0且合同失败，修复后显式光流/Automatic各9次、Zero0次，八组回归、真实FSR GUI及双入口通过；同时补齐密集竖条横移11/11中间帧A/B，无本组负收益。代码/本机回归完成，真实游戏观感待用户，栏杆模型问题/延迟仍暂缓。
+
 > **2026-10-12 XeSS 修复接手**：用户要求接手 Claude 额度耗尽的 XeSS 修复。按 docs/XESS_HANDOFF_PLAN_2026-10-12.md 在 codex/xess-handoff-20261012 从 7fe3ea6 继承独立封存的五文件未完成修改，只完成 XeSS 开启光流时的运动边界精修及必要生命周期/构建/真实画质和耗时验证。61 旧工作树/509 脏文件由 archives/xess-handoff-20261012/start.json 保护，Claude 原树不改；此具体范围覆盖历史冻结。不派 Agent、不修改运行库/模型/驱动/真实配置；33ms 统计和默认 GPU 优先级保持。全部产物 E 盘、每测试≤300秒/构建≤900秒；无 main 合并/push/Release/关机。未获益的精修撤回，合成画面结果不冒充真实游戏或其他硬件通过。
 
 > **2026-10-12 补帧人物边缘果冻 J0（Claude）**：用户要求先排查果冻（延迟暂缓），按 reports/jelly-latency-20261012/方案选项.md 先做 J0 判定，先测 DLSS/FSR，随后按用户“主要是XESS”补测 XeSS（SDK 只显示插值帧加桌面复制抓屏）。存档 `checkpoint/pre-claude-jelly-20261012`（main 76f41b3）与 E 盘 `archives/claude-jelly-20261012`；分支 `claude/jelly-20261012` 新增诊断测试 `veyra_fg_motion_boundary_tests`、`veyra_fg_xess_boundary_tests` 及文档；产品代码只加默认不生效的测试开关（XeSS 只显示插值帧、fgMotionProbe 进 XeSS 链路、NVOF 网格），不改默认行为、运行库/模型/驱动/用户配置；无 merge/push/Release。结论见 docs/JELLY_J0_2026-10-12.md。

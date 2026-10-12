@@ -12,7 +12,8 @@
 //   inverted - ideal with the opposite sign (motion-sign convention control)
 //   idealdepth / productdepth - ideal or product motion plus a layered depth (character
 //              near, front limbs nearest, background far) instead of the constant depth
-// usage: veyra_fg_xess_boundary_tests <outDir> <run|orbit> <speedPx> <variant> [tag]
+// bars adds dense vertical background rails for the accepted repeated-texture regression.
+// usage: veyra_fg_xess_boundary_tests <outDir> <run|orbit|bars> <speedPx> <variant> [tag]
 // Product-flow knobs for experiments (environment): VEYRA_TEST_FLOW_FULL=1 (flow at full
 // resolution), VEYRA_TEST_FLOW_QUALITY=0|1|2, VEYRA_TEST_FLOW_VALIDATE=0, VEYRA_TEST_FLOW_BACKEND=
 // dis|amd, VEYRA_TEST_NVOF_GRID=1|2|4 (read by EnhanceGraph).
@@ -122,7 +123,7 @@ struct Scene {
         return {px-(x+.5f),py-(y+.5f)};
     }
 };
-Scene makeScene(bool run,int speed){
+Scene makeScene(bool run,int speed,bool bars=false){
     Scene s;s.run=run;s.speed=speed;s.bw=W+(N+2)*speed;s.background.resize(size_t(s.bw)*H);
     parallelRows(H,[&](int y){
         for(int x=0;x<s.bw;++x){
@@ -131,6 +132,13 @@ Scene makeScene(bool run,int speed){
             const float m=.55f+.9f*n;r*=m;g*=m;b*=m;
             if(x%211<13){r*=.35f;g*=.32f;b*=.3f;}
             if((y/120)%3==1&&x%67<4){r=std::min(255.f,r+60);g=std::min(255.f,g+55);b=std::min(255.f,b+40);}
+            if(bars&&y<H*3/4){
+                // Four-pixel rails every 22 pixels, with mild non-periodic surface texture.
+                // The lower quarter retains unique texture to identify captured frame time.
+                // Scoring below excludes that matching region.
+                const float rail=x%22<4?.18f:1.f;
+                r=(150.f+20.f*n)*rail;g=(160.f+18.f*n)*rail;b=(170.f+16.f*n)*rail;
+            }
             s.background[size_t(y)*s.bw+x]={uint8_t(std::clamp(r,0.f,255.f)),uint8_t(std::clamp(g,0.f,255.f)),uint8_t(std::clamp(b,0.f,255.f))};
         }
     });
@@ -182,10 +190,10 @@ int wmain(int argc,wchar_t** argv){
     if(argc!=5&&argc!=6)return 2;
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     const std::filesystem::path dir=argv[1];const std::wstring sceneName=argv[2],variant=argv[4];const int speed=_wtoi(argv[3]);
-    const bool run=sceneName==L"run";if(!run&&sceneName!=L"orbit")return 2;if(speed<1||speed>200)return 2;
+    const bool run=sceneName==L"run",bars=sceneName==L"bars";if(!run&&!bars&&sceneName!=L"orbit")return 2;if(speed<1||speed>200)return 2;
     const int mode=variant==L"zero"?0:variant==L"product"?1:variant==L"ideal"?2:variant==L"inverted"?3:variant==L"idealdepth"?4:variant==L"productdepth"?5:-1;if(mode<0)return 2;
     std::filesystem::create_directories(dir);CoInitializeEx(nullptr,COINIT_MULTITHREADED);
-    const std::string label=std::format("xess-{}{}-{}{}",run?"run":"orbit",speed,std::filesystem::path(variant).string(),argc==6?"-"+std::filesystem::path(argv[5]).string():std::string());
+    const std::string label=std::format("xess-{}{}-{}{}",bars?"bars":run?"run":"orbit",speed,std::filesystem::path(variant).string(),argc==6?"-"+std::filesystem::path(argv[5]).string():std::string());
     SetEnvironmentVariableW(L"VEYRA_TEST_XESS_ONLY_INTERPOLATED",L"1");
     const HMONITOR monitor=MonitorFromPoint({0,0},MONITOR_DEFAULTTOPRIMARY);MONITORINFO mi{sizeof(mi)};GetMonitorInfoW(monitor,&mi);
     if(mi.rcMonitor.right-mi.rcMonitor.left!=W||mi.rcMonitor.bottom-mi.rcMonitor.top!=H){std::cerr<<"primary monitor must be 2560x1440"<<std::endl;return 2;}
@@ -194,7 +202,7 @@ int wmain(int argc,wchar_t** argv){
     if(!window)return 2;ShowWindow(window,SW_SHOW);SetForegroundWindow(window);UpdateWindow(window);
     auto pump=[]{MSG m;while(PeekMessageW(&m,nullptr,0,0,PM_REMOVE)){TranslateMessage(&m);DispatchMessageW(&m);}};
     pump();
-    const Scene scene=makeScene(run,speed);
+    const Scene scene=makeScene(run,speed,bars);
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status st=Status::Ok;gfx::DeviceContextDesc dd;dd.enableDebugLayer=true;
     if(!ctx.initialize(dd,st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),6,st))return 2;
     pipeline::EnhanceGraph graph(ctx,ring);pipeline::EnhanceGraphDesc gd;
@@ -319,7 +327,9 @@ int wmain(int argc,wchar_t** argv){
     };
     std::vector<Image> mids(N),reals(N);std::vector<std::vector<float>> midEdge(N),realEdge(N);std::vector<std::vector<int8_t>> midTop(N);
     for(int k=0;k<N;++k){render(k,reals[k],&realEdge[k],nullptr);if(k>0)render(k-.5,mids[k],&midEdge[k],&midTop[k]);}
-    auto distance=[&](const Image& a,const Image& b){double s=0;uint64_t n=0;for(int y=0;y<H;y+=8)for(int x=0;x<CW;x+=8){const auto& p=a.rgb[size_t(y)*CW+x];const auto& q=b.rgb[size_t(y)*CW+x];s+=std::abs(p[0]-q[0])+std::abs(p[1]-q[1])+std::abs(p[2]-q[2]);++n;}return s/(3.0*n);};
+    // Dense periodic rails cannot reliably identify time by nearest-image distance.
+    // Match using the uniquely textured lower corners, then score only the rail region.
+    auto distance=[&](const Image& a,const Image& b){double s=0;uint64_t n=0;for(int y=bars?H*3/4:0;y<H;y+=8)for(int x=0;x<CW;x+=8){if(bars&&x>=400&&x<CW-400)continue;const auto& p=a.rgb[size_t(y)*CW+x];const auto& q=b.rgb[size_t(y)*CW+x];s+=std::abs(p[0]-q[0])+std::abs(p[1]-q[1])+std::abs(p[2]-q[2]);++n;}return s/(3.0*n);};
     std::vector<int> bestCapture(N,-1);std::vector<double> bestDistance(N,1e9);unsigned matchedReal=0,unmatched=0;std::string matches;
     for(size_t c=0;c<captures.size();++c){
         int pair=-1;double best=1e9;bool real=false;
@@ -335,7 +345,7 @@ int wmain(int argc,wchar_t** argv){
     for(int k=Warmup+1;k<N;++k){
         distances+=std::format("{}{:.2f}",distances.empty()?"":",",bestCapture[k]<0?-1.0:bestDistance[k]);
         if(bestCapture[k]<0)continue;++evaluated;last=k;const auto& got=captures[size_t(bestCapture[k])];
-        for(int y=0;y<H;++y)for(int x=0;x<CW;++x){
+        for(int y=0;y<(bars?H*3/4:H);++y)for(int x=0;x<CW;++x){
             const size_t i=size_t(y)*CW+x;const auto& p=got.rgb[i];const auto& q=mids[k].rgb[i];
             const int r=std::abs(p[0]-q[0]),g=std::abs(p[1]-q[1]),b=std::abs(p[2]-q[2]);
             const float e=std::min({midEdge[k][i],realEdge[k][i],realEdge[k-1][i]});
@@ -348,7 +358,7 @@ int wmain(int argc,wchar_t** argv){
         for(size_t c=0;c<centers.size()&&ok;++c){
             const std::string stem=label+"-"+names[c];
             ok=save(dir/(stem+"-cap.png"),got,centers[c][0],centers[c][1],448)&&save(dir/(stem+"-err.png"),got,centers[c][0],centers[c][1],448,true,&mids[last]);
-            if(ok&&mode==0)ok=save(dir/(std::format("xess-{}{}-{}-gt.png",run?"run":"orbit",speed,names[c])),mids[last],centers[c][0],centers[c][1],448);
+            if(ok&&mode==0)ok=save(dir/(std::format("xess-{}{}-{}-gt.png",bars?"bars":run?"run":"orbit",speed,names[c])),mids[last],centers[c][0],centers[c][1],448);
         }
     }
     unsigned errors=0;ComPtr<ID3D12InfoQueue> iq;

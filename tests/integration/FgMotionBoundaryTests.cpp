@@ -183,7 +183,7 @@ int wmain(int argc,wchar_t** argv){
     const std::filesystem::path dir=argv[1];const std::wstring backend=argv[2],sceneName=argv[3],variant=argv[4];
     const bool fsr=backend==L"fsr";if(!fsr&&backend!=L"dlss")return 2;
     const bool orbit=sceneName==L"orbit";if(!orbit&&sceneName!=L"walk")return 2;
-    const int mode=variant==L"zero"?0:variant==L"product"?1:variant==L"ideal"?2:variant==L"blocky"?3:variant==L"zeroband"?4:variant==L"inverted"?5:variant==L"garbage"?6:variant==L"nrflow"?7:variant==L"nrzero"?8:-1;if(mode<0)return 2;
+    const int mode=variant==L"zero"?0:variant==L"product"?1:variant==L"ideal"?2:variant==L"blocky"?3:variant==L"zeroband"?4:variant==L"inverted"?5:variant==L"garbage"?6:variant==L"nrflow"?7:variant==L"nrzero"?8:variant==L"product-only"?9:variant==L"zero-only"?10:variant==L"auto-only"?11:-1;if(mode<0)return 2;
     std::filesystem::create_directories(dir);CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     const std::string label=std::string(fsr?"fsr":"dlss")+"-"+(orbit?"orbit":"walk")+"-"+std::filesystem::path(variant).string();
     const Scene scene=makeScene(orbit);
@@ -193,11 +193,11 @@ int wmain(int argc,wchar_t** argv){
     gd.sourceWidth=gd.workWidth=W;gd.sourceHeight=gd.workHeight=H;gd.flowWidth=FlowW;gd.flowHeight=FlowH;gd.rgbInput=true;
     gd.enableNr=false;gd.enableSr=false;gd.enableFg=true;gd.fgMultiplier=2;
     gd.frameGenerationBackend=fsr?engine::FrameGenerationBackend::Fsr:engine::FrameGenerationBackend::Dlss;
-    gd.fgMotion=mode==1?engine::MotionSource::OpticalFlow:engine::MotionSource::Zero;
-    if(mode>=7){gd.enableNr=true;gd.nrWidth=FlowW;gd.nrHeight=FlowH;gd.nrMotion=mode==7?engine::MotionSource::OpticalFlow:engine::MotionSource::Zero;gd.enableNvofStandalone=mode==7;}
+    gd.fgMotion=mode==11?engine::MotionSource::Automatic:mode==1||mode==9?engine::MotionSource::OpticalFlow:engine::MotionSource::Zero;
+    if(mode==7||mode==8){gd.enableNr=true;gd.nrWidth=FlowW;gd.nrHeight=FlowH;gd.nrMotion=mode==7?engine::MotionSource::OpticalFlow:engine::MotionSource::Zero;gd.enableNvofStandalone=mode==7;}
     const bool probe=mode!=1&&mode<7;
-    // EnhanceGraph::initNvof only creates flow for in-graph FG when the backend is DLSS;
-    // FSR receives flow only when NR/SR request it. Run it here as NR users do.
+    // Keep the original J0 experiment's explicitly requested standalone flow.
+    // *-only cases exercise the real consumer gate with NR/SR/standalone all off.
     if(mode==1)gd.enableNvofStandalone=true;
     gd.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
     pipeline::ComPtr<ID3D12Resource> motion,upload;
@@ -305,7 +305,9 @@ int wmain(int argc,wchar_t** argv){
     if(SUCCEEDED(ctx.device()->QueryInterface(IID_PPV_ARGS(&iq))))
         for(UINT64 i=0;i<iq->GetNumStoredMessages();++i){SIZE_T bytes=0;if(FAILED(iq->GetMessage(i,nullptr,&bytes)))continue;std::vector<uint8_t>b(bytes);auto* msg=reinterpret_cast<D3D12_MESSAGE*>(b.data());
             if(SUCCEEDED(iq->GetMessage(i,msg,&bytes))&&msg->Severity<=D3D12_MESSAGE_SEVERITY_ERROR){++errors;std::cerr<<msg->pDescription<<std::endl;}}
-    const bool complete=evaluated==unsigned(N-Warmup);
+    const bool flowContract=mode==9||mode==11?m.nvofExecuteCount==unsigned(N-1):mode==10?m.nvofExecuteCount==0:true;
+    if(!flowContract)std::cerr<<"FG-only optical-flow consumer contract failed: nvof="<<m.nvofExecuteCount<<std::endl;
+    const bool complete=evaluated==unsigned(N-Warmup)&&flowContract;
     std::cout<<std::format("FG_MOTION_BOUNDARY {{\"label\":\"{}\",\"generated\":{},\"evaluated\":{},\"disabled\":{},\"nvof\":{},\"bandMae\":{:.4f},\"bandBadPct\":{:.4f},\"bandP95\":{},"
         "\"farMae\":{:.4f},\"farBadPct\":{:.4f},\"innerMae\":{:.4f},\"fullMae\":{:.4f},\"realMae\":{:.4f},\"realBandMae\":{:.4f},\"realOutsideMae\":{:.4f},\"wobbleEdge\":{:.4f},\"wobbleEdgeBadPct\":{:.4f},\"wobbleDeep\":{:.4f},\"flowBandEpe\":{:.4f},\"flowBandWrongPct\":{:.3f},\"flowBandZeroedPct\":{:.3f},\"flowFarWrongPct\":{:.3f},\"errors\":{},\"pass\":{}}}",
         label,generated,evaluated,m.fgDisabledFrames,m.nvofExecuteCount,band.mae(),band.badPercent(),band.p95(),outside.mae(),outside.badPercent(),inner.mae(),full.mae(),real.mae(),realBand.mae(),realOutside.mae(),wobbleEdge.mae(),wobbleEdge.badPercent(),wobbleDeep.mae(),

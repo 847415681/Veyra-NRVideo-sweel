@@ -9178,3 +9178,22 @@ seal.py validate逐项核对源码/输入/EXE/QML/原包1626文件及旧树；�
 本地构建 tests/.../app、Start-XeSS-Test.cmd 和独立 user-test-profile，未打新压缩包。1626母包文件哈希不变，SDK/DLL/模型/媒体未入Git。运行组件原件保持，默认UI/GPU行为保持，无main合并/push/Release/关机。真实用户游戏、AMD/Intel显卡、长期显存和屏幕端到端延迟未验，不宣称根治。详见 docs/XESS_HANDOFF_REPORT_2026-10-12.md；最终本地commit、source-after.bundle、全部保护/构建回执哈希见 reports/xess-handoff-20261012/final.json。
 
 启动入口最终实测：tmp/.../check-launcher.py，reports/.../launcher.json，9.6秒。初次检查误在继承管道关闭后查询已退出进程，日志实际正常；种子配置补齐field-render迁移旁文件，真实GUI断言XeSS2X/光流/NVOF/原版NR1080p成功，按时退出，检查探针已删除。
+
+## 2026-10-12 核对 Claude 计划并补齐 FSR 单独光流漏项
+
+用户追问“FSRbug顺手修复了没有”“claude说的其他工作都完成了吗”。重新读取本地d6689aca会话及其获准JELLY_FIX_PLAN，确认FSR单独开启补帧的光流初始化明确在计划内。初次交付f468dfb只完成XeSS，把FSR排除是Agent漏项，已向用户明确纠正。原main76f41b3、f468检查点/bundle/final回执、原XeSS测试目录和61旧树/509脏文件保持；在同一codex/xess-handoff-20261012继续，独立产物E:/项目/Veyra/{用途}/fsr-flow-followup-20261012。start.json记录不可变前次证据哈希，未重新生成基线来掩盖变化。
+
+产品只修EnhanceGraph::initNvof的图内FG光流消费者条件，原DLSS条件加入Fsr/Fsr4；显式Zero/VFG/stillImage/noFeatures保留，FSR不扩用XeSS精修。原J0测试强制standalone绕过缺陷；新增product-only/auto-only/zero-only，NR/SR/standalone全关，要求实际NVOF次数。不改光流来源规则、UI统计33ms/状态约250ms、GPU默认优先级、运行库/模型/驱动/真实配置，不加正常路径读回/每帧等待。
+
+实际命令前缀Python3.11 -X utf8 -B -I，脚本在tmp/fsr-flow-followup-20261012：
+
+- build-before.py→logs/.../before-build/receipt.json，4.11秒；用旧f468图对象链接新测试。test.py before→tests-20261012-115656/receipt.json，旧代码exit1预期失败：FSR生成9/评分8帧、NVOF0、D3D12错误0。
+- build.py→build-20261012-115740/receipt.json，40.7秒，4依赖闭包对象/16EXE；复用已验对象，非全量clean构建。GUI版本2.0.6-xess-fsr-fix-test-20261012，SHA256 02d10c603da2a49c3bb2a352b3f741c241626d959baba97d482c594fddb342c6。configure.py→configure-20261012-115841/receipt.json，35.7秒完整CMake配置通过。
+- test.py flow auto zero standalone xess contracts hdr video→tests-20261012-115841/receipt.json，8项通过，最长GTA6设置重建43.62秒。FSR显式光流/Automatic均实际NVOF9次，Zero0次，强制standalone对照9次；轮廓带MAE8旧10.5214→新2.0412、auto2.0411，与standalone2.0411一致，所有realMae0/debugErrors0。XeSS合同160检查/6改变帧对/失败与debug0。不能把合成误差改进说成用户游戏果冻降低比例；FSR现在实际计算所选光流，可能比错误零运动路径多GPU成本，无提速声明。
+- gui.py→gui-20261012-120643/receipt.json，30.8秒；真实GTA6原4K30、FSR3.1 2X、NR/SR全关、普通优先级私有profile。NVOF实际阶段计时/seek/零运动/AMD光流provider/补帧关闭开启/恢复NVOF通过，约60提交fps。前两次gui-120042/120259夹具误用后端名fsr和QML运动来源2，实际API是fsr3与0/1；失败保留，修夹具后通过。引擎Automatic单独验证，未假称GUI有该选项。
+- 原计划还要求密集竖条横移回归：诊断新增bars场景，22px间隔/4px竖条、27px源帧位移，静止前景。最初bars-121021纯周期图按全图匹配只识别1/11而失败。修测试用下方非周期纹理角落识别时间、只评分上方竖条区，原12 MAE身份阈值/11帧完整性/错误零要求保持。rebuild-boundary.py最终boundary-build-20261012-121135/receipt.json，4.12秒，仅诊断EXE变，产品及其余15EXE同。bars.py→bars-20261012-121146/receipt.json，旧/新各11/11中间帧、matchedReal0/debug0/capture0，轮廓带10.1397→9.7037、远背景12.4370→10.2953，无本组负收益；不声称栏杆模型缺陷修复。
+- launchers.py→reports/.../launchers.json：实际运行Start-XeSS-FSR-Test.cmd和Start-FSR-Only-Test.cmd，9.77/9.47秒读取独立配置通过并退出，Main恢复、探针删除。前者原版NR1080+XeSS2X/光流/NVOF，后者NR/SR全关+FSR3.1 2X/光流/NVOF；配置迁移旁文件完整复制，只写本轮私有目录。
+
+原报告/计划的FSR排除语句已纠正并链接docs/FSR_FLOW_FOLLOWUP_2026-10-12.md；历史f468数字仍对应旧交付，不冒充联合版重测。本机RTX5070/FSR3.1及其AMD光流provider通过，Fsr4枚举覆盖不等于AMD/Intel或FSR4ML实卡验收。延迟研究、栏杆模型问题仍按用户要求暂缓；真实用户游戏观感/长期显存/屏幕延迟未验。
+
+seal.py检查代码/输入/16EXE/QML/原运行组件、全部回执、61旧树/509脏文件、原XeSS构建不变和改动范围；本地提交/增量源码bundle/检查点/最终保护回执见reports/fsr-flow-followup-20261012/final.json。没有新运行库压缩包、二进制入Git、main合并、push/Release、子Agent或关机。
