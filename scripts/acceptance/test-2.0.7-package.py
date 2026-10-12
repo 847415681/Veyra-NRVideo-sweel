@@ -121,7 +121,7 @@ def source_archive():
     assert git('rev-parse','HEAD^{tree}')==git('rev-parse','main^{tree}'),'Seal integrated main only'
     records=[];skipped=[];prefix=SOURCE.stem+'/'
     with zipfile.ZipFile(SOURCE,'x',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
-        for n in git('ls-files').splitlines():
+        for n in filter(None,git('ls-files','-z').split('\0')):
             pkg.relative(n)
             if '__pycache__' in n or n.endswith('.pyc'):skipped.append(n);continue
             assert not re.search(r'\.(dll|exe|lib|pdb|obj|onnx|pth|zip|7z|ptx|addon64)$|(^|/)(runtime_local|third_party_local|\.git)/',n,re.I),n
