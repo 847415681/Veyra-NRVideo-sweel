@@ -61,9 +61,11 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 ---
 
-**2.0.6 release, 2026-10-07:** VFG real-time submission optimization, NR-first output preservation through FSR, and Blackmagic/DeckLink capture compatibility with driver properties. [Full release notes](docs/RELEASE_NOTES_2.0.6.md).
+**2.0.7 release, 2026-10-13:** VFG mixed tiers (Veyra's latest model-allocation research), rebuilt content cadence, optional XeSS Edge Aegis, and fixes for capture settings, subtitles, playlists, audio, rendering and interface layout. [Full update report](docs/RELEASE_NOTES_2.0.7.md).
 
-**VFG measurements:** RTX 5070, GTA 4K30, original single-layer internal 1080p NR, actual Normal priority: adjacent comparisons improved Medium 4X submission readings **80→120fps (+50%)**, High 2X **35.5→60fps (+69%)**. These are local software submission measurements, not universal GPU or display-latency gains. Medium 6X+ and High 3X+ remain limited; **NVIDIA VRAM growth remains unresolved**. Actual AMD inference/consoles and physical Blackmagic hardware need further verification. [Conditions and limits](docs/RELEASE_NOTES_2.0.6.md).
+**Measured trade-off:** RTX5070, GTA4K30+one NR layer: new Medium4X→Medium+Low kept120 submitted FPS while FG group P95 changed11.45→6.92ms (−39.6%) and GPU utilisation58→45%. The mixed tier uses a lower-cost model for most subframes; this is not an equal-quality speedup or physical display-FPS claim. **NVIDIA long-run VRAM growth remains unresolved.** [Measurements and limits](docs/RELEASE_NOTES_2.0.7.md).
+
+**[Veyra knowledge base](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home)** — community guidance compiled from four group chats, covering software setup, common problems and capture cards.
 
 ## Highlights
 
@@ -75,18 +77,21 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 - **New export workflow:** editable ordered queue, trimming, MP4/MKV, multiple audio/embedded subtitle tracks, cancellation/retry and completion sound.
 - **Enhancement and compatibility:** four NR runtime choices (NVIDIA original for RTX 50, Lecram, SF-v2 and AMD lmxxf), DLSS/XeSS/FSR options, capture improvements and a persistent OBS Game Capture switch with restart confirmation. Full details are in the Release.
 
-## New in 2.0.6
+## New in 2.0.7
 
-- **VFG real-time submission:** bounded asynchronous SDK work keeps presentation moving, with per-frame success checks and ordered teardown; exports retain synchronous SDK verdicts.
-- **AMD NR→FSR:** preserve the NR result through upscaling and first-frame/discontinuity fallback instead of reading the original image.
-- **Blackmagic/DeckLink:** WDM upstream connection, native HDYC/BT709, driver/input property pages, exact format restoration and sustained-black observations. Physical hardware still needs verification.
-- **Community:** switch to group 5; retain WeChat donation, Discord and Ko-fi.
+- **VFG High+Medium / High+Low / Medium+Low:** spend the first model on one midpoint subframe and the second on the rest; inference remains per subframe. GPU shot detection runs once per input pair. Medium remains default.
+- **Content cadence rebuilt:** full-image comparison with a capture-noise tolerance, learned static cadence, and a separate fixed60→30 sampler; normal VSync/dedup/FPS limits explain their effective target.
+- **XeSS Edge Aegis:** optional motion-boundary/uncovered-background refinement for NVOF and FidelityFX flow. Limited, scene-dependent improvement with additional GPU cost; limbs/fences remain problematic.
+- **Capture:** driver-exposed mode enumeration, resolution-first selection, MJPEG warning, strict errors without fallback, complete autosave/resume/startup restoration and short-PTS reset fix. Opt-in Blackmagic native capture and Elgato colour compatibility.
+- **Playback and UI:** compressed PGS/SUP and more subtitle formats, folder playlists, bounded audio read-ahead, endpoint switching, DLSS SR K/M/L hints, compatible swap-chain reuse, inactive-effect editing and keyboard/layout/software-clipping fixes.
+- **Compatibility:** default-off HDR FG flash workaround, overlay/GamePP software-UI selection, hang diagnostics and bounded shutdown. Negative optimisation experiments remain withdrawn.
+- **Community:** group6 and the knowledge base; retain WeChat donation, Discord and Ko-fi.
 
-[Full 2.0.6 release notes, measurements and validation limits](docs/RELEASE_NOTES_2.0.6.md).
+[Complete2.0.6→2.0.7 update, evidence and limitations](docs/RELEASE_NOTES_2.0.7.md). The approved test-r2 package is promoted unchanged, including its internal display label.
 
 ## Install and upgrade
 
-Download **Veyra-2.0.6-NVIDIA-win64-portable.zip** or **Veyra-2.0.6-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
+Download **Veyra-2.0.7-NVIDIA-win64-portable.zip** or **Veyra-2.0.7-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
 
 Start with effects off, check picture/sound, then enable effects individually. High resolution, layered NR and frame generation increase GPU/VRAM requirements.
 
@@ -124,13 +129,13 @@ Select Nodes at the top of Professional. This is an executable chain editor:
 5. Optical flow is shared after input; SR is a single instance. RTX Video HDR stays before final FG; select one DLSS/XeSS/FSR backend. This is not an arbitrary branching/mixing graph.
 6. List and Node settings, presets and sessions are separate. Returning to List restores its settings and retains the node graph. Switching rebuilds processing and may briefly pause the picture.
 
-**2.0.6 Node mode does not support offline export or List mode's global NR protection region.** Switch to List and verify its effects before exporting; graphs are not silently converted.
+**2.0.7 Node mode does not support offline export or List mode's global NR protection region.** Switch to List and verify its effects before exporting; graphs are not silently converted.
 
 ### Capture and streaming
 
 | Source | Setup |
 |---|---|
-| Capture card | Select device, format, resolution, rate and audio input. Close competing apps. Match PQ/HLG/709 and Limited/Full to the signal. Magewell Pro Capture has a dedicated low-latency option. |
+| Capture card | Select device, resolution, rate, then a supported pixel format and audio input. Close competing apps. Match PQ/HLG/709 and Limited/Full to the signal. Magewell Pro Capture has a dedicated low-latency option. |
 | PS5 | Enable Remote Play, discover/enter IP, use PSN Account ID and the console's eight-digit pairing code; reconnect saved hosts. |
 | PC | Install/configure Sunshine yourself; discover/add the host, PIN-pair, select app/desktop and connect. Sunshine is not bundled. |
 | Xbox | Follow device-code sign-in and select a console with remote features enabled. Unofficial/experimental; account, service and console restrictions apply. |
@@ -179,7 +184,7 @@ QML renders UI; native D3D12 renders video. List/Nodes share the engine, disconn
 
 ## Source and build
 
-Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.0.6 build/source](docs/BUILD_2.0.6.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
+Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.0.7 build/source](docs/BUILD_2.0.7.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
 
 ## Support
 
@@ -192,7 +197,7 @@ Original code: GPL-3.0. The combined Chiaki streaming application is also subjec
 <p align="center">
   <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="WeChat donation" width="220">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v2.0.6/docs/images/2.0.6/community-group.png" alt="Veyra community group 5" width="220">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v2.0.7/docs/images/2.0.7/community-group.png" alt="Veyra community group 6" width="220">
 </p>
 
-Left: optional donation, no feature restrictions. Right: community group; QR valid **before 2026-10-14** as shown. Check repository updates after expiry.
+Left: optional donation, no feature restrictions. Right: community group; QR valid **before 2026-10-19** as shown. Check repository updates after expiry.
