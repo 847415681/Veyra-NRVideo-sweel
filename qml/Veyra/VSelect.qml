@@ -4,6 +4,7 @@ import QtQuick.Layouts
 Rectangle {
     id: sel
     property string value: ""
+    readonly property color valueColor: options.some(o => o.label === value && o.danger === true) ? Theme.err : Theme.t1
     property var options: []      // [{ id, label }]
     // .pop h6: the design titles a select's menu with the row label (core.js sel()).
     property string title: ""
@@ -27,7 +28,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.minimumWidth: 0
             text: sel.value
-            color: Theme.t1
+            color: sel.valueColor
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsBody
             font.weight: Font.Medium
@@ -49,7 +50,7 @@ Rectangle {
                 if (p instanceof VRow) return p.label
             return ""
         }
-        items: sel.options.map(o => ({ label: o.label, checked: o.label === sel.value, disabled: o.disabled === true, note: o.note || "" }))
+        items: sel.options.map(o => ({ label: o.label, checked: o.label === sel.value, disabled: o.disabled === true, danger: o.danger === true, note: o.note || "" }))
         onPicked: (i, o) => sel.picked(sel.options[i].id)
     }
 }

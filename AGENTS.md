@@ -1,6 +1,24 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-12 构建前采集格式追加授权**：用户要求分辨率先行、MJPEG 标红（不建议使用）、无效组合明确弹错且不自动路由其他格式。允许最小 UI/桥接/采集协商修复和有关回归，保留有效上次配置；与本轮整合一起本地合入 main 和 2.0.7 测试包。
+
+> **2026-10-12 各分支整合与 2.0.7 测试包授权**：用户明确要求将 Claude 最新已验 XeSS 和各分支已完成修复合入 main 并构建 2.0.7 测试包。按 docs/TEST_2.0.7_PLAN_2026-10-12.md 从 main a167831 隔离整合 Claude e46bbdf 与 Codex d883216（含34f479e），必要冲突适配后构建、组合回归、本地 main 合并及 NVIDIA/AMD 完整便携测试包。66旧树/509脏文件及来源 tip 存档保护，不派 Agent，不改驱动/运行库/模型/真实配置；UI33ms/250ms、GPU默认优先级与已撤回负优化保持。产物全E盘，测试每进程≤300秒、构建≤900秒。此范围覆盖历史 no-merge/no-package；没有新 push/Release/上传/关机授权。
+
+> **2026-10-12 专业模式画面遮挡播放条**：用户反馈原生视频位置错误并要求追溯来源。按docs/PRO_VIDEO_GEOMETRY_PLAN_2026-10-12.md从已验34f479e隔离codex/pro-video-geometry-20261012，仅统一Main/ProPage响应式尺寸、加入实际HWND回归；不改引擎、33ms/250ms节奏、GPU优先级、运行库或真实配置，不派Agent。65旧树/509脏文件由本轮start/bundle保护；产物全E盘，每测试≤300秒。无main合并/push/打包/Release/关机。
+
+> **2026-10-12 日志50补帧修复授权**：用户在完成 RTX5070Ti/Elgato 日志诊断后明确“尝试修复”。按 docs/FG_CAPTURE_RECOVERY_PLAN_2026-10-12.md 从 main a167831 在 codex/fg-capture-recovery-20261012 隔离修复异常短 PTS 污染节奏基线及有证据的必要接点，覆盖这些具体范围旧冻结。独立 start/bundle 保护64旧树/515脏文件；已有交换链复用先验证，不重复改写。保持真实 PTS、VRR、真正断点重置、容量上限、UI33ms/250ms、GPU默认优先级与用户配置，不派Agent、不改驱动/运行库/模型。全产物E盘，测试每进程≤300秒/构建≤900秒；无main合并/push/打包/Release/关机。本机回放不能冒充Elgato实卡或物理屏幕性能验收。
+
 > **2026-10-12 PR34 合并与采集设置授权**：用户明确合并 PR34、补齐当前卡全部设备格式及采集页自动保存/继续上次/启动自动恢复。按 docs/PR34_CAPTURE_SETTINGS_PLAN_2026-10-12.md 从 main76f41b3 在 codex/pr34-capture-settings-20261012 隔离适配必要 source/bridge/QML/preferences/测试接点，覆盖这些范围旧冻结。构建及定向验收后允许 main 合并与普通推送以完成 GitHub PR 合并。62 旧树/509 脏文件保持，main仅按授权更新；其它尚未合并分支不混入。保持 UI33ms/250ms、默认优先级与正常采集缓冲，不派Agent、不改驱动/运行库/真实配置。全产物E盘，测试≤300秒/构建≤900秒，无打包/Release/关机。
+
+> **2026-10-12 边缘神盾开关与 AMD 光流（Claude，同一分支续做）**：用户问精修是否只对 NV 光流生效，要求“如果不可能就把AMD光流也加上这个优化，并且把这个设置成一个独立的开关，在选择补帧光流的下面，你给取一个屌炸天的名字”。开关「边缘神盾」（`EnhancementSettings::fgMotionRefine`，桥接 `edgeAegis`，默认开）放在列表/节点页“光流算法”下面，作为全局控件存进界面偏好 `edgeAegis`（不改会话/预设格式），只在 XeSS+运动来源“光流”时生效并重建图。AMD FidelityFX 光流接入同一精修，无后向光流时用新 `FlowClaim.hlsl` 认领检查判定露出背景；NVIDIA 路径逐位不变。合成测试 AMD XeSS 轮廓带误差 −4%~−29%，成本约 +0.6 ms；AMD 实卡未验。无 merge/push/Release、无子 Agent；详见 docs/XESS_FLOW_REVIEW_2026-10-12.md 第 9 节。
+
+> **2026-10-12 XeSS 光流修复复审（Claude）**：用户“codex完成了后续的修复工作，但实际效果一般，你可以审一下，看看还有没有可以优化的地方，有没有可能是默认光流是1080p的问题？当然codex还在处理其他的任务，你不要打断他，你们不要互相影响到”。只读 Codex 分支/构建/回执；存档 `checkpoint/pre-claude-xess-tune-20261012`（f0fafdf）与 E 盘 `archives/claude-xess-tune-20261012`，分支 `claude/xess-flow-tune-20261012`，产物统一 `{用途}/claude-xess-tune-20261012`。屏幕/GUI/GPU 计时前检查无其他 Veyra 进程，Codex 测试期间等待。结论：Codex 接线无缺陷；1080p 默认光流不是原因（全分辨率几乎无改善且更贵）；新增 NVOF 后向光流的前后向一致性只用于判定/填补人物移开露出的背景（候选选择保持 Codex 版），仅 XeSS+光流+NVIDIA NVOF，NR/SR 光流逐字节不变；`VEYRA_TEST_FLOW_CONSISTENCY=0` 恢复 Codex 版。一致性参与选择的负收益方案已撤回。四肢与栏杆残差未解决。不改自动模式/其他补帧/运行库/模型/用户配置；无 merge/push/Release、无子 Agent。详见 docs/XESS_FLOW_REVIEW_2026-10-12.md。
+
+> **2026-10-12 Claude 计划漏项补齐**：用户追问 FSR bug 和 Claude 其他工作完成情况。重新核对其最后获准的 JELLY_FIX_PLAN，FSR 单独开启补帧时初始化光流本来在接手范围内，初次接手排除它是 Agent 漏项。保留 f468dfb 和初次验收存档，在同一本地隔离分支按 docs/FSR_FLOW_FOLLOWUP_2026-10-12.md 补齐 FSR 光流消费者条件及真实 GPU/GUI 回归；不把 XeSS 精修扩到 FSR，不改自动选择规则、其他算法/UI节奏/默认优先级/运行组件/真实配置。新产物 E:/项目/Veyra/{用途}/fsr-flow-followup-20261012，初次所有回执和旧树基线保持。无子Agent、main合并、push、发布、关机。已证旧代码 NR/SR/standalone 全关时NVOF=0且合同失败，修复后显式光流/Automatic各9次、Zero0次，八组回归、真实FSR GUI及双入口通过；同时补齐密集竖条横移11/11中间帧A/B，无本组负收益。代码/本机回归完成，真实游戏观感待用户，栏杆模型问题/延迟仍暂缓。
+
+> **2026-10-12 XeSS 修复接手**：用户要求接手 Claude 额度耗尽的 XeSS 修复。按 docs/XESS_HANDOFF_PLAN_2026-10-12.md 在 codex/xess-handoff-20261012 从 7fe3ea6 继承独立封存的五文件未完成修改，只完成 XeSS 开启光流时的运动边界精修及必要生命周期/构建/真实画质和耗时验证。61 旧工作树/509 脏文件由 archives/xess-handoff-20261012/start.json 保护，Claude 原树不改；此具体范围覆盖历史冻结。不派 Agent、不修改运行库/模型/驱动/真实配置；33ms 统计和默认 GPU 优先级保持。全部产物 E 盘、每测试≤300秒/构建≤900秒；无 main 合并/push/Release/关机。未获益的精修撤回，合成画面结果不冒充真实游戏或其他硬件通过。
+
+> **2026-10-12 补帧人物边缘果冻 J0（Claude）**：用户要求先排查果冻（延迟暂缓），按 reports/jelly-latency-20261012/方案选项.md 先做 J0 判定，先测 DLSS/FSR，随后按用户“主要是XESS”补测 XeSS（SDK 只显示插值帧加桌面复制抓屏）。存档 `checkpoint/pre-claude-jelly-20261012`（main 76f41b3）与 E 盘 `archives/claude-jelly-20261012`；分支 `claude/jelly-20261012` 新增诊断测试 `veyra_fg_motion_boundary_tests`、`veyra_fg_xess_boundary_tests` 及文档；产品代码只加默认不生效的测试开关（XeSS 只显示插值帧、fgMotionProbe 进 XeSS 链路、NVOF 网格），不改默认行为、运行库/模型/驱动/用户配置；无 merge/push/Release。结论见 docs/JELLY_J0_2026-10-12.md。
 
 > **2026-10-11 当前修复已合入本地main**：Codex4557ab6（含e8300d9）与Claude1d4c33f经隔离整合、42依赖闭包/13EXE构建、完整CMake、16组回归、12真实GUI状态/6布局及SR+VFG组合持久化/重启通过；实测产品4904b73、记录tip adcf509通过功能merge d2e1396进入main，完整Git树相同。VFG默认中档、DLSS K、33ms统计/250ms状态及负优化撤回保持。59开工树中唯main按授权更新，其余58树/504脏文件、来源分支及原包1626文件保持；final.json见reports/merge-current-fixes-20261011。首次组合GUI夹具漏FG节点失败，修夹具后通过，原证据保留；没有新的性能A/B或全硬件/长期显存通过声明。无push/打包/Release/关机。
 

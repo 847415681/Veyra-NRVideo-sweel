@@ -216,14 +216,9 @@ Window {
             // .min .stage: full width, height = the picture height.
             return { x: 0, y: 0, width: width, height: Math.round(pictureHeight) }
         case "pro":
-            // .pro grid: 1fr 376px, gap 10, padding 14. The video wrap is column
-            // 1 row 2; .meters below it is a fixed 172px; .pro-head is 32; and the
-            // card's own .vbar is 36px at its foot, which the picture must not cover.
-            // The inspector column can be widened by its splitter (inspectorWidth).
-            return { x: 14,
-                     y: 14 + 32 + 10,
-                     width: Math.max(1, width - proPage.inspectorWidth - 14 * 2 - 10 - 14),
-                     height: Math.max(1, height - 14 * 2 - 32 - 10 - 172 - 10 - 36) }
+            // Share the page's responsive header, transport and status dimensions.
+            // A second fixed-height formula let the HWND cover the playback bar.
+            return proPage.videoViewport
         case "node":
             // .nodeview padding 14; .nv-top (330px by default, the splitter under
             // it resizes it) minus its 40px bar.
@@ -259,8 +254,8 @@ Window {
         ProPage {
             id: proPage
             pageId: "pro"
-            // The splitter moves the picture's right edge with it.
-            onInspectorWidthChanged: if (root.page === "pro" && !root.fullscreen) videoHost.syncRect()
+            // Also follows wrapping status text and the compact header/transport.
+            onVideoViewportChanged: if (root.page === "pro" && !root.fullscreen) videoHost.syncRect()
             home: pages
             overlay: root.quickPanelShown
             onRequestFullscreen: root.toggleFullscreen()

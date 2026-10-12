@@ -9169,3 +9169,129 @@ harness/final-ui.py最终9组通过：四语言布局、跨列表／节点全局
 全部源码以外产物在E:/项目/Veyra本轮build/tests/logs/tmp/reports/archives目录，私有profile和子进程缓存。源/二进制及原包1626文件、旧树保持校验见validation.json，Git收尾见final.json。BMD／美乐威没有实卡，真实出画和全制式待持卡用户确认；不宣称性能提升、全硬件或长期稳定通过。详细记录docs/PR34_CAPTURE_SETTINGS_REPORT_2026-10-12.md。验证后合入并普通推送main完成PR34，无打包／Release／关机。
 
 2026-10-12 PR34合并收尾：seal.py validate通过834源码／配置、334构建输入、12EXE、11回归、9最终GUI及两个草稿保存场景；旧62树／509脏文件、原包1626文件完整。适配提交b60830c及tested标签封存，GitHub固定head f1f53ace合并成功（7b9332513257363ec3474c7232bf2bc448296f17），隔离候选49eb6bd吸收远端记录，只多同步远端既有star-history.svg。main merge6570f5672ce3496c4b9bfd27750cb59c1917cc4d完整树等于候选907bad1dd0e077647ff632213fde77b8084e00d6，产品源码与实测一致；后续仅本段及报告收尾文档。普通推送／PR状态／61旧树保持／增量最终bundle的实际结果见reports/pr34-capture-settings-20261012/final.json。修正一次PowerShell未引用HEAD^{tree}导致的只读查询错误后，用带引号参数成功取得树SHA；没有执行其失败结果作为合并依据。
+
+
+## 2026-10-12 日志50采集补帧误重置修复
+
+按用户“尝试修复”，main a167831起点，隔离codex/fg-capture-recovery-20261012；archives/fg-capture-recovery-20261012/start.json与增量bundle存档64旧树/515脏文件。最小生产修改仅SceneCadenceAnalyzer两文件：上一间隔改为固定5值中位基线，不缓存帧、不改真实PTS/VRR/预算/队列/UI33ms/250ms/默认GPU优先级。补永久CPU/GPU回归和CMake测试登记。
+
+命令python -X utf8 -B -I tmp/fg-capture-recovery-20261012/scene-test.py before/after：30检查从5失败到0；build.py依赖闭包22项/10EXE，55.4秒，非clean全量；configure.py完整CMake通过。harness/regress.py scene timing contracts capture-cadence、presenter lifecycle video rollback全部通过；capture-cadence-before预期exit1，原生产库224帧2误重置/221生成，修复四组各0/223。真实P010/DLSS/VFG、外部COM链/缓冲引用、resize故障恢复及200ms真断点/D3D12错误0；GTA八轮设置、事务seek、回滚通过。gui-smoke.py GPU/软件生产UI实际GTA播放和正常退出通过。同步图回归不是FPS/显示延迟证据，无实卡或普遍性能收益声明。
+
+工具夹具PATH/环境键、路径转义、旧Ninja缺目标、负对照输出目录断言和GUI日志路径失败已修，未以失败批次冒称通过；详细失败记录见REPORT。严格旧树核对失败于并行claude/xess-flow-tune树的新增修改：63原树完全保持，差异原样记录worktree-audit.json，没有写入/回滚/合入该树。main及原分支tip保持。validation.json核对源码/输入/10EXE/原包1626文件和原日志SHA；runtime/SDK/模型无新增入Git。
+
+全产物E:/项目/Veyra本轮archives/build/tests/logs/tmp/reports；实际命令、原回执与边界见docs/FG_CAPTURE_RECOVERY_REPORT_2026-10-12.md。可用程序tests/fg-capture-recovery-20261012/app/veyra_qml_ui.exe，未合并main/push/打包/Release/关机。最后源码commit/tag/bundle、保护及存储核对见reports/fg-capture-recovery-20261012/final.json。反馈者Elgato/5070Ti/120Hz仍需同设置复测；不强改设备时钟或延长deadline掩盖剩余问题。
+
+## 2026-10-12 专业模式原生视频遮挡播放条
+
+用户要求追溯画面盖住播放条；从34f479e隔离codex/pro-video-geometry-20261012。start/bundle保护65旧树/509脏文件。确认4557ab6新增限速状态选项后统计区动态增高，但Main仍固定减172；常见窗口遮挡56、900宽遮挡90逻辑像素。git历史和真实旧e8300d9 QML普通窗口0遮挡共同定位引入点；旧宽度少14、窄标题差40和播放条固定36的问题一并消除。
+
+生产仅Main/ProPage两QML改动，统一videoViewport及依赖尺寸、按变化事件同步，不加生产Timer/update/requestUpdate，不改33ms/250ms、优先级、引擎、算法或真实配置。保留打开源前非零尺寸。使用原已验EXE c815906d…，Qt6.8.3 qmlcachegen --only-bytecode编译两QML通过，输出build/pro-video-geometry-20261012；不是C++全量clean构建。
+
+命令Python311 -X utf8 -B -I scripts/acceptance/pro-video-geometry-test.py after --renderer d3d12|software --scale 1|1.5 --donor-app E:/项目/Veyra/tests/fg-capture-recovery-20261012/app --media E:/Ai/知识/小七姐/GTAVI_An_Extended_Look_4K_Native.mp4：四模式各13布局（52组合）实际HWND/QML一致、遮挡0，另永久夹具完整复跑软件100%通过。覆盖选项、四语言、720宽、检查器650宽、极简/全屏返回，单进程约26秒，GUI无绑定/D3D错误。before --baseline-ref 4557ab6^ --case normal-active-policy正常完成、遮挡0而旧14/2间隙仍在；160222首次遗漏NodePage同版依赖加载失败，修夹具后160403通过目的对照，未把失败当通过。夹具改独立日志防追加混入，历史QML树完整替换/恢复，异常只结束自有进程；初次屏幕截取被其它窗口遮住，删除副本、不作证据。
+
+tmp/pro-video-geometry-20261012/perf.py before|after d3d12|software顺序各约45秒：同用户4K GTA、原版单层1080p NR、强度1/调控关、普通优先级，实际视频30fps。GPU界面NR5.852→5.839ms/UI36→34提交每秒，软件5.751→5.901/UI38→40；均后台窗口，不宣称前台完整性能通过或提速。四组外部class采样ACCESS_DENIED（增加query权限仍失败）原记录保留；独立产品日志actual=2/state=1/status0确认普通优先级。CPU早期窗口有波动，全部采样及限制见REPORT，不用单次读数宣传下降。没有持续resize循环，修复后每组仅开源和状态初始化共3次SetWindowPos。
+
+git diff --check、Python夹具语法通过。audit.py核对59个QML与356个原件文件；33ms插值/bridge/宿主/presenter源码SHA不变，runtime/SDK/模型无新增进Git。control.py verify：64原树不变，Claude xess-flow-tune树外部并行修改及收尾外部提交推进原样记录、未碰/合入，其余旧tip/main保持。详细命令、回执、失败及边界见docs/PRO_VIDEO_GEOMETRY_REPORT_2026-10-12.md、reports/pro-video-geometry-20261012/validation.json。
+
+全产物在E:/项目/Veyra本轮archives/build/tests/logs/tmp/reports；可用程序tests/pro-video-geometry-20261012/app/veyra_qml_ui.exe，驱动已移除、QML恢复源码。未合并main/push/打包/Release/关机；收尾commit/tag/bundle/清理见reports/pro-video-geometry-20261012/final.json。
+
+收尾tmp缓存清理两次遭自动审批“blocked by policy”拒绝。第二次先只读核验12个路径在本任务内、无链接，固定LiteralPath仍被拦截；没有继续绕过，约40MB缓存保留，cleanup.json如实标记未删。该清理不影响本轮修复完成。
+
+## 2026-10-12 补帧人物边缘果冻：J0 判定（Claude）
+
+- 授权：用户看完 reports/jelly-latency-20261012/方案选项.md 后回复“延迟这块先放着吧，先搞果冻的问题……你先做J0判定吧”，随后“测试xess即可，不要浪费时间”“那就测dlss”。存档：标签 checkpoint/pre-claude-jelly-20261012（main 76f41b3），archives/claude-jelly-20261012（bundle 已 verify，start.json 61 工作树/504 脏文件）；分支 claude/jelly-20261012。只加诊断测试，不改产品。
+- 构建：py -3.11 -I E:/项目/Veyra/tmp/claude-jelly-20261012/build.py（产品源码逐个对照 Codex 合并构建回执，只编译新测试并用其链接文件链接，6–8 秒）。运行目录为私有副本 tests/claude-jelly-latency-20261012/app，D3D12 调试层开启。
+- 结果（4K 合成场景，30fps 位移，FG 2X，光流 1080p）：DLSS 补帧对零、产品光流、理想、取反、全屏 +120 px 的矢量结果相同（轮廓带误差 2.77/2.58），即不读矢量。FSR 依赖矢量：零 6.59/10.52（镜头转动时背景整体 16.26），产品光流 1.54/2.04，与理想 1.71/2.05 相当。开 NR 后轮廓带偏离原图更多（NR 光流 13.00 对 NR 零 10.77），但静止人物内侧抖动没有增加。判定：光流精修（J1）没有收益，不实施。附带发现 initNvof 只给 DLSS 补帧建光流，只开 FSR 补帧时“光流”实际为 0。
+- 证据：logs/claude-jelly-20261012/j0/（j0-results.json、每组日志、裁切图/误差图/sheet）。详细结论与边界见 docs/JELLY_J0_2026-10-12.md。合成场景没有复现明显果冻，XeSS 未测；不 merge/push/Release。
+- XeSS 补测（用户：“主要是XESS……人物侧向奔跑……画面高速运动的时候”）：新增 veyra_fg_xess_boundary_tests。2560×1440 全屏，产品图 + VideoPresenter 的 XeSS 送显链路，SDK 调试功能“只显示插值帧”，用 DXGI 桌面复制抓屏（HDR 桌面按 SDR 白电平 4.75 还原）。侧跑场景每帧 27/80 px：零矢量（XeSS“自动”默认）7.68/9.65，产品光流 6.88/8.21，关闭清零校验 6.43/7.56，理想 5.47/6.01，取反 8.05/10.12。加分层深度只改善 2–4%；NVOF 网格 1/2、全分辨率光流、质量档无效，GPU DIS 更差。判定：XeSS 依赖我们的矢量，默认零矢量最差，逐像素精修（J1）对 XeSS 有收益。产品代码只加测试开关（VEYRA_TEST_XESS_ONLY_INTERPOLATED、fgMotionProbe 送入 XeSS 链路、VEYRA_TEST_NVOF_GRID），默认路径不变。证据 logs/claude-jelly-20261012/xess/。
+
+
+## 2026-10-12 接手 Claude XeSS 光流修复
+
+用户要求“claude又跑空额度了，继续接手他，完成xess修复”。读取其最新 d6689aca 会话，沿用最后授权：只修开启光流的人物/背景运动边界，Automatic 不改，延迟暂缓。独立 archives/xess-handoff-20261012/start.json、source-before.bundle（verify）和五文件 patch/副本保护 61 旧工作树/509 脏文件；在 E:/项目/Veyra/worktrees/xess-handoff-20261012 / codex/xess-handoff-20261012 从 7fe3ea6 接手，Claude 原树、桌面和 main76f41b3 不改，不派 Agent。
+
+继承两个诊断提交和 FlowRefine/FlowFill 半成品，完成 NVOF→逐像素邻格亮度匹配→相似颜色补洞→XeSS 工作尺寸运动的 GPU 分支；补资源/预算、pass shader/descriptor 顺序、barrier、首帧/reset零运动、失败/释放及 CMake 接线。仅 XeSS+显式光流+NVIDIA 生效，NR/SR 保留原校验光流，Automatic/其他光流后端/其他补帧不改；还原 Claude 半成品里的 FSR 初始化条件扩大。新增工作纳入已有光流计时，未改 33ms统计/约250ms状态/GPU默认优先级，无正常路径像素回读或逐帧等待。
+
+命令前缀为 Python3.11 -X utf8 -B -I，脚本与产物均 E:/项目/Veyra/{用途}/xess-handoff-20261012：
+
+- tmp/.../build.py 最终 logs/.../build-20261012-111040/receipt.json，22.2秒，17依赖闭包对象核对/重编、16EXE链接成功；不是clean全工程重编。GUI SHA256 43a5fea655a3b2840e5f5f25befac70c8ad6cd2de2f78c79385d8f83ea658edc。tmp/.../configure.py → configure-20261012-111144完整配置成功，新shader及test targets登记，无QuickPrivate。
+- tests/.../harness/regress.py xess-motion chain contracts hdr video rollback → logs/.../xess/tests-20261012-111135/receipt.json 六组通过；160真实GPU检查、6运动帧对改变、D3D12错误0。首帧/reset/Automatic零运动，原校验光流和未增强实帧像素相同，设置重建、失败回退、HDR颜色回归通过。
+- tests/.../harness/ui.py perf-old perf-new lifecycle → logs/.../xess-ui-20261012-111651/receipt.json，40.3/40.0/50.1秒通过；真实GUI seek/暂停恢复/2X→4X/零运动/AMD光流→NVOF/关闭开启，SDK framesPresented=4。AMD provider在RTX5070实际Dispatch成功，非AMD显卡验收。探针删除、Main.qml恢复。
+- tests/.../harness/quality.py → logs/.../quality-20261012-112023/results.json，6组每组11/11有效插值帧、debug/capture错误0。1440p XeSS2X、720p flow，中速27px/高速80px侧跑、80px横移轮廓带MAE8：6.8755→6.3781（-7.23%）、8.2148→7.4180（-9.70%）、3.7651→3.0332（-19.44%）；远处背景误差均降。不是实际果冻减少百分比，仍有弯曲残留。SDK只显示插值调试模式generated计数为0，不冒称计数证明；全部目标帧由像素匹配确认，matchedReal0，正常GUI另验2X/4X提交。
+- GTA6原4K30/原版NR一层1080/NVOF1080/XeSS2X，测试私有配置在打开源前固定普通class2（产品原有默认实时class5保持）。相同源帧300–840共541帧，Color.begin→Residual.end中位8.4835→8.8310ms（+0.348ms/+4.10%）、P95 8.6534→9.0396，双方约60fps提交；显存1980→2037MiB（+57）。不能把XeSS异步FgBatch时间戳或UI统计直接当全部处理/显示延迟。光流统计覆盖新增工作后约+0.57ms含旧漏记densify/adapt，实际成本看同边界处理图。汇总reports/.../validation.json。
+
+失败保留：110508性能夹具实际Native4K+默认class5，作废，修正sizePolicy0和普通优先级后110652/111651重测；111634抓屏重复帧耗尽容量仅4/11而失败，测试改像素去重+有界128张、加强为11/11且无采集错误，单独重建诊断测试boundary-build-20261012-112011（4秒），产品及其他EXE保持，最终六组与早期完整结果一致。单独重链首次LNK1181因工作目录错误，修复后通过。新保护核对器最初漏处理2棵detached HEAD，修正与开工None比较后61树/509文件全同，保留guard-detached-mismatch.json。
+
+本地构建 tests/.../app、Start-XeSS-Test.cmd 和独立 user-test-profile，未打新压缩包。1626母包文件哈希不变，SDK/DLL/模型/媒体未入Git。运行组件原件保持，默认UI/GPU行为保持，无main合并/push/Release/关机。真实用户游戏、AMD/Intel显卡、长期显存和屏幕端到端延迟未验，不宣称根治。详见 docs/XESS_HANDOFF_REPORT_2026-10-12.md；最终本地commit、source-after.bundle、全部保护/构建回执哈希见 reports/xess-handoff-20261012/final.json。
+
+启动入口最终实测：tmp/.../check-launcher.py，reports/.../launcher.json，9.6秒。初次检查误在继承管道关闭后查询已退出进程，日志实际正常；种子配置补齐field-render迁移旁文件，真实GUI断言XeSS2X/光流/NVOF/原版NR1080p成功，按时退出，检查探针已删除。
+
+## 2026-10-12 核对 Claude 计划并补齐 FSR 单独光流漏项
+
+用户追问“FSRbug顺手修复了没有”“claude说的其他工作都完成了吗”。重新读取本地d6689aca会话及其获准JELLY_FIX_PLAN，确认FSR单独开启补帧的光流初始化明确在计划内。初次交付f468dfb只完成XeSS，把FSR排除是Agent漏项，已向用户明确纠正。原main76f41b3、f468检查点/bundle/final回执、原XeSS测试目录和61旧树/509脏文件保持；在同一codex/xess-handoff-20261012继续，独立产物E:/项目/Veyra/{用途}/fsr-flow-followup-20261012。start.json记录不可变前次证据哈希，未重新生成基线来掩盖变化。
+
+产品只修EnhanceGraph::initNvof的图内FG光流消费者条件，原DLSS条件加入Fsr/Fsr4；显式Zero/VFG/stillImage/noFeatures保留，FSR不扩用XeSS精修。原J0测试强制standalone绕过缺陷；新增product-only/auto-only/zero-only，NR/SR/standalone全关，要求实际NVOF次数。不改光流来源规则、UI统计33ms/状态约250ms、GPU默认优先级、运行库/模型/驱动/真实配置，不加正常路径读回/每帧等待。
+
+实际命令前缀Python3.11 -X utf8 -B -I，脚本在tmp/fsr-flow-followup-20261012：
+
+- build-before.py→logs/.../before-build/receipt.json，4.11秒；用旧f468图对象链接新测试。test.py before→tests-20261012-115656/receipt.json，旧代码exit1预期失败：FSR生成9/评分8帧、NVOF0、D3D12错误0。
+- build.py→build-20261012-115740/receipt.json，40.7秒，4依赖闭包对象/16EXE；复用已验对象，非全量clean构建。GUI版本2.0.6-xess-fsr-fix-test-20261012，SHA256 02d10c603da2a49c3bb2a352b3f741c241626d959baba97d482c594fddb342c6。configure.py→configure-20261012-115841/receipt.json，35.7秒完整CMake配置通过。
+- test.py flow auto zero standalone xess contracts hdr video→tests-20261012-115841/receipt.json，8项通过，最长GTA6设置重建43.62秒。FSR显式光流/Automatic均实际NVOF9次，Zero0次，强制standalone对照9次；轮廓带MAE8旧10.5214→新2.0412、auto2.0411，与standalone2.0411一致，所有realMae0/debugErrors0。XeSS合同160检查/6改变帧对/失败与debug0。不能把合成误差改进说成用户游戏果冻降低比例；FSR现在实际计算所选光流，可能比错误零运动路径多GPU成本，无提速声明。
+- gui.py→gui-20261012-120643/receipt.json，30.8秒；真实GTA6原4K30、FSR3.1 2X、NR/SR全关、普通优先级私有profile。NVOF实际阶段计时/seek/零运动/AMD光流provider/补帧关闭开启/恢复NVOF通过，约60提交fps。前两次gui-120042/120259夹具误用后端名fsr和QML运动来源2，实际API是fsr3与0/1；失败保留，修夹具后通过。引擎Automatic单独验证，未假称GUI有该选项。
+- 原计划还要求密集竖条横移回归：诊断新增bars场景，22px间隔/4px竖条、27px源帧位移，静止前景。最初bars-121021纯周期图按全图匹配只识别1/11而失败。修测试用下方非周期纹理角落识别时间、只评分上方竖条区，原12 MAE身份阈值/11帧完整性/错误零要求保持。rebuild-boundary.py最终boundary-build-20261012-121135/receipt.json，4.12秒，仅诊断EXE变，产品及其余15EXE同。bars.py→bars-20261012-121146/receipt.json，旧/新各11/11中间帧、matchedReal0/debug0/capture0，轮廓带10.1397→9.7037、远背景12.4370→10.2953，无本组负收益；不声称栏杆模型缺陷修复。
+- launchers.py→reports/.../launchers.json：实际运行Start-XeSS-FSR-Test.cmd和Start-FSR-Only-Test.cmd，9.77/9.47秒读取独立配置通过并退出，Main恢复、探针删除。前者原版NR1080+XeSS2X/光流/NVOF，后者NR/SR全关+FSR3.1 2X/光流/NVOF；配置迁移旁文件完整复制，只写本轮私有目录。
+
+原报告/计划的FSR排除语句已纠正并链接docs/FSR_FLOW_FOLLOWUP_2026-10-12.md；历史f468数字仍对应旧交付，不冒充联合版重测。本机RTX5070/FSR3.1及其AMD光流provider通过，Fsr4枚举覆盖不等于AMD/Intel或FSR4ML实卡验收。延迟研究、栏杆模型问题仍按用户要求暂缓；真实用户游戏观感/长期显存/屏幕延迟未验。
+
+seal.py检查代码/输入/16EXE/QML/原运行组件、全部回执、61旧树/509脏文件、原XeSS构建不变和改动范围；本地提交/增量源码bundle/检查点/最终保护回执见reports/fsr-flow-followup-20261012/final.json。没有新运行库压缩包、二进制入Git、main合并、push/Release、子Agent或关机。
+
+## 2026-10-12 用户要求 XeSS 复测幅度与直接贴图
+
+用户：“claude那边应该有做测试程序，你测测Xess改善了多少，然后把图贴给我看看”。使用Claude已有veyra_fg_xess_boundary_tests、e7af5d8联合构建，不重编/改产品。新产物统一E:/项目/Veyra/{logs,tests,tmp,reports,archives}/xess-visual-ab-20261012，旧目录/报告/运行组件保持。开工start.json保存main/HEAD、测试app全部原件与既有final/bundle/画质JSON哈希；同一隔离分支只新增docs/XESS_VISUAL_AB_2026-10-12.md及本记录，无子Agent。
+
+命令Python3.11 -X utf8 -B -I tmp/xess-visual-ab-20261012/run.py：同一EXE以VEYRA_TEST_FLOW_REFINE0/1切换旧/新光流，RTX5070、XeSS2X1440p、NVOF720p、NR/SR全关。run27/run80/orbit80/bars27各A/B，再加两组zero导出合成中点真值，共10项exit0，每项11/11目标插值帧、matchedReal0/debug0/capture0，3.69–4.22秒。诊断按30fps位移/时间构造，放慢送显抓帧，不测FPS性能。
+
+logs/.../results.json与reports/.../measurement.json：中速侧跑轮廓带MAE8 6.8755→6.3781（-7.23%），高速8.2148→7.4180（-9.70%），背景横移3.7651→3.0332（-19.44%），密集竖条10.1397→9.7037（-4.30%）。背景误差均下降，聚合结果与此前独立测试一致；不解释为真实游戏果冻减少比例。不是每个区域都好：高速人物内部0.2814→0.2849，横移内部0.0004→0.0483；不隐藏这一小幅负变化。代码模型未改，仍有轮廓残差/锯齿/弯曲。
+
+images.py生成reports/.../images/xess-side-run-comparison.png和xess-fast-error-comparison.png。固定帧对14→15中点14.5、448×448腿部、左合成真值/中旧光流/右精修；原像素未缩放或修饰，拼图每区域逐字节与原图验证。相同×4绝对RGB误差图（越黑越好）；该单帧高速整个裁切MAE6.6951→6.2269、中速7.0968→6.9294，不混淆为11帧轮廓带均值。原图、拼图、坐标及SHA见reports/.../images.json，已实际查看布局/文字/像素图。
+
+audit.py核对测试/GUI/所有app原件、两份旧final、旧JSON和源码bundle、当前两个文档范围、原61树/509脏文件、main及数据/图片原件，最终回执reports/.../final.json；诊断EXE SHA050740291e5cbb07a39da07da801dae03c192737a2f95b2a3bc07708f9ea49b7保持。没有真实游戏逐帧真值/观感或新性能验证，无main合并、push、打包、Release、二进制入Git或关机。
+
+## 2026-10-12 XeSS 光流修复复审与前后向一致性（Claude）
+
+用户要求审查 Codex 已完成的 XeSS 开启光流修复（实际效果一般），判断默认 1080p 光流是否为原因，且不得打断/影响仍在工作的 Codex。只读 codex/xess-handoff-20261012（f0fafdf）及其构建/回执；新工作树 worktrees/xess-flow-tune-20261012、分支 claude/xess-flow-tune-20261012，存档标签 checkpoint/pre-claude-xess-tune-20261012 与 archives/claude-xess-tune-20261012/start.json、source-before.bundle（verify）。构建 tmp/claude-xess-tune-20261012/build.py 复制自 Codex 构建脚本，依赖闭包 16 对象、17 EXE，读入对象/着色器哈希核对、着色器改用复制。capture.py/gui.py/motion.py 每次启动前检查其他 Veyra 进程；Codex 运行 capture_cadence_fg、live_presentation、qml_ui 期间三次拒绝启动并等待。
+
+复审：Codex 接线（资源/描述符/状态/A=上一帧 B=当前帧/首帧 reset/NR-SR 保持/计时）未发现缺陷。新增无窗口测试 veyra_xess_motion_quality_tests（读回送 XeSS 的运动，按区域比真值 EPE，含 4K perf 模式）：Codex 版主要残差是人物移开露出的背景（run80 EPE 38.5、63%>4px，颜色阈值不触发且错误向量被当可信来源扩散）与快速摆动四肢（各版 20–50px）。XeSS 敏感度：理想 6.0076，露出区置零 7.5111，四肢置零 7.2748。默认光流 1080p 不是原因：全分辨率 EPE 3.09→3.06（Codex 版），本版全分辨率反更差；J0 XeSS 8.2148→8.1977；NVOF 4K 成本约 3.5 倍。
+
+改动：仅 XeSS+光流+NVIDIA NVOF 时 NVOF 输出后向光流（NvOfSession 已有 BOTH），FlowRefine 选择不变、记录选中向量的前后向不一致量，FlowFill 不一致 >2 光流像素即填补、只从 ≤0.5 的像素借向量；EnhanceGraph 新增两张网格纹理、SRV 槽与常量，测试开关 VEYRA_TEST_FLOW_CONSISTENCY=0；FgXessBoundaryTests 加 ideal-uncovered0/ideal-limbs0 敏感度变体；新测试入 CMake。撤回：一致性参与候选选择（bars27 9.7037→9.9149 负收益）、填补代价下限（只是误差互换）；触发 2/4/8、来源 0.25/0.5/2 无实质差异。
+
+结果（XeSS 抓屏 11/11 帧、采集/D3D12 0 错误，Codex 版数字本构建逐位复现）：run27 6.3781→6.4016（+0.37%），run80 7.4180→7.3042（−1.53%），orbit80 3.0332→2.5901（−14.61%，距理想 2.0984 的差距缩小 47%），bars27 9.7037→9.6196（−0.87%）；侧跑场景 >32 级像素比例略增（7.96→8.88、9.01→9.63）。无窗口运动：露出区 run80 38.5→6.6、orbit80 41.9→7.5。成本：4K 无窗口光流阶段 1.52→2.27 ms；真实 GUI（GTA VI 4K30、原版 NR 1080p、XeSS 2X、class2、帧 300–840 共 541 帧）光流阶段 1.53→2.26 ms，整图 9.52→9.19 ms 属波动不声称提速，提交 60/60。回归：Codex 合同测试 160/0、debug 0；GUI 生命周期（Codex ProbeXess 原样复制）52.6s 通过，三种运动路径与 NVOF 双向仅在 XeSS 分支。
+
+本地测试版 tests/claude-xess-tune-20261012/delivery（Codex 测试包复制、去测试 EXE、换本版 EXE 与两个着色器；New/Codex/Original 三入口共用一份设置）。全部数字与来源见 reports/claude-xess-tune-20261012/results.json，报告 docs/XESS_FLOW_REVIEW_2026-10-12.md。四肢、栏杆残差，真实游戏观感、AMD/Intel、长期显存、屏幕延迟未验；无 merge/push/Release/子 Agent/关机。
+
+## 2026-10-12 边缘神盾开关与 AMD 光流（Claude）
+
+用户追问精修是否只对 NV 光流生效，要求给 AMD 光流也加上，做成独立开关放在补帧光流选择下面并起名。答：此前精修与前后向检查都只限 NVIDIA NVOF。同一分支 claude/xess-flow-tune-20261012 续做；Codex 期间运行 pro-video-geometry 等 GUI 测试，抓屏/GUI/GPU 计时脚本启动前检查其他 Veyra 进程，多次等待其结束。
+
+实现：EnhancementSettings::fgMotionRefine（默认开，非 XeSS 光流运动时视为非活动）→ GraphDescription → EnhanceGraphDesc；requiresGraphRebuild 与图的实时设置检查在其变化时重建。桥接 edgeAegis 存界面偏好（同 NR 抗闪烁/音频同步，启动时会话后恢复），会话/预设格式不变。列表页“光流 · 运动估算”与节点“输入 · 光流”卡在光流算法下加开关「边缘神盾」；catalog 只追加 4 条译文（本分支 catalog 与全量 extract.py 本就不同步，未全量重提取）。图：FlowRefine 增加 FidelityFX 向量（网格8、整像素、预热/场景切换零运动）；新 FlowClaim.hlsl（清零/认领/结算，InterlockedMax 按代价认领上一帧位置，与胜者向量差进 FlowFill，阈值同 NVIDIA）；CMake 登记。测试：EffectChainTests 加开关活动性/重建断言；运动质量与 XeSS 抓屏测试加 AMD 后端（多跑帧避开预热），运动质量测试 perf 模式支持 AMD。构建 build-20261012-160356（42 对象、全部 EXE）与 161421（测试）。
+
+结果：NVIDIA 运动误差与改动前逐位相同。AMD 无窗口露出区 EPE run80 71.7→67.3→19.7、run27 35.4→41.0→23.8、orbit80 68.0→63.3→17.4（修复前→只精修→精修+认领），密集竖条 FidelityFX 自身场景切换判定三路均零运动（原有行为）。AMD XeSS 抓屏轮廓带 MAE8：run27 7.5361→7.6048→7.2088，run80 8.2161→7.8578→7.2462，orbit80 3.8166→3.2447→2.6991，均 11/11 帧、采集/D3D12 0 错误。4K 无窗口光流阶段：AMD 0.41→0.91→1.01 ms，NVIDIA 1.03→1.58→2.29 ms。回归：效果链、预设库、Codex 合同 160/0、界面合同、修复合同 259/0、HDR 颜色、非活动效果 9/0、真实视频设置重建全部通过。GUI（gui_aegis.py，GTA VI 4K30）：默认开→NVOF 前后向、关→校验光流、AMD+开→FidelityFX 认领、重启保持关、再开写回偏好，截图 reports/claude-xess-tune-20261012/edge-aegis-ui.png；首两次运行因夹具期望序列未计入中间重建及截图前未切到补帧页而判失败，修夹具后通过，失败记录保留。
+
+测试版 tests/claude-xess-tune-20261012/delivery 更新为新 EXE/着色器/两个 QML 页，入口改为 New/Codex 两个（关开关即修复前）。AMD 实卡、真实游戏观感未验；无 merge/push/Release/子 Agent。
+
+
+
+## 2026-10-12 2.0.7 本地整合测试包开工
+
+用户授权 main 合并与测试包。开工 main a167831，66旧树/509脏文件独立快照、增量 bundle verify；隔离 codex/test-2.0.7-20261012 合入 d883216 与 e46bbdf。三处冲突为 AGENTS/WORKLOG/catalog，保留双方记录和主线翻译，增加四条 Edge Aegis 翻译。其余旧分支以祖先/最终差异审核，不恢复旧实验。计划 docs/TEST_2.0.7_PLAN_2026-10-12.md；构建/验收尚未完成，不把来源分支通过冒充组合通过。实际产物 E:/项目/Veyra 的本轮 archives/build/tests/logs/tmp/reports/test-packages。
+
+### 2026-10-12 2.0.7 构建前采集格式追加修复（待本轮回归）
+- 用户追加先选分辨率、MJPEG 红色警示、不支持的格式不得自动路由。新增草稿两轴和严格像素 key 校验、联动选择禁用、无效格式错误通知；更改分辨率/帧率需重新确认像素格式。有效历史完整配置继续恢复，部分草稿存现有 JSON，不升级二进制配置。移除压缩格式连接/解码失败的隐式 RGB 重试，保留显式诊断开关；没有改采集缓冲、逐帧传输或 UI 刷新频率。
+- 首轮完整配置暴露最新 FFmpeg staging 无 import LIB，按对应 DEF 在 E 盘构建目录生成；DLL 未改。随后完整编译在 capture_format_selection_tests 缺 MSVC /utf-8 失败（中文源被按本机代码页解析），给该目标明确 /utf-8。失败证据 logs/test-2.0.7-20261012/build-20261012-163711、build-20261012-163842 保留；尚未宣称通过。
+
+### 2026-10-12 2.0.7 产品整合验收与本地交付封存
+- 完整CMake在本轮独立build目录最终成功，27目标；最终75步骤47.2秒，产品实现4a4952f，EXE SHA256 26967f1308cc9c6afdb7517051fb5a7fdef93e23da69d2251e66289651189c51，显示2.0.7-test/PE2.0.7.0。命令 scripts/acceptance/test-2.0.7-build.py；日志logs/test-2.0.7-20261012/build-20261012-191841。
+- regress.py最终逐项28组通过；字幕/数据夹具参数修正复测、源旧索引误选240FPS的失败均如实保留。采集GUI15逻辑场景及378/378格式完整性、MJPEG红色、错误不连接、草稿与全设置恢复/继续/启动通过。原生源显式30FPS稳定采集/重连通过。证据reports/test-2.0.7-20261012/product-validation.json、capture-gui.json与TEST_2.0.7_REPORT_2026-10-12.md。
+- XeSS实际GUI开关/重启、seek/暂停/倍率/光流/关闭再开通过；GTA4K30+原版NR1080+XeSS2X、GPU普通class2，20独立样本软件提交60FPS，应用GPU图8.54ms、NR采样5.85ms、光流2.39ms。这不是完整XeSS驱动开销、屏幕刷新/延迟或新A/B提速证明；默认优先级仍原有实时class5。几何52状态D3D12/软件×100%/150%无播放条遮挡。
+- 66旧树/509脏文件及分支tip核验原样，完成来源均为整合祖先。旧RTSS仅剩计划文档，其余旧归档/撤回实验不混入。没有新增生产Timer、统计频率或采集逐帧缓冲变更，没有运行库/SDK/模型/私有素材入Git。
+- 本验收tip按用户授权本地main --no-ff合并，完整Git树必须相同；随后脚本test-2.0.7-package.py seal/cold制作NVIDIA/AMD完整包及本版源码，审计逐文件/运行组件/厂商/PE/ZIP并用解压最终ZIP私有目录冷启动。合并hash/保护快照见archives/test-2.0.7-20261012，最终包证据见test-packages/test-2.0.7-20261012/DELIVERY.json、cold-start.json；完成前不交付。当前两份staging内容审计已通过，最终封包/冷启动另记外部回执，避免源码自引用改包。NV长期显存增长和AMD/BMD现场未宣称根治；未push/Release/上传/关机。

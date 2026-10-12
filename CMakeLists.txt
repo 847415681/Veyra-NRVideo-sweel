@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(veyra VERSION 2.0.6 LANGUAGES C CXX RC)
+project(veyra VERSION 2.0.7 LANGUAGES C CXX RC)
 # Moonlight/Xbox have C sources independently of the optional PS5 backend.
 # Shown in the EXE's version resource and in the package name. CMake versions
 # must be numeric, so the beta marker lives here instead.
-set(VEYRA_DISPLAY_VERSION "2.0.6" CACHE STRING "Human-readable version string")
+set(VEYRA_DISPLAY_VERSION "2.0.7" CACHE STRING "Human-readable version string")
 # The cache keeps the first value it ever saw, so a release that bumps
 # project(VERSION) used to ship an EXE still stamped with the previous display
 # string. Re-align it whenever the cached label does not start with the project
@@ -297,6 +297,9 @@ veyra_add_compute_shader(veyra_shader_nr_temporal NrTemporal)
 # Stage-5 output stabiliser (anti-flicker, default off).
 veyra_add_compute_shader(veyra_shader_nr_hold NrHold)
 veyra_add_compute_shader(veyra_shader_flow_adapt FlowAdapt)
+veyra_add_compute_shader(veyra_shader_flow_refine FlowRefine)
+veyra_add_compute_shader(veyra_shader_flow_fill FlowFill)
+veyra_add_compute_shader(veyra_shader_flow_claim FlowClaim)
 # VfgShotChange: per-pair shot-change test for VFG (replaces the SDK's automatic one).
 veyra_add_compute_shader(veyra_shader_vfg_shot_change VfgShotChange)
 veyra_add_compute_shader(veyra_shader_rgb_nv12 RgbToNv12)
@@ -556,7 +559,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
 
   # veyra_sources: product input sources (Playbook R3/R7). MediaFileSource
   # composes veyra_media; no second decode implementation exists.
-  add_dependencies(veyra_pipeline veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_flow_adapt veyra_shader_vfg_shot_change)
+  add_dependencies(veyra_pipeline veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change)
   add_library(veyra_sources STATIC
     src/source/NativeCaptureSink.cpp
     src/source/MediaFileSource.cpp
@@ -732,6 +735,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   add_executable(veyra_capture_color_tests tests/unit/CaptureColorContractTests.cpp)
   add_executable(veyra_capture_format_selection_tests tests/unit/CaptureFormatSelectionTests.cpp)
   target_compile_features(veyra_capture_format_selection_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_capture_format_selection_tests PRIVATE /utf-8)
   target_include_directories(veyra_capture_format_selection_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_compile_definitions(veyra_capture_format_selection_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_link_libraries(veyra_capture_format_selection_tests PRIVATE ole32 strmiids)
@@ -820,6 +824,9 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   add_executable(veyra_settings_transaction_tests tests/integration/SettingsTransactionTests.cpp)
   target_compile_features(veyra_settings_transaction_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_settings_transaction_tests PRIVATE veyra_engine)
+  add_executable(veyra_capture_cadence_fg_tests tests/integration/CaptureCadenceFgTests.cpp)
+  target_compile_features(veyra_capture_cadence_fg_tests PRIVATE cxx_std_20)
+  target_link_libraries(veyra_capture_cadence_fg_tests PRIVATE veyra_engine)
   add_executable(veyra_sr_quality_tests tests/integration/SrQualityTests.cpp)
   target_compile_features(veyra_sr_quality_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_sr_quality_tests PRIVATE veyra_engine)
@@ -914,6 +921,26 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_include_directories(veyra_srfg_depth_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
   target_compile_definitions(veyra_srfg_depth_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN VEYRA_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
   target_link_libraries(veyra_srfg_depth_tests PRIVATE veyra_engine)
+  add_executable(veyra_fg_motion_boundary_tests tests/integration/FgMotionBoundaryTests.cpp)
+  target_compile_features(veyra_fg_motion_boundary_tests PRIVATE cxx_std_20)
+  target_include_directories(veyra_fg_motion_boundary_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
+  target_compile_definitions(veyra_fg_motion_boundary_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN VEYRA_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+  target_link_libraries(veyra_fg_motion_boundary_tests PRIVATE veyra_engine)
+  add_executable(veyra_fg_xess_boundary_tests tests/integration/FgXessBoundaryTests.cpp)
+  target_compile_features(veyra_fg_xess_boundary_tests PRIVATE cxx_std_20)
+  target_include_directories(veyra_fg_xess_boundary_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
+  target_compile_definitions(veyra_fg_xess_boundary_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN VEYRA_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+  target_link_libraries(veyra_fg_xess_boundary_tests PRIVATE veyra_engine d3d11 dxgi)
+  add_executable(veyra_xess_motion_contract_tests tests/integration/XessMotionContractTests.cpp)
+  target_compile_features(veyra_xess_motion_contract_tests PRIVATE cxx_std_20)
+  target_include_directories(veyra_xess_motion_contract_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
+  target_compile_definitions(veyra_xess_motion_contract_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN VEYRA_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+  target_link_libraries(veyra_xess_motion_contract_tests PRIVATE veyra_engine)
+  add_executable(veyra_xess_motion_quality_tests tests/integration/XessMotionQualityTests.cpp)
+  target_compile_features(veyra_xess_motion_quality_tests PRIVATE cxx_std_20)
+  target_include_directories(veyra_xess_motion_quality_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
+  target_compile_definitions(veyra_xess_motion_quality_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN VEYRA_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+  target_link_libraries(veyra_xess_motion_quality_tests PRIVATE veyra_engine)
   # Qt 6.8.3 is staged under deps/ (the user allowed the latest Qt). The probe is
 # opt-in so a normal product build never depends on Qt being present.
 option(VEYRA_BUILD_QT_PROBE "Build the Qt + D3D12 host probe" OFF)

@@ -656,6 +656,11 @@ VPage {
                             value: options[veyra.opticalFlowChoice]?.label ?? (veyra.opticalFlowChoice === 2 ? qsTr("GPU DIS 已移除，请重选") : qsTr("未知配置"))
                             onPicked: id => veyra.setOpticalFlowChoice(Number(id))
                         }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            NodeLabel { Layout.fillWidth: true; text: qsTr("边缘神盾（XeSS 防果冻）") }
+                            VSwitch { objectName: "node-edge-aegis"; checked: veyra.edgeAegis; onToggled: checked => veyra.edgeAegis = checked }
+                        }
                         NodeLabel { text: qsTr("运动估算质量") }
                         VSeg {
                             objectName: "node-flow-quality"

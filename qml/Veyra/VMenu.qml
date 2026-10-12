@@ -241,7 +241,7 @@ Popup {
                                             Layout.fillWidth: true
                                             Layout.minimumWidth: 0
                                             text: row.modelData.label
-                                            color: Theme.t1
+                                            color: row.modelData.danger === true ? Theme.err : Theme.t1
                                             font.family: Theme.fontUi
                                             font.pixelSize: Theme.fsBody
                                             font.weight: Font.Medium

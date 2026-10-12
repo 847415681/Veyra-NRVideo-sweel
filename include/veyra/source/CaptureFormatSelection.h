@@ -12,7 +12,7 @@ namespace veyra::source {
 // persisted identity so an old combined selection still restores one type.
 struct CaptureFormat {int index=0;unsigned width=0,height=0;double fps=0;std::wstring label;std::wstring key;int rank=0;int tier=0;bool driverCurrent=false;std::wstring pixel;std::wstring scan;bool interlaced=false;int64_t interval100ns=0;bool supported=true;bool automatic=false;};
 enum class CaptureFormatAxis { Resolution, FrameRate };
-struct CaptureFormatOption { std::wstring id, label; bool disabled=false; };
+struct CaptureFormatOption { std::wstring id, label; bool disabled=false, discouraged=false; };
 
 inline const CaptureFormat* selectCaptureFormat(std::span<const CaptureFormat> formats,int legacyIndex,std::wstring_view key){
     for(const auto& format:formats)
@@ -34,11 +34,34 @@ inline std::wstring captureResolutionId(const CaptureFormat& format){
     if(format.automatic)return L"auto";
     return std::format(L"{}x{}",format.width,format.height);
 }
+// A draft resolution/rate may exist before the user has chosen a concrete
+// pixel format. Representatives populate dependent menus; they are never a
+// capture selection and must not silently replace a missing media identity.
+inline const CaptureFormat* captureResolutionSample(std::span<const CaptureFormat> formats,std::wstring_view resolution){
+    if(resolution.empty())return nullptr;
+    for(const auto& f:formats)if(captureResolutionId(f)==resolution)return &f;
+    return nullptr;
+}
 inline std::wstring captureFrameRateId(const CaptureFormat& format){
     if(format.automatic)return L"auto";
     // Progressive and interlaced modes that share a numeric rate stay distinct.
     // Field order stays on the pixel list, so it does not create two identical fps rows.
     return std::format(L"{}|{}",format.interval100ns>0?format.interval100ns:format.fps>0?captureFrameInterval(format.fps):0,format.interlaced?1:0);
+}
+inline const CaptureFormat* captureRateSample(std::span<const CaptureFormat> formats,std::wstring_view resolution,std::wstring_view rate){
+    if(resolution.empty()||rate.empty())return nullptr;
+    for(const auto& f:formats)if(captureResolutionId(f)==resolution&&captureFrameRateId(f)==rate)return &f;
+    return nullptr;
+}
+inline const CaptureFormat* selectCapturePixelFormat(std::span<const CaptureFormat> formats,std::wstring_view resolution,std::wstring_view rate,std::wstring_view key){
+    if(key.empty())return nullptr;
+    const auto* f=selectCaptureFormat(formats,-1,key);
+    return f&&!resolution.empty()&&!rate.empty()&&captureResolutionId(*f)==resolution&&captureFrameRateId(*f)==rate?f:nullptr;
+}
+inline bool captureMjpegFormat(const CaptureFormat& format){
+    std::wstring pixel=format.pixel;
+    for(auto& c:pixel)if(c>=L'a'&&c<=L'z')c-=L'a'-L'A';
+    return pixel==L"MJPEG"||pixel==L"MJPG";
 }
 inline std::wstring captureResolutionLabel(const CaptureFormat& format){
     if(format.automatic)return L"自动检测实际信号";
@@ -97,14 +120,14 @@ inline std::vector<CaptureFormatOption> capturePixelOptions(std::span<const Capt
         int copies=0;
         for(const auto* other:matched)if(other->pixel==format->pixel)++copies;
         if(std::any_of(out.begin(),out.end(),[&](const CaptureFormatOption& option){return option.id==format->key;}))continue;
-        out.push_back({format->key,capturePixelLabel(*format,copies>1),!format->supported});
+        out.push_back({format->key,capturePixelLabel(*format,copies>1),!format->supported,captureMjpegFormat(*format)});
     }
     return out;
 }
 // Keep the other two axes when the newly chosen resolution or frame rate still
-// offers them. Otherwise take the first remaining media type in list order
-// (driver-current, then lower latency). Never invent a triple the device did
-// not enumerate.
+// offers them. A missing pixel format must be selected explicitly; never route
+// an existing choice to another pixel format. A null current is only a menu
+// representative, not permission to connect that media type.
 inline const CaptureFormat* retargetCaptureFormat(std::span<const CaptureFormat> formats,const CaptureFormat* current,CaptureFormatAxis axis,std::wstring_view id){
     if(id.empty()||(axis==CaptureFormatAxis::FrameRate&&!current))return nullptr;
     const auto resolution=current?captureResolutionId(*current):std::wstring{};
@@ -112,7 +135,6 @@ inline const CaptureFormat* retargetCaptureFormat(std::span<const CaptureFormat>
     const auto pixel=current?current->pixel:std::wstring{};
     const CaptureFormat* fallback=nullptr;
     const CaptureFormat* samePixel=nullptr;
-    const CaptureFormat* sameRate=nullptr;
     const CaptureFormat* sameBoth=nullptr;
     for(const auto& format:formats){
         const bool match=axis==CaptureFormatAxis::Resolution?captureResolutionId(format)==id
@@ -123,11 +145,11 @@ inline const CaptureFormat* retargetCaptureFormat(std::span<const CaptureFormat>
         const bool rateMatch=captureFrameRateId(format)==rate;
         const bool pixelMatch=!pixel.empty()&&format.pixel==pixel;
         if(rateMatch&&pixelMatch){if(!sameBoth)sameBoth=&format;}
-        else if(rateMatch){if(!sameRate)sameRate=&format;}
         else if(pixelMatch){if(!samePixel)samePixel=&format;}
     }
-    if(axis==CaptureFormatAxis::FrameRate)return samePixel?samePixel:fallback;
-    return sameBoth?sameBoth:sameRate?sameRate:samePixel?samePixel:fallback;
+    if(!current)return fallback;
+    if(axis==CaptureFormatAxis::FrameRate)return samePixel;
+    return sameBoth?sameBoth:samePixel;
 }
 
 inline std::wstring capturePathOptions(double fps,std::wstring_view encodedKey){

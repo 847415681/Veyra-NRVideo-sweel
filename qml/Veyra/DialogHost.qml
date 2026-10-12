@@ -331,9 +331,11 @@ Item {
             }
             VRow {
                 label: qsTr("分辨率")
-                hint: qsTr("与帧率和像素格式一起决定采集媒体类型")
+                hint: qsTr("先选择分辨率，再选择该分辨率支持的帧率和像素格式")
                 VSelect {
                     objectName: "capture-resolution"
+                    enabled: !veyra.captureQueryBusy
+                    opacity: enabled ? 1 : 0.5
                     implicitWidth: 180
                     value: captureDialog.labelOf(veyra.captureResolutionOptions, veyra.captureResolutionId, veyra.captureResolutionOptions.length ? qsTr("请选择分辨率") : "—")
                     options: veyra.captureResolutionOptions
@@ -345,6 +347,8 @@ Item {
                 hint: qsTr("只列出当前分辨率下设备上报的帧率。设备帧率填 0 时，连接使用这里选中的帧率")
                 VSelect {
                     objectName: "capture-frame-rate"
+                    enabled: !veyra.captureQueryBusy && veyra.captureResolutionId.length > 0
+                    opacity: enabled ? 1 : 0.5
                     implicitWidth: 280
                     value: captureDialog.labelOf(veyra.captureFrameRateOptions, veyra.captureFrameRateId, veyra.captureFrameRateOptions.length ? qsTr("请选择帧率") : "—")
                     options: veyra.captureFrameRateOptions
@@ -356,8 +360,10 @@ Item {
                 hint: { const f = veyra.captureFormats.find(x => x.id === veyra.captureFormatKey); return f && f.costHint ? qsTr("该格式比低延迟格式多一道处理环节，高分辨率/高帧率下建议优先低延迟格式") : qsTr("只列出当前分辨率和帧率下的像素格式") }
                 VSelect {
                     objectName: "capture-format"
+                    enabled: !veyra.captureQueryBusy && veyra.captureResolutionId.length > 0 && veyra.captureFrameRateId.length > 0
+                    opacity: enabled ? 1 : 0.5
                     implicitWidth: 220
-                    value: captureDialog.labelOf(veyra.capturePixelOptions, veyra.capturePixelId, veyra.capturePixelOptions.length ? qsTr("请选择像素格式") : "—")
+                    value: captureDialog.labelOf(veyra.capturePixelOptions, veyra.capturePixelId, veyra.captureResolutionId.length ? qsTr("请选择像素格式") : qsTr("请先选择分辨率"))
                     options: veyra.capturePixelOptions
                     onPicked: id => veyra.capturePixelId = id
                 }
