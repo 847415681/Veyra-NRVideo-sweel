@@ -450,6 +450,7 @@ Item {
             VRow {
                 label: qsTr("Dolby / DTS 位流")
                 VSeg {
+                    objectName: "capture-audio-ingress"
                     options: [{ id: "0", label: qsTr("自动") }, { id: "1", label: qsTr("强制 PCM") }, { id: "2", label: qsTr("位流优先") }]
                     current: String(veyra.captureAudioIngress)
                     onPicked: id => veyra.captureAudioIngress = Number(id)
@@ -462,6 +463,7 @@ Item {
                 label: qsTr("输入色彩（SDR / HDR）")
                 hint: qsTr("不确定就选「自动」。采集 HDR：采集格式选 P010，这里选「HDR · PQ」（游戏机、显卡的 HDR10 都是 PQ）。「HDR · HLG」用于广播信号。「SDR · 709」是普通画面。变更需重连")
                 VSeg {
+                    objectName: "capture-color-space"
                     options: [{ id: "0", label: qsTr("自动") }, { id: "1", label: "HDR · PQ" }, { id: "2", label: "HDR · HLG" }, { id: "3", label: "SDR · 709" }]
                     current: String(veyra.captureColorSpace)
                     onPicked: id => veyra.captureColorSpace = Number(id)
@@ -471,6 +473,7 @@ Item {
                 label: qsTr("输入范围")
                 hint: qsTr("Limited = 16–235，Full = 0–255。画面发灰选「有限」，暗部全黑、亮部过曝选「完全」")
                 VSeg {
+                    objectName: "capture-color-range"
                     options: [{ id: "0", label: qsTr("自动") }, { id: "1", label: qsTr("有限 · Limited") }, { id: "2", label: qsTr("完全 · Full") }]
                     current: String(veyra.captureColorRange)
                     onPicked: id => veyra.captureColorRange = Number(id)
@@ -480,6 +483,7 @@ Item {
                 label: qsTr("设备缓冲")
                 hint: qsTr("自动：1080p 及以下 2 帧，更高 3 帧；最小 1 帧延迟最低但可能丢帧")
                 VSeg {
+                    objectName: "capture-buffer-mode"
                     options: [{ id: "0", label: qsTr("自动") }, { id: "1", label: qsTr("最小") }, { id: "2", label: qsTr("驱动默认") }]
                     current: String(veyra.captureBufferMode)
                     onPicked: id => veyra.captureBufferMode = Number(id)
@@ -489,6 +493,7 @@ Item {
                 label: qsTr("转为 SDR 显示")
                 hint: qsTr("收到 HDR 也按 SDR 预览，立即生效")
                 VSwitch {
+                    objectName: "capture-force-sdr"
                     checked: veyra.captureForceSdr
                     onToggled: checked => veyra.captureForceSdr = checked
                 }
@@ -497,6 +502,7 @@ Item {
                 label: qsTr("画面上下翻转")
                 hint: qsTr("采集画面倒置时开启，立即生效")
                 VSwitch {
+                    objectName: "capture-flip-vertical"
                     checked: veyra.captureFlipVertical
                     onToggled: checked => veyra.captureFlipVertical = checked
                 }

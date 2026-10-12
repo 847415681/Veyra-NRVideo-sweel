@@ -12647,7 +12647,7 @@
   {
    "zh": "逐行",
    "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "逐行",
+   "zh-TW": "循序",
    "en": "Progressive",
    "ja": "プログレッシブ"
   },
@@ -15109,13 +15109,6 @@
    "ja": "この BMD カードは自動検出に対応していません。信号に一致する手動形式を選んでください。"
   },
   {
-   "zh": "逐行",
-   "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "循序",
-   "en": "Progressive",
-   "ja": "プログレッシブ"
-  },
-  {
    "zh": "隔行",
    "src": "src/source/CaptureCardSource.cpp",
    "zh-TW": "交錯",
@@ -15331,6 +15324,251 @@
    "zh-TW": "VFG 中間影格約 %1 ms、其餘每張約 %2 ms，目前負載約可穩定 %3X",
    "en": "VFG takes about %1 ms for the middle frame and %2 ms for each other frame; about %3X holds at the current load",
    "ja": "VFG は中央の 1 枚が約 %1 ms、その他は 1 枚あたり約 %2 ms、現在の負荷で安定するのは約 %3X"
+  },
+  {
+   "zh": "自动检测实际信号",
+   "src": "include/veyra/source/CaptureFormatSelection.h",
+   "zh-TW": "自動偵測實際訊號",
+   "en": "Detect the input signal automatically",
+   "ja": "入力信号を自動検出"
+  },
+  {
+   "zh": "跟随实际信号",
+   "src": "include/veyra/source/CaptureFormatSelection.h",
+   "zh-TW": "跟隨實際訊號",
+   "en": "Follow the input signal",
+   "ja": "入力信号に合わせる"
+  },
+  {
+   "zh": "设备默认帧率",
+   "src": "include/veyra/source/CaptureFormatSelection.h",
+   "zh-TW": "裝置預設幀率",
+   "en": "Device default frame rate",
+   "ja": "デバイスの既定フレームレート"
+  },
+  {
+   "zh": " · 驱动默认",
+   "src": "include/veyra/source/CaptureFormatSelection.h",
+   "zh-TW": " · 驅動預設",
+   "en": " · Driver default",
+   "ja": " · ドライバーの既定値"
+  },
+  {
+   "zh": " · 当前播放器不支持",
+   "src": "include/veyra/source/CaptureFormatSelection.h",
+   "zh-TW": " · 目前播放器不支援",
+   "en": " · Unsupported by this player",
+   "ja": " · このプレイヤーでは非対応"
+  },
+  {
+   "zh": "当前播放器不支持",
+   "src": "include/veyra/source/CaptureFormatSelection.h",
+   "zh-TW": "目前播放器不支援",
+   "en": "Unsupported by this player",
+   "ja": "このプレイヤーでは非対応"
+  },
+  {
+   "zh": "自动选择像素格式",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "自動選擇像素格式",
+   "en": "Automatic pixel format",
+   "ja": "ピクセルフォーマットを自動選択"
+  },
+  {
+   "zh": "设备提供此格式，但当前播放器不支持其尺寸或像素布局，请选择其他格式",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "裝置提供此格式，但目前播放器不支援其尺寸或像素配置，請選擇其他格式",
+   "en": "The device offers this format, but this player cannot handle its size or pixel layout. Choose another format",
+   "ja": "デバイスはこの形式を提供していますが、このプレイヤーではサイズまたはピクセル配置に対応していません。別の形式を選んでください"
+  },
+  {
+   "zh": "设备提供此制式，但当前播放器的 BMD 采集最高支持 3840×2160",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "裝置提供此制式，但目前播放器的 BMD 擷取最高支援 3840×2160",
+   "en": "The device offers this mode, but BMD capture in this player supports up to 3840×2160",
+   "ja": "デバイスはこのモードを提供していますが、このプレイヤーの BMD キャプチャは最大 3840×2160 です"
+  },
+  {
+   "zh": "采集设置保存失败，请检查配置目录是否可写",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "擷取設定儲存失敗，請檢查設定目錄是否可寫入",
+   "en": "Could not save capture settings. Check that the configuration folder is writable",
+   "ja": "キャプチャ設定を保存できません。設定フォルダーに書き込めるか確認してください"
+  },
+  {
+   "zh": "上次的音频输入未连接",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "上次的音訊輸入未連接",
+   "en": "Previous audio input is disconnected",
+   "ja": "前回の音声入力が接続されていません"
+  },
+  {
+   "zh": "上次的音频输入未连接，请插回设备或重新选择音频监听",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "上次的音訊輸入未連接，請重新插入裝置或選擇音訊監聽",
+   "en": "The previous audio input is disconnected. Reconnect it or select an audio input",
+   "ja": "前回の音声入力が接続されていません。再接続するか音声入力を選び直してください"
+  },
+  {
+   "zh": "未读到设备上报的采集格式，或设备正被其他应用占用。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "未讀到裝置回報的擷取格式，或裝置正被其他應用程式佔用。",
+   "en": "No capture formats were reported, or the device is in use by another application.",
+   "ja": "キャプチャ形式が取得できないか、他のアプリがデバイスを使用しています。"
+  },
+  {
+   "zh": "BMD 驱动返回的连接格式与所选模式不同，请按实际信号重新选择格式。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "BMD 驅動回傳的連接格式與所選模式不同，請依實際訊號重新選擇格式。",
+   "en": "The BMD driver connected with a different format. Select a format that matches the input signal.",
+   "ja": "BMD ドライバーが選択したモードと異なる形式で接続しました。実際の信号に合う形式を選び直してください。"
+  },
+  {
+   "zh": "先断开采集，再配置驱动",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "先中斷擷取，再設定驅動",
+   "en": "Disconnect capture before configuring the driver",
+   "ja": "キャプチャを切断してからドライバーを設定"
+  },
+  {
+   "zh": "收到黑帧 · 检查输入制式",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "收到黑幀 · 檢查輸入制式",
+   "en": "Black frames received · Check the input mode",
+   "ja": "黒いフレームを受信 · 入力モードを確認"
+  },
+  {
+   "zh": "无法打开驱动设置；请先断开采集并关闭占用设备的应用。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "無法開啟驅動設定；請先中斷擷取並關閉佔用裝置的應用程式。",
+   "en": "Cannot open driver settings. Disconnect capture and close applications using the device first.",
+   "ja": "ドライバー設定を開けません。キャプチャを切断し、デバイスを使用中のアプリを閉じてください。"
+  },
+  {
+   "zh": "正在收帧",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "正在接收影格",
+   "en": "Receiving frames",
+   "ja": "フレームを受信中"
+  },
+  {
+   "zh": "设备属性",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "裝置屬性",
+   "en": "Device properties",
+   "ja": "デバイスのプロパティ"
+  },
+  {
+   "zh": "设备查询或驱动设置尚未完成",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "裝置查詢或驅動設定尚未完成",
+   "en": "Wait for the device query or driver settings to finish",
+   "ja": "デバイスの検索またはドライバー設定が完了するまでお待ちください"
+  },
+  {
+   "zh": "请先选择设备并等待查询完成",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "請先選擇裝置並等待查詢完成",
+   "en": "Select a device and wait for the query to finish",
+   "ja": "デバイスを選択し、検索が完了するまでお待ちください"
+  },
+  {
+   "zh": "请等待连接结束并断开采集，再打开驱动设置",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "請等待連接完成並中斷擷取，再開啟驅動設定",
+   "en": "Wait for the connection to finish, then disconnect capture before opening driver settings",
+   "ja": "接続が完了してからキャプチャを切断し、ドライバー設定を開いてください"
+  },
+  {
+   "zh": "请选择与输入信号一致的格式。驱动默认格式不代表检测到的信号。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "請選擇與輸入訊號一致的格式。驅動預設格式不代表偵測到的訊號。",
+   "en": "Choose a format that matches the input signal. The driver default is not a detected signal format.",
+   "ja": "入力信号に合う形式を選んでください。ドライバーの既定値は信号検出の結果ではありません。"
+  },
+  {
+   "zh": "输入选择",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "輸入選擇",
+   "en": "Select input",
+   "ja": "入力を選択"
+  },
+  {
+   "zh": "配置驱动公开的输入与视频属性；其他采集应用占用设备时请先关闭",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "設定驅動提供的輸入與視訊屬性；請先關閉佔用裝置的其他擷取程式",
+   "en": "Configure the input and video properties exposed by the driver. Close other capture applications using the device first.",
+   "ja": "ドライバーが提供する入力と映像のプロパティを設定します。デバイスを使用中の他のキャプチャアプリを先に閉じてください。"
+  },
+  {
+   "zh": "采集卡上游输入连接失败（0x{:08X}），请检查驱动与输入选择。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取卡上游輸入連接失敗（0x{:08X}），請檢查驅動與輸入選擇。",
+   "en": "Capture card upstream input connection failed (0x{:08X}). Check the driver and selected input.",
+   "ja": "キャプチャカードの上流入力への接続に失敗しました（0x{:08X}）。ドライバーと入力の選択を確認してください。"
+  },
+  {
+   "zh": "采集视频格式",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取視訊格式",
+   "en": "Capture video format",
+   "ja": "キャプチャ映像形式"
+  },
+  {
+   "zh": "采集设备驱动设置",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取裝置驅動設定",
+   "en": "Capture device driver settings",
+   "ja": "キャプチャデバイスのドライバー設定"
+  },
+  {
+   "zh": "采集输入选择",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取輸入選擇",
+   "en": "Capture input selection",
+   "ja": "キャプチャ入力の選択"
+  },
+  {
+   "zh": "驱动没有公开此设置页。Blackmagic 请用 Desktop Video Setup 选择 HDMI/SDI，并在采集面板匹配分辨率、帧率和逐行/隔行制式。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "驅動未提供此設定頁。Blackmagic 請使用 Desktop Video Setup 選擇 HDMI/SDI，並在擷取面板匹配解析度、幀率及循序／交錯制式。",
+   "en": "The driver does not provide this settings page. For Blackmagic, select HDMI/SDI in Desktop Video Setup and match the resolution, frame rate, and progressive/interlaced mode in the capture panel.",
+   "ja": "ドライバーはこの設定画面を提供していません。Blackmagic は Desktop Video Setup で HDMI/SDI を選び、キャプチャ画面で解像度、フレームレート、プログレッシブ／インターレースを合わせてください。"
+  },
+  {
+   "zh": "驱动设置",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "驅動設定",
+   "en": "Driver settings",
+   "ja": "ドライバー設定"
+  },
+  {
+   "zh": "驱动设置已关闭。请核对所选格式与设备帧率，再连接。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "驅動設定已關閉。請核對所選格式與裝置幀率，再連接。",
+   "en": "Driver settings are closed. Check the selected format and device frame rate before connecting.",
+   "ja": "ドライバー設定を閉じました。選択した形式とデバイスのフレームレートを確認してから接続してください。"
+  },
+  {
+   "zh": "驱动设置无法打开（0x{:08X}）。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "驅動設定無法開啟（0x{:08X}）。",
+   "en": "Cannot open driver settings (0x{:08X}).",
+   "ja": "ドライバー設定を開けません（0x{:08X}）。"
+  },
+  {
+   "zh": "设备实际支持的格式",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "裝置實際支援的格式",
+   "en": "Formats the device actually supports",
+   "ja": "デバイスが実際に対応するフォーマット"
+  },
+  {
+   "zh": "请选择格式",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "請選擇格式",
+   "en": "Choose a format",
+   "ja": "フォーマットを選んでください"
   }
  ]
 }

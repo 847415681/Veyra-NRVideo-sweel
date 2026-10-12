@@ -1,6 +1,7 @@
 #pragma once
 #include "veyra/source/CaptureFrameRate.h"
 #include <algorithm>
+#include <cstdint>
 #include <format>
 #include <span>
 #include <vector>
@@ -9,9 +10,9 @@ namespace veyra::source {
 // `pixel` / `scan` / `interlaced` describe the same media type as `key`.
 // The capture dialog offers them as three linked choices; `key` stays the
 // persisted identity so an old combined selection still restores one type.
-struct CaptureFormat {int index=0;unsigned width=0,height=0;double fps=0;std::wstring label;std::wstring key;int rank=0;int tier=0;bool driverCurrent=false;std::wstring pixel;std::wstring scan;bool interlaced=false;};
+struct CaptureFormat {int index=0;unsigned width=0,height=0;double fps=0;std::wstring label;std::wstring key;int rank=0;int tier=0;bool driverCurrent=false;std::wstring pixel;std::wstring scan;bool interlaced=false;int64_t interval100ns=0;bool supported=true;bool automatic=false;};
 enum class CaptureFormatAxis { Resolution, FrameRate };
-struct CaptureFormatOption { std::wstring id, label; };
+struct CaptureFormatOption { std::wstring id, label; bool disabled=false; };
 
 inline const CaptureFormat* selectCaptureFormat(std::span<const CaptureFormat> formats,int legacyIndex,std::wstring_view key){
     for(const auto& format:formats)
@@ -30,18 +31,23 @@ inline const CaptureFormat* selectCaptureFormat(std::span<const CaptureFormat> f
 }
 
 inline std::wstring captureResolutionId(const CaptureFormat& format){
+    if(format.automatic)return L"auto";
     return std::format(L"{}x{}",format.width,format.height);
 }
 inline std::wstring captureFrameRateId(const CaptureFormat& format){
+    if(format.automatic)return L"auto";
     // Progressive and interlaced modes that share a numeric rate stay distinct.
     // Field order stays on the pixel list, so it does not create two identical fps rows.
-    return std::format(L"{:.6f}|{}",format.fps,format.interlaced?1:0);
+    return std::format(L"{}|{}",format.interval100ns>0?format.interval100ns:format.fps>0?captureFrameInterval(format.fps):0,format.interlaced?1:0);
 }
 inline std::wstring captureResolutionLabel(const CaptureFormat& format){
+    if(format.automatic)return L"自动检测实际信号";
     return std::format(L"{} × {}",format.width,format.height);
 }
 inline std::wstring captureFrameRateLabel(const CaptureFormat& format){
-    auto label=std::format(L"{:.2f} fps",format.fps);
+    if(format.automatic)return L"跟随实际信号";
+    if(format.fps<=0)return L"设备默认帧率";
+    auto label=std::format(L"{:.3f} fps",format.fps);
     if(!format.scan.empty())label+=L" · "+format.scan;
     return label;
 }
@@ -52,6 +58,7 @@ inline std::wstring capturePixelLabel(const CaptureFormat& format,bool ambiguous
         label+=std::format(L" [format {}]",format.index);
     }
     if(format.driverCurrent)label+=L" · 驱动默认";
+    if(!format.supported)label+=L" · 当前播放器不支持";
     return label;
 }
 inline std::vector<CaptureFormatOption> captureResolutionOptions(std::span<const CaptureFormat> formats){
@@ -89,7 +96,8 @@ inline std::vector<CaptureFormatOption> capturePixelOptions(std::span<const Capt
     for(const auto* format:matched){
         int copies=0;
         for(const auto* other:matched)if(other->pixel==format->pixel)++copies;
-        out.push_back({format->key,capturePixelLabel(*format,copies>1)});
+        if(std::any_of(out.begin(),out.end(),[&](const CaptureFormatOption& option){return option.id==format->key;}))continue;
+        out.push_back({format->key,capturePixelLabel(*format,copies>1),!format->supported});
     }
     return out;
 }

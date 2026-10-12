@@ -80,7 +80,7 @@ std::vector<Mode> readModes(IDeckLinkInput* input){
     if(!checked(input->GetDisplayModeIterator(&iterator),"GetDisplayModeIterator"))return out;
     ComPtr<IDeckLinkDisplayMode> mode;
     while(iterator->Next(&mode)==S_OK){auto m=describe(mode.Get());
-        if(m.width>=2&&m.width<=3840&&m.height&&m.height<=2160&&m.duration>0&&m.scale>0)out.push_back(std::move(m));mode.Reset();}
+        if(m.width>=2&&m.height&&m.duration>0&&m.scale>0)out.push_back(std::move(m));mode.Reset();}
     // A conservative seed only. The format-change callback, not this order,
     // selects the real automatic mode before any frame can be published.
     std::stable_sort(out.begin(),out.end(),[](const Mode& a,const Mode& b){const auto seed=[](const Mode& m){return m.width==1920&&m.height==1080&&!m.interlaced&&m.scale==m.duration*60;};return seed(a)&&!seed(b);});

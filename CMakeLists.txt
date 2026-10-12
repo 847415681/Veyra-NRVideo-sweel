@@ -733,6 +733,8 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   add_executable(veyra_capture_format_selection_tests tests/unit/CaptureFormatSelectionTests.cpp)
   target_compile_features(veyra_capture_format_selection_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_capture_format_selection_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_compile_definitions(veyra_capture_format_selection_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_link_libraries(veyra_capture_format_selection_tests PRIVATE ole32 strmiids)
   add_executable(veyra_presentation_worker_tests tests/unit/LiveGpuSchedulerTests.cpp)
   target_compile_features(veyra_presentation_worker_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_presentation_worker_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)

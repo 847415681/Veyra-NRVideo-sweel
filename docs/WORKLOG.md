@@ -9155,3 +9155,15 @@ seal.py validate逐项核对源码/输入/EXE/QML/原包1626文件及旧树；�
 2026-10-11 本地合并收尾：实测产品4904b73，补报告/WORKLOG后tip adcf509；main功能merge d2e1396无冲突，完整Git树与adcf509相同。后续仅四份收尾文档。seal.py final核对833源码/配置、13EXE、所有回执及来源祖先、main clean、其它58旧树/504脏文件和原包1626文件，最终main提交/增量bundle/标签见reports/merge-current-fixes-20261011/final.json。本轮无推送/打包/发布/关机，来源分支均保留，不把原正式/测试包说成已经更新。
 
 首次final raw-SHA核对停止于旧main ColorDetailPass.h；逐项排查只有9个旧文件LF/CRLF差异，去除CRLF后字节完全相同，Git树仍仅四份文档差异。保留final-raw-hash-attempt.json，核对器改为对这类差异额外验证唯一换行转换及完整Git内容，并记录两份checkout SHA；未改任何产品/旧源文件。后续final.json记录最终通过结果。
+
+## 2026-10-12 PR34 全格式与采集设置恢复
+
+用户授权合并 PR34、补齐当前卡全部公开格式、采集页全部设置自动保存及继续／启动自动恢复。main76f41b3 起点，隔离 codex/pr34-capture-settings-20261012；作者 f1f53ace 完整合入 d67417fe，保留最新已验主线，未合未验 XeSS 分支。开工 62 旧工作树／509 脏文件独立 start.json 与增量 source-before.bundle 已核验。创建工作树尚未结束时一次提前 merge 被 index.lock 拒绝，等待完成后正常整合，没有删锁、reset 或覆盖旧目录。
+
+增加 IAMVideoControl GetFrameRateList 离散帧率枚举及精确 100ns 类型选择、完整尺寸列表与不能接入的格式标注，补 BMD 自动模式和 4K 接入边界；修改即保存设备／格式／音频／FPS／色彩，启动恢复 flip／SDR／buffer／audio ingress。QSaveFile 原子保存；缺失卡／音频／格式保留记录，其他控件不得清空失效格式键；异步查询保留最新请求。UI33ms／250ms、默认优先级、正常逐帧链路和缓冲不变。保留 main 全部翻译值，新增42完整三语言键并消除PR合并产生的“逐行”重复项。
+
+实际命令 python -X utf8 -B -I E:/项目/Veyra/tmp/pr34-capture-settings-20261012/build.py：7依赖闭包对象／12EXE定向构建，最终12.1秒，非从零全量重编。configure.py完整CMake通过。harness/regress.py capture-formats decklink capture-color ui-contracts contracts chain library presets slider menu components 共11项最终全通过，logs/pr34-capture-settings-20261012/pr34/tests-20261012-143150；最长9.2秒。本机MCS 4K-T911 驱动96能力记录展开378媒体组合／9分辨率，真实GUI三选择框全部可达；1080p30 NV12 连接、FPS=0离散30档、显式FPS30、手动继续／启动自动恢复通过。设备并未逐格式实测，未测实际音频位流。
+
+harness/final-ui.py最终9组通过：四语言布局、跨列表／节点全局保持、查询排队、手动继续／连接／自动恢复、缺失格式／音频／设备及磁盘记录保留；日志ui-*-20261012-143224至143320。另测未连接修改直接退出，以及建立会话后修改新草稿再重启恢复。GUI SHA5dc08c327c052ab139394c89e0f206676162da84f62b4076a4c753878ab711de。早期两次私有GUI夹具失败（脱离树查找／空闲事务等待）、UTF-16 BOM误判和审查断言均保留；只修夹具或确实存在的产品缺口，生产Main恢复，未加测试Timer或持续绘制。i18n --check占位符0错误，既有HDR／导出6条未译保留，diff --check通过。
+
+全部源码以外产物在E:/项目/Veyra本轮build/tests/logs/tmp/reports/archives目录，私有profile和子进程缓存。源/二进制及原包1626文件、旧树保持校验见validation.json，Git收尾见final.json。BMD／美乐威没有实卡，真实出画和全制式待持卡用户确认；不宣称性能提升、全硬件或长期稳定通过。详细记录docs/PR34_CAPTURE_SETTINGS_REPORT_2026-10-12.md。验证后合入并普通推送main完成PR34，无打包／Release／关机。

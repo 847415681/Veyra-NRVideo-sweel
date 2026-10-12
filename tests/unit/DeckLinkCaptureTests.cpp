@@ -15,12 +15,13 @@ Mode makeMode(uint32_t id=1,unsigned width=1920){
 struct FakeDriver:Driver {
     DriverSink* sink=nullptr;Mode mode=makeMode();Pixel pixel=Pixel::V210;
     bool automatic=true,noSignal=false,occupied=false,rejectTen=false,failFlush=false,failStart=false,sendRgbChange=false,detectDuringEnable=false;
+    bool oversizedFirst=false;
     unsigned enabled=0,started=0,paused=0,flushed=0,stopped=0;
     std::vector<uint8_t> pixels;
     std::thread::id owner=std::this_thread::get_id();bool allControlsOnOwner=true;
     void control(){allControlsOnOwner&=std::this_thread::get_id()==owner;}
     bool open(std::wstring_view,DriverSink& target,std::wstring& error)override{control();sink=&target;if(occupied){error=L"busy";return false;}return true;}
-    std::vector<Mode> modes()override{return {makeMode(),makeMode(2,1280)};}
+    std::vector<Mode> modes()override{auto out=std::vector<Mode>{makeMode(),makeMode(2,1280)};if(oversizedFirst){auto huge=makeMode(3,7680);huge.height=4320;out.insert(out.begin(),huge);}return out;}
     bool autoDetection()const override{return automatic;}
     bool enable(const Mode& m,Pixel p,bool,bool,std::wstring& error)override{control();++enabled;if(rejectTen&&(p==Pixel::V210||p==Pixel::Rgb10xLE)){error=L"unsupported";return false;}mode=m;pixel=p;
         if(detectDuringEnable&&enabled==1){std::thread callback([&]{sink->formatChanged({makeMode(2,1280),true,10});});callback.join();}
@@ -45,6 +46,11 @@ int main(){
     int failures=0;auto check=[&](bool value,const char* name){printf("%s %s\n",value?"PASS":"FAIL",name);if(!value)++failures;};
     auto fixture=[](){auto driver=std::make_unique<FakeDriver>();auto* raw=driver.get();return std::pair{std::move(driver),raw};};
     constexpr auto path=L"decklink-native:p:0000000000000123:0";
+    {
+        auto [driver,fake]=fixture();fake->oversizedFirst=true;Capture capture(std::move(driver));
+        check(capture.configure(path,L"decklink:auto",false,50)&&capture.mode().id==1,"all driver modes retained without choosing an unsupported automatic seed");
+        check(!capture.configure(path,modeKey(3),false,50)&&!capture.error().empty(),"oversized manual driver mode fails explicitly before enabling");
+    }
     {
         auto [driver,fake]=fixture();Capture capture(std::move(driver));unsigned video=0,audio=0;
         check(capture.configure(path,L"decklink:auto",true,50),"valid signal probes without retaining a frame");
