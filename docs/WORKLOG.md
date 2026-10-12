@@ -9149,3 +9149,10 @@ seal.py validate逐项核对源码/输入/EXE/QML/原包1626文件及旧树；�
 2026-10-11 本地合并收尾：实测产品4904b73，补报告/WORKLOG后tip adcf509；main功能merge d2e1396无冲突，完整Git树与adcf509相同。后续仅四份收尾文档。seal.py final核对833源码/配置、13EXE、所有回执及来源祖先、main clean、其它58旧树/504脏文件和原包1626文件，最终main提交/增量bundle/标签见reports/merge-current-fixes-20261011/final.json。本轮无推送/打包/发布/关机，来源分支均保留，不把原正式/测试包说成已经更新。
 
 首次final raw-SHA核对停止于旧main ColorDetailPass.h；逐项排查只有9个旧文件LF/CRLF差异，去除CRLF后字节完全相同，Git树仍仅四份文档差异。保留final-raw-hash-attempt.json，核对器改为对这类差异额外验证唯一换行转换及完整Git内容，并记录两份checkout SHA；未改任何产品/旧源文件。后续final.json记录最终通过结果。
+
+## 2026-10-12 补帧人物边缘果冻：J0 判定（Claude）
+
+- 授权：用户看完 reports/jelly-latency-20261012/方案选项.md 后回复“延迟这块先放着吧，先搞果冻的问题……你先做J0判定吧”，随后“测试xess即可，不要浪费时间”“那就测dlss”。存档：标签 checkpoint/pre-claude-jelly-20261012（main 76f41b3），archives/claude-jelly-20261012（bundle 已 verify，start.json 61 工作树/504 脏文件）；分支 claude/jelly-20261012。只加诊断测试，不改产品。
+- 构建：py -3.11 -I E:/项目/Veyra/tmp/claude-jelly-20261012/build.py（产品源码逐个对照 Codex 合并构建回执，只编译新测试并用其链接文件链接，6–8 秒）。运行目录为私有副本 tests/claude-jelly-latency-20261012/app，D3D12 调试层开启。
+- 结果（4K 合成场景，30fps 位移，FG 2X，光流 1080p）：DLSS 补帧对零、产品光流、理想、取反、全屏 +120 px 的矢量结果相同（轮廓带误差 2.77/2.58），即不读矢量。FSR 依赖矢量：零 6.59/10.52（镜头转动时背景整体 16.26），产品光流 1.54/2.04，与理想 1.71/2.05 相当。开 NR 后轮廓带偏离原图更多（NR 光流 13.00 对 NR 零 10.77），但静止人物内侧抖动没有增加。判定：光流精修（J1）没有收益，不实施。附带发现 initNvof 只给 DLSS 补帧建光流，只开 FSR 补帧时“光流”实际为 0。
+- 证据：logs/claude-jelly-20261012/j0/（j0-results.json、每组日志、裁切图/误差图/sheet）。详细结论与边界见 docs/JELLY_J0_2026-10-12.md。合成场景没有复现明显果冻，XeSS 未测；不 merge/push/Release。

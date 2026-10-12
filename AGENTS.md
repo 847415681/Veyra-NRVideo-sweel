@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-12 补帧人物边缘果冻 J0（Claude）**：用户要求先排查果冻（延迟暂缓），按 reports/jelly-latency-20261012/方案选项.md 先做 J0 判定，只测 DLSS（XeSS 在送显端无法直接读回）。存档 `checkpoint/pre-claude-jelly-20261012`（main 76f41b3）与 E 盘 `archives/claude-jelly-20261012`；分支 `claude/jelly-20261012` 只新增诊断测试 `veyra_fg_motion_boundary_tests` 及文档，不改产品、默认设置、运行库/模型/驱动/用户配置；无 merge/push/Release。结论见 docs/JELLY_J0_2026-10-12.md。
+
 > **2026-10-11 当前修复已合入本地main**：Codex4557ab6（含e8300d9）与Claude1d4c33f经隔离整合、42依赖闭包/13EXE构建、完整CMake、16组回归、12真实GUI状态/6布局及SR+VFG组合持久化/重启通过；实测产品4904b73、记录tip adcf509通过功能merge d2e1396进入main，完整Git树相同。VFG默认中档、DLSS K、33ms统计/250ms状态及负优化撤回保持。59开工树中唯main按授权更新，其余58树/504脏文件、来源分支及原包1626文件保持；final.json见reports/merge-current-fixes-20261011。首次组合GUI夹具漏FG节点失败，修夹具后通过，原证据保留；没有新的性能A/B或全硬件/长期显存通过声明。无push/打包/Release/关机。
 
 > **2026-10-11 当前修复本地合并授权**：用户明确要求将 Codex 与 Claude 当前修复合入 main。按 docs/MERGE_CURRENT_FIXES_PLAN_2026-10-11.md，在 codex/merge-current-fixes-20261011 整合已验4557ab6（含e8300d9）与Claude1d4c33f，必要冲突适配后构建/定向回归，再本地main合并；覆盖这些接点历史no-merge。59旧工作树/504脏文件及来源tip由独立start/bundle保护，main仅按本次授权更新。默认档位、33ms统计/250ms状态节奏保持，不派Agent，不改运行库/模型/驱动/真实配置。产物全E盘，每测试≤300秒、构建≤900秒；不push/Release/打包/关机，不恢复已撤回负优化或旧未完成实验。

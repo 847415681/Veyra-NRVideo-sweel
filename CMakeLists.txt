@@ -912,6 +912,11 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_include_directories(veyra_srfg_depth_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
   target_compile_definitions(veyra_srfg_depth_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN VEYRA_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
   target_link_libraries(veyra_srfg_depth_tests PRIVATE veyra_engine)
+  add_executable(veyra_fg_motion_boundary_tests tests/integration/FgMotionBoundaryTests.cpp)
+  target_compile_features(veyra_fg_motion_boundary_tests PRIVATE cxx_std_20)
+  target_include_directories(veyra_fg_motion_boundary_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
+  target_compile_definitions(veyra_fg_motion_boundary_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN VEYRA_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+  target_link_libraries(veyra_fg_motion_boundary_tests PRIVATE veyra_engine)
   # Qt 6.8.3 is staged under deps/ (the user allowed the latest Qt). The probe is
 # opt-in so a normal product build never depends on Qt being present.
 option(VEYRA_BUILD_QT_PROBE "Build the Qt + D3D12 host probe" OFF)
