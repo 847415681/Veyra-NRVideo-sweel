@@ -24,6 +24,11 @@
 //  - The 64x36 points the graph analyses are sampled in the callback from the
 //    driver sample (raw pixel bytes, same packing as the frame), never read
 //    back from the upload buffer.
+//  - While content dedup runs (ContentDedup.h) the callback also compares the
+//    whole driver sample with the last new picture (PictureCompare.h) and tags
+//    the frame with a picture number, for the same reason: the engine decides
+//    on repeats without touching the upload buffer.
+#include "veyra/pipeline/PictureCompare.h"
 #include <d3d12.h>
 #include <wrl/client.h>
 #include <cstdint>
@@ -33,7 +38,9 @@
 extern "C" {
 #include <libavutil/buffer.h>
 #include <libavutil/frame.h>
+#include <libavutil/imgutils.h>
 #include <libavutil/mem.h>
+#include <libavutil/pixdesc.h>
 }
 
 namespace veyra::pipeline {
@@ -56,6 +63,11 @@ struct CaptureUploadFrame {
     // proxyPitch(): a tiny frame with the same packing as the real one.
     uint8_t proxy[kProxyWidth * kProxyHeight * kMaxPixelBytes] = {};
     int proxyPitch() const { return int(kProxyWidth * pixelBytes); }
+    // Picture number (content dedup only; see the rules above): frames with equal
+    // numbers show the same picture within the capture-noise band.
+    bool pictureValid = false, pictureRepeat = false;
+    uint64_t pictureId = 0, pictureOver = 0;
+    unsigned pictureMax8 = 0;
     uint64_t fallbacks = 0;
 
     // Last GPU list that reads the upload buffer (set by the graph).
@@ -134,7 +146,7 @@ inline void selectCaptureUploadTarget(AVFrame& frame) {
     auto* info = captureUploadFrame(&frame);
     if (!info) return;
     uint8_t* base = info->mapped;
-    info->direct = true; info->proxyValid = false;
+    info->direct = true; info->proxyValid = false; info->pictureValid = false;
     if (info->gpuBusy()) {
         if (!info->cpu) { info->cpu = static_cast<uint8_t*>(av_malloc(size_t(info->bytes))); if (info->cpu) std::memset(info->cpu, 0, size_t(info->bytes)); }
         if (info->cpu) { base = info->cpu; info->direct = false; ++info->fallbacks; }
@@ -150,7 +162,7 @@ inline void useCaptureUploadCpuPlanes(AVFrame& frame) {
     if (!info) return;
     if (!info->cpu) { info->cpu = static_cast<uint8_t*>(av_malloc(size_t(info->bytes))); if (info->cpu) std::memset(info->cpu, 0, size_t(info->bytes)); }
     if (!info->cpu) return;
-    info->direct = false; info->proxyValid = false;
+    info->direct = false; info->proxyValid = false; info->pictureValid = false;
     frame.data[0] = info->cpu;
     if (info->planes == 2) frame.data[1] = info->cpu + info->chromaOffset;
 }
@@ -172,6 +184,39 @@ inline void sampleCaptureUploadProxy(AVFrame& frame, const uint8_t* source, size
         }
     }
     info->proxyValid = true;
+}
+
+// Content dedup (ContentDedup.h): the picture number of a frame. An upload-
+// backed frame carries the capture callback's comparison of the driver sample
+// and is never read back; any other CPU frame (CPU planes, converted frames,
+// test replay) is compared here with `reference`, every component of every
+// plane. Hardware frames, packed carriers and upload buffers written without a
+// comparison have none: the caller keeps the sample.
+inline bool captureFramePicture(const AVFrame* frame, PictureReference& reference, bool packedCarrier, PictureReference::Result& out) {
+    if (!frame || !frame->data[0] || frame->width <= 0 || frame->height <= 0) return false;
+    if (const auto* info = captureUploadFrame(frame)) {
+        if (info->pictureValid) { out = {info->pictureId, info->pictureRepeat, info->pictureOver, info->pictureMax8}; return true; }
+        if (info->direct) return false;
+    }
+    const auto format = AVPixelFormat(frame->format);
+    const auto* desc = av_pix_fmt_desc_get(format);
+    if (packedCarrier || !desc || (desc->flags & (AV_PIX_FMT_FLAG_HWACCEL | AV_PIX_FMT_FLAG_BITSTREAM | AV_PIX_FMT_FLAG_PAL))) return false;
+    // 8-bit components compare bytewise and little-endian 16-bit containers as
+    // words; anything else (5/6-bit RGB, 10-bit fields packed in 32 bits) exactly.
+    const unsigned depth = desc->comp[0].depth;
+    bool words = depth > 8 && !(desc->flags & AV_PIX_FMT_FLAG_BE);
+    for (int c = 0; c < desc->nb_components; ++c)
+        words = words && desc->comp[c].depth + desc->comp[c].shift <= 16 && desc->comp[c].step % 2 == 0 && desc->comp[c].offset % 2 == 0;
+    const auto kind = depth == 8 ? PictureComponents::Bytes : words ? PictureComponents::Words : PictureComponents::Exact;
+    PicturePlane planes[4]; unsigned count = 0;
+    for (int plane = 0, total = av_pix_fmt_count_planes(format); plane < total && plane < 4; ++plane) {
+        const int bytes = av_image_get_linesize(format, frame->width, plane);
+        const int rows = plane == 1 || plane == 2 ? -((-frame->height) >> desc->log2_chroma_h) : frame->height;
+        if (bytes <= 0 || !frame->data[plane] || frame->linesize[plane] < bytes) return false;
+        planes[count++] = {frame->data[plane], size_t(frame->linesize[plane]), size_t(bytes), unsigned(rows)};
+    }
+    out = reference.observe(planes, count, kind, PictureReference::bandFor(depth, desc->comp[0].shift));
+    return true;
 }
 
 // v210 stores six pixels in four words, not one four-byte word per pixel.

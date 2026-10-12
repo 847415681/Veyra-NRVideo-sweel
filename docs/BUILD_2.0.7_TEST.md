@@ -9,3 +9,9 @@ Follow BUILD_2.0.6.md and BUILD_2.0.0.md with MSVC 2022 x64/C++20, CMake/Ninja, 
 `test-2.0.7-package.py stage/seal/cold` stages approved vendor payloads, replaces application/QML/shaders with this source build, audits hashes/vendor separation/licenses/PE imports, produces corresponding source, checks every ZIP entry and cold-starts each final ZIP with a private profile. Its local `main` merge requirement prevents packaging a divergent source tree. No GitHub publication is performed.
 
 See TEST_2.0.7_REPORT_2026-10-12.md for measured coverage and limits. Prior reports describe historical source builds, not additional current validation. NVIDIA long-run VRAM growth and AMD/Blackmagic field checks remain open.
+
+## Cadence refresh (2.0.7-test-r2)
+
+The rebuilt application source is `Veyra-2.0.7-test-r2-source.zip`; the dependency source archives above are unchanged. Use display override `-DVEYRA_DISPLAY_VERSION=2.0.7-test-r2` (PE version remains 2.0.7.0). On this machine the separate fresh build command is `python -X utf8 -B -I scripts/acceptance/test-2.0.7-build.py --task test-2.0.7-refresh-20261012 --label 2.0.7-test-r2`.
+
+Packaging uses the same explicit task/label, `--validation-record docs/TEST_2.0.7_REFRESH_2026-10-12.md`, and the audited original 2.0.7 NVIDIA/AMD folders as `--nvidia-donor` / `--amd-donor`. Existing user profiles and logs outside the donor manifest are never copied. Startup checks keep any existing user session running, record that condition, and do not measure GPU performance. Current results and the extended synthetic half-rate test limitation are in [the refresh report](TEST_2.0.7_REFRESH_2026-10-12.md).

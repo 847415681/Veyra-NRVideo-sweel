@@ -2,9 +2,21 @@
 stage -> seal -> cold; no GitHub access, driver installation or user profiles.
 """
 from pathlib import Path
-import hashlib,importlib.util,json,os,re,shutil,subprocess,sys,time,zipfile
+import argparse,hashlib,importlib.util,json,os,re,shutil,subprocess,sys,time,zipfile
 import pefile
-ROOT=Path(__file__).resolve().parents[2];B=Path('E:/项目/Veyra');TASK='test-2.0.7-20261012';LABEL='2.0.7-test'
+parser=argparse.ArgumentParser()
+parser.add_argument('mode',choices=('stage','seal','cold'))
+parser.add_argument('--task',default='test-2.0.7-20261012')
+parser.add_argument('--label',default='2.0.7-test')
+parser.add_argument('--nvidia-donor',default='E:/项目/Veyra/test-packages/fixes-20261010/Veyra-2.0.6-fixes-20261010-NVIDIA-win64-portable')
+parser.add_argument('--amd-donor',default='E:/项目/Veyra/releases/release-2.0.6-20261007/packages/Veyra-2.0.6-AMD-win64-portable')
+parser.add_argument('--validation-record',default='docs/TEST_2.0.7_REPORT_2026-10-12.md')
+args=parser.parse_args()
+assert re.fullmatch(r'[a-z0-9][a-z0-9.-]{0,79}',args.task)
+assert re.fullmatch(r'2\.0\.7-[A-Za-z0-9.-]+',args.label)
+assert re.fullmatch(r'docs/[A-Za-z0-9_.-]+\.md',args.validation_record)
+ROOT=Path(__file__).resolve().parents[2];B=Path('E:/项目/Veyra');TASK=args.task;LABEL=args.label
+VALIDATION=args.validation_record
 BUILD=B/'build'/TASK;OUT=B/'test-packages'/TASK;REPORT=B/'reports'/TASK
 FF=B/'deps/ffmpeg-subtitle-formats-20261009/installed'
 FFSOURCE=B/'test-packages/subtitle-formats-20261009/FFmpeg-9.0.1-slices256-dav1d-zlib-source.zip'
@@ -12,8 +24,8 @@ FFSHA='49db22049f072bd5448faa664aa736074dccfe6e72b4a933f673d8ae954b0bb6'
 DEPSOURCE=B/'releases/release-2.0.6-20261007/Veyra-2.0.6-dependency-source.zip'
 DEPSHA='4eccde6343d66e0511b641aaacc12b999e424738a383fcce268d762abb3dceb9'
 SOURCE=OUT/('Veyra-'+LABEL+'-source.zip')
-DONORS={'NVIDIA':B/'test-packages/fixes-20261010/Veyra-2.0.6-fixes-20261010-NVIDIA-win64-portable',
-        'AMD':B/'releases/release-2.0.6-20261007/packages/Veyra-2.0.6-AMD-win64-portable'}
+DONORS={'NVIDIA':Path(args.nvidia_donor),'AMD':Path(args.amd_donor)}
+assert all(p.resolve().is_relative_to(B.resolve()) for p in DONORS.values())
 def module(name,path):
     spec=importlib.util.spec_from_file_location(name,path);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m
 pkg=module('qml_package',ROOT/'scripts/package-qml-release.py')
@@ -74,6 +86,7 @@ def refresh(flavor):
         if (ROOT/name).is_file():atomic(ROOT/name,app/name)
     docs={r['path'] for r in json.loads((DONORS[flavor]/'package-manifest.json').read_text('utf8'))['files'] if r['path'].startswith('docs/')}
     docs|={'docs/'+n for n in ('TEST_2.0.7_PLAN_2026-10-12.md','TEST_2.0.7_REPORT_2026-10-12.md','BUILD_2.0.7_TEST.md','XESS_FLOW_REVIEW_2026-10-12.md','XESS_HANDOFF_REPORT_2026-10-12.md','FG_CAPTURE_RECOVERY_REPORT_2026-10-12.md','PRO_VIDEO_GEOMETRY_REPORT_2026-10-12.md','PR34_CAPTURE_SETTINGS_REPORT_2026-10-12.md','DLSS45_SR_REPORT_2026-10-11.md')}
+    docs|={VALIDATION,'docs/CONTENT_CADENCE_EXACT_2026-10-12.md'}
     for n in docs:
         if (ROOT/n).is_file():atomic(ROOT/n,app/n)
     ff=pkg.audit_ffmpeg(FF)
@@ -83,17 +96,18 @@ def refresh(flavor):
     runtime=json.loads((DONORS[flavor]/'release-runtime-manifest.json').read_text('utf8'));runtime.update(package='2.0.7',candidate=LABEL,localOnly=True)
     for n in ('release-runtime-manifest.json','runtime/experimental/release-runtime-manifest.json'):document(app/n,runtime)
     write(app/'GPU-PACKAGE.txt',f'Veyra {LABEL} / {flavor}\nLocal test build. Extract the entire package to a new directory and run veyra_qml_ui.exe. Unsupported features remain disabled. No drivers or SDK development files are bundled.\n'.encode('utf8'))
-    notes=f'''# Veyra 2.0.7 测试版 · {flavor}
+    notes=f'''# Veyra {LABEL} · {flavor}
 
 完整解压到新目录，运行 veyra_qml_ui.exe。不要只替换旧包的 EXE。此为本地测试版，尚未发布 GitHub 正式版。
 
 优先测试：
+- 固定“采集 60→30”恢复隔帧采样，不参与内容去重；自动识别改为全画面逐像素比较，避免旧稀疏采样漏掉小幅运动。只在内容去重开启时增加比较工作；整画面变化都在采集噪声容差内时仍可能被视为重复。T911 NV12/P010 的此前实卡记录见 docs/CONTENT_CADENCE_EXACT_2026-10-12.md。
 - 采集卡先选择分辨率，再选择实际支持的帧率和格式。MJPEG 标红“（不建议使用）”；更换分辨率/帧率后需重新选像素格式。无效组合会弹错误，不自动换格式。已有有效上次设置仍恢复。
 - XeSS + 光流的“边缘神盾”开关（默认开），可关闭对照。包括 NVIDIA 双向检查及 FidelityFX 运动边界修复；开启有计算成本，不保证所有场景画质提升。
 - 源时间戳下补帧持续性、专业模式播放条边界、采集全部设置保存/继续上次/启动恢复。
 
 保留字幕、播放列表/文件夹导入、DLSS SR K/M/L、VFG 混合质量档等主线修复。HDR 补帧兼容和 Blackmagic 原生采集仍是默认关闭的开关；需用户实卡验证。UI 统计33ms/状态250ms及GPU默认优先级保持。
-本机RTX5070组合回归见 docs/TEST_2.0.7_REPORT_2026-10-12.md；AMD包完成内容/启动检查不代表AMD实卡增强验证。NV长期显存增长尚未根治。
+本次构建和回归见 {VALIDATION}；此前完整整合记录见 docs/TEST_2.0.7_REPORT_2026-10-12.md。AMD包完成内容/启动检查不代表AMD实卡增强验证。NV长期显存增长尚未根治。
 
 对应源码在上一级 Veyra-{LABEL}-source.zip；同时提供原样依赖源 Veyra-2.0.6-dependency-source.zip 和新增字幕FFmpeg源 FFmpeg-9.0.1-slices256-dav1d-zlib-source.zip。保留PS5 slices256和zlib字幕支持。构建见 docs/BUILD_2.0.7_TEST.md。
 runtime清单记录原版/社区身份；社区HashMismatch/NotSigned如实保留，不锁定用户自行替换的兼容DLL。运行库、SDK、模型和私有素材未混入应用源码。
@@ -103,7 +117,7 @@ def manifest(flavor,source=False):
     app=stagepath(flavor);build=json.loads(Path(json.loads((REPORT/'build.json').read_text('utf8'))['receipt']).read_text('utf8'))
     data=dict(schema=3,version='2.0.7',candidate=LABEL,displayVersion=LABEL,gpuPackage=flavor,localOnly=True,releaseReady=False,
         sourceArchiveCommit=git('rev-parse','HEAD'),mainCommit=git('rev-parse','main'),productSourceCommit=build['head'],exeSha256=sha(BUILD/'veyra_qml_ui.exe'),
-        validationRecord='docs/TEST_2.0.7_REPORT_2026-10-12.md',peVersions=dict(file='2.0.7.0',product='2.0.7.0'),
+        validationRecord=VALIDATION,peVersions=dict(file='2.0.7.0',product='2.0.7.0'),
         knownIssues=['NVIDIA long-run VRAM growth unresolved','AMD/Intel enhancement and Blackmagic field validation require affected hardware','XeSS boundary refinement adds GPU work; scene-dependent quality'],
         correspondingSource=dict(application='../'+SOURCE.name,applicationSha256=sha(SOURCE) if source else None,
             dependencies='../'+DEPSOURCE.name,dependencySha256=DEPSHA,ffmpeg='../'+FFSOURCE.name,ffmpegSha256=FFSHA,
@@ -150,7 +164,12 @@ def seal():
     for p in [SOURCE,OUT/FFSOURCE.name,OUT/DEPSOURCE.name,*[Path(r['archive']) for r in rows]]:write(Path(str(p)+'.sha256'),(sha(p)+'  '+p.name+'\n').encode('ascii'))
     document(OUT/'DELIVERY.json',dict(localOnly=True,version=LABEL,mainCommit=git('rev-parse','main'),source=source,packages=rows,ffmpegSource=FFSOURCE.name,dependencySource=DEPSOURCE.name))
 def cold():
-    assert not subprocess.check_output(['powershell','-NoProfile','-Command',"Get-Process | Where-Object { $_.ProcessName -like 'veyra*' } | ForEach-Object { $_.Id }"],text=True).split()
+    # These are playback/startup checks with effects off, not performance tests.
+    # Preserve an already running user session; reject only this harness's own
+    # unfinished verification processes and record shared-GPU conditions.
+    running=json.loads(subprocess.check_output(['powershell','-NoProfile','-Command',"[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false); ConvertTo-Json -Compress -InputObject @((Get-Process | Where-Object { $_.ProcessName -like 'veyra*' } | Select-Object Id,ProcessName,Path))"],text=True,encoding='utf8'))
+    own=B/'verify'/TASK
+    assert not any(r.get('Path') and Path(r['Path']).resolve().is_relative_to(own.resolve()) for r in running),running
     rows=json.loads((OUT/'DELIVERY.json').read_text('utf8'))['packages'];results=[]
     for row in rows:
         flavor=row['vendor'];dest=B/'verify'/TASK/flavor;assert not dest.exists() and dest.resolve().is_relative_to((B/'verify'/TASK).resolve())
@@ -177,8 +196,7 @@ def cold():
             assert run.returncode==0 and not errors and presented and max(presented)>=100,(tag,run.returncode,errors,presented)
             assert json.loads((profile/'qml-preferences.v1.json').read_text('utf8'))['sentinel']=='retained'
             audit(app,flavor);results.append(dict(vendor=flavor,mode=mode,passed=True,exit=run.returncode,seconds=round(time.monotonic()-start,1),realPresented=max(presented),logs=str(logs),archiveSha256=row['sha256'],exeSha256=sha(app/'veyra_qml_ui.exe')))
-            document(OUT/'cold-start.json',dict(passed=len(results)==4,results=results));print('COLD ZIP PASS',flavor,mode,flush=True)
+            document(OUT/'cold-start.json',dict(passed=len(results)==4,results=results,existingUserProcesses=running,performanceMeasurement=False));print('COLD ZIP PASS',flavor,mode,flush=True)
     document(REPORT/'package.json',dict(passed=True,delivery=str(OUT/'DELIVERY.json'),cold=str(OUT/'cold-start.json')))
 OUT.mkdir(parents=True,exist_ok=True);REPORT.mkdir(parents=True,exist_ok=True)
-assert len(sys.argv)==2 and sys.argv[1] in ('stage','seal','cold')
-{'stage':stage,'seal':seal,'cold':cold}[sys.argv[1]]()
+{'stage':stage,'seal':seal,'cold':cold}[args.mode]()
