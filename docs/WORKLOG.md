@@ -9279,3 +9279,8 @@ audit.py核对测试/GUI/所有app原件、两份旧final、旧JSON和源码bund
 
 测试版 tests/claude-xess-tune-20261012/delivery 更新为新 EXE/着色器/两个 QML 页，入口改为 New/Codex 两个（关开关即修复前）。AMD 实卡、真实游戏观感未验；无 merge/push/Release/子 Agent。
 
+
+
+## 2026-10-12 2.0.7 本地整合测试包开工
+
+用户授权 main 合并与测试包。开工 main a167831，66旧树/509脏文件独立快照、增量 bundle verify；隔离 codex/test-2.0.7-20261012 合入 d883216 与 e46bbdf。三处冲突为 AGENTS/WORKLOG/catalog，保留双方记录和主线翻译，增加四条 Edge Aegis 翻译。其余旧分支以祖先/最终差异审核，不恢复旧实验。计划 docs/TEST_2.0.7_PLAN_2026-10-12.md；构建/验收尚未完成，不把来源分支通过冒充组合通过。实际产物 E:/项目/Veyra 的本轮 archives/build/tests/logs/tmp/reports/test-packages。

@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-12 各分支整合与 2.0.7 测试包授权**：用户明确要求将 Claude 最新已验 XeSS 和各分支已完成修复合入 main 并构建 2.0.7 测试包。按 docs/TEST_2.0.7_PLAN_2026-10-12.md 从 main a167831 隔离整合 Claude e46bbdf 与 Codex d883216（含34f479e），必要冲突适配后构建、组合回归、本地 main 合并及 NVIDIA/AMD 完整便携测试包。66旧树/509脏文件及来源 tip 存档保护，不派 Agent，不改驱动/运行库/模型/真实配置；UI33ms/250ms、GPU默认优先级与已撤回负优化保持。产物全E盘，测试每进程≤300秒、构建≤900秒。此范围覆盖历史 no-merge/no-package；没有新 push/Release/上传/关机授权。
+
 > **2026-10-12 专业模式画面遮挡播放条**：用户反馈原生视频位置错误并要求追溯来源。按docs/PRO_VIDEO_GEOMETRY_PLAN_2026-10-12.md从已验34f479e隔离codex/pro-video-geometry-20261012，仅统一Main/ProPage响应式尺寸、加入实际HWND回归；不改引擎、33ms/250ms节奏、GPU优先级、运行库或真实配置，不派Agent。65旧树/509脏文件由本轮start/bundle保护；产物全E盘，每测试≤300秒。无main合并/push/打包/Release/关机。
 
 > **2026-10-12 日志50补帧修复授权**：用户在完成 RTX5070Ti/Elgato 日志诊断后明确“尝试修复”。按 docs/FG_CAPTURE_RECOVERY_PLAN_2026-10-12.md 从 main a167831 在 codex/fg-capture-recovery-20261012 隔离修复异常短 PTS 污染节奏基线及有证据的必要接点，覆盖这些具体范围旧冻结。独立 start/bundle 保护64旧树/515脏文件；已有交换链复用先验证，不重复改写。保持真实 PTS、VRR、真正断点重置、容量上限、UI33ms/250ms、GPU默认优先级与用户配置，不派Agent、不改驱动/运行库/模型。全产物E盘，测试每进程≤300秒/构建≤900秒；无main合并/push/打包/Release/关机。本机回放不能冒充Elgato实卡或物理屏幕性能验收。
