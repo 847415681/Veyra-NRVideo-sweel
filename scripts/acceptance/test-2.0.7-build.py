@@ -28,6 +28,20 @@ for line in setup.stdout.splitlines():
         k,v=line.split('=',1)
         if k and not k.startswith('='):env[k]=v
 env.update(TEMP=str(TMP),TMP=str(TMP),PYTHONDONTWRITEBYTECODE='1')
+# The audited subtitle FFmpeg staging tree contains DLLs/DEFs and headers, but
+# no MSVC import libraries. Generate those from the matching DEF export lists
+# in this build tree; never modify the DLLs or external dependency tree.
+importdir=BUILD/'ffmpeg-imports';importdir.mkdir(exist_ok=True)
+lib=r'C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/lib.exe'
+ffimports=[]
+for short,dll in [('avformat','avformat-63'),('avcodec','avcodec-63'),('swresample','swresample-7'),('swscale','swscale-10'),('avutil','avutil-61')]:
+    definition=Path(options['VEYRA_FFMPEG_ROOT'])/'lib'/(dll+'.def');target=importdir/(short+'.lib')
+    with (LOG/('import-'+short+'.log')).open('wb') as stream:
+        subprocess.run([lib,'/nologo','/machine:x64','/def:'+str(definition),'/name:'+dll+'.dll','/out:'+str(target)],cwd=TMP,env=env,stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=30)
+    options['FFMPEG_lib'+short+'_LIBRARY']=str(target)
+    options['FFMPEG_lib'+short+'_LIBRARY_RELEASE']=str(target)
+    options['FFMPEG_lib'+short+'_LIBRARY_RELEASE_DIR']=str(importdir)
+    ffimports.append(dict(definition=str(definition),definitionSha256=sha(definition),path=str(target),sha256=sha(target)))
 cmake=r'C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe'
 targets=['veyra_qml_ui','veyra_xess_motion_contract_tests','veyra_xess_motion_quality_tests','veyra_fg_xess_boundary_tests',
     'veyra_fg_motion_boundary_tests','veyra_capture_cadence_fg_tests','veyra_scene_tests','veyra_live_timing_tests',
@@ -53,7 +67,7 @@ for name,command in (('configure',configure),('compile',build)):
 for name,h in inputs.items():assert sha(ROOT/name)==h,name
 exes={n+'.exe':sha(BUILD/(n+'.exe')) for n in targets}
 receipt=dict(passed=True,head=git('rev-parse','HEAD'),displayVersion='2.0.7-test',freshCMakeBuild=True,
-    sources=inputs,commands=commands,dependencies=options,targets=targets,executables=exes,seconds=time.monotonic()-start)
+    sources=inputs,commands=commands,dependencies=options,ffmpegImportLibraries=ffimports,targets=targets,executables=exes,seconds=time.monotonic()-start)
 save(LOG/'receipt.json',receipt)
 report=BASE/'reports'/TASK;report.mkdir(parents=True,exist_ok=True)
 save(report/'build.json',dict(receipt=str(LOG/'receipt.json'),sha256=sha(LOG/'receipt.json')))
