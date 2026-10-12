@@ -297,6 +297,8 @@ veyra_add_compute_shader(veyra_shader_nr_temporal NrTemporal)
 # Stage-5 output stabiliser (anti-flicker, default off).
 veyra_add_compute_shader(veyra_shader_nr_hold NrHold)
 veyra_add_compute_shader(veyra_shader_flow_adapt FlowAdapt)
+veyra_add_compute_shader(veyra_shader_flow_refine FlowRefine)
+veyra_add_compute_shader(veyra_shader_flow_fill FlowFill)
 # VfgShotChange: per-pair shot-change test for VFG (replaces the SDK's automatic one).
 veyra_add_compute_shader(veyra_shader_vfg_shot_change VfgShotChange)
 veyra_add_compute_shader(veyra_shader_rgb_nv12 RgbToNv12)
@@ -556,7 +558,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
 
   # veyra_sources: product input sources (Playbook R3/R7). MediaFileSource
   # composes veyra_media; no second decode implementation exists.
-  add_dependencies(veyra_pipeline veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_flow_adapt veyra_shader_vfg_shot_change)
+  add_dependencies(veyra_pipeline veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_vfg_shot_change)
   add_library(veyra_sources STATIC
     src/source/NativeCaptureSink.cpp
     src/source/MediaFileSource.cpp
@@ -922,6 +924,11 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_include_directories(veyra_fg_xess_boundary_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
   target_compile_definitions(veyra_fg_xess_boundary_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN VEYRA_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
   target_link_libraries(veyra_fg_xess_boundary_tests PRIVATE veyra_engine d3d11 dxgi)
+  add_executable(veyra_xess_motion_contract_tests tests/integration/XessMotionContractTests.cpp)
+  target_compile_features(veyra_xess_motion_contract_tests PRIVATE cxx_std_20)
+  target_include_directories(veyra_xess_motion_contract_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
+  target_compile_definitions(veyra_xess_motion_contract_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN VEYRA_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+  target_link_libraries(veyra_xess_motion_contract_tests PRIVATE veyra_engine)
   # Qt 6.8.3 is staged under deps/ (the user allowed the latest Qt). The probe is
 # opt-in so a normal product build never depends on Qt being present.
 option(VEYRA_BUILD_QT_PROBE "Build the Qt + D3D12 host probe" OFF)

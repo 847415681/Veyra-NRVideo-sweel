@@ -235,13 +235,14 @@ int wmain(int argc,wchar_t** argv){
     D3D11_TEXTURE2D_DESC sd{};sd.Width=CW;sd.Height=H;sd.MipLevels=1;sd.ArraySize=1;sd.Format=captureFormat;sd.SampleDesc.Count=1;sd.Usage=D3D11_USAGE_STAGING;sd.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
     ComPtr<ID3D11Texture2D> staging;if(FAILED(device11->CreateTexture2D(&sd,nullptr,&staging)))return 2;
     std::vector<Image> captures;std::mutex captureLock;std::atomic<bool> stop=false;std::atomic<unsigned> captureErrors=0;
+    unsigned duplicateCaptures=0;
     std::jthread capture([&]{
         while(!stop){
             DXGI_OUTDUPL_FRAME_INFO fi{};ComPtr<IDXGIResource> resource;
             const HRESULT hr=duplication->AcquireNextFrame(20,&fi,&resource);
             if(hr==DXGI_ERROR_WAIT_TIMEOUT)continue;
             if(FAILED(hr)){++captureErrors;break;}
-            if(fi.LastPresentTime.QuadPart&&captures.size()<64){
+            if(fi.LastPresentTime.QuadPart&&captures.size()<128){
                 ComPtr<ID3D11Texture2D> texture;
                 if(SUCCEEDED(resource.As(&texture))){
                     D3D11_BOX box{UINT(X0),0,0,UINT(X0+CW),UINT(H),1};context11->CopySubresourceRegion(staging.Get(),0,0,0,0,texture.Get(),0,&box);
@@ -252,7 +253,13 @@ int wmain(int argc,wchar_t** argv){
                             if(hdrDesktop){const auto* h=reinterpret_cast<const uint16_t*>(row);
                                 for(int x=0;x<CW;++x)im.rgb[size_t(y)*CW+x]={decode[h[x*4]],decode[h[x*4+1]],decode[h[x*4+2]]};}
                             else for(int x=0;x<CW;++x)im.rgb[size_t(y)*CW+x]={row[x*4+2],row[x*4+1],row[x*4]};}
-                        context11->Unmap(staging.Get(),0);std::lock_guard lock(captureLock);captures.push_back(std::move(im));
+                        context11->Unmap(staging.Get(),0);std::lock_guard lock(captureLock);
+                        // DWM can report multiple desktop updates for an unchanged
+                        // interpolated image (including the previous test window).
+                        // Keep distinct pixels so those updates cannot consume the
+                        // bounded capture budget before the later pairs are shown.
+                        if(!captures.empty()&&im.rgb==captures.back().rgb)++duplicateCaptures;
+                        else captures.push_back(std::move(im));
                     }
                 }
             }
@@ -348,10 +355,10 @@ int wmain(int argc,wchar_t** argv){
     if(SUCCEEDED(ctx.device()->QueryInterface(IID_PPV_ARGS(&iq))))
         for(UINT64 i=0;i<iq->GetNumStoredMessages();++i){SIZE_T bytes=0;if(FAILED(iq->GetMessage(i,nullptr,&bytes)))continue;std::vector<uint8_t>b(bytes);auto* msg=reinterpret_cast<D3D12_MESSAGE*>(b.data());
             if(SUCCEEDED(iq->GetMessage(i,msg,&bytes))&&msg->Severity<=D3D12_MESSAGE_SEVERITY_ERROR){++errors;std::cerr<<msg->pDescription<<std::endl;}}
-    const bool complete=evaluated>=unsigned(N-Warmup-1)*2/3;
-    std::cout<<std::format("FG_XESS_BOUNDARY {{\"label\":\"{}\",\"captures\":{},\"matchedReal\":{},\"unmatched\":{},\"evaluated\":{},\"sdkGenerated\":{},\"bandMae\":{:.4f},\"bandBadPct\":{:.4f},"
+    const bool complete=evaluated==unsigned(N-Warmup-1)&&!captureErrors;
+    std::cout<<std::format("FG_XESS_BOUNDARY {{\"label\":\"{}\",\"captures\":{},\"duplicatesSkipped\":{},\"matchedReal\":{},\"unmatched\":{},\"evaluated\":{},\"sdkGenerated\":{},\"bandMae\":{:.4f},\"bandBadPct\":{:.4f},"
         "\"outsideMae\":{:.4f},\"outsideBadPct\":{:.4f},\"innerMae\":{:.4f},\"pairDistances\":[{}],\"captureMatches\":[{}],\"hdrDesktop\":{},\"sdrWhite\":{:.3f},\"captureErrors\":{},\"errors\":{},\"pass\":{}}}",
-        label,captures.size(),matchedReal,unmatched,evaluated,generatedBySdk,band.mae(),band.badPercent(),outside.mae(),outside.badPercent(),inner.mae(),distances,matches,
+        label,captures.size(),duplicateCaptures,matchedReal,unmatched,evaluated,generatedBySdk,band.mae(),band.badPercent(),outside.mae(),outside.badPercent(),inner.mae(),distances,matches,
         hdrDesktop,white,captureErrors.load(),errors,ok&&complete&&!errors?"true":"false")<<std::endl;
     ring.shutdown();ctx.shutdown();DestroyWindow(window);CoUninitialize();
     return ok&&complete&&!errors?0:1;

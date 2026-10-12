@@ -9157,3 +9157,24 @@ seal.py validate逐项核对源码/输入/EXE/QML/原包1626文件及旧树；�
 - 结果（4K 合成场景，30fps 位移，FG 2X，光流 1080p）：DLSS 补帧对零、产品光流、理想、取反、全屏 +120 px 的矢量结果相同（轮廓带误差 2.77/2.58），即不读矢量。FSR 依赖矢量：零 6.59/10.52（镜头转动时背景整体 16.26），产品光流 1.54/2.04，与理想 1.71/2.05 相当。开 NR 后轮廓带偏离原图更多（NR 光流 13.00 对 NR 零 10.77），但静止人物内侧抖动没有增加。判定：光流精修（J1）没有收益，不实施。附带发现 initNvof 只给 DLSS 补帧建光流，只开 FSR 补帧时“光流”实际为 0。
 - 证据：logs/claude-jelly-20261012/j0/（j0-results.json、每组日志、裁切图/误差图/sheet）。详细结论与边界见 docs/JELLY_J0_2026-10-12.md。合成场景没有复现明显果冻，XeSS 未测；不 merge/push/Release。
 - XeSS 补测（用户：“主要是XESS……人物侧向奔跑……画面高速运动的时候”）：新增 veyra_fg_xess_boundary_tests。2560×1440 全屏，产品图 + VideoPresenter 的 XeSS 送显链路，SDK 调试功能“只显示插值帧”，用 DXGI 桌面复制抓屏（HDR 桌面按 SDR 白电平 4.75 还原）。侧跑场景每帧 27/80 px：零矢量（XeSS“自动”默认）7.68/9.65，产品光流 6.88/8.21，关闭清零校验 6.43/7.56，理想 5.47/6.01，取反 8.05/10.12。加分层深度只改善 2–4%；NVOF 网格 1/2、全分辨率光流、质量档无效，GPU DIS 更差。判定：XeSS 依赖我们的矢量，默认零矢量最差，逐像素精修（J1）对 XeSS 有收益。产品代码只加测试开关（VEYRA_TEST_XESS_ONLY_INTERPOLATED、fgMotionProbe 送入 XeSS 链路、VEYRA_TEST_NVOF_GRID），默认路径不变。证据 logs/claude-jelly-20261012/xess/。
+
+
+## 2026-10-12 接手 Claude XeSS 光流修复
+
+用户要求“claude又跑空额度了，继续接手他，完成xess修复”。读取其最新 d6689aca 会话，沿用最后授权：只修开启光流的人物/背景运动边界，Automatic 不改，延迟暂缓。独立 archives/xess-handoff-20261012/start.json、source-before.bundle（verify）和五文件 patch/副本保护 61 旧工作树/509 脏文件；在 E:/项目/Veyra/worktrees/xess-handoff-20261012 / codex/xess-handoff-20261012 从 7fe3ea6 接手，Claude 原树、桌面和 main76f41b3 不改，不派 Agent。
+
+继承两个诊断提交和 FlowRefine/FlowFill 半成品，完成 NVOF→逐像素邻格亮度匹配→相似颜色补洞→XeSS 工作尺寸运动的 GPU 分支；补资源/预算、pass shader/descriptor 顺序、barrier、首帧/reset零运动、失败/释放及 CMake 接线。仅 XeSS+显式光流+NVIDIA 生效，NR/SR 保留原校验光流，Automatic/其他光流后端/其他补帧不改；还原 Claude 半成品里的 FSR 初始化条件扩大。新增工作纳入已有光流计时，未改 33ms统计/约250ms状态/GPU默认优先级，无正常路径像素回读或逐帧等待。
+
+命令前缀为 Python3.11 -X utf8 -B -I，脚本与产物均 E:/项目/Veyra/{用途}/xess-handoff-20261012：
+
+- tmp/.../build.py 最终 logs/.../build-20261012-111040/receipt.json，22.2秒，17依赖闭包对象核对/重编、16EXE链接成功；不是clean全工程重编。GUI SHA256 43a5fea655a3b2840e5f5f25befac70c8ad6cd2de2f78c79385d8f83ea658edc。tmp/.../configure.py → configure-20261012-111144完整配置成功，新shader及test targets登记，无QuickPrivate。
+- tests/.../harness/regress.py xess-motion chain contracts hdr video rollback → logs/.../xess/tests-20261012-111135/receipt.json 六组通过；160真实GPU检查、6运动帧对改变、D3D12错误0。首帧/reset/Automatic零运动，原校验光流和未增强实帧像素相同，设置重建、失败回退、HDR颜色回归通过。
+- tests/.../harness/ui.py perf-old perf-new lifecycle → logs/.../xess-ui-20261012-111651/receipt.json，40.3/40.0/50.1秒通过；真实GUI seek/暂停恢复/2X→4X/零运动/AMD光流→NVOF/关闭开启，SDK framesPresented=4。AMD provider在RTX5070实际Dispatch成功，非AMD显卡验收。探针删除、Main.qml恢复。
+- tests/.../harness/quality.py → logs/.../quality-20261012-112023/results.json，6组每组11/11有效插值帧、debug/capture错误0。1440p XeSS2X、720p flow，中速27px/高速80px侧跑、80px横移轮廓带MAE8：6.8755→6.3781（-7.23%）、8.2148→7.4180（-9.70%）、3.7651→3.0332（-19.44%）；远处背景误差均降。不是实际果冻减少百分比，仍有弯曲残留。SDK只显示插值调试模式generated计数为0，不冒称计数证明；全部目标帧由像素匹配确认，matchedReal0，正常GUI另验2X/4X提交。
+- GTA6原4K30/原版NR一层1080/NVOF1080/XeSS2X，测试私有配置在打开源前固定普通class2（产品原有默认实时class5保持）。相同源帧300–840共541帧，Color.begin→Residual.end中位8.4835→8.8310ms（+0.348ms/+4.10%）、P95 8.6534→9.0396，双方约60fps提交；显存1980→2037MiB（+57）。不能把XeSS异步FgBatch时间戳或UI统计直接当全部处理/显示延迟。光流统计覆盖新增工作后约+0.57ms含旧漏记densify/adapt，实际成本看同边界处理图。汇总reports/.../validation.json。
+
+失败保留：110508性能夹具实际Native4K+默认class5，作废，修正sizePolicy0和普通优先级后110652/111651重测；111634抓屏重复帧耗尽容量仅4/11而失败，测试改像素去重+有界128张、加强为11/11且无采集错误，单独重建诊断测试boundary-build-20261012-112011（4秒），产品及其他EXE保持，最终六组与早期完整结果一致。单独重链首次LNK1181因工作目录错误，修复后通过。新保护核对器最初漏处理2棵detached HEAD，修正与开工None比较后61树/509文件全同，保留guard-detached-mismatch.json。
+
+本地构建 tests/.../app、Start-XeSS-Test.cmd 和独立 user-test-profile，未打新压缩包。1626母包文件哈希不变，SDK/DLL/模型/媒体未入Git。运行组件原件保持，默认UI/GPU行为保持，无main合并/push/Release/关机。真实用户游戏、AMD/Intel显卡、长期显存和屏幕端到端延迟未验，不宣称根治。详见 docs/XESS_HANDOFF_REPORT_2026-10-12.md；最终本地commit、source-after.bundle、全部保护/构建回执哈希见 reports/xess-handoff-20261012/final.json。
+
+启动入口最终实测：tmp/.../check-launcher.py，reports/.../launcher.json，9.6秒。初次检查误在继承管道关闭后查询已退出进程，日志实际正常；种子配置补齐field-render迁移旁文件，真实GUI断言XeSS2X/光流/NVOF/原版NR1080p成功，按时退出，检查探针已删除。
