@@ -2045,6 +2045,13 @@
    "ja": "ホストとの接続が切れました。"
   },
   {
+   "zh": "与帧率和像素格式一起决定采集媒体类型",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "與幀率和像素格式一起決定採集媒體類型",
+   "en": "Together with frame rate and pixel format, this selects the capture media type",
+   "ja": "フレームレートとピクセルフォーマットと合わせて、キャプチャのメディアタイプを決めます"
+  },
+  {
    "zh": "专业模式",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "專業模式",
@@ -2820,6 +2827,13 @@
    "zh-TW": "偏移 %1 ms",
    "en": "Offset %1 ms",
    "ja": "オフセット %1 ms"
+  },
+  {
+   "zh": "像素格式",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "像素格式",
+   "en": "Pixel format",
+   "ja": "ピクセルフォーマット"
   },
   {
    "zh": "允许撕裂",
@@ -3892,6 +3906,20 @@
    "zh-TW": "另存為",
    "en": "Save as",
    "ja": "名前を付けて保存"
+  },
+  {
+   "zh": "只列出当前分辨率下设备上报的帧率。设备帧率填 0 时，连接使用这里选中的帧率",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "只列出目前解析度下裝置回報的幀率。裝置幀率填 0 時，連接使用這裡選中的幀率",
+   "en": "Only frame rates the device reports for the current resolution. A device frame rate of 0 uses the rate selected here",
+   "ja": "現在の解像度でデバイスが報告するフレームレートだけを表示します。デバイスのフレームレートが 0 のときは、ここで選んだ値で接続します"
+  },
+  {
+   "zh": "只列出当前分辨率和帧率下的像素格式",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "只列出目前解析度與幀率下的像素格式",
+   "en": "Only pixel formats available at the current resolution and frame rate",
+   "ja": "現在の解像度とフレームレートで使えるピクセルフォーマットだけを表示します"
   },
   {
    "zh": "只删除本机保存的这台主机；以后需要重新配对",
@@ -8207,6 +8235,13 @@
    "ja": "不明なエフェクトの種類"
   },
   {
+   "zh": "未知格式",
+   "src": "include/veyra/source/CaptureFormatSelection.h",
+   "zh-TW": "未知格式",
+   "en": "Unknown format",
+   "ja": "不明なフォーマット"
+  },
+  {
    "zh": "未知格式 {}",
    "src": "include/veyra/source/CapturePixelFormat.h",
    "zh-TW": "未知格式 {}",
@@ -11238,13 +11273,6 @@
    "ja": "デバイス"
   },
   {
-   "zh": "设备实际支持的格式",
-   "src": "qml/DialogHost.qml",
-   "zh-TW": "裝置實際支援的格式",
-   "en": "Formats the device actually supports",
-   "ja": "デバイスが実際に対応するフォーマット"
-  },
-  {
    "zh": "设备帧率 FPS",
    "src": "qml/DialogHost.qml",
    "zh-TW": "裝置幀率 FPS",
@@ -11560,11 +11588,32 @@
    "ja": "選択してください"
   },
   {
+   "zh": "请选择像素格式",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "請選擇像素格式",
+   "en": "Choose a pixel format",
+   "ja": "ピクセルフォーマットを選んでください"
+  },
+  {
+   "zh": "请选择分辨率",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "請選擇解析度",
+   "en": "Choose a resolution",
+   "ja": "解像度を選んでください"
+  },
+  {
    "zh": "请选择图片和已存在的输出目录",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "請選擇圖片和已存在的輸出目錄",
    "en": "Choose images and an existing output folder",
    "ja": "画像と既存の出力フォルダーを選んでください"
+  },
+  {
+   "zh": "请选择帧率",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "請選擇幀率",
+   "en": "Choose a frame rate",
+   "ja": "フレームレートを選んでください"
   },
   {
    "zh": "请选择有效的输出目录",
@@ -11579,13 +11628,6 @@
    "zh-TW": "請選擇本地影片與有效匯出設定",
    "en": "Choose a local video and valid export settings",
    "ja": "ローカルの動画と有効な書き出し設定を選んでください"
-  },
-  {
-   "zh": "请选择格式",
-   "src": "qml/DialogHost.qml",
-   "zh-TW": "請選擇格式",
-   "en": "Choose a format",
-   "ja": "フォーマットを選んでください"
   },
   {
    "zh": "请选择输入端口完成连接 · Esc 取消",
@@ -12603,6 +12645,13 @@
    "ja": "オプション"
   },
   {
+   "zh": "逐行",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "逐行",
+   "en": "Progressive",
+   "ja": "プログレッシブ"
+  },
+  {
    "zh": "部分轨道当前封装装不下，未保留（详见队列说明）",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "部分軌道當前封裝裝不下，未保留（詳見佇列說明）",
@@ -13070,6 +13119,13 @@
    "zh-TW": "隱藏播放條（頂部膠囊裡可重新開啟）",
    "en": "Hide the playback bar (it can be shown again from the dock at the top)",
    "ja": "再生バーを非表示（上部のドックから再表示できます）"
+  },
+  {
+   "zh": "隔行（{:.2f} 场/秒）",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "隔行（{:.2f} 場/秒）",
+   "en": "Interlaced ({:.2f} fields/s)",
+   "ja": "インターレース（{:.2f} フィールド/秒）"
   },
   {
    "zh": "零运动",

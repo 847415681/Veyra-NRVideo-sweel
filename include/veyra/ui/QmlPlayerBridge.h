@@ -121,6 +121,14 @@ class QmlPlayerBridge : public QObject {
     // the choice is remembered in capture-preferences.v1 for "continue".
     Q_PROPERTY(QVariantList captureFormats READ captureFormats NOTIFY captureChanged)
     Q_PROPERTY(QString captureFormatKey READ captureFormatKey WRITE setCaptureFormatKey NOTIFY captureChanged)
+    // Resolution, frame rate and pixel format are three views of captureFormatKey.
+    // Changing one retargets that key to a media type the device actually enumerated.
+    Q_PROPERTY(QVariantList captureResolutionOptions READ captureResolutionOptions NOTIFY captureChanged)
+    Q_PROPERTY(QString captureResolutionId READ captureResolutionId WRITE setCaptureResolutionId NOTIFY captureChanged)
+    Q_PROPERTY(QVariantList captureFrameRateOptions READ captureFrameRateOptions NOTIFY captureChanged)
+    Q_PROPERTY(QString captureFrameRateId READ captureFrameRateId WRITE setCaptureFrameRateId NOTIFY captureChanged)
+    Q_PROPERTY(QVariantList capturePixelOptions READ capturePixelOptions NOTIFY captureChanged)
+    Q_PROPERTY(QString capturePixelId READ capturePixelId WRITE setCapturePixelId NOTIFY captureChanged)
     Q_PROPERTY(QVariantList captureAudioInputs READ captureAudioInputs NOTIFY captureChanged)
     Q_PROPERTY(int captureAudioChoice READ captureAudioChoice WRITE setCaptureAudioChoice NOTIFY captureChanged)
     Q_PROPERTY(int captureColorSpace READ captureColorSpace WRITE setCaptureColorSpace NOTIFY captureChanged)
@@ -565,6 +573,15 @@ public:
     QVariantList captureFormats() const;
     QString captureFormatKey() const;
     void setCaptureFormatKey(const QString& key);
+    QVariantList captureResolutionOptions() const;
+    QString captureResolutionId() const;
+    void setCaptureResolutionId(const QString& id);
+    QVariantList captureFrameRateOptions() const;
+    QString captureFrameRateId() const;
+    void setCaptureFrameRateId(const QString& id);
+    QVariantList capturePixelOptions() const;
+    QString capturePixelId() const;
+    void setCapturePixelId(const QString& id);
     QVariantList captureAudioInputs() const;
     int captureAudioChoice() const;
     void setCaptureAudioChoice(int choice);

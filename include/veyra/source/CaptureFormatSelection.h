@@ -1,10 +1,17 @@
 #pragma once
 #include "veyra/source/CaptureFrameRate.h"
+#include <algorithm>
 #include <format>
 #include <span>
+#include <vector>
 
 namespace veyra::source {
-struct CaptureFormat {int index=0;unsigned width=0,height=0;double fps=0;std::wstring label;std::wstring key;int rank=0;int tier=0;bool driverCurrent=false;};
+// `pixel` / `scan` / `interlaced` describe the same media type as `key`.
+// The capture dialog offers them as three linked choices; `key` stays the
+// persisted identity so an old combined selection still restores one type.
+struct CaptureFormat {int index=0;unsigned width=0,height=0;double fps=0;std::wstring label;std::wstring key;int rank=0;int tier=0;bool driverCurrent=false;std::wstring pixel;std::wstring scan;bool interlaced=false;};
+enum class CaptureFormatAxis { Resolution, FrameRate };
+struct CaptureFormatOption { std::wstring id, label; };
 
 inline const CaptureFormat* selectCaptureFormat(std::span<const CaptureFormat> formats,int legacyIndex,std::wstring_view key){
     for(const auto& format:formats)
@@ -20,6 +27,99 @@ inline const CaptureFormat* selectCaptureFormat(std::span<const CaptureFormat> f
         return match;
     }
     return nullptr;
+}
+
+inline std::wstring captureResolutionId(const CaptureFormat& format){
+    return std::format(L"{}x{}",format.width,format.height);
+}
+inline std::wstring captureFrameRateId(const CaptureFormat& format){
+    // Progressive and interlaced modes that share a numeric rate stay distinct.
+    // Field order stays on the pixel list, so it does not create two identical fps rows.
+    return std::format(L"{:.6f}|{}",format.fps,format.interlaced?1:0);
+}
+inline std::wstring captureResolutionLabel(const CaptureFormat& format){
+    return std::format(L"{} × {}",format.width,format.height);
+}
+inline std::wstring captureFrameRateLabel(const CaptureFormat& format){
+    auto label=std::format(L"{:.2f} fps",format.fps);
+    if(!format.scan.empty())label+=L" · "+format.scan;
+    return label;
+}
+inline std::wstring capturePixelLabel(const CaptureFormat& format,bool ambiguous){
+    std::wstring label=format.pixel.empty()?L"未知格式":format.pixel;
+    if(ambiguous){
+        if(!format.scan.empty())label+=L" · "+format.scan;
+        label+=std::format(L" [format {}]",format.index);
+    }
+    if(format.driverCurrent)label+=L" · 驱动默认";
+    return label;
+}
+inline std::vector<CaptureFormatOption> captureResolutionOptions(std::span<const CaptureFormat> formats){
+    std::vector<CaptureFormatOption> out;
+    for(const auto& format:formats){
+        const auto id=captureResolutionId(format);
+        if(std::any_of(out.begin(),out.end(),[&](const CaptureFormatOption& option){return option.id==id;}))continue;
+        out.push_back({id,captureResolutionLabel(format)});
+    }
+    return out;
+}
+inline std::vector<CaptureFormatOption> captureFrameRateOptions(std::span<const CaptureFormat> formats,const CaptureFormat* current){
+    std::vector<CaptureFormatOption> out;
+    if(!current)return out;
+    const auto resolution=captureResolutionId(*current);
+    for(const auto& format:formats){
+        if(captureResolutionId(format)!=resolution)continue;
+        const auto id=captureFrameRateId(format);
+        if(std::any_of(out.begin(),out.end(),[&](const CaptureFormatOption& option){return option.id==id;}))continue;
+        auto label=captureFrameRateLabel(format);
+        if(std::any_of(out.begin(),out.end(),[&](const CaptureFormatOption& option){return option.label==label;}))
+            label+=std::format(L" [format {}]",format.index);
+        out.push_back({id,std::move(label)});
+    }
+    return out;
+}
+inline std::vector<CaptureFormatOption> capturePixelOptions(std::span<const CaptureFormat> formats,const CaptureFormat* current){
+    std::vector<CaptureFormatOption> out;
+    if(!current)return out;
+    const auto resolution=captureResolutionId(*current);
+    const auto rate=captureFrameRateId(*current);
+    std::vector<const CaptureFormat*> matched;
+    for(const auto& format:formats)
+        if(captureResolutionId(format)==resolution&&captureFrameRateId(format)==rate)matched.push_back(&format);
+    for(const auto* format:matched){
+        int copies=0;
+        for(const auto* other:matched)if(other->pixel==format->pixel)++copies;
+        out.push_back({format->key,capturePixelLabel(*format,copies>1)});
+    }
+    return out;
+}
+// Keep the other two axes when the newly chosen resolution or frame rate still
+// offers them. Otherwise take the first remaining media type in list order
+// (driver-current, then lower latency). Never invent a triple the device did
+// not enumerate.
+inline const CaptureFormat* retargetCaptureFormat(std::span<const CaptureFormat> formats,const CaptureFormat* current,CaptureFormatAxis axis,std::wstring_view id){
+    if(id.empty()||(axis==CaptureFormatAxis::FrameRate&&!current))return nullptr;
+    const auto resolution=current?captureResolutionId(*current):std::wstring{};
+    const auto rate=current?captureFrameRateId(*current):std::wstring{};
+    const auto pixel=current?current->pixel:std::wstring{};
+    const CaptureFormat* fallback=nullptr;
+    const CaptureFormat* samePixel=nullptr;
+    const CaptureFormat* sameRate=nullptr;
+    const CaptureFormat* sameBoth=nullptr;
+    for(const auto& format:formats){
+        const bool match=axis==CaptureFormatAxis::Resolution?captureResolutionId(format)==id
+            :captureResolutionId(format)==resolution&&captureFrameRateId(format)==id;
+        if(!match)continue;
+        if(!fallback)fallback=&format;
+        if(!current)continue;
+        const bool rateMatch=captureFrameRateId(format)==rate;
+        const bool pixelMatch=!pixel.empty()&&format.pixel==pixel;
+        if(rateMatch&&pixelMatch){if(!sameBoth)sameBoth=&format;}
+        else if(rateMatch){if(!sameRate)sameRate=&format;}
+        else if(pixelMatch){if(!samePixel)samePixel=&format;}
+    }
+    if(axis==CaptureFormatAxis::FrameRate)return samePixel?samePixel:fallback;
+    return sameBoth?sameBoth:sameRate?sameRate:samePixel?samePixel:fallback;
 }
 
 inline std::wstring capturePathOptions(double fps,std::wstring_view encodedKey){

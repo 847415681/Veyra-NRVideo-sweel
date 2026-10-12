@@ -2045,7 +2045,9 @@ QVariantList QmlPlayerBridge::captureFormats() const {
         auto label=uiText(f.label);
         if(source::decklink::isPath(impl_->captureDevice))label=label.replace(QStringLiteral("逐行"),tr("逐行")).replace(QStringLiteral("隔行"),tr("隔行"));
         out << QVariantMap{{"id", utf8Of(f.key)}, {"label", label}, {"tier", f.tier},
-                           {"costHint", source::captureFormatNeedsCostHint(static_cast<source::CaptureFormatTier>(f.tier))}, {"driverCurrent", f.driverCurrent}};
+                           {"costHint", source::captureFormatNeedsCostHint(static_cast<source::CaptureFormatTier>(f.tier))}, {"driverCurrent", f.driverCurrent},
+                           {"width", int(f.width)}, {"height", int(f.height)}, {"fps", f.fps}, {"pixel", uiText(f.pixel)},
+                           {"scan", uiText(f.scan)}, {"interlaced", f.interlaced}};
     }
     return out;
 }
@@ -2054,6 +2056,67 @@ void QmlPlayerBridge::setCaptureFormatKey(const QString& key) {
     if (impl_->captureFormatKey == wideOf(key)) return;
     impl_->captureFormatKey = wideOf(key);
     emit captureChanged();
+}
+namespace {
+QVariantList captureChoiceList(const std::vector<source::CaptureFormatOption>& options) {
+    QVariantList out;
+    for (const auto& option : options)
+        out << QVariantMap{{"id", utf8Of(option.id)}, {"label", uiText(option.label)}};
+    return out;
+}
+const source::CaptureFormat* selectedCaptureFormat(const std::vector<source::CaptureFormat>& formats, const std::wstring& key) {
+    return source::selectCaptureFormat(formats, -1, key);
+}
+}
+QVariantList QmlPlayerBridge::captureResolutionOptions() const {
+    return captureChoiceList(source::captureResolutionOptions(impl_->captureFormatList));
+}
+QString QmlPlayerBridge::captureResolutionId() const {
+    const auto* format = selectedCaptureFormat(impl_->captureFormatList, impl_->captureFormatKey);
+    return format ? utf8Of(source::captureResolutionId(*format)) : QString();
+}
+void QmlPlayerBridge::setCaptureResolutionId(const QString& id) {
+    const auto wide = wideOf(id);
+    const auto* current = selectedCaptureFormat(impl_->captureFormatList, impl_->captureFormatKey);
+    if (current && source::captureResolutionId(*current) == wide) return;
+    const auto* next = source::retargetCaptureFormat(impl_->captureFormatList, current, source::CaptureFormatAxis::Resolution, wide);
+    if (!next || next->key == impl_->captureFormatKey) return;
+    impl_->captureFormatKey = next->key;
+    emit captureChanged();
+}
+QVariantList QmlPlayerBridge::captureFrameRateOptions() const {
+    return captureChoiceList(source::captureFrameRateOptions(impl_->captureFormatList, selectedCaptureFormat(impl_->captureFormatList, impl_->captureFormatKey)));
+}
+QString QmlPlayerBridge::captureFrameRateId() const {
+    const auto* format = selectedCaptureFormat(impl_->captureFormatList, impl_->captureFormatKey);
+    return format ? utf8Of(source::captureFrameRateId(*format)) : QString();
+}
+void QmlPlayerBridge::setCaptureFrameRateId(const QString& id) {
+    const auto wide = wideOf(id);
+    const auto* current = selectedCaptureFormat(impl_->captureFormatList, impl_->captureFormatKey);
+    if (!current || source::captureFrameRateId(*current) == wide) return;
+    const auto* next = source::retargetCaptureFormat(impl_->captureFormatList, current, source::CaptureFormatAxis::FrameRate, wide);
+    if (!next || next->key == impl_->captureFormatKey) return;
+    impl_->captureFormatKey = next->key;
+    emit captureChanged();
+}
+QVariantList QmlPlayerBridge::capturePixelOptions() const {
+    return captureChoiceList(source::capturePixelOptions(impl_->captureFormatList, selectedCaptureFormat(impl_->captureFormatList, impl_->captureFormatKey)));
+}
+QString QmlPlayerBridge::capturePixelId() const {
+    const auto* format = selectedCaptureFormat(impl_->captureFormatList, impl_->captureFormatKey);
+    return format ? utf8Of(format->key) : QString();
+}
+void QmlPlayerBridge::setCapturePixelId(const QString& id) {
+    const auto key = wideOf(id);
+    if (key == impl_->captureFormatKey) return;
+    const auto options = source::capturePixelOptions(impl_->captureFormatList, selectedCaptureFormat(impl_->captureFormatList, impl_->captureFormatKey));
+    for (const auto& option : options) {
+        if (option.id != key) continue;
+        impl_->captureFormatKey = key;
+        emit captureChanged();
+        return;
+    }
 }
 QVariantList QmlPlayerBridge::captureAudioInputs() const {
     // Only what the user picks explicitly is ever opened (1.4.4 rule).
