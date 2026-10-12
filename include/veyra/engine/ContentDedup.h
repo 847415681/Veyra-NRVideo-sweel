@@ -1,5 +1,4 @@
 #pragma once
-#include "veyra/pipeline/PictureFingerprint.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -16,12 +15,14 @@ namespace veyra::engine {
 // 30 / 50 / 60 fps) drop a sample here when its picture repeats the last kept
 // one; "60->30" is the plain every-second-sample CaptureHalfRate, not this.
 //
-// A repeat is a picture whose every byte of every plane equals the last kept
-// picture (PictureFingerprint.h). The first version judged 64x36 sampled points
-// with an 8-level gate: a running HDR game seen from a still position lost most
-// real pictures (6-16 kept of 60 per second, field log 2026-10-12). Anything
-// that is not bit-identical is a new picture now, so a noisy or re-encoded
-// source simply keeps every sample.
+// A repeat is a sample with the same picture number as the last kept one: the
+// capture callback (or the engine, for CPU frames) compares every component of
+// the whole picture with the last new picture and only a sample entirely within
+// the capture-noise band keeps its number (PictureCompare.h). The first version
+// judged 64x36 sampled points with an 8-level gate: a running HDR game seen
+// from a still position lost most real pictures (6-16 kept of 60 per second,
+// field log 2026-10-12). Numbers rather than pictures also keep a picture whose
+// first sample the engine never read (mailbox overwrite).
 //
 // Kept frames get a content timestamp from a clamped phase-locked cadence: the
 // picture changed after the previous sample and no later than this one, so the
@@ -50,9 +51,9 @@ public:
         haveKept_ = haveContent_ = skipSpan_ = holding_ = false; prevSample_ = 0; lastKeptSample_ = 0; lastContent_ = 0;
         timeCount_ = 0; timeHead_ = 0; period_ = 0; misses_ = 0;
     }
-    // picture: exact identity of the sample, or nullptr (no CPU picture: keep everything).
+    // picture: picture number of the sample, or nullptr (no CPU picture: keep everything).
     // hintPeriod: expected content period of the selected content rate, 0 = unknown.
-    Decision observe(const pipeline::PictureFingerprint* picture, int64_t pts, int64_t transport, bool boundary, int64_t hintPeriod = 0) {
+    Decision observe(const uint64_t* picture, int64_t pts, int64_t transport, bool boundary, int64_t hintPeriod = 0) {
         Decision d;
         ++stats_.observed;
         if (transport <= 0) transport = 166667;
@@ -95,7 +96,7 @@ public:
 private:
     enum class Timing { Sample, Cadence };
     static constexpr unsigned kTimes = 48;
-    Decision& keep(Decision& d, int64_t pts, int64_t previous, int64_t transport, const pipeline::PictureFingerprint* picture, Timing timing,
+    Decision& keep(Decision& d, int64_t pts, int64_t previous, int64_t transport, const uint64_t* picture, Timing timing,
                    const char* reason, int64_t hint = 0) {
         d.keep = true; d.reason = reason; ++stats_.kept;
         int64_t content = pts;
@@ -147,7 +148,7 @@ private:
 
     void push(int64_t time) { times_[timeHead_] = time; timeHead_ = (timeHead_ + 1) % kTimes; timeCount_ = std::min(timeCount_ + 1, kTimes); }
 
-    pipeline::PictureFingerprint kept_{};
+    uint64_t kept_ = 0;
     std::array<int64_t, kTimes> times_{};
     unsigned timeCount_ = 0, timeHead_ = 0, misses_ = 0;
     bool haveKept_ = false, haveContent_ = false, skipSpan_ = false, holding_ = false;

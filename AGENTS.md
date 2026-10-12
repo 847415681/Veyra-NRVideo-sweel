@@ -1,6 +1,6 @@
 # Veyra 项目 Agent 执行规则
 
-> **2026-10-12 内容节奏修正（Claude）**：用户实测 2.0.7：“采集 60→30”被植入内容节奏判断、原始帧率跳动，要求还原为最简单的 60 帧 AABBCCDD→ABCD 稳定隔帧；新“自动识别内容节奏”去重不稳定（VFG 耗时、GPU 占用忽高忽低），游戏运行中出现 6fps，怀疑不是百分百相同的帧也被去掉。存档 `checkpoint/pre-claude-cadence-exact-20261012`（main 05bc4b5）与 `archives/claude-cadence-exact-20261012`，分支 `claude/cadence-exact-20261012`。60→30 恢复 `CaptureHalfRate`（与 85cbd5a 之前相同、不经去重）；内容模式只去掉与上一张保留画面逐字节完全相同的帧（`PictureFingerprint.h` 整画面指纹，采集回调仅在内容去重开启时对驱动样本计算，CPU 帧在引擎端计算），静止画面按内容节奏保留。见 docs/CONTENT_CADENCE_EXACT_2026-10-12.md。用户 2.0.7 会话运行期间只做 CPU/轻 GPU 测试；不改默认设置、NR/SR/FG 模型、运行库、用户配置；无 merge/push/Release/子 Agent。
+> **2026-10-12 内容节奏修正（Claude）**：用户实测 2.0.7：“采集 60→30”被植入内容节奏判断、原始帧率跳动，要求还原为最简单的 60 帧 AABBCCDD→ABCD 稳定隔帧；新“自动识别内容节奏”去重不稳定（VFG 耗时、GPU 占用忽高忽低），游戏运行中出现 6fps，怀疑不是百分百相同的帧也被去掉。追加授权关闭用户正在运行的 Veyra、直接用 T911 实卡（2K60 NV12、游戏 30 帧）测试。存档 `checkpoint/pre-claude-cadence-exact-20261012`（main 05bc4b5）与 `archives/claude-cadence-exact-20261012`，分支 `claude/cadence-exact-20261012`。60→30 恢复 `CaptureHalfRate`（与 85cbd5a 之前相同、不经去重）；内容模式整画面逐像素与上一张新画面比较，每个分量都在 ±3 级（8 位刻度）以内才算重复（`PictureCompare.h`，采集回调只在去重开启时比较驱动样本并给帧编画面号）；逐字节相同在实卡上从不成立（T911 重复帧 ±1–2 级噪声），该版本已被实卡数据否决。见 docs/CONTENT_CADENCE_EXACT_2026-10-12.md。不改默认设置、NR/SR/FG 模型、运行库；用户设置只读取并复制进测试包；无 merge/push/Release/子 Agent。
 
 > **2026-10-12 构建前采集格式追加授权**：用户要求分辨率先行、MJPEG 标红（不建议使用）、无效组合明确弹错且不自动路由其他格式。允许最小 UI/桥接/采集协商修复和有关回归，保留有效上次配置；与本轮整合一起本地合入 main 和 2.0.7 测试包。
 

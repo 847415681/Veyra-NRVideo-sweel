@@ -67,7 +67,6 @@ struct CaptureCompressedDecoder::Impl {
     bool hardwareChecked = false;
     bool waiting = false;
     bool depthWarningLogged = false;
-    bool fingerprints = false; // content dedup: fingerprint each decoded picture
     std::string error;
     uint64_t frames = 0, failures = 0, fallbacks = 0;
     double decodeMs = 0, convertMs = 0;
@@ -109,16 +108,6 @@ struct CaptureCompressedDecoder::Impl {
             }
         }
         pipeline::sampleCaptureUploadProxy(*target, frame.data[0], size_t(frame.linesize[0]), false);
-        // Content dedup (ContentDedup.h): the decoded picture, every byte of every
-        // plane; the upload buffer written above is never read back.
-        if (auto* info = fingerprints ? pipeline::captureUploadFrame(target) : nullptr) {
-            pipeline::PictureHasher hasher;
-            const unsigned chromaRows = is422 ? height : height / 2;
-            hasher.rows(frame.data[0], size_t(frame.linesize[0]), width, height);
-            hasher.rows(frame.data[1], size_t(frame.linesize[1]), width / 2, chromaRows);
-            hasher.rows(frame.data[2], size_t(frame.linesize[2]), width / 2, chromaRows);
-            info->fingerprint = hasher.finish(); info->fingerprintValid = true;
-        }
         return true;
     }
 
@@ -393,7 +382,6 @@ bool CaptureCompressedDecoder::opened() const { return p_->decoder.opened(); }
 bool CaptureCompressedDecoder::hardwareActive() const { return p_->hardware; }
 bool CaptureCompressedDecoder::waitingForInput() const { return p_->waiting; }
 void CaptureCompressedDecoder::recoverAtKeyframe() { p_->decoder.recoverAtKeyframe(); }
-void CaptureCompressedDecoder::setPictureFingerprints(bool enabled) { p_->fingerprints = enabled; }
 const char* CaptureCompressedDecoder::backendName() const
 {
     if (p_->hardware) return p_->stream && p_->codec == CaptureCodec::Hevc ? "d3d11va" : "d3d12va";

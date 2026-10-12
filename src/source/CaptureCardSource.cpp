@@ -260,22 +260,28 @@ bool parseCapturePath(std::wstring_view path,CaptureSelection& selection){
     selection.videoIndex=videoIndex;selection.format=format;selection.audio=audio;selection.colorOverride=fields>=4?colorOverride:0;return true;
 }
 }
-// Content dedup (ContentDedup.h): exact identity of the driver sample, every
-// payload byte of every plane in source order, never the write-combined copy.
-// About 0.2 ms for 1440p P010 and 0.5 ms for 4K P010 (bench 2026-10-12), so
-// only while a content mode asks for it.
-static void fingerprintCaptureSample(const CaptureMediaLayout& layout,const uint8_t* data,AVFrame& frame){
+// Content dedup (ContentDedup.h): compares the driver sample - every payload
+// component of every plane, never the write-combined copy - with the last new
+// picture (PictureCompare.h) and tags the frame with its picture number. About
+// 0.3 ms for 1440p NV12 plus a copy of each new picture, so only while a
+// content mode asks for it.
+static void compareCaptureSample(const CaptureMediaLayout& layout,const uint8_t* data,AVFrame& frame,pipeline::PictureReference& reference){
     auto* info=pipeline::captureUploadFrame(&frame);if(!info)return;
-    pipeline::PictureHasher hasher;
-    hasher.rows(data,layout.stride,layout.rowBytes,layout.height);
-    for(unsigned p=1;p<layout.planes;++p)hasher.rows(data+(p==1?layout.chromaOffset:layout.secondChromaOffset),layout.chromaStride,layout.chromaRowBytes,layout.height/2);
-    info->fingerprint=hasher.finish();info->fingerprintValid=true;
+    pipeline::PicturePlane planes[3]{{data,layout.stride,layout.rowBytes,layout.height}};unsigned count=1;
+    for(unsigned p=1;p<layout.planes&&p<3;++p)planes[count++]={data+(p==1?layout.chromaOffset:layout.secondChromaOffset),layout.chromaStride,layout.chromaRowBytes,layout.height/2};
+    // P010/P016 are 16-bit words; packed 10-bit and 5/6-bit RGB fields compare exactly; the rest are 8-bit components.
+    const bool p016=layout.packing==CapturePacking::P016,words=p016||layout.packing==CapturePacking::P010;
+    const bool exact=layout.packing==CapturePacking::V210||layout.packing==CapturePacking::Rgb10xLE||layout.packing==CapturePacking::Rgb555||
+        layout.packing==CapturePacking::Rgb565||layout.packing==CapturePacking::Unknown;
+    const auto r=reference.observe(planes,count,exact?pipeline::PictureComponents::Exact:words?pipeline::PictureComponents::Words:pipeline::PictureComponents::Bytes,
+        words?pipeline::PictureReference::bandFor(p016?16:10,p016?0:6):pipeline::PictureReference::kBand8);
+    info->pictureId=r.id;info->pictureRepeat=r.repeat;info->pictureOver=r.over;info->pictureMax8=r.max8;info->pictureValid=true;
 }
 // One native sample into a mailbox frame. Upload-backed frames
 // (CaptureUploadFrame.h) are written once, straight into GPU upload memory, or
 // into their CPU planes while the GPU still reads the buffer; planar I420/YV12
 // is interleaved into the frame's NV12 layout here instead of in the graph.
-static bool writeCaptureFrame(const CaptureMediaLayout& layout,const uint8_t* data,size_t bytes,AVFrame& frame,bool flipRows,bool fingerprint){
+static bool writeCaptureFrame(const CaptureMediaLayout& layout,const uint8_t* data,size_t bytes,AVFrame& frame,bool flipRows,pipeline::PictureReference* pictures){
     pipeline::selectCaptureUploadTarget(frame);
     const bool flip=layout.bottomUp!=flipRows;
     if(layout.planes==3&&frame.format==AV_PIX_FMT_NV12&&pipeline::captureUploadFrame(&frame)){
@@ -284,7 +290,7 @@ static bool writeCaptureFrame(const CaptureMediaLayout& layout,const uint8_t* da
     }else if(!copyCaptureSample(layout,data,bytes,frame,flipRows))return false;
     if(layout.packing==CapturePacking::V210)pipeline::sampleCaptureV210Proxy(frame,data,layout.stride,flip);
     else pipeline::sampleCaptureUploadProxy(frame,data,layout.stride,flip);
-    if(fingerprint)fingerprintCaptureSample(layout,data,frame);
+    if(pictures)compareCaptureSample(layout,data,frame,*pictures);
     return true;
 }
 struct CaptureCardSource::Impl:ISampleGrabberCB {
@@ -385,8 +391,9 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
     std::vector<AVFrame*> compressedFree;
     // Manual capture flip; read by the DirectShow callback thread.
     std::atomic<bool> verticalFlip{false};
-    // Content dedup wants picture fingerprints; read by the callback and MJPEG workers.
-    std::atomic<bool> pictureFingerprints{false};
+    // Content dedup wants picture numbers; the reference lives on the callback thread.
+    std::atomic<bool> pictureCompare{false};
+    pipeline::PictureReference pictureReference{1};
     std::unique_ptr<WasapiAudioInput> wasapi;
     std::unique_ptr<decklink::Capture> decklink;
     std::wstring audioError;
@@ -431,7 +438,7 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
         externalFrames.fetch_add(1,std::memory_order_relaxed);
         AVFrame* staged=nullptr;bool written=false;
         {std::lock_guard lock(mutex);if(stagingFrame&&!stagingBusy){stagingBusy=true;staged=stagingFrame;}}
-        if(staged)written=writeCaptureFrame(layout,data,bytes,*staged,verticalFlip.load(),pictureFingerprints.load(std::memory_order_relaxed));
+        if(staged)written=writeCaptureFrame(layout,data,bytes,*staged,verticalFlip.load(),pictureCompare.load(std::memory_order_relaxed)?&pictureReference:nullptr);
         {
             std::lock_guard lock(mutex);
             if(staged)stagingBusy=false;
@@ -506,7 +513,6 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
             }
             // Upload-backed target: written once, straight into GPU upload memory.
             pipeline::selectCaptureUploadTarget(*target);
-            decoder.setPictureFingerprints(pictureFingerprints.load(std::memory_order_relaxed));
             AVFrame* decodedFrame=nullptr;bool hardware=false;
             const bool produced=decoder.decode(sample.payload.data(),sample.payload.size(),int64_t(sample.time*1e7),target,&decodedFrame,hardware)&&!hardware;
             {
@@ -628,7 +634,7 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
             {std::lock_guard lock(mutex);if(stagingFrame&&!stagingBusy){stagingBusy=true;staged=stagingFrame;}
                 if(signalProbeEnabled&&arrival>=nextSignalProbe){nextSignalProbe=arrival+std::chrono::seconds(1);probeNow=true;}}
             if(probeNow)signalSample=sampleCaptureSignal(layout,data,size_t(sample->GetActualDataLength()));
-            if(staged)stagedOk=writeCaptureFrame(layout,data,size_t(sample->GetActualDataLength()),*staged,verticalFlip.load(),pictureFingerprints.load(std::memory_order_relaxed));
+            if(staged)stagedOk=writeCaptureFrame(layout,data,size_t(sample->GetActualDataLength()),*staged,verticalFlip.load(),pictureCompare.load(std::memory_order_relaxed)?&pictureReference:nullptr);
         }
         {
             std::lock_guard lock(mutex);
@@ -703,7 +709,7 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
                     }else{
                         // Staging frame unavailable (should not happen once
                         // configured); keep the locked copy as a safe fallback.
-                        if(!writeCaptureFrame(layout,data,size_t(sample->GetActualDataLength()),*pendingFrame,verticalFlip.load(),pictureFingerprints.load(std::memory_order_relaxed))){callbackError=true;wake.notify_one();return S_OK;}
+                        if(!writeCaptureFrame(layout,data,size_t(sample->GetActualDataLength()),*pendingFrame,verticalFlip.load(),pictureCompare.load(std::memory_order_relaxed)?&pictureReference:nullptr)){callbackError=true;wake.notify_one();return S_OK;}
                     }
                     if(pending)++dropped;
                     // Inspect consecutive callbacks, not consecutive mailbox reads.
@@ -872,8 +878,8 @@ void CaptureCardSource::setVerticalFlip(bool enabled){
     if(p.verticalFlip.exchange(enabled)==enabled)return;
     log::info("capture-flip",std::format("manual vertical flip={} (applies to the next sample; ingest only)",enabled?1:0));
 }
-void CaptureCardSource::setPictureFingerprints(bool enabled){
-    if(p_->pictureFingerprints.exchange(enabled)!=enabled)log::info("capture-dedup",std::format("picture fingerprints={} (whole driver sample, content dedup)",enabled?1:0));
+void CaptureCardSource::setPictureCompare(bool enabled){
+    if(p_->pictureCompare.exchange(enabled)!=enabled)log::info("capture-dedup",std::format("picture compare={} (whole driver sample against the last new picture, band {} levels of 255; content dedup)",enabled?1:0,pipeline::PictureReference::kBand8));
 }
 void CaptureCardSource::setCpuUnpack(bool enabled){
     auto& p=*p_;
