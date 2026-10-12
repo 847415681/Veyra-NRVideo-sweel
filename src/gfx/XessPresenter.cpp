@@ -7,6 +7,7 @@
 #include <atomic>
 #ifdef VEYRA_HAS_XESS
 #include <xess_fg/xefg_swapchain_d3d12.h>
+#include <xess_fg/xefg_swapchain_debug.h>
 #include <xell/xell_d3d12.h>
 #endif
 
@@ -192,6 +193,12 @@ bool XessPresenter::initialize(ID3D12Device* device,ID3D12CommandQueue* queue,ID
     if(!p.check(p.xefgSwapChainD3D12InitFromSwapChainDescFn(p.fg,window,&desc,nullptr,queue,factory,&init),"Init",true))return false;
     }
     if(p.requestedGenerated>0&&!p.check(p.xefgSwapChainSetNumInterpolatedFramesFn(p.fg,p.requestedGenerated),"SetNumInterpolatedFrames",true))return false;
+    // Test-only (frame-generation quality experiments): present only interpolated
+    // frames so a screen capture can score them. The product never sets this.
+    if(GetEnvironmentVariableW(L"VEYRA_TEST_XESS_ONLY_INTERPOLATED",nullptr,0)>0){
+        const auto enableDebug=reinterpret_cast<decltype(&xefgSwapChainEnableDebugFeature)>(GetProcAddress(p.fgDll,"xefgSwapChainEnableDebugFeature"));
+        if(!enableDebug||!p.check(enableDebug(p.fg,XEFG_SWAPCHAIN_DEBUG_FEATURE_SHOW_ONLY_INTERPOLATION,1,nullptr),"Debug show-only-interpolation (test)",true))return false;
+    }
     return p.check(p.xefgSwapChainD3D12GetSwapChainPtrFn(p.fg,__uuidof(IDXGISwapChain3),reinterpret_cast<void**>(swapchain)),"GetSwapChain",true);
 #else
     (void)device;(void)queue;(void)factory;(void)window;(void)desc;(void)swapchain;(void)fgMultiplier;(void)lowLatencySleep;

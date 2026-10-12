@@ -125,7 +125,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     desc.flowQuality=settings.flow;
     desc.contentRate=settings.content;
     desc.opticalFlowBackend=settings.opticalFlowBackend;
-    desc.amdFlowHalfResolution=settings.amdFlowHalfResolution;
+    desc.amdFlowHalfResolution=settings.amdFlowHalfResolution;desc.fgMotionRefine=settings.fgMotionRefine;
     desc.nrLayersExtent.clear();
     for(uint32_t i=0;i<chain.nodeCount;++i){
         auto& node=chain.nodes[i];

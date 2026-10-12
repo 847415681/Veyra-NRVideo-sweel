@@ -992,6 +992,7 @@ __declspec(noinline) void testInactiveEffectEdits(){
     edited.videoHdr.peakNits=700;edited.protection.featherPixels=40;edited.nrHoldTolerance=.25f;
     edited.hdrCurve.midGrayNits=400;edited.hdrMetadata.maxCllNits=2000;
     edited.flow=FlowQuality::Performance;edited.opticalFlowBackend=OpticalFlowBackend::GpuDis;edited.amdFlowHalfResolution=true;
+    edited.fgMotionRefine=false;
     check(edited.validate().empty()&&off!=edited,"inactive edits remain valid distinct persistent settings");
     check(off.sameActiveVideoParameters(edited)&&edited.sameActiveVideoParameters(off)&&off.sameVideoConfiguration(edited),"all bypassed effect parameters are absent from active GPU identity");
     check(!requiresGraphRebuild(off,edited)&&!requiresGraphRebuild(edited,off),"bypassed topology/LUT/backend edits do not rebuild in either direction");
@@ -1016,6 +1017,12 @@ __declspec(noinline) void testInactiveEffectEdits(){
         check(active.sameVideoConfiguration(next)==(backend==FrameGenerationBackend::Vfg),"shared flow stays active for every external-flow FG consumer");
         next=active;next.nrPolicy=veyra::pipeline::NrSizePolicy::Native;next.nrRuntime=NrRuntime::LmxxfAmd;
         check(active.sameVideoConfiguration(next),"active FG does not activate stored NR parameters");
+        // 边缘神盾 (fgMotionRefine) shapes only XeSS motion taken from optical flow.
+        next=active;next.fgMotionRefine=false;
+        const bool refines=backend==FrameGenerationBackend::XeSS;
+        check(active.sameVideoConfiguration(next)!=refines&&requiresGraphRebuild(active,next)==refines,"edge aegis rebuilds only XeSS optical-flow motion");
+        auto automatic=active;automatic.fgMotion=MotionSource::Automatic;next=automatic;next.fgMotionRefine=false;
+        check(!requiresGraphRebuild(automatic,next),"edge aegis is inactive while XeSS motion stays automatic");
     }
     auto stack=populated();stack.nrLayerCount=2;stack.nrLayers[0].enabled=false;stack.nrLayers[1].enabled=true;
     stack.nrLayers[1].runtime=stack.nrRuntime;stack.nrLayers[1].lowLatencyPairing=stack.lowLatency;
