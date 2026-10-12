@@ -9321,3 +9321,5 @@ audit.py核对测试/GUI/所有app原件、两份旧final、旧JSON和源码bund
 独立完整CMake/Ninja548步骤、27目标141.9秒通过，668输入SHA一致；build回执logs/test-2.0.7-refresh-20261012/build-20261012-224305。EXE 6fd35109d3c668f51fd7ce1609c8176e164227e2510473ef5a6276a34b1d713d，2.0.7-test-r2/PE2.0.7.0。regress.py两轮16组通过，timing100条。replay.py三组内容/固定隔帧逐帧真值通过；小低对比运动538/540（已知±3容差的2张）、half540/540恒30、GTA538/538恒30。NV/AMD staging payload1641/2081、runtime48/534、PE95/83审计通过。
 
 扩展--half-rate两次31/34：NR+DLSS同步驱动初始化9–11秒，随后虚拟采集PTS约9秒落后，生成帧舍弃；失败保留。修复前原2.0.7同场A/B也初始化约9.7秒、33/34（同样NR+2X事务超时）。用户cadence播放器一直运行，保留程序/配置，不断言并行负载是唯一原因、不放宽测试或改代码。16组/3回放/用户实卡确认作为本轮去重修复证据，不声称完整34项GPU热切换通过；详细报告docs/TEST_2.0.7_REFRESH_2026-10-12.md。无新性能、显示延迟或AMD/BMD现场通过声明。计划本地main精确树合并、最终ZIP封包与解压冷启动通过后交付，结果另见外部DELIVERY/cold-start/final回执。
+
+最终ZIP冷启动首次四次播放均成功，但复核实际renderer发现两次software也为D3D12；此前脚本只设QT_QUICK_BACKEND，应用的自身RHI选择覆盖它。没有把错误模式算作软件UI通过。修正本地验收脚本显式VEYRA_UI_RHI=software+实际日志断言，cold-run参数保留首轮目录。产品EXE/668输入不变；初轮包/源码/DELIVERY/cold回执存档后重新封包和真实双后端冷启动，最终以外部final为准。无用户程序/运行库/配置修改。
