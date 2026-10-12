@@ -9288,3 +9288,10 @@ audit.py核对测试/GUI/所有app原件、两份旧final、旧JSON和源码bund
 ### 2026-10-12 2.0.7 构建前采集格式追加修复（待本轮回归）
 - 用户追加先选分辨率、MJPEG 红色警示、不支持的格式不得自动路由。新增草稿两轴和严格像素 key 校验、联动选择禁用、无效格式错误通知；更改分辨率/帧率需重新确认像素格式。有效历史完整配置继续恢复，部分草稿存现有 JSON，不升级二进制配置。移除压缩格式连接/解码失败的隐式 RGB 重试，保留显式诊断开关；没有改采集缓冲、逐帧传输或 UI 刷新频率。
 - 首轮完整配置暴露最新 FFmpeg staging 无 import LIB，按对应 DEF 在 E 盘构建目录生成；DLL 未改。随后完整编译在 capture_format_selection_tests 缺 MSVC /utf-8 失败（中文源被按本机代码页解析），给该目标明确 /utf-8。失败证据 logs/test-2.0.7-20261012/build-20261012-163711、build-20261012-163842 保留；尚未宣称通过。
+
+### 2026-10-12 2.0.7 产品整合验收与本地交付封存
+- 完整CMake在本轮独立build目录最终成功，27目标；最终75步骤47.2秒，产品实现4a4952f，EXE SHA256 26967f1308cc9c6afdb7517051fb5a7fdef93e23da69d2251e66289651189c51，显示2.0.7-test/PE2.0.7.0。命令 scripts/acceptance/test-2.0.7-build.py；日志logs/test-2.0.7-20261012/build-20261012-191841。
+- regress.py最终逐项28组通过；字幕/数据夹具参数修正复测、源旧索引误选240FPS的失败均如实保留。采集GUI15逻辑场景及378/378格式完整性、MJPEG红色、错误不连接、草稿与全设置恢复/继续/启动通过。原生源显式30FPS稳定采集/重连通过。证据reports/test-2.0.7-20261012/product-validation.json、capture-gui.json与TEST_2.0.7_REPORT_2026-10-12.md。
+- XeSS实际GUI开关/重启、seek/暂停/倍率/光流/关闭再开通过；GTA4K30+原版NR1080+XeSS2X、GPU普通class2，20独立样本软件提交60FPS，应用GPU图8.54ms、NR采样5.85ms、光流2.39ms。这不是完整XeSS驱动开销、屏幕刷新/延迟或新A/B提速证明；默认优先级仍原有实时class5。几何52状态D3D12/软件×100%/150%无播放条遮挡。
+- 66旧树/509脏文件及分支tip核验原样，完成来源均为整合祖先。旧RTSS仅剩计划文档，其余旧归档/撤回实验不混入。没有新增生产Timer、统计频率或采集逐帧缓冲变更，没有运行库/SDK/模型/私有素材入Git。
+- 本验收tip按用户授权本地main --no-ff合并，完整Git树必须相同；随后脚本test-2.0.7-package.py seal/cold制作NVIDIA/AMD完整包及本版源码，审计逐文件/运行组件/厂商/PE/ZIP并用解压最终ZIP私有目录冷启动。合并hash/保护快照见archives/test-2.0.7-20261012，最终包证据见test-packages/test-2.0.7-20261012/DELIVERY.json、cold-start.json；完成前不交付。当前两份staging内容审计已通过，最终封包/冷启动另记外部回执，避免源码自引用改包。NV长期显存增长和AMD/BMD现场未宣称根治；未push/Release/上传/关机。
