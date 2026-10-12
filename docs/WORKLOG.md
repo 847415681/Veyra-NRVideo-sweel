@@ -9209,3 +9209,15 @@ logs/.../results.json与reports/.../measurement.json：中速侧跑轮廓带MAE8
 images.py生成reports/.../images/xess-side-run-comparison.png和xess-fast-error-comparison.png。固定帧对14→15中点14.5、448×448腿部、左合成真值/中旧光流/右精修；原像素未缩放或修饰，拼图每区域逐字节与原图验证。相同×4绝对RGB误差图（越黑越好）；该单帧高速整个裁切MAE6.6951→6.2269、中速7.0968→6.9294，不混淆为11帧轮廓带均值。原图、拼图、坐标及SHA见reports/.../images.json，已实际查看布局/文字/像素图。
 
 audit.py核对测试/GUI/所有app原件、两份旧final、旧JSON和源码bundle、当前两个文档范围、原61树/509脏文件、main及数据/图片原件，最终回执reports/.../final.json；诊断EXE SHA050740291e5cbb07a39da07da801dae03c192737a2f95b2a3bc07708f9ea49b7保持。没有真实游戏逐帧真值/观感或新性能验证，无main合并、push、打包、Release、二进制入Git或关机。
+
+## 2026-10-12 XeSS 光流修复复审与前后向一致性（Claude）
+
+用户要求审查 Codex 已完成的 XeSS 开启光流修复（实际效果一般），判断默认 1080p 光流是否为原因，且不得打断/影响仍在工作的 Codex。只读 codex/xess-handoff-20261012（f0fafdf）及其构建/回执；新工作树 worktrees/xess-flow-tune-20261012、分支 claude/xess-flow-tune-20261012，存档标签 checkpoint/pre-claude-xess-tune-20261012 与 archives/claude-xess-tune-20261012/start.json、source-before.bundle（verify）。构建 tmp/claude-xess-tune-20261012/build.py 复制自 Codex 构建脚本，依赖闭包 16 对象、17 EXE，读入对象/着色器哈希核对、着色器改用复制。capture.py/gui.py/motion.py 每次启动前检查其他 Veyra 进程；Codex 运行 capture_cadence_fg、live_presentation、qml_ui 期间三次拒绝启动并等待。
+
+复审：Codex 接线（资源/描述符/状态/A=上一帧 B=当前帧/首帧 reset/NR-SR 保持/计时）未发现缺陷。新增无窗口测试 veyra_xess_motion_quality_tests（读回送 XeSS 的运动，按区域比真值 EPE，含 4K perf 模式）：Codex 版主要残差是人物移开露出的背景（run80 EPE 38.5、63%>4px，颜色阈值不触发且错误向量被当可信来源扩散）与快速摆动四肢（各版 20–50px）。XeSS 敏感度：理想 6.0076，露出区置零 7.5111，四肢置零 7.2748。默认光流 1080p 不是原因：全分辨率 EPE 3.09→3.06（Codex 版），本版全分辨率反更差；J0 XeSS 8.2148→8.1977；NVOF 4K 成本约 3.5 倍。
+
+改动：仅 XeSS+光流+NVIDIA NVOF 时 NVOF 输出后向光流（NvOfSession 已有 BOTH），FlowRefine 选择不变、记录选中向量的前后向不一致量，FlowFill 不一致 >2 光流像素即填补、只从 ≤0.5 的像素借向量；EnhanceGraph 新增两张网格纹理、SRV 槽与常量，测试开关 VEYRA_TEST_FLOW_CONSISTENCY=0；FgXessBoundaryTests 加 ideal-uncovered0/ideal-limbs0 敏感度变体；新测试入 CMake。撤回：一致性参与候选选择（bars27 9.7037→9.9149 负收益）、填补代价下限（只是误差互换）；触发 2/4/8、来源 0.25/0.5/2 无实质差异。
+
+结果（XeSS 抓屏 11/11 帧、采集/D3D12 0 错误，Codex 版数字本构建逐位复现）：run27 6.3781→6.4016（+0.37%），run80 7.4180→7.3042（−1.53%），orbit80 3.0332→2.5901（−14.61%，距理想 2.0984 的差距缩小 47%），bars27 9.7037→9.6196（−0.87%）；侧跑场景 >32 级像素比例略增（7.96→8.88、9.01→9.63）。无窗口运动：露出区 run80 38.5→6.6、orbit80 41.9→7.5。成本：4K 无窗口光流阶段 1.52→2.27 ms；真实 GUI（GTA VI 4K30、原版 NR 1080p、XeSS 2X、class2、帧 300–840 共 541 帧）光流阶段 1.53→2.26 ms，整图 9.52→9.19 ms 属波动不声称提速，提交 60/60。回归：Codex 合同测试 160/0、debug 0；GUI 生命周期（Codex ProbeXess 原样复制）52.6s 通过，三种运动路径与 NVOF 双向仅在 XeSS 分支。
+
+本地测试版 tests/claude-xess-tune-20261012/delivery（Codex 测试包复制、去测试 EXE、换本版 EXE 与两个着色器；New/Codex/Original 三入口共用一份设置）。全部数字与来源见 reports/claude-xess-tune-20261012/results.json，报告 docs/XESS_FLOW_REVIEW_2026-10-12.md。四肢、栏杆残差，真实游戏观感、AMD/Intel、长期显存、屏幕延迟未验；无 merge/push/Release/子 Agent/关机。

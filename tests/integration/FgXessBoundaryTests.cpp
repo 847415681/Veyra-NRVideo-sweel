@@ -12,6 +12,8 @@
 //   inverted - ideal with the opposite sign (motion-sign convention control)
 //   idealdepth / productdepth - ideal or product motion plus a layered depth (character
 //              near, front limbs nearest, background far) instead of the constant depth
+//   ideal-uncovered0 / ideal-limbs0 - ideal motion with zero in just-uncovered background or on
+//              the limbs: how much each region's motion matters to the interpolated result
 // bars adds dense vertical background rails for the accepted repeated-texture regression.
 // usage: veyra_fg_xess_boundary_tests <outDir> <run|orbit|bars> <speedPx> <variant> [tag]
 // Product-flow knobs for experiments (environment): VEYRA_TEST_FLOW_FULL=1 (flow at full
@@ -191,7 +193,7 @@ int wmain(int argc,wchar_t** argv){
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     const std::filesystem::path dir=argv[1];const std::wstring sceneName=argv[2],variant=argv[4];const int speed=_wtoi(argv[3]);
     const bool run=sceneName==L"run",bars=sceneName==L"bars";if(!run&&!bars&&sceneName!=L"orbit")return 2;if(speed<1||speed>200)return 2;
-    const int mode=variant==L"zero"?0:variant==L"product"?1:variant==L"ideal"?2:variant==L"inverted"?3:variant==L"idealdepth"?4:variant==L"productdepth"?5:-1;if(mode<0)return 2;
+    const int mode=variant==L"zero"?0:variant==L"product"?1:variant==L"ideal"?2:variant==L"inverted"?3:variant==L"idealdepth"?4:variant==L"productdepth"?5:variant==L"ideal-uncovered0"?6:variant==L"ideal-limbs0"?7:-1;if(mode<0)return 2;
     std::filesystem::create_directories(dir);CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     const std::string label=std::format("xess-{}{}-{}{}",bars?"bars":run?"run":"orbit",speed,std::filesystem::path(variant).string(),argc==6?"-"+std::filesystem::path(argv[5]).string():std::string());
     SetEnvironmentVariableW(L"VEYRA_TEST_XESS_ONLY_INTERPOLATED",L"1");
@@ -214,7 +216,7 @@ int wmain(int argc,wchar_t** argv){
     if(const auto q=knob(L"VEYRA_TEST_FLOW_QUALITY");!q.empty())gd.flowQuality=engine::FlowQuality(std::clamp(_wtoi(q.c_str()),0,2));
     if(knob(L"VEYRA_TEST_FLOW_VALIDATE")==L"0")gd.validateMotion=false;
     if(const auto b=knob(L"VEYRA_TEST_FLOW_BACKEND");b==L"dis")gd.opticalFlowBackend=engine::OpticalFlowBackend::GpuDis;else if(b==L"amd")gd.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;gd.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
-    ComPtr<ID3D12Resource> motion,upload,depthUpload;const bool probe=mode>=2&&mode<=4,layered=mode>=4;
+    ComPtr<ID3D12Resource> motion,upload,depthUpload;const bool probe=(mode>=2&&mode<=4)||mode>=6,layered=mode==4||mode==5;
     if(layered&&!(depthUpload=pipeline::makeUploadBuffer(ctx.device(),uint64_t(W)*H*4)))return 2;
     if(probe){
         motion=pipeline::makeTexture(ctx.device(),W,H,DXGI_FORMAT_R16G16_FLOAT,false);upload=pipeline::makeUploadBuffer(ctx.device(),uint64_t(W)*H*4);
@@ -277,13 +279,14 @@ int wmain(int argc,wchar_t** argv){
     AVFrame* f=av_frame_alloc();if(!f)return 2;
     f->width=W;f->height=H;f->format=AV_PIX_FMT_RGBA;f->color_range=AVCOL_RANGE_JPEG;f->color_trc=AVCOL_TRC_IEC61966_2_1;f->colorspace=AVCOL_SPC_RGB;
     if(av_frame_get_buffer(f,32)<0)return 2;
-    std::vector<uint16_t> halves(size_t(W)*H*2);std::vector<int> tops(size_t(W)*H);
+    std::vector<uint16_t> halves(size_t(W)*H*2);std::vector<int> tops(size_t(W)*H),previousTops(size_t(W)*H,-1);
     bool ok=true;const auto start=std::chrono::steady_clock::now();
     for(int k=0;k<N&&ok;++k){
         // 10 presents/s so every interpolated frame is captured; the provider still gets
         // 30 fps source timestamps (frameRenderTime), which is what its interpolation uses.
         std::this_thread::sleep_until(start+std::chrono::milliseconds(int64_t(k)*100));pump();
         ok=presenter.beginSourceInput();
+        tops.swap(previousTops);
         parallelRows(H,[&](int y){auto* row=f->data[0]+size_t(y)*f->linesize[0];for(int x=0;x<W;++x){int top=-1;const auto p=scene.pixel(x,y,k,&top);tops[size_t(y)*W+x]=top;row[x*4]=p[0];row[x*4+1]=p[1];row[x*4+2]=p[2];row[x*4+3]=255;}});
         if(ok&&layered){
             // Depth of this frame (non-inverted: smaller is nearer) into the graph's FG depth texture.
@@ -298,7 +301,10 @@ int wmain(int argc,wchar_t** argv){
             ok=ring.submitAndSignal(slot)&&ring.waitIdle();
         }
         if(ok&&probe){
-            parallelRows(H,[&](int y){for(int x=0;x<W;++x){auto v=k>0?scene.ideal(x,y,k,tops[size_t(y)*W+x]):std::array<float,2>{0,0};if(mode==3){v[0]=-v[0];v[1]=-v[1];}
+            parallelRows(H,[&](int y){for(int x=0;x<W;++x){auto v=k>0?scene.ideal(x,y,k,tops[size_t(y)*W+x]):std::array<float,2>{0,0};if(mode==3){v[0]=-v[0];v[1]=-v[1];}const int top=tops[size_t(y)*W+x];
+                if(mode==6&&k>0&&top<0&&previousTops[size_t(std::clamp(int(std::lround(y+v[1])),0,H-1))*W+std::clamp(int(std::lround(x+v[0])),0,W-1)]>=0)v={0,0};
+                if(mode==7&&top>=0&&kParts[top].limb)v={0,0};
+                
                 halves[(size_t(y)*W+x)*2]=DirectX::PackedVector::XMConvertFloatToHalf(v[0]);halves[(size_t(y)*W+x)*2+1]=DirectX::PackedVector::XMConvertFloatToHalf(v[1]);}});
             void* data=nullptr;if(FAILED(upload->Map(0,nullptr,&data))){ok=false;break;}
             std::memcpy(data,halves.data(),halves.size()*2);upload->Unmap(0,nullptr);

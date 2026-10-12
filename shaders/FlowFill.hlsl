@@ -4,7 +4,11 @@
 // interpolator drag that background with the object (the "jelly" around characters).
 // Take the vector of the most similar-coloured confident pixel nearby instead; uncovered
 // background resembles the background beside it, which moves with the background.
-Texture2D<float4> refined : register(t0);        // xy vector, z best cost (FlowRefine)
+// With backward flow a pixel whose best candidate fails the forward-backward check has no
+// correspondence either. Only pixels that pass it clearly lend their vector: next to an
+// object NVOF's backward vectors lean towards the object too, so a few uncovered pixels
+// pass narrowly and must not spread the object's vector over the background beside them.
+Texture2D<float4> refined : register(t0);        // xy vector, z cost, w disagreement (FlowRefine)
 Texture2D<float4> currentColor : register(t1);   // flow extent
 RWTexture2D<float2> output : register(u0);       // flow extent, current->previous pixels
 
@@ -14,8 +18,8 @@ cbuffer FlowFillConstants : register(b0)
     uint flowH;
     float threshold;      // best cost above this has no correspondence
     float distanceWeight; // colour distance added per pixel of search distance
-    uint unused0;
-    uint unused1;
+    float consistencyThreshold; // disagreement above this (flow pixels) has none; 0 = unused
+    float sourceThreshold;      // disagreement up to this lends its vector
     uint unused2;
     uint unused3;
 };
@@ -23,13 +27,16 @@ cbuffer FlowFillConstants : register(b0)
 static const int2 kDirections[8] = { int2(1, 0), int2(-1, 0), int2(0, 1), int2(0, -1), int2(1, 1), int2(-1, 1), int2(1, -1), int2(-1, -1) };
 static const int kRadii[9] = { 2, 4, 8, 12, 16, 24, 32, 48, 64 };
 
+bool confident(float4 r) { return r.z <= threshold && (consistencyThreshold <= 0 || r.w <= sourceThreshold); }
+bool filled(float4 r) { return r.z > threshold || (consistencyThreshold > 0 && r.w > consistencyThreshold); }
+
 [numthreads(16, 16, 1)]
 void main(uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= flowW || id.y >= flowH) return;
     const int2 p = int2(id.xy);
     const float4 own = refined[p];
-    if (own.z <= threshold) { output[p] = own.xy; return; }
+    if (!filled(own)) { output[p] = own.xy; return; }
     const float3 colour = currentColor[p].rgb;
     float bestScore = 1e9;
     float2 vector = own.xy;
@@ -38,7 +45,7 @@ void main(uint3 id : SV_DispatchThreadID)
             const int2 q = p + kDirections[d] * kRadii[r];
             if (any(q < 0) || q.x >= int(flowW) || q.y >= int(flowH)) continue;
             const float4 candidate = refined[q];
-            if (candidate.z > threshold) continue;
+            if (!confident(candidate)) continue;
             const float3 delta = currentColor[q].rgb - colour;
             const float score = dot(abs(delta), float3(1, 1, 1)) + distanceWeight * kRadii[r];
             if (score < bestScore) { bestScore = score; vector = candidate.xy; }

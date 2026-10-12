@@ -459,6 +459,8 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     const bool refineDisabled=GetEnvironmentVariableW(L"VEYRA_TEST_FLOW_REFINE",refine,4)&&refine[0]==L'0';
     flowRefine_=presentSinkFg()&&desc_.fgUsesFlow()&&
         desc_.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia&&!refineDisabled;
+    wchar_t consistency[4]{};
+    flowConsistency_=flowRefine_&&!(GetEnvironmentVariableW(L"VEYRA_TEST_FLOW_CONSISTENCY",consistency,4)&&consistency[0]==L'0');
     uint64_t budget=0,usage=0;
     // Every NR layer allocates its own full set of textures, and a stabilised
     // layer adds two history/guide pairs on top. The stack is bounded (16 nodes),
@@ -485,7 +487,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     const uint64_t estimate=uint64_t(workW_)*workH_*(76u+4u*generatedTextures)+vfgSharedBytes
         +nrTextureBytes+fullLayerBytes
         +uint64_t(srcW_)*srcH_*(32u+(desc_.protectionBeforeSr()?8u:0u))+temporalBytes+tailColorBytes+interProtectionBytes
-        +(flowRefine_?uint64_t(nvofW_)*nvofH_*12u+uint64_t(workW_)*workH_*4u:0);
+        +(flowRefine_?uint64_t(nvofW_)*nvofH_*(flowConsistency_?13u:12u)+uint64_t(workW_)*workH_*4u:0);
     if(context_.videoMemoryInfo(budget,usage)){
         veyra::log::info("memory",std::format("graph lower-bound={}MiB budget={}MiB usage={}MiB; SDK allocations additional",estimate>>20,budget>>20,usage>>20));
         if(usage>=budget||estimate>budget-usage){veyra::log::error("memory","insufficient adapter budget for requested graph textures");return false;}
@@ -615,7 +617,7 @@ bool EnhanceGraph::createResources()
         fgBaseFlow_=makeTexture(context_.device(),workW_,workH_,DXGI_FORMAT_R16G16_FLOAT,true);
         if(!fgFlowRefined_||!fgFlowFilled_||!fgBaseFlow_)return false;
     }
-    if(presentSinkFg())veyra::log::info("graph",std::format("present-sink FG motion: {}",!desc_.fgUsesFlow()?"zero":flowRefine_?"refined NVOF (FlowRefine+FlowFill)":"validated flow"));
+    if(presentSinkFg())veyra::log::info("graph",std::format("present-sink FG motion: {}",!desc_.fgUsesFlow()?"zero":flowConsistency_?"refined NVOF (FlowRefine+FlowFill, forward-backward)":flowRefine_?"refined NVOF (FlowRefine+FlowFill)":"validated flow"));
     // Colour grade tables (v4): only allocated when the stage is enabled.
     colorActive_=desc_.color.enabled&&!desc_.nodeColor(0);
     if(colorActive_){
@@ -684,6 +686,11 @@ bool EnhanceGraph::createResources()
     rawH_ = (nvofH_ + nvofGrid_ - 1) / nvofGrid_;
     nvofRawTex_ = makeTexture(context_.device(), rawW_, rawH_, DXGI_FORMAT_R16G16_SINT, false);
     nvofCostTex_ = makeTexture(context_.device(), rawW_, rawH_, DXGI_FORMAT_R8_UINT, false);
+    if(flowConsistency_){
+        nvofReverseTex_=makeTexture(context_.device(),rawW_,rawH_,DXGI_FORMAT_R16G16_SINT,false);
+        nvofReverseCostTex_=makeTexture(context_.device(),rawW_,rawH_,DXGI_FORMAT_R8_UINT,false);
+        if(!nvofReverseTex_||!nvofReverseCostTex_)return false;
+    }
     nvofInA_ = makeTexture(context_.device(), nvofW_, nvofH_, DXGI_FORMAT_B8G8R8A8_UNORM, true);
     nvofInB_ = makeTexture(context_.device(), nvofW_, nvofH_, DXGI_FORMAT_B8G8R8A8_UNORM, true);
 
@@ -855,6 +862,7 @@ bool EnhanceGraph::initNvof()
     nd.gridSize = nvofGrid_;nd.quality=uint32_t(desc_.flowQuality);
     // s6 contract: B8G8R8A8 inputs, raw R16G16_SINT + R8_UINT cost at grid
     // extent, passed explicitly; allocation failure = fail closed.
+    if(flowConsistency_){nd.reverseFlow=nvofReverseTex_.Get();nd.reverseCost=nvofReverseCostTex_.Get();}
     Status st = Status::Ok;
     if (!nvof_->initialize(context_.device(), nvofInA_.Get(), nvofInB_.Get(),
             nvofRawTex_.Get(), nvofCostTex_.Get(), nd, st)) {
@@ -1533,7 +1541,7 @@ bool EnhanceGraph::createComputePasses()
     if(!flowAdaptPass_.loadShader("FlowAdapt.dxil",cs)||!flowAdaptPass_.create(context_.device(),cs,3+UINT(nrInstances_.size()),1,1))return false;
     if(flowRefine_){
         if(!fgFlowAdaptPass_.create(context_.device(),cs,2,1,1))return false;
-        if(!flowRefinePass_.loadShader("FlowRefine.dxil",cs)||!flowRefinePass_.create(context_.device(),cs,4,3,1))return false;
+        if(!flowRefinePass_.loadShader("FlowRefine.dxil",cs)||!flowRefinePass_.create(context_.device(),cs,5,4,1))return false;
         if(!flowFillPass_.loadShader("FlowFill.dxil",cs)||!flowFillPass_.create(context_.device(),cs,3,2,1))return false;
     }
     // Stage-5 output stabiliser. Only allocated when the setting is non-zero:
@@ -1733,13 +1741,15 @@ bool EnhanceGraph::createViews()
     for(size_t i=0;i<nrInstances_.size();++i)
         makeUav(context_.device(),nrInstances_[i]->motion(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowAdaptPass_,3+UINT(i)));
     if(flowRefine_){
-        // FlowRefine: 0 raw grid vectors, 1 previous, 2 current; 3 refined. FlowFill: 0 refined,
+        // FlowRefine: 0 raw grid vectors, 1 previous, 2 current, 3 backward grid vectors (null
+        // without flowConsistency_); 4 refined. FlowFill: 0 refined,
         // 1 current; 2 filled. Adapt: 0 filled; 1 work-extent XeSS motion.
         D3D12_SHADER_RESOURCE_VIEW_DESC raw{};raw.Format=DXGI_FORMAT_R16G16_SINT;raw.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;
         raw.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;raw.Texture2D.MipLevels=1;
         stager_.stageSrv(nvofRawTex_.Get(),&raw,flowRefinePass_.heap.Get(),0);
         stagedSrv(nvofInA_.Get(),DXGI_FORMAT_B8G8R8A8_UNORM,flowRefinePass_,1);stagedSrv(nvofInB_.Get(),DXGI_FORMAT_B8G8R8A8_UNORM,flowRefinePass_,2);
-        makeUav(context_.device(),fgFlowRefined_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,cpu(flowRefinePass_,3));
+        stager_.stageSrv(nvofReverseTex_.Get(),&raw,flowRefinePass_.heap.Get(),3);
+        makeUav(context_.device(),fgFlowRefined_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,cpu(flowRefinePass_,4));
         stagedSrv(fgFlowRefined_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,flowFillPass_,0);stagedSrv(nvofInB_.Get(),DXGI_FORMAT_B8G8R8A8_UNORM,flowFillPass_,1);
         makeUav(context_.device(),fgFlowFilled_.Get(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowFillPass_,2));
         stagedSrv(fgFlowFilled_.Get(),DXGI_FORMAT_R16G16_FLOAT,fgFlowAdaptPass_,0);
@@ -2401,17 +2411,21 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 if(flowRefine_){
                     // XeSS motion: per-pixel candidate choice, then disocclusion fill.
                     tracker_.transition(list,fgFlowRefined_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-                    const float rc[8]={uintBits(rawW_),uintBits(rawH_),uintBits(nvofW_),uintBits(nvofH_),uintBits(selectedGrid_),.004f,0,0};
-                    flowRefinePass_.bind(list,rc,gpuHandleOf(flowRefinePass_,0).ptr,gpuHandleOf(flowRefinePass_,3).ptr);
+                    if(flowConsistency_)tracker_.transition(list,nvofReverseTex_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                    const float rc[8]={uintBits(rawW_),uintBits(rawH_),uintBits(nvofW_),uintBits(nvofH_),uintBits(selectedGrid_),.004f,uintBits(flowConsistency_?1u:0u),0};
+                    flowRefinePass_.bind(list,rc,gpuHandleOf(flowRefinePass_,0).ptr,gpuHandleOf(flowRefinePass_,4).ptr);
                     list->Dispatch((nvofW_+15)/16,(nvofH_+15)/16,1);
                     tracker_.uavBarrier(list,fgFlowRefined_.Get());
                     tracker_.transition(list,fgFlowRefined_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
                     tracker_.transition(list,fgFlowFilled_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-                    const float fc[8]={uintBits(nvofW_),uintBits(nvofH_),.06f,.002f,0,0,0,0};
+                    // A chosen vector off by more than 2 flow pixels forward-backward is filled, from
+                    // pixels within 0.5 (consistent background/body: ~0.2 at P90).
+                    const float fc[8]={uintBits(nvofW_),uintBits(nvofH_),.06f,.002f,flowConsistency_?2.f:0.f,flowConsistency_?.5f:0.f,0,0};
                     flowFillPass_.bind(list,fc,gpuHandleOf(flowFillPass_,0).ptr,gpuHandleOf(flowFillPass_,2).ptr);
                     list->Dispatch((nvofW_+15)/16,(nvofH_+15)/16,1);
                     tracker_.uavBarrier(list,fgFlowFilled_.Get());
                     tracker_.transition(list,fgFlowFilled_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                    if(flowConsistency_)tracker_.transition(list,nvofReverseTex_.Get(),D3D12_RESOURCE_STATE_COMMON);
                 }
                 tracker_.transition(list,nvofInA_.Get(),D3D12_RESOURCE_STATE_COMMON);
                 tracker_.transition(list,nvofInB_.Get(),D3D12_RESOURCE_STATE_COMMON);
@@ -3380,6 +3394,7 @@ void EnhanceGraph::shutdown()
     }
     nvofCostTex_.Reset();
     nvofRawTex_.Reset();
+    nvofReverseCostTex_.Reset();nvofReverseTex_.Reset();
     nvofInB_.Reset();
     nvofInA_.Reset();
     if (nvof_) nvof_->shutdown();
@@ -3441,7 +3456,7 @@ void EnhanceGraph::shutdown()
     nrInstances_.clear();
     for(auto& layer:nrAutoPool_)layer.reset();nrAutoLevel_=0;nrAutoPoolReady_=nrAutoResetPending_=false;
     residualRgba_.Reset();preSrProtectionRgba_.Reset();interNrProtectionRgba_.Reset();nrFlow_.Reset();baseFlow_.Reset();
-    fgFlowRefined_.Reset();fgFlowFilled_.Reset();fgBaseFlow_.Reset();flowRefinePass_={};flowFillPass_={};fgFlowAdaptPass_={};flowRefine_=false;
+    fgFlowRefined_.Reset();fgFlowFilled_.Reset();fgBaseFlow_.Reset();flowRefinePass_={};flowFillPass_={};fgFlowAdaptPass_={};flowRefine_=flowConsistency_=false;
     for(unsigned i=0;i<kGeneratedPoolSlots;++i){if(fgDisableMapped_[i]&&fgDisableReadback_[i]){D3D12_RANGE written{0,0};fgDisableReadback_[i]->Unmap(0,&written);}fgDisableMapped_[i]=nullptr;fgDisable_[i].Reset();fgDisableReadback_[i].Reset();generatedLeases_[i].reset();genFrame_[i].Reset();}for(auto& lease:realLeases_)lease.reset();fgDisableInit_.Reset();
     encPass_ = ComputePass{};
     blitPass_ = ComputePass{};hdrVideoSrPass_={};

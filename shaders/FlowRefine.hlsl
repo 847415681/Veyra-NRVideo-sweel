@@ -5,10 +5,17 @@
 // frame best: motion boundaries follow the picture instead of the grid. Unlike
 // NvofDensify nothing is zeroed; the best cost is kept for FlowFill to find pixels that
 // have no correspondence at all (background uncovered by a moving object).
+// With NVOF's backward output (previous->current) the chosen vector is also checked for
+// forward-backward agreement: the previous-frame point it lands on must flow back to this
+// pixel. Uncovered background has no vector that does - its true vector lands on the object
+// that covered it, the object's vector on background that moved on - even where a wrong
+// vector matches the smooth background beside it photometrically. The choice itself stays
+// photometric: on rotating limbs and repetitive texture the check is too noisy to rank by.
 Texture2D<int2> rawFlow : register(t0);          // grid extent, S10.5 flow pixels
 Texture2D<float4> previousColor : register(t1);  // flow extent
 Texture2D<float4> currentColor : register(t2);   // flow extent
-RWTexture2D<float4> refined : register(u0);      // xy vector, z best cost, w own-cell cost
+Texture2D<int2> reverseFlow : register(t3);      // grid extent, S10.5, previous->current
+RWTexture2D<float4> refined : register(u0);      // xy vector, z best cost, w forward-backward disagreement
 
 cbuffer FlowRefineConstants : register(b0)
 {
@@ -18,8 +25,8 @@ cbuffer FlowRefineConstants : register(b0)
     uint flowH;
     uint gridSize;
     float tieBias;   // added to every neighbour cell's cost: the own cell wins ties
+    uint backward;   // 1: reverseFlow holds NVOF's backward output (else w = 0)
     uint unused0;
-    uint unused1;
 };
 
 float luma(float3 c) { return dot(c, float3(.2126, .7152, .0722)); }
@@ -35,7 +42,7 @@ void main(uint3 id : SV_DispatchThreadID)
         current[j] = luma(currentColor[clamp(p + int2(j % 3 - 1, j / 3 - 1), int2(0, 0), limit)].rgb);
     const int2 cell = p / int(gridSize);
     const int2 cellLimit = int2(gridW - 1, gridH - 1);
-    float bestCost = 1e9, ownCost = 0;
+    float bestCost = 1e9;
     float2 best = 0;
     [unroll] for (int k = 0; k < 9; ++k) {
         const int2 offset = int2(k % 3 - 1, k / 3 - 1);
@@ -45,8 +52,13 @@ void main(uint3 id : SV_DispatchThreadID)
         [unroll] for (int j = 0; j < 9; ++j)
             cost += abs(current[j] - luma(previousColor[clamp(q + int2(j % 3 - 1, j / 3 - 1), int2(0, 0), limit)].rgb));
         cost /= 9;
-        if (k == 4) ownCost = cost; else cost += tieBias;
+        if (k != 4) cost += tieBias;
         if (cost < bestCost) { bestCost = cost; best = v; }
     }
-    refined[p] = float4(best, bestCost, ownCost);
+    float disagreement = 0;
+    if (backward) {
+        const int2 back = clamp(int2(floor((float2(p) + .5 + best) / float(gridSize))), int2(0, 0), cellLimit);
+        disagreement = length(best + float2(reverseFlow[back]) / 32.0);
+    }
+    refined[p] = float4(best, bestCost, disagreement);
 }

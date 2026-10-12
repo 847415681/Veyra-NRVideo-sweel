@@ -611,6 +611,8 @@ public:
     // Isolated diagnostics only: existing constant guidance, borrowed lifetime.
     // A caller writing before the first real frame must restore COMMON state.
     ID3D12Resource* diagnosticDepthResource(bool frameGeneration) const { return frameGeneration?depthTex_.Get():nrZeroDepth_.Get(); }
+    // Test-only: FlowRefine output (flow extent RGBA16F: vector, cost, forward-backward disagreement).
+    ID3D12Resource* diagnosticRefinedFlow() const { return fgFlowRefined_.Get(); }
     uint32_t nvofRawWidth() const { return rawW_; }
     uint32_t nvofRawHeight() const { return rawH_; }
 
@@ -707,6 +709,11 @@ private:
     // the validated baseFlow_. VEYRA_TEST_FLOW_REFINE=0 restores the previous input.
     bool flowRefine_=false;
     ComPtr<ID3D12Resource> fgFlowRefined_,fgFlowFilled_,fgBaseFlow_;
+    // NVOF backward output (previous->current) for the refinement's forward-backward check
+    // (uncovered background). Only with flowRefine_; VEYRA_TEST_FLOW_CONSISTENCY=0 leaves
+    // NVOF forward-only (photometric refinement). NR/SR never read it.
+    bool flowConsistency_=false;
+    ComPtr<ID3D12Resource> nvofReverseTex_,nvofReverseCostTex_;
     uint64_t motionPreviousSource_[2]={},previousSource_=0;
     ComPtr<ID3D12Resource> proxyTex_;
     ComPtr<ID3D12Resource> neuralTex_;
