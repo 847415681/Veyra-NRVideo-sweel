@@ -189,9 +189,10 @@ def cold():
             document(profile/'qml-preferences.v1.json',dict(language='zh-CN',autoResume=False,rememberPosition=False,prewarmEnhancement=False,gpuPriority='normal',sentinel='retained'))
             env={k:v for k,v in os.environ.items() if not k.upper().startswith(('VEYRA_','QT_','QSG_','QML_'))};win=Path(env['WINDIR'])
             env.update(PATH=str(win/'System32')+';'+str(win),TEMP=str(tmp),TMP=str(tmp),CUDA_CACHE_PATH=str(tmp/'cuda'),QML_DISABLE_DISK_CACHE='1',QT_FORCE_STDERR_LOGGING='1',VEYRA_LOG_FILE=str(logs/'engine.log'))
-            if mode=='software':env.update(QT_QUICK_BACKEND='software',VEYRA_UI_RHI='software')
+            if mode=='software':env['QT_QUICK_BACKEND']='software'
             else:env['VEYRA_UI_RHI']='d3d12'
             command=[str(app/'veyra_qml_ui.exe'),'--data-dir',str(profile),'--page','pro','--size','1280x900','--exit-after','14000','E:/Ai/知识/小七姐/GTAVI_An_Extended_Look_4K_Native.mp4']
+            if mode=='software':command.insert(1,'--obs-game-capture')
             start=time.monotonic()
             with (logs/'console.log').open('wb') as f:run=subprocess.run(command,cwd=app,env=env,stdout=f,stderr=subprocess.STDOUT,timeout=50)
             text='\n'.join(p.read_text('utf8',errors='replace') for p in [logs/'engine.log',logs/'console.log'] if p.exists())

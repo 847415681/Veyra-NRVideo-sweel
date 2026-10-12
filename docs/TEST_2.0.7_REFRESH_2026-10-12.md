@@ -26,7 +26,7 @@ Claude 先前实卡数据在 [内容节奏报告](CONTENT_CADENCE_EXACT_2026-10-
 - `harness/replay.py`：3 组当前引擎回放及逐帧真值检查通过。小幅低对比运动自动去重，暖机后540张真实画面保留538张、无重复，逐秒29–30；两张变化未超过±3容差，与已知边界一致。固定60→30保留540/540、无重复无漏帧、每秒30、间隔33.333ms。GTA无损30→60自动去重保留538/538、无重复无漏帧、每秒30。此为合成文件走实时入口，不是本轮采集卡实测。回执 `logs/.../replay-20261012-224748/summary.json`。
 - NVIDIA / AMD staging 逐文件、运行组件及PE依赖闭包通过：1641 / 2081 payload文件、48 / 534 runtime记录、95 / 83 PE；未增换运行库。原包逐项 SHA 保持，用户正在运行的 cadence 程序与配置未关闭或改写。
 - 本地 main 合并需先核对当前构建输入、旧树保护及上述回执；封包后以 `archives/.../main-merge.json`、`reports/.../validation.json`、`test-packages/.../DELIVERY.json`、`cold-start.json` 和 `reports/.../final.json` 的实际状态为准。最终 ZIP 逐项校验和四组解压启动成功后才交付，不将尚未运行的检查预记为通过。
-- 首次解压启动的四次播放都成功，但最终实际渲染日志复核发现两次标为software的检查仍是D3D12：旧脚本只设QT_QUICK_BACKEND，应用会按自身VEYRA_UI_RHI重新选择后端。修正验收脚本，显式设VEYRA_UI_RHI=software，并对实际日志中的后端做强制断言；增加独立cold-run路径保留首轮证据。首轮包/源码/回执在archives下存档，重新封包、解压、两种真实后端重测，产品EXE和668个输入不变。
+- 首次解压启动的四次播放都成功，但最终实际渲染日志复核发现两次标为software的检查仍是D3D12：旧脚本只设QT_QUICK_BACKEND，应用会自行选择图形API。第二次误用VEYRA_UI_RHI=software，实际该变量只用于D3D11/D3D12选择，软件后端断言依旧失败，未算通过。核对启动源码后改用程序已有的 `--obs-game-capture` 参数，6秒独立预检已实际确认software和OBS兼容日志；最终脚本强制核对实际后端，独立 `--cold-run obs-renderer` 路径用于重新封包、解压及双后端重测。两次失败回执/哈希/Git源存档保留于archives，最终成功后清理这两轮临时ZIP及旧解压副本；产品EXE和668个输入不变，没有改生产渲染代码。
 
 ### 扩展回归未通过：保留失败，未修改产品掩盖
 
