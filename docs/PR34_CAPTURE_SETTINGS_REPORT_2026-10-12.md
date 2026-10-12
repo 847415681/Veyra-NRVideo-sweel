@@ -39,3 +39,9 @@
 本机没有 BMD／美乐威实卡，因此原生自动识别、HDMI／SDI 输入切换、各卡所有格式的真实出画仍需对应持卡用户验证。本轮验证了枚举、参数恢复、错误处理和本机 USB 采集连接，没有做跨显卡、长时间、端到端延迟或性能提升承诺。驱动未公开的私有格式与连续能力区间无法凭空枚举为有限列表；界面列出的是驱动公开的离散能力。
 
 开工 62 个既有工作树、509 个脏文件由独立 `archives/pr34-capture-settings-20261012/start.json` 和增量 bundle 保护；除获授权的 main 外保持原样。未混入尚未合并的 XeSS 接手分支。最终源码、二进制、原包 1626 文件、合并 ancestry 与远端状态由 `reports/pr34-capture-settings-20261012/validation.json`／`final.json` 记录。
+
+## Git 收尾
+
+验证器已核对 834 个源码／配置文件、334 个不可变构建输入、12 个 EXE、11 组回归与最终 9 组真实 GUI 回执，以及原包 1626 个文件。适配存档提交 `b60830c`，标签 `checkpoint/pr34-capture-settings-tested-20261012`。GitHub API 按固定 PR head f1f53ace 合并 PR34，返回成功，远端合并提交 `7b9332513257363ec3474c7232bf2bc448296f17`。
+
+隔离候选 `49eb6bdd04db6effe37ada36c846d603f4b85282` 包含该远端合并记录；相对实测适配提交只同步了远端既有 `4ceb2df` 的 README 星数图 `assets/star-history.svg`，产品源码与可执行文件未改变。本地 main 合并提交 `6570f5672ce3496c4b9bfd27750cb59c1917cc4d` 与该候选完整 Git 树相同：`907bad1dd0e077647ff632213fde77b8084e00d6`。之后只追加本节及 WORKLOG。普通推送、最终 main SHA、PR 关闭状态和其它 61 旧工作树／509 脏文件核对由 `final.json` 记录；没有强推、打包或 Release。
