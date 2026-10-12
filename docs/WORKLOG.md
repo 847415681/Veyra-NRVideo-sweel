@@ -9338,3 +9338,10 @@ VFG按真实逐子帧模型分配解释，4X三张、8X七张、2X无混合省�
 ZIP/EXE原字节晋级，仅外部下载名去test-r2；包内显示原标识在正文明示。源码单独非latest归档，未改变依赖源保留v2.0.6固定链接。未完成远端上传/核验前不称发布完成。无新GPU测试、模型/驱动/真实配置修改或关机。实际命令、哈希、远端回执见E:/项目/Veyra/{archives,logs,tmp,reports,releases}/release-2.0.7-20261013。
 
 发布输入审计实际完成：tmp/release-2.0.7-20261013/audit.py exit0，两个ZIP全部payload1641/2081及runtime48/534/应用SHA/CRC和四冷启回执逐项绑定；三源SHA/CRC与应用1970文件通过，未新增专有文件，产品树不变。assets.json保留结果。compose.py生成Release正文（全部相对文档链接转tag固定URL）、两二维码/知识库/双包SHA、独立SOURCE_BODY和<=1000字群公告；所有相对文档链接检查通过。尚未执行上传/发布，服务器digest/标签/latest/旧Release保护须另核实。
+
+
+### 2026-10-13 2.0.7 正式发布完成
+
+v2.0.7 ID 410800361，published_at 2026-10-12T16:24:59Z，latest/非草稿/非预发布通过；两个运行资产服务器SHA/size等于原test-r2。v2.0.7-sources ID 410800322，两源资产、非latest，未变依赖源保留v2.0.6。main/tag6ede5a7普通atomic推送成功，产品与67ab696相同，后续只补回执文档。remote.py draft/upload/verify-draft/publish/verify-public均通过；public-check.py final全部公开文档/双QR/Ko-fi/Release/下载200，六群原图SHA吻合，飞书带Cookie匿名GET200。最初无Cookie404/循环证据保留，不把它写成知识库本身失效。
+
+旧v2.0.6Release完整稳定字段不变，68其它树/509脏文件/全部原包保护通过。详细docs/RELEASE_2.0.7_REPORT_2026-10-13.md；外部reports/logs回执固定远端正文/资产digest。只读发布辅助检查曾因utf8-sig别名和依赖回执尚未完成失败，原错误说明保留，改编码/顺序后原检查通过，未重发或改资产。原扩展NR+DLSS热切换失败和NV显存/BMD/HDR/AMD实卡限制保留，没有新性能或全硬件通过声明。群公告632字符仅保存给用户，无代发/关机。
