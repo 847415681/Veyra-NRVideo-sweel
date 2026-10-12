@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-13 2.0.7正式发布授权**：用户明确直接采用已验2.0.7-test-r2两个包发布GitHub、六群原图替换、README/Release加知识库、完整说明2.0.6以来变化。按docs/RELEASE_2.0.7_PLAN_2026-10-13.md，只改发布文档/图片和外部文件名，ZIP/EXE/运行组件逐字节保持。允许本地main合入、普通push nrvideo/main与两个标签、主v2.0.7两资产及独立非latest源码归档；保留原赞助/Discord/Ko-fi/width220。69旧树/509脏文件、旧包和旧Release保护，全产物E盘；无子Agent/代发/关机。不伪称包内test标识被去掉，不把混合模型取舍或合成误差包装成普遍画质/提速，也不宣称NV显存/BMD/HDR现场已根治。
+
 > **2026-10-12 用户确认 Claude 内容节奏修复实机通过并授权合并重打 2.0.7**：从 main05bc4b5 隔离合入 claude/cadence-exact-20261012（60a93f3、8d11cad），按 docs/TEST_2.0.7_REFRESH_2026-10-12.md 重新构建、定向回归、本地 main 合并与 NVIDIA/AMD 完整测试包；显示2.0.7-test-r2。保护68旧树/509脏文件及已交付原包，全部研发产物在E盘新任务目录。不改用户正在运行的播放器/配置、UI频率/默认GPU优先级/运行库/模型，无新push/Release/关机或子Agent授权。
 
 > **2026-10-12 内容节奏修正（Claude）**：用户实测 2.0.7：“采集 60→30”被植入内容节奏判断、原始帧率跳动，要求还原为最简单的 60 帧 AABBCCDD→ABCD 稳定隔帧；新“自动识别内容节奏”去重不稳定（VFG 耗时、GPU 占用忽高忽低），游戏运行中出现 6fps，怀疑不是百分百相同的帧也被去掉。追加授权关闭用户正在运行的 Veyra、直接用 T911 实卡（2K60 NV12、游戏 30 帧）测试。存档 `checkpoint/pre-claude-cadence-exact-20261012`（main 05bc4b5）与 `archives/claude-cadence-exact-20261012`，分支 `claude/cadence-exact-20261012`。60→30 恢复 `CaptureHalfRate`（与 85cbd5a 之前相同、不经去重）；内容模式整画面逐像素与上一张新画面比较，每个分量都在 ±3 级（8 位刻度）以内才算重复（`PictureCompare.h`，采集回调只在去重开启时比较驱动样本并给帧编画面号）；逐字节相同在实卡上从不成立（T911 重复帧 ±1–2 级噪声），该版本已被实卡数据否决。见 docs/CONTENT_CADENCE_EXACT_2026-10-12.md。不改默认设置、NR/SR/FG 模型、运行库；用户设置只读取并复制进测试包；无 merge/push/Release/子 Agent。

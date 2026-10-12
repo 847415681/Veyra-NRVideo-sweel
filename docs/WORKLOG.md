@@ -9325,3 +9325,16 @@ audit.py核对测试/GUI/所有app原件、两份旧final、旧JSON和源码bund
 最终ZIP冷启动首次四次播放均成功，但复核实际renderer发现两次software也为D3D12；此前脚本只设QT_QUICK_BACKEND，应用的自身RHI选择覆盖它。没有把错误模式算作软件UI通过。修正本地验收脚本显式VEYRA_UI_RHI=software+实际日志断言，cold-run参数保留首轮目录。产品EXE/668输入不变；初轮包/源码/DELIVERY/cold回执存档后重新封包和真实双后端冷启动，最终以外部final为准。无用户程序/运行库/配置修改。
 
 验收入口纠正续：第二次用VEYRA_UI_RHI=software仍被实际renderer断言拦下；源码只将这个变量用于D3D11/D3D12。已读main.cpp并按实际--obs-game-capture参数做6秒预检，真实software/OBS日志通过（logs/.../obs-renderer-preflight）。最终cold脚本使用该既有产品参数+实际后端断言，obs-renderer独立目录；不改产品渲染代码/EXE。失败回执、哈希、Git源保留，最终成功后清理这两轮临时ZIP及解压副本，避免重复占盘。
+
+
+## 2026-10-13 2.0.7 正式发布开工与文档整理
+
+用户明确直接采用已验r2包发布、六群、知识库、主下载仅两个厂商包、完整整理2.0.6以后更新。隔离codex/release-2.0.7-20261013从main67ab696；protect.py start固定69旧树/509脏文件及全部原交付ZIP/群图，source-before.bundle从v2.0.6起增量verify通过。fetch nrvideo/main与tags，远端main原a167831，尚无v2.0.7。原v2.0.6 Release/API回执保持。
+
+读取当前README、技术合同/竞品文档、当前WORKLOG各任务、完整v2.0.6..67ab696非merge列表及80产品路径diff；逐项对照已验报告，新增RELEASE_NOTES_2.0.7与CHANGE_INDEX、BUILD_2.0.7、发布计划，更新中英README和RELEASE_SUPPORT。六群原图a237d642...原样复制；捐助/Discord/Ko-fi与width220保持。飞书web工具不可访问，知识库描述按用户提供，不冒称读过其内容。
+
+VFG按真实逐子帧模型分配解释，4X三张、8X七张、2X无混合省时；单质量检测优化与低档模型取舍分开，声明显存/纹理成本。内容识别±3噪声容差/静止节奏与固定60→30独立；XeSS有限改善/成本和非AMD实卡边界。字幕/列表/音频/设置/交换链/UI/采集全部索引，撤回实验及显存/HDR/BMD/扩展热切换失败保留。
+
+ZIP/EXE原字节晋级，仅外部下载名去test-r2；包内显示原标识在正文明示。源码单独非latest归档，未改变依赖源保留v2.0.6固定链接。未完成远端上传/核验前不称发布完成。无新GPU测试、模型/驱动/真实配置修改或关机。实际命令、哈希、远端回执见E:/项目/Veyra/{archives,logs,tmp,reports,releases}/release-2.0.7-20261013。
+
+发布输入审计实际完成：tmp/release-2.0.7-20261013/audit.py exit0，两个ZIP全部payload1641/2081及runtime48/534/应用SHA/CRC和四冷启回执逐项绑定；三源SHA/CRC与应用1970文件通过，未新增专有文件，产品树不变。assets.json保留结果。compose.py生成Release正文（全部相对文档链接转tag固定URL）、两二维码/知识库/双包SHA、独立SOURCE_BODY和<=1000字群公告；所有相对文档链接检查通过。尚未执行上传/发布，服务器digest/标签/latest/旧Release保护须另核实。
