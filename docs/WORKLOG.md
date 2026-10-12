@@ -9191,7 +9191,7 @@ harness/final-ui.py最终9组通过：四语言布局、跨列表／节点全局
 
 tmp/pro-video-geometry-20261012/perf.py before|after d3d12|software顺序各约45秒：同用户4K GTA、原版单层1080p NR、强度1/调控关、普通优先级，实际视频30fps。GPU界面NR5.852→5.839ms/UI36→34提交每秒，软件5.751→5.901/UI38→40；均后台窗口，不宣称前台完整性能通过或提速。四组外部class采样ACCESS_DENIED（增加query权限仍失败）原记录保留；独立产品日志actual=2/state=1/status0确认普通优先级。CPU早期窗口有波动，全部采样及限制见REPORT，不用单次读数宣传下降。没有持续resize循环，修复后每组仅开源和状态初始化共3次SetWindowPos。
 
-git diff --check、Python夹具语法通过。audit.py核对59个QML与356个原件文件；33ms插值/bridge/宿主/presenter源码SHA不变，runtime/SDK/模型无新增进Git。control.py verify：64原树不变，Claude xess-flow-tune树外部并行修改原样记录、未碰/合入，全部旧tip/main保持。详细命令、回执、失败及边界见docs/PRO_VIDEO_GEOMETRY_REPORT_2026-10-12.md、reports/pro-video-geometry-20261012/validation.json。
+git diff --check、Python夹具语法通过。audit.py核对59个QML与356个原件文件；33ms插值/bridge/宿主/presenter源码SHA不变，runtime/SDK/模型无新增进Git。control.py verify：64原树不变，Claude xess-flow-tune树外部并行修改及收尾外部提交推进原样记录、未碰/合入，其余旧tip/main保持。详细命令、回执、失败及边界见docs/PRO_VIDEO_GEOMETRY_REPORT_2026-10-12.md、reports/pro-video-geometry-20261012/validation.json。
 
 全产物在E:/项目/Veyra本轮archives/build/tests/logs/tmp/reports；可用程序tests/pro-video-geometry-20261012/app/veyra_qml_ui.exe，驱动已移除、QML恢复源码。未合并main/push/打包/Release/关机；收尾commit/tag/bundle/清理见reports/pro-video-geometry-20261012/final.json。
 

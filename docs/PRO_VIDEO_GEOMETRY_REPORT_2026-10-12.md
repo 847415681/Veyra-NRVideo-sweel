@@ -29,7 +29,7 @@ ProPage持有videoColumnWidth、metersHeight、videoCardHeight和videoViewport�
 - Qt6.8.3 `qmlcachegen --only-bytecode -o E:/项目/Veyra/build/pro-video-geometry-20261012/Main.qmlc qml/Veyra/Main.qml`，ProPage同命令，均通过。本次是外置QML变更，复用34f479e已测EXE，无需重编C++，没有冒称全量clean构建。所有真实GUI正常播放、正常退出，无QML绑定/类型或D3D12错误。
 - `tmp/pro-video-geometry-20261012/perf.py before|after d3d12|software`：4K视频、单层原版NR、内部1080p、强度1、自动调控关闭、无SR/FG、普通优先级。四组产品日志均确认requested=2 actual=2；夹具外部class采样因句柄权限不足未成功，不作为确认依据。各组约45秒，NR实际运行后取18个一秒GPU统计样本。GPU界面NR中位数5.852→5.839ms、UI提交中位数36→34次/秒；软件界面5.751→5.901ms、38→40次/秒，视频提交均30fps。仅后台窗口短测（activeSamples=0），不当作前台完整性能A/B或普遍提速证据。
 - 同四组早期15–30秒进程CPU读数为GPU0.2476→0.2756 CPU秒/秒、软件0.2594→0.2271；原始全部采样保留。GPU25–42秒为0.2460→0.2566。短样本有波动，不能宣称CPU下降；没有增加持续全窗重绘路径。33ms插值、250ms状态和GPU优先级代码SHA保持，见validation.json。
-- `git diff --check`通过；控制脚本verify保护65旧树：64完全不变，claude/xess-flow-tune-20261012有外部并行修改，原样记录且未触碰/合入；原分支tip和main不变。源码/QML及所有EXE/DLL/模型/着色器的原件对照见reports/pro-video-geometry-20261012/validation.json。没有新增proprietary文件入Git。
+- `git diff --check`通过；控制脚本verify保护65旧树：64完全不变，claude/xess-flow-tune-20261012有外部并行修改，收尾时该分支也有外部提交推进，均原样记录且未触碰/合入；其余原分支tip和main不变。源码/QML及所有EXE/DLL/模型/着色器的原件对照见reports/pro-video-geometry-20261012/validation.json。没有新增proprietary文件入Git。
 
 实际矩形通过Win32 EnumChildWindows/GetWindowRect读取，与QML mapToItem结果及Qt DPR比较，允许原生物理像素舍入≤1像素。屏幕截取曾被其它窗口遮住，已删除该副本，不作为通过证据。150%使用Qt缩放参数，不冒充双屏真实DPI热切换验收；未连接反馈者采集卡，但本次视频几何与源类型无关，实卡仍待反馈者确认。
 
