@@ -108,7 +108,7 @@ int inactiveEffectsTest(const wchar_t* input,const wchar_t* output,bool nodeMode
 // --dedup-* replay (ContentDedup.h). Not inlined, snapshots built on the heap:
 // wmain already holds many PlayerSnapshot locals, and two more overflowed its
 // 1 MiB stack before the first line ran.
-__declspec(noinline) static int runContentCadenceReplay(engine::EngineController& engine,const std::wstring& mode){
+__declspec(noinline) static int runContentCadenceReplay(engine::EngineController& engine,const std::wstring& mode,bool fg){
     using namespace std::chrono_literals;
     auto pumpUntil=[&](auto predicate,std::chrono::seconds limit){
         const auto deadline=std::chrono::steady_clock::now()+limit;
@@ -119,8 +119,8 @@ __declspec(noinline) static int runContentCadenceReplay(engine::EngineController
         return false;
     };
     std::unique_ptr<engine::PlayerSnapshot> start,end;
-    const bool started=pumpUntil([&]{start.reset(new engine::PlayerSnapshot(engine.snapshot()));return start->frames>30&&start->fgActive;},25s);
-    std::cout<<(started?"PASS ":"FAIL ")<<"replay starts with DLSS 2X"<<std::endl;
+    const bool started=pumpUntil([&]{start.reset(new engine::PlayerSnapshot(engine.snapshot()));return start->frames>30&&(!fg||start->fgActive);},25s);
+    std::cout<<(started?"PASS ":"FAIL ")<<(fg?"replay starts with DLSS 2X":"replay starts without frame generation")<<std::endl;
     const auto begin=std::chrono::steady_clock::now();
     pumpUntil([&]{end.reset(new engine::PlayerSnapshot(engine.snapshot()));return end->failed||std::chrono::steady_clock::now()-begin>=20s;},25s);
     std::wcout<<L"DEDUP_RESULT mode="<<mode;
@@ -253,10 +253,12 @@ int wmain(int argc,wchar_t**argv){
     if(halfRate)options.settings.content=engine::ContentRate::Capture60To30;
     // --dedup-transport|auto|half|fps30: file replay through the live capture path
     // with CPU decode and DLSS 2X, for content-cadence A/B runs (ContentDedup.h).
+    // A "-nofg" suffix runs it without frame generation (light GPU load).
     const bool dedupRun=argc==4&&std::wstring(argv[3]).rfind(L"--dedup-",0)==0;
-    const std::wstring dedupMode=dedupRun?std::wstring(argv[3]).substr(8):L"";
+    std::wstring dedupMode=dedupRun?std::wstring(argv[3]).substr(8):L"";
+    const bool dedupNoFg=dedupMode.ends_with(L"-nofg");if(dedupNoFg)dedupMode.resize(dedupMode.size()-5);
     if(dedupRun){
-        options.softwareDecode=true;options.fg=true;options.fgMultiplier=2;
+        options.softwareDecode=true;options.fg=!dedupNoFg;options.fgMultiplier=2;
         options.settings.frameGenerationBackend=engine::FrameGenerationBackend::Dlss;
         options.settings.content=dedupMode==L"auto"?engine::ContentRate::Auto:dedupMode==L"half"?engine::ContentRate::Capture60To30:
             dedupMode==L"fps30"?engine::ContentRate::Fps30:engine::ContentRate::Transport;
@@ -266,7 +268,7 @@ int wmain(int argc,wchar_t**argv){
     int failures=0;auto check=[&](bool pass,const char* s){std::cout<<(pass?"PASS ":"FAIL ")<<s<<std::endl;if(!pass)++failures;};
     auto until=[&](auto predicate,int seconds=8){auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(seconds);while(std::chrono::steady_clock::now()<deadline){MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}auto s=engine.snapshot();if(s.failed){std::wcerr<<s.status<<'\n';return false;}if(predicate(s))return true;std::this_thread::sleep_for(5ms);}return false;};
     engine.open(window,argv[1],options);
-    if(dedupRun){const int result=runContentCadenceReplay(engine,dedupMode);DestroyWindow(window);CoUninitialize();return result;}
+    if(dedupRun){const int result=runContentCadenceReplay(engine,dedupMode,!dedupNoFg);DestroyWindow(window);CoUninitialize();return result;}
     if(settingsRebuild){
         check(until([](const auto& s){return s.frames>20&&s.nrActive&&s.fgActive;},30),"original NR 1080p and DLSS 2X start on the actual video");
         for(unsigned round=0;round<8&&!failures;++round){

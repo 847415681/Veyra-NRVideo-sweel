@@ -9271,11 +9271,11 @@
    "ja": "消去"
   },
   {
-   "zh": "游戏锁 30/40 帧、采集卡输出 60 帧时选“自动识别内容节奏”：只去掉重复画面，补帧时间均匀；“采集 60→30”另外把上限固定为 30 帧",
+   "zh": "游戏锁 30/40 帧、采集卡输出 60 帧时选“自动识别内容节奏”：只去掉与上一张完全相同的画面，补帧时间均匀；“采集 60→30”固定每两帧取一帧，稳定 30 帧",
    "src": "qml/ProPage.qml",
-   "zh-TW": "遊戲鎖 30/40 幀、擷取卡輸出 60 幀時選“自動識別內容節奏”：只去掉重複畫面，補幀時間均勻；“擷取 60→30”另外把上限固定為 30 幀",
-   "en": "For a game locked to 30/40 fps behind a 60 fps capture card, choose \"Detect content pacing automatically\": only repeated pictures are dropped and generated frames stay evenly timed; \"Capture 60→30\" also caps the rate at 30",
-   "ja": "ゲームが 30/40 fps 固定でキャプチャーカードが 60 fps を出力する場合は「コンテンツのペーシングを自動判別」を選択：重複した映像だけを除き、補間フレームの間隔を均一にします。「キャプチャー 60→30」はさらに上限を 30 fps にします"
+   "zh-TW": "遊戲鎖 30/40 幀、擷取卡輸出 60 幀時選“自動識別內容節奏”：只去掉與上一張完全相同的畫面，補幀時間均勻；“擷取 60→30”固定每兩幀取一幀，穩定 30 幀",
+   "en": "For a game locked to 30/40 fps behind a 60 fps capture card, choose \"Detect content pacing automatically\": only pictures identical to the previous one are dropped and generated frames stay evenly timed; \"Capture 60→30\" always keeps every second frame for a steady 30",
+   "ja": "ゲームが 30/40 fps 固定でキャプチャーカードが 60 fps を出力する場合は「コンテンツのペーシングを自動判別」を選択：直前とまったく同じ映像だけを除き、補間フレームの間隔を均一にします。「キャプチャー 60→30」は常に 2 フレームごとに 1 フレームを取り、30 fps で安定させます"
   },
   {
    "zh": "游戏与程序 · ",

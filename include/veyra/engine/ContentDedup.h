@@ -1,123 +1,101 @@
 #pragma once
+#include "veyra/pipeline/PictureFingerprint.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
-#include <cstring>
 
 namespace veyra::engine {
-// Repeated-picture removal and content cadence for live sources (2026-10-11).
+// Repeated-picture removal and content cadence for live sources (2026-10-11,
+// exact pictures 2026-10-12).
 //
-// A game locked to 30 or 40 fps behind a 60 Hz capture repeats pictures. The
-// old "60->30" setting kept every second sample by timestamp, blind to the
-// picture: whenever the game's frames did not land on that grid (a hitch, a
-// 40 fps cap, a 58/59.94 Hz transport) it dropped real frames and kept
-// repeats, and frame generation then interpolated across a doubled step
-// (ghosting) or a still pair; "auto" only reported a rate.
+// A game locked to 30 or 40 fps behind a 60 Hz capture repeats pictures; frame
+// generation then interpolates across a still pair, or across a doubled step
+// where a blind sampler dropped a real picture. The content modes (auto /
+// 30 / 50 / 60 fps) drop a sample here when its picture repeats the last kept
+// one; "60->30" is the plain every-second-sample CaptureHalfRate, not this.
 //
-// A sample is dropped here only when its picture repeats the last kept one,
-// judged on the 64x36 luma points the capture callback already takes (~2.3k
-// compares per frame, no GPU work). Kept frames get a content timestamp from a
-// clamped phase-locked cadence: the picture changed after the previous sample
-// and no later than this one, so the predicted time is clamped into that
-// window. Regular content (30 in 58 Hz, 40 in 60 Hz) gets evenly spaced
-// timestamps that are never later than the sample; hitches and variable rates
-// keep their sample times.
+// A repeat is a picture whose every byte of every plane equals the last kept
+// picture (PictureFingerprint.h). The first version judged 64x36 sampled points
+// with an 8-level gate: a running HDR game seen from a still position lost most
+// real pictures (6-16 kept of 60 per second, field log 2026-10-12). Anything
+// that is not bit-identical is a new picture now, so a noisy or re-encoded
+// source simply keeps every sample.
+//
+// Kept frames get a content timestamp from a clamped phase-locked cadence: the
+// picture changed after the previous sample and no later than this one, so the
+// predicted time is clamped into that window. Regular content (30 in 58 Hz,
+// 40 in 60 Hz) gets evenly spaced timestamps that are never later than the
+// sample; hitches and variable rates keep their sample times.
+//
+// A picture that stays identical past a hitch (paused game, menu) is held at
+// the content cadence instead of one frame per 150-250 ms: the kept rate, and
+// with it the GPU work of NR and frame generation, stays steady.
 class ContentDedup {
 public:
-    static constexpr unsigned kPoints = 64 * 36;
     struct Decision {
         bool keep = true;
         int64_t contentPts = 0;   // 100 ns, kept frames
         int64_t interval = 0;     // 100 ns from the previous kept frame (0 = unknown)
-        double median = 0;        // median |luma difference| to the last kept frame (levels)
-        unsigned changed = 0;     // points beyond the change gate
         const char* reason = "first";
     };
     struct Stats {
-        uint64_t observed = 0, kept = 0, repeats = 0, capped = 0, held = 0, blind = 0;
+        uint64_t observed = 0, kept = 0, repeats = 0, held = 0, blind = 0;
         uint64_t regular = 0, irregular = 0;
         double maxShiftMs = 0;    // largest sample-to-content correction
     };
 
     void reset() {
-        haveKept_ = haveContent_ = skipSpan_ = false; prevSample_ = 0; lastKeptSample_ = 0; lastContent_ = 0;
+        haveKept_ = haveContent_ = skipSpan_ = holding_ = false; prevSample_ = 0; lastKeptSample_ = 0; lastContent_ = 0;
         timeCount_ = 0; timeHead_ = 0; period_ = 0; misses_ = 0;
     }
-    // luma: kPoints 8-bit samples or nullptr (no CPU picture: keep everything).
-    // capPeriod: minimum spacing of kept frames (the 60->30 setting), 0 = none.
+    // picture: exact identity of the sample, or nullptr (no CPU picture: keep everything).
     // hintPeriod: expected content period of the selected content rate, 0 = unknown.
-    Decision observe(const uint8_t* luma, int64_t pts, int64_t transport, bool boundary,
-                     int64_t capPeriod = 0, int64_t hintPeriod = 0) {
+    Decision observe(const pipeline::PictureFingerprint* picture, int64_t pts, int64_t transport, bool boundary, int64_t hintPeriod = 0) {
         Decision d;
         ++stats_.observed;
         if (transport <= 0) transport = 166667;
         const int64_t previous = prevSample_;
         const bool continuous = haveKept_ && !boundary && pts > previous && pts - previous <= transport * 6;
         prevSample_ = pts;
-        if (!luma) {
-            // No CPU picture (hardware-decoded streams): keep everything, except
-            // that 60->30 still samples every second slot by timestamp as before.
-            // A boundary (open, seek, settings change) keeps its first frame and
-            // re-anchors, like the old sampler: transactions wait for that frame.
+        if (!picture) {
+            // No CPU picture (hardware-decoded streams): keep everything. A
+            // boundary (open, seek, settings change) re-anchors the cadence.
             ++stats_.blind; haveKept_ = false;
             if (boundary) { reset(); prevSample_ = pts; }
-            else if (capPeriod > 0 && haveContent_ && pts > lastKeptSample_ && pts - lastKeptSample_ + transport / 4 < capPeriod && pts - lastKeptSample_ <= transport * 6) {
-                ++stats_.capped; d.keep = false; d.reason = "rate-cap"; return d;
-            }
             return keep(d, pts, previous, transport, nullptr, Timing::Sample, "no-picture");
         }
         if (!continuous) {
             reset(); prevSample_ = pts;
-            return keep(d, pts, previous, transport, luma, Timing::Sample, boundary ? "boundary" : "first");
+            return keep(d, pts, previous, transport, picture, Timing::Sample, boundary ? "boundary" : "first");
         }
-        // Compare with the last KEPT picture: a slow fade accumulates until it
-        // counts instead of being dropped one sub-threshold step at a time.
-        std::array<uint16_t, 256> histogram{};
-        const int gate = int(std::max(8.0, 3.0 * noise_ + 6.0));
-        unsigned changed = 0;
-        for (unsigned i = 0; i < kPoints; ++i) {
-            const int diff = std::abs(int(luma[i]) - int(kept_[i]));
-            ++histogram[diff];
-            changed += diff > gate;
-        }
-        unsigned median = 0;
-        for (unsigned seen = 0; median < 255; ++median) if ((seen += histogram[median]) * 2 >= kPoints) break;
-        d.median = median; d.changed = changed;
-        // New picture: a point moved clearly (a small object or the HUD in a still
-        // scene counts; a clean capture repeats bit-exactly, so one point is enough
-        // until noise has been seen) or most of the picture shifted (fades, pans).
-        const double medianGate = std::max(1.5, 1.5 * noise_ + 0.75);
-        const bool repeat = changed < (noise_ < 0.5 ? 1u : 3u) && median <= medianGate;
-        const int64_t sinceKept = pts - lastKeptSample_;
-        if (repeat) {
-            // Never hold one picture for long: a still screen keeps a frame now
-            // and then, and a change too slow to pass the gates still advances.
-            const int64_t hold = std::clamp<int64_t>(period_ ? period_ * 4 : transport * 8, 1500000, 2500000);
-            if (sinceKept < hold) {
-                noise_ = noise_ * 0.9 + 0.1 * median;
-                ++stats_.repeats; d.keep = false; d.reason = "repeat"; return d;
+        if (*picture == kept_) {
+            const int64_t cadence = std::min<int64_t>(period_ > 0 ? period_ : hintPeriod > 0 ? hintPeriod : transport * 2, 666667);
+            if (!holding_) {
+                // A hitch repeats one picture for a few samples: drop those, so
+                // the next picture spans the whole wait.
+                if (pts - lastKeptSample_ < std::max(cadence * 5 / 2, transport * 3)) { ++stats_.repeats; d.keep = false; d.reason = "repeat"; return d; }
+                holding_ = true; holdDue_ = pts;
             }
+            // Past that the picture is still: hold it on the content cadence's
+            // grid (40 fps in 60 Hz keeps 33/17 ms), never slower than 15 fps.
+            if (pts + transport / 4 < holdDue_) { ++stats_.repeats; d.keep = false; d.reason = "repeat"; return d; }
+            holdDue_ = std::max(holdDue_ + cadence, pts + cadence / 2);
             ++stats_.held;
-            return keep(d, pts, previous, transport, luma, Timing::Sample, "hold-limit");
+            return keep(d, pts, previous, transport, picture, Timing::Sample, "hold");
         }
-        if (capPeriod > 0 && sinceKept + transport / 4 < capPeriod) {
-            // 60->30: a new picture one slot after the last kept one (60 fps
-            // content) is over the cap. Repeats never take its place.
-            ++stats_.capped; d.keep = false; d.reason = "rate-cap"; return d;
-        }
-        return keep(d, pts, previous, transport, luma, Timing::Cadence, "new", hintPeriod);
+        holding_ = false;
+        return keep(d, pts, previous, transport, picture, Timing::Cadence, "new", hintPeriod);
     }
     // Estimated content rate of the kept frames (0 until established).
     double contentFps() const { return period_ > 0 ? 1e7 / double(period_) : 0.0; }
-    double noiseLevel() const { return noise_; }
     const Stats& stats() const { return stats_; }
 
 private:
     enum class Timing { Sample, Cadence };
     static constexpr unsigned kTimes = 48;
-    Decision& keep(Decision& d, int64_t pts, int64_t previous, int64_t transport, const uint8_t* luma, Timing timing,
+    Decision& keep(Decision& d, int64_t pts, int64_t previous, int64_t transport, const pipeline::PictureFingerprint* picture, Timing timing,
                    const char* reason, int64_t hint = 0) {
         d.keep = true; d.reason = reason; ++stats_.kept;
         int64_t content = pts;
@@ -162,19 +140,18 @@ private:
         haveContent_ = true;
         stats_.maxShiftMs = std::max(stats_.maxShiftMs, double(pts - content) / 1e4);
         d.contentPts = content;
-        if (luma) { std::memcpy(kept_.data(), luma, kPoints); haveKept_ = true; }
+        if (picture) { kept_ = *picture; haveKept_ = true; }
         lastKeptSample_ = pts; lastContent_ = content;
         return d;
     }
 
     void push(int64_t time) { times_[timeHead_] = time; timeHead_ = (timeHead_ + 1) % kTimes; timeCount_ = std::min(timeCount_ + 1, kTimes); }
 
-    std::array<uint8_t, kPoints> kept_{};
+    pipeline::PictureFingerprint kept_{};
     std::array<int64_t, kTimes> times_{};
     unsigned timeCount_ = 0, timeHead_ = 0, misses_ = 0;
-    bool haveKept_ = false, haveContent_ = false, skipSpan_ = false;
-    int64_t prevSample_ = 0, lastKeptSample_ = 0, lastContent_ = 0, period_ = 0;
-    double noise_ = 0;
+    bool haveKept_ = false, haveContent_ = false, skipSpan_ = false, holding_ = false;
+    int64_t prevSample_ = 0, lastKeptSample_ = 0, lastContent_ = 0, period_ = 0, holdDue_ = 0;
     Stats stats_;
 };
 }

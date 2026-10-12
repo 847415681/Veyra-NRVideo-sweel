@@ -69,6 +69,9 @@ public:
     bool hardwareActive() const;
     bool waitingForInput() const;
     void recoverAtKeyframe();
+    // Content dedup: fingerprint each software-decoded MJPEG picture written to an
+    // upload-backed target (CaptureUploadFrame.h). Call on the decoding thread.
+    void setPictureFingerprints(bool enabled);
     const char* backendName() const;
     const std::string& lastError() const;
     uint64_t framesDecoded() const;

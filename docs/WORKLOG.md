@@ -9295,3 +9295,11 @@ audit.py核对测试/GUI/所有app原件、两份旧final、旧JSON和源码bund
 - XeSS实际GUI开关/重启、seek/暂停/倍率/光流/关闭再开通过；GTA4K30+原版NR1080+XeSS2X、GPU普通class2，20独立样本软件提交60FPS，应用GPU图8.54ms、NR采样5.85ms、光流2.39ms。这不是完整XeSS驱动开销、屏幕刷新/延迟或新A/B提速证明；默认优先级仍原有实时class5。几何52状态D3D12/软件×100%/150%无播放条遮挡。
 - 66旧树/509脏文件及分支tip核验原样，完成来源均为整合祖先。旧RTSS仅剩计划文档，其余旧归档/撤回实验不混入。没有新增生产Timer、统计频率或采集逐帧缓冲变更，没有运行库/SDK/模型/私有素材入Git。
 - 本验收tip按用户授权本地main --no-ff合并，完整Git树必须相同；随后脚本test-2.0.7-package.py seal/cold制作NVIDIA/AMD完整包及本版源码，审计逐文件/运行组件/厂商/PE/ZIP并用解压最终ZIP私有目录冷启动。合并hash/保护快照见archives/test-2.0.7-20261012，最终包证据见test-packages/test-2.0.7-20261012/DELIVERY.json、cold-start.json；完成前不交付。当前两份staging内容审计已通过，最终封包/冷启动另记外部回执，避免源码自引用改包。NV长期显存增长和AMD/BMD现场未宣称根治；未push/Release/上传/关机。
+
+## 2026-10-12 内容节奏修正：60→30 还原，去重只认完全相同画面（Claude）
+
+- 用户实测 2.0.7（MCS T911 2560×1440@60 P010 HDR）：60→30 原始帧率跳动，要求还原为 AABBCCDD→ABCD 稳定隔帧；自动识别去重不稳定、游戏运行中出现 6fps。存档 checkpoint/pre-claude-cadence-exact-20261012（main 05bc4b5）、archives/claude-cadence-exact-20261012，分支 claude/cadence-exact-20261012。
+- 原因：85cbd5a 让 60→30 走“去重+30 上限”；去重只比 64×36 个单像素采样点（P010 取高 8 位）、变化超过 8 级才算新画面，原地站立时的小动作碰不到采样点，被当成重复（日志 mode=5/1 每秒只留 6–16 帧、held=6–7）。
+- 修正：60→30 回到 CaptureHalfRate；内容模式用 PictureFingerprint（整画面所有平面逐字节，8 路 AES），完全相同才去掉；采集回调只在去重开启时计算（1440p P010 约 0.2 ms），MJPEG 解码帧同样，其他 CPU 帧引擎端算；静止画面超过 2.5 个内容周期后按内容节奏网格保留。删除 EnhanceGraph::lumaSignature，提示文字四语更新。
+- 结果：离线同帧 A/B 静止画面+小低对比移动物体（无损 30→60）旧版 600 张真实画面只留 134（每秒 6–7），新版 600/600 每秒恒 30；GTA6 无损 30→60 两者 598/598；有损 x264 重复帧不逐字节相同，新版全部保留。引擎回放（不开补帧）自动 540/540、0 丢失 0 重复、每秒恒 30、间隔恒 33.333 ms；60→30 每秒恒 30。单测 92、--half-rate 34、ui-contracts、新 EXE 冷启动通过。构建 py -3.11 -I tmp/claude-cadence-exact-20261012/build.py（复用 build/test-2.0.7-20261012 对象，只读）。
+- 测试包 tests/claude-cadence-exact-20261012/Veyra-2.0.7-test-cadence-NVIDIA（2.0.7 NVIDIA 包全量复制，只换 EXE 与 ProPage.qml，共用用户设置）。实卡未验（用户会话占用 T911）；采集卡重复帧若非逐字节相同则自动模式不去重（repeats=0）。无 merge/push/Release。

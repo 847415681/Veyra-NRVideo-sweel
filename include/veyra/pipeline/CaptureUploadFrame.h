@@ -24,6 +24,10 @@
 //  - The 64x36 points the graph analyses are sampled in the callback from the
 //    driver sample (raw pixel bytes, same packing as the frame), never read
 //    back from the upload buffer.
+//  - While content dedup runs (ContentDedup.h) the callback also fingerprints
+//    the whole driver sample, every payload byte of every plane, for the same
+//    reason: the engine decides on repeats without touching the upload buffer.
+#include "veyra/pipeline/PictureFingerprint.h"
 #include <d3d12.h>
 #include <wrl/client.h>
 #include <cstdint>
@@ -33,7 +37,9 @@
 extern "C" {
 #include <libavutil/buffer.h>
 #include <libavutil/frame.h>
+#include <libavutil/imgutils.h>
 #include <libavutil/mem.h>
+#include <libavutil/pixdesc.h>
 }
 
 namespace veyra::pipeline {
@@ -56,6 +62,9 @@ struct CaptureUploadFrame {
     // proxyPitch(): a tiny frame with the same packing as the real one.
     uint8_t proxy[kProxyWidth * kProxyHeight * kMaxPixelBytes] = {};
     int proxyPitch() const { return int(kProxyWidth * pixelBytes); }
+    // Exact identity of the picture (content dedup only; see the rules above).
+    bool fingerprintValid = false;
+    PictureFingerprint fingerprint;
     uint64_t fallbacks = 0;
 
     // Last GPU list that reads the upload buffer (set by the graph).
@@ -134,7 +143,7 @@ inline void selectCaptureUploadTarget(AVFrame& frame) {
     auto* info = captureUploadFrame(&frame);
     if (!info) return;
     uint8_t* base = info->mapped;
-    info->direct = true; info->proxyValid = false;
+    info->direct = true; info->proxyValid = false; info->fingerprintValid = false;
     if (info->gpuBusy()) {
         if (!info->cpu) { info->cpu = static_cast<uint8_t*>(av_malloc(size_t(info->bytes))); if (info->cpu) std::memset(info->cpu, 0, size_t(info->bytes)); }
         if (info->cpu) { base = info->cpu; info->direct = false; ++info->fallbacks; }
@@ -150,7 +159,7 @@ inline void useCaptureUploadCpuPlanes(AVFrame& frame) {
     if (!info) return;
     if (!info->cpu) { info->cpu = static_cast<uint8_t*>(av_malloc(size_t(info->bytes))); if (info->cpu) std::memset(info->cpu, 0, size_t(info->bytes)); }
     if (!info->cpu) return;
-    info->direct = false; info->proxyValid = false;
+    info->direct = false; info->proxyValid = false; info->fingerprintValid = false;
     frame.data[0] = info->cpu;
     if (info->planes == 2) frame.data[1] = info->cpu + info->chromaOffset;
 }
@@ -172,6 +181,32 @@ inline void sampleCaptureUploadProxy(AVFrame& frame, const uint8_t* source, size
         }
     }
     info->proxyValid = true;
+}
+
+// Content dedup (ContentDedup.h): exact identity of the whole picture. An
+// upload-backed frame carries the capture callback's fingerprint of the driver
+// sample and is never read back; any other CPU frame (CPU planes, decoded or
+// converted frames, test replay) is hashed here, every payload byte of every
+// plane. Hardware frames, and upload buffers written without a fingerprint,
+// have none: the caller keeps the sample.
+inline bool captureFrameFingerprint(const AVFrame* frame, PictureFingerprint& out) {
+    if (!frame || !frame->data[0] || frame->width <= 0 || frame->height <= 0) return false;
+    if (const auto* info = captureUploadFrame(frame)) {
+        if (info->fingerprintValid) { out = info->fingerprint; return true; }
+        if (info->direct) return false;
+    }
+    const auto format = AVPixelFormat(frame->format);
+    const auto* desc = av_pix_fmt_desc_get(format);
+    if (!desc || (desc->flags & (AV_PIX_FMT_FLAG_HWACCEL | AV_PIX_FMT_FLAG_BITSTREAM | AV_PIX_FMT_FLAG_PAL))) return false;
+    PictureHasher hasher;
+    for (int plane = 0, planes = av_pix_fmt_count_planes(format); plane < planes; ++plane) {
+        const int bytes = av_image_get_linesize(format, frame->width, plane);
+        const int rows = plane == 1 || plane == 2 ? -((-frame->height) >> desc->log2_chroma_h) : frame->height;
+        if (bytes <= 0 || !frame->data[plane] || frame->linesize[plane] < bytes) return false;
+        hasher.rows(frame->data[plane], size_t(frame->linesize[plane]), size_t(bytes), unsigned(rows));
+    }
+    out = hasher.finish();
+    return true;
 }
 
 // v210 stores six pixels in four words, not one four-byte word per pixel.

@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-12 内容节奏修正（Claude）**：用户实测 2.0.7：“采集 60→30”被植入内容节奏判断、原始帧率跳动，要求还原为最简单的 60 帧 AABBCCDD→ABCD 稳定隔帧；新“自动识别内容节奏”去重不稳定（VFG 耗时、GPU 占用忽高忽低），游戏运行中出现 6fps，怀疑不是百分百相同的帧也被去掉。存档 `checkpoint/pre-claude-cadence-exact-20261012`（main 05bc4b5）与 `archives/claude-cadence-exact-20261012`，分支 `claude/cadence-exact-20261012`。60→30 恢复 `CaptureHalfRate`（与 85cbd5a 之前相同、不经去重）；内容模式只去掉与上一张保留画面逐字节完全相同的帧（`PictureFingerprint.h` 整画面指纹，采集回调仅在内容去重开启时对驱动样本计算，CPU 帧在引擎端计算），静止画面按内容节奏保留。见 docs/CONTENT_CADENCE_EXACT_2026-10-12.md。用户 2.0.7 会话运行期间只做 CPU/轻 GPU 测试；不改默认设置、NR/SR/FG 模型、运行库、用户配置；无 merge/push/Release/子 Agent。
+
 > **2026-10-12 构建前采集格式追加授权**：用户要求分辨率先行、MJPEG 标红（不建议使用）、无效组合明确弹错且不自动路由其他格式。允许最小 UI/桥接/采集协商修复和有关回归，保留有效上次配置；与本轮整合一起本地合入 main 和 2.0.7 测试包。
 
 > **2026-10-12 各分支整合与 2.0.7 测试包授权**：用户明确要求将 Claude 最新已验 XeSS 和各分支已完成修复合入 main 并构建 2.0.7 测试包。按 docs/TEST_2.0.7_PLAN_2026-10-12.md 从 main a167831 隔离整合 Claude e46bbdf 与 Codex d883216（含34f479e），必要冲突适配后构建、组合回归、本地 main 合并及 NVIDIA/AMD 完整便携测试包。66旧树/509脏文件及来源 tip 存档保护，不派 Agent，不改驱动/运行库/模型/真实配置；UI33ms/250ms、GPU默认优先级与已撤回负优化保持。产物全E盘，测试每进程≤300秒、构建≤900秒。此范围覆盖历史 no-merge/no-package；没有新 push/Release/上传/关机授权。
