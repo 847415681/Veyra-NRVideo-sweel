@@ -2,8 +2,14 @@
 No downloads, package publication, or mutations of other build trees.
 """
 from pathlib import Path
-import hashlib,json,os,re,subprocess,time
-ROOT=Path(__file__).resolve().parents[2];BASE=Path('E:/项目/Veyra');TASK='test-2.0.7-20261012'
+import argparse,hashlib,json,os,re,subprocess,time
+parser=argparse.ArgumentParser()
+parser.add_argument('--task',default='test-2.0.7-20261012')
+parser.add_argument('--label',default='2.0.7-test')
+args=parser.parse_args()
+assert re.fullmatch(r'[a-z0-9][a-z0-9.-]{0,79}',args.task)
+assert re.fullmatch(r'2\.0\.7-[A-Za-z0-9.-]+',args.label)
+ROOT=Path(__file__).resolve().parents[2];BASE=Path('E:/项目/Veyra');TASK=args.task;LABEL=args.label
 BUILD=BASE/'build'/TASK;TMP=BASE/'tmp'/TASK/'build';LOG=BASE/'logs'/TASK/('build-'+time.strftime('%Y%m%d-%H%M%S'))
 for p in (BUILD,TMP,LOG):p.mkdir(parents=True,exist_ok=True)
 def sha(p):
@@ -18,7 +24,7 @@ for k in ('PROTOC','PKG_CONFIG_EXECUTABLE','SDL3_DIR','LibDataChannel_DIR','Opus
 options.update(VEYRA_DECKLINK_SDK_DIR=str(BASE/'deps/decklink-sdk-obs31-20261009'),
     VEYRA_AMD_NR_TEST_GRAPH_SOURCE=str(ROOT/'src/pipeline/EnhanceGraph.cpp'),
     VEYRA_FFMPEG_ROOT=str(BASE/'deps/ffmpeg-subtitle-formats-20261009/installed'),
-    VEYRA_DISPLAY_VERSION='2.0.7-test',Python3_EXECUTABLE=os.sys.executable)
+    VEYRA_DISPLAY_VERSION=LABEL,Python3_EXECUTABLE=os.sys.executable)
 assert all(options['VEYRA_ENABLE_'+f]=='ON' for f in ('REMOTEPLAY','MOONLIGHT','XBOX'))
 env={k:v for k,v in os.environ.items() if not k.upper().startswith(('VEYRA_','QT_','QSG_','QML_'))}
 env.update(TEMP=str(TMP),TMP=str(TMP),VSLANG='1033',PYTHONDONTWRITEBYTECODE='1')
@@ -66,7 +72,7 @@ for name,command in (('configure',configure),('compile',build)):
         save(LOG/'failure.json',dict(results=results,commands=commands,seconds=time.monotonic()-start));raise SystemExit(rc)
 for name,h in inputs.items():assert sha(ROOT/name)==h,name
 exes={n+'.exe':sha(BUILD/(n+'.exe')) for n in targets}
-receipt=dict(passed=True,head=git('rev-parse','HEAD'),displayVersion='2.0.7-test',freshCMakeBuild=True,
+receipt=dict(passed=True,head=git('rev-parse','HEAD'),displayVersion=LABEL,freshCMakeBuild=True,
     sources=inputs,commands=commands,dependencies=options,ffmpegImportLibraries=ffimports,targets=targets,executables=exes,seconds=time.monotonic()-start)
 save(LOG/'receipt.json',receipt)
 report=BASE/'reports'/TASK;report.mkdir(parents=True,exist_ok=True)
