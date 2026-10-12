@@ -92,8 +92,9 @@ bool Capture::configure(std::wstring_view path,std::wstring_view key,bool audio,
     const bool automatic=key==L"decklink:auto"||key.empty();
     {std::lock_guard lock(p.mutex);p.automatic=automatic;}
     if(automatic&&!p.driver->autoDetection())return failed(L"这张 BMD 卡不支持自动检测，请选择与信号一致的手动制式");
-    const auto chosen=std::find_if(available.begin(),available.end(),[&](const Mode& m){return automatic||modeKey(m.id)==key;});
+    const auto chosen=std::find_if(available.begin(),available.end(),[&](const Mode& m){return automatic?(m.width<=3840&&m.height<=2160):modeKey(m.id)==key;});
     if(chosen==available.end())return failed(L"保存的 BMD 制式不可用，请重新选择");
+    if(chosen->width>3840||chosen->height>2160)return failed(L"设备提供此制式，但当前播放器的 BMD 采集最高支持 3840×2160");
     auto enable=[&](const Mode& mode,Pixel pixel){
         {std::lock_guard lock(p.mutex);p.mode=mode;p.pixel=pixel;p.valid=false;}
         const bool ok=p.driver->enable(mode,pixel,automatic,audio,why);if(ok)why.clear();return ok;

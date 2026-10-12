@@ -32,6 +32,7 @@
 #include <QJsonArray>
 #include <QHash>
 #include <QFile>
+#include <QSaveFile>
 #include <QTimer>
 #include <QBuffer>
 #include <QImage>
@@ -336,6 +337,7 @@ struct QmlPlayerBridge::Impl {
     // --- capture connection (P4-e) ---
     struct CaptureQuery { int kind = 0; std::wstring device; std::vector<source::CaptureDevice> video, audio; std::vector<source::CaptureFormat> formats; };
     std::future<CaptureQuery> captureQuery;
+    std::optional<std::pair<int,std::wstring>> captureNextQuery;
     bool captureBusy = false, captureListed = false, captureResumePending = false;
     bool captureDriverSettingsOpen = false;
     std::wstring captureDriverFormatKey;
@@ -344,6 +346,7 @@ struct QmlPlayerBridge::Impl {
     std::vector<source::CaptureFormat> captureFormatList;
     std::wstring captureFormatKey;
     int captureAudioChoice = source::kCaptureAudioDisabled;
+    bool captureAudioMissing = false;
     unsigned captureColor = 0;
     double captureFps = 0;
     QString captureStatus;
@@ -476,17 +479,47 @@ struct QmlPlayerBridge::Impl {
         // on a new profile used to fail and was silently kept only in memory.
         std::error_code ec;
         std::filesystem::create_directories(prefsFile().parent_path(), ec);
-        QFile file(path + QStringLiteral(".tmp"));
-        if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) return false;
+        if(ec)return false;
+        QSaveFile file(path);
+        if (!file.open(QIODevice::WriteOnly)) return false;
         const auto bytes = QJsonDocument(QJsonObject::fromVariantMap(prefs)).toJson(QJsonDocument::Indented);
-        if (file.write(bytes) != bytes.size()) { file.close(); file.remove(); return false; }
-        file.close();
-        QFile::remove(path);
-        return QFile::rename(path + QStringLiteral(".tmp"), path);
+        if (file.write(bytes) != bytes.size()) return false;
+        return file.commit();
     }
     int prefInt(const char* key, int fallback) const { return prefs.contains(key) ? prefs.value(key).toInt() : fallback; }
     bool prefBool(const char* key, bool fallback) const { return prefs.contains(key) ? prefs.value(key).toBool() : fallback; }
     QString prefString(const char* key) const { return prefs.value(key).toString(); }
+    void restoreCaptureForm() {
+        captureFps=capturePrefs.requestedFps;
+        captureColor=capturePrefs.colorForDevice(captureDevice);
+        captureAudioChoice=source::kCaptureAudioDisabled;
+        captureAudioMissing=false;
+        if(capturePrefs.audioMode==source::kCaptureAudioFromVideoDevice)captureAudioChoice=source::kCaptureAudioFromVideoDevice;
+        else if(!capturePrefs.audioPath.empty()){
+            captureAudioMissing=true;
+            for(size_t k=0;k<captureAudio.size();++k)
+                if(captureAudio[k].path==capturePrefs.audioPath&&captureAudio[k].wasapi==(capturePrefs.audioMode==source::kCaptureAudioWasapi)){
+                    captureAudioChoice=int(k);captureAudioMissing=false;break;
+                }
+        }
+    }
+    bool persistCaptureSelection() {
+        if(captureDevice.empty())return true; // Disconnecting a card must retain it.
+        const bool sameDevice=capturePrefs.videoPath==captureDevice;
+        capturePrefs.videoPath=captureDevice;
+        // An unavailable saved type has no active selection. Editing another
+        // control must retain its key until the user explicitly picks a new type.
+        if(!captureFormatKey.empty()||!sameDevice)capturePrefs.formatKey=captureFormatKey;
+        capturePrefs.colorOverride=captureColor;capturePrefs.requestedFps=captureFps;
+        if(capturePrefs.deviceColors.size()<128||capturePrefs.deviceColors.contains(captureDevice))capturePrefs.deviceColors[captureDevice]=captureColor;
+        if(!captureAudioMissing){
+            const auto* audio=captureAudioChoice>=0&&size_t(captureAudioChoice)<captureAudio.size()?&captureAudio[size_t(captureAudioChoice)]:nullptr;
+            capturePrefs.audioPath=audio?audio->path:std::wstring{};
+            capturePrefs.audioMode=audio?(audio->wasapi?source::kCaptureAudioWasapi:0):captureAudioChoice;
+        }
+        if(ui::CapturePreferenceStore(dataDir).save(capturePrefs))return true;
+        veyra::log::error("capture-ui","capture settings could not be saved");return false;
+    }
     Impl(engine::EngineController& e, std::filesystem::path dataDirectory)
         : engine(e), facade(e, dataDirectory),
           dataDir(dataDirectory.empty() ? runtime::localDataDirectory() : dataDirectory) {
@@ -1186,6 +1219,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         };
         restoreHold("nrHoldStrength", s.nrHoldStrength);
         restoreHold("nrHoldTolerance", s.nrHoldTolerance);
+        for(const auto& pair : {std::pair{"captureFlipVertical",&s.captureFlipVertical},std::pair{"captureForceSdr",&s.forceSdrPreview}})
+            if(p.contains(QLatin1String(pair.first))){const bool value=p.value(QLatin1String(pair.first)).toBool();changed|=*pair.second!=value;*pair.second=value;}
+        if(p.contains("captureAudioIngress")){const int value=p.value("captureAudioIngress").toInt();if(value>=0&&value<=2){changed|=int(s.captureAudio)!=value;s.captureAudio=static_cast<engine::CaptureAudioIngress>(value);}}
+        if(p.contains("captureBufferMode")){const int value=p.value("captureBufferMode").toInt();if(value>=0&&value<=2){changed|=int(s.captureBuffer)!=value;s.captureBuffer=static_cast<source::CaptureBufferMode>(value);}}
         if (changed && !impl_->commit(std::move(s))) veyra::log::warn("ui-prefs", "saved global controls not accepted");
     }
     // Presentation (低延迟队列 / 显示同步 / 输出上限) and the picture aspect.
@@ -2026,12 +2063,15 @@ void QmlPlayerBridge::setCaptureDeviceId(const QString& value) {
     if (impl_->captureDriverSettingsOpen) return;
     if (impl_->captureDevice == wideOf(value)) return;
     impl_->captureDevice = wideOf(value);
-    impl_->captureFormatList.clear(); impl_->captureFormatKey.clear();
+    impl_->captureFormatList.clear();
+    impl_->captureFormatKey=impl_->captureDevice==impl_->capturePrefs.videoPath?impl_->capturePrefs.formatKey:std::wstring{};
     impl_->captureDriverFormatKey.clear();
     // Colour follows the device, as in 1.4.4; audio returns to "none" unless it
     // is the remembered device.
     impl_->captureColor = impl_->capturePrefs.colorForDevice(impl_->captureDevice);
-    if (impl_->captureDevice != impl_->capturePrefs.videoPath) impl_->captureAudioChoice = source::kCaptureAudioDisabled;
+    if(impl_->captureDevice==impl_->capturePrefs.videoPath)impl_->restoreCaptureForm();
+    else {impl_->captureAudioChoice=source::kCaptureAudioDisabled;impl_->captureAudioMissing=false;}
+    if(!impl_->persistCaptureSelection())emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
     if (!impl_->captureDevice.empty()) queryCapture(1, impl_->captureDevice);
     emit captureChanged();
 }
@@ -2045,19 +2085,82 @@ QVariantList QmlPlayerBridge::captureFormats() const {
         auto label=uiText(f.label);
         if(source::decklink::isPath(impl_->captureDevice))label=label.replace(QStringLiteral("逐行"),tr("逐行")).replace(QStringLiteral("隔行"),tr("隔行"));
         out << QVariantMap{{"id", utf8Of(f.key)}, {"label", label}, {"tier", f.tier},
-                           {"costHint", source::captureFormatNeedsCostHint(static_cast<source::CaptureFormatTier>(f.tier))}, {"driverCurrent", f.driverCurrent}};
+                           {"costHint", source::captureFormatNeedsCostHint(static_cast<source::CaptureFormatTier>(f.tier))}, {"driverCurrent", f.driverCurrent},
+                           {"width", int(f.width)}, {"height", int(f.height)}, {"fps", f.fps}, {"pixel", uiText(f.pixel)},
+                           {"scan", uiText(f.scan)}, {"interlaced", f.interlaced}};
     }
     return out;
 }
 QString QmlPlayerBridge::captureFormatKey() const { return utf8Of(impl_->captureFormatKey); }
 void QmlPlayerBridge::setCaptureFormatKey(const QString& key) {
     if (impl_->captureFormatKey == wideOf(key)) return;
+    if(!source::selectCaptureFormat(impl_->captureFormatList,-1,wideOf(key)))return;
     impl_->captureFormatKey = wideOf(key);
+    if(!impl_->persistCaptureSelection())emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
     emit captureChanged();
+}
+namespace {
+QVariantList captureChoiceList(const std::vector<source::CaptureFormatOption>& options) {
+    QVariantList out;
+    for (const auto& option : options)
+        out << QVariantMap{{"id", utf8Of(option.id)}, {"label", uiText(option.label)}, {"disabled",option.disabled}};
+    return out;
+}
+const source::CaptureFormat* selectedCaptureFormat(const std::vector<source::CaptureFormat>& formats, const std::wstring& key) {
+    return source::selectCaptureFormat(formats, -1, key);
+}
+}
+QVariantList QmlPlayerBridge::captureResolutionOptions() const {
+    return captureChoiceList(source::captureResolutionOptions(impl_->captureFormatList));
+}
+QString QmlPlayerBridge::captureResolutionId() const {
+    const auto* format = selectedCaptureFormat(impl_->captureFormatList, impl_->captureFormatKey);
+    return format ? utf8Of(source::captureResolutionId(*format)) : QString();
+}
+void QmlPlayerBridge::setCaptureResolutionId(const QString& id) {
+    const auto wide = wideOf(id);
+    const auto* current = selectedCaptureFormat(impl_->captureFormatList, impl_->captureFormatKey);
+    if (current && source::captureResolutionId(*current) == wide) return;
+    const auto* next = source::retargetCaptureFormat(impl_->captureFormatList, current, source::CaptureFormatAxis::Resolution, wide);
+    if (!next || next->key == impl_->captureFormatKey) return;
+    setCaptureFormatKey(utf8Of(next->key));
+}
+QVariantList QmlPlayerBridge::captureFrameRateOptions() const {
+    return captureChoiceList(source::captureFrameRateOptions(impl_->captureFormatList, selectedCaptureFormat(impl_->captureFormatList, impl_->captureFormatKey)));
+}
+QString QmlPlayerBridge::captureFrameRateId() const {
+    const auto* format = selectedCaptureFormat(impl_->captureFormatList, impl_->captureFormatKey);
+    return format ? utf8Of(source::captureFrameRateId(*format)) : QString();
+}
+void QmlPlayerBridge::setCaptureFrameRateId(const QString& id) {
+    const auto wide = wideOf(id);
+    const auto* current = selectedCaptureFormat(impl_->captureFormatList, impl_->captureFormatKey);
+    if (!current || source::captureFrameRateId(*current) == wide) return;
+    const auto* next = source::retargetCaptureFormat(impl_->captureFormatList, current, source::CaptureFormatAxis::FrameRate, wide);
+    if (!next || next->key == impl_->captureFormatKey) return;
+    setCaptureFormatKey(utf8Of(next->key));
+}
+QVariantList QmlPlayerBridge::capturePixelOptions() const {
+    return captureChoiceList(source::capturePixelOptions(impl_->captureFormatList, selectedCaptureFormat(impl_->captureFormatList, impl_->captureFormatKey)));
+}
+QString QmlPlayerBridge::capturePixelId() const {
+    const auto* format = selectedCaptureFormat(impl_->captureFormatList, impl_->captureFormatKey);
+    return format ? utf8Of(format->key) : QString();
+}
+void QmlPlayerBridge::setCapturePixelId(const QString& id) {
+    const auto key = wideOf(id);
+    if (key == impl_->captureFormatKey) return;
+    const auto options = source::capturePixelOptions(impl_->captureFormatList, selectedCaptureFormat(impl_->captureFormatList, impl_->captureFormatKey));
+    for (const auto& option : options) {
+        if (option.id != key) continue;
+        setCaptureFormatKey(id);
+        return;
+    }
 }
 QVariantList QmlPlayerBridge::captureAudioInputs() const {
     // Only what the user picks explicitly is ever opened (1.4.4 rule).
     QVariantList out{QVariantMap{{"id", source::kCaptureAudioDisabled}, {"label", tr("不监听音频")}}};
+    if(impl_->captureAudioMissing)out<<QVariantMap{{"id",-4},{"label",tr("上次的音频输入未连接")},{"disabled",true}};
     for (const auto& d : impl_->captureVideo)
         if (d.path == impl_->captureDevice)
             out << QVariantMap{{"id", source::kCaptureAudioFromVideoDevice},
@@ -2066,30 +2169,29 @@ QVariantList QmlPlayerBridge::captureAudioInputs() const {
         out << QVariantMap{{"id", int(i)}, {"label", QStringLiteral("[%1] %2").arg(impl_->captureAudio[i].wasapi ? QStringLiteral("WASAPI") : QStringLiteral("DirectShow"), utf8Of(impl_->captureAudio[i].name))}};
     return out;
 }
-int QmlPlayerBridge::captureAudioChoice() const { return impl_->captureAudioChoice; }
+int QmlPlayerBridge::captureAudioChoice() const { return impl_->captureAudioMissing?-4:impl_->captureAudioChoice; }
 void QmlPlayerBridge::setCaptureAudioChoice(int choice) {
     if (choice < source::kCaptureAudioFromVideoDevice || choice >= int(impl_->captureAudio.size())) return;
     impl_->captureAudioChoice = choice;
+    impl_->captureAudioMissing=false;
     // Remember the audio choice for this device as soon as it is picked, not only on
     // 连接并开始 (field report 2026-10-01: picked, closed, and it was gone next time).
-    auto& i = *impl_;
-    if (!i.captureDevice.empty() && i.captureDevice == i.capturePrefs.videoPath) {
-        const source::CaptureDevice* audio = choice >= 0 && size_t(choice) < i.captureAudio.size() ? &i.captureAudio[size_t(choice)] : nullptr;
-        i.capturePrefs.audioPath = audio ? audio->path : std::wstring{};
-        i.capturePrefs.audioMode = audio ? (audio->wasapi ? source::kCaptureAudioWasapi : 0) : choice;
-        if (!ui::CapturePreferenceStore(i.dataDir).save(i.capturePrefs)) veyra::log::warn("capture-ui", "capture audio choice not saved");
-    }
+    if(!impl_->persistCaptureSelection())emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
     emit captureChanged();
 }
 int QmlPlayerBridge::captureColorSpace() const { return int(source::captureColorSpace(impl_->captureColor)); }
 void QmlPlayerBridge::setCaptureColorSpace(int value) {
     if (value < 0 || value > 3) return;
-    impl_->captureColor = source::captureColorOverride(unsigned(value), source::captureColorRange(impl_->captureColor)); emit captureChanged();
+    impl_->captureColor = source::captureColorOverride(unsigned(value), source::captureColorRange(impl_->captureColor));
+    if(!impl_->persistCaptureSelection())emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
+    emit captureChanged();
 }
 int QmlPlayerBridge::captureColorRange() const { return int(source::captureColorRange(impl_->captureColor)); }
 void QmlPlayerBridge::setCaptureColorRange(int value) {
     if (value < 0 || value > 2) return;
-    impl_->captureColor = source::captureColorOverride(source::captureColorSpace(impl_->captureColor), unsigned(value)); emit captureChanged();
+    impl_->captureColor = source::captureColorOverride(source::captureColorSpace(impl_->captureColor), unsigned(value));
+    if(!impl_->persistCaptureSelection())emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
+    emit captureChanged();
 }
 double QmlPlayerBridge::captureRequestedFps() const { return impl_->captureFps; }
 void QmlPlayerBridge::setCaptureRequestedFps(double value) {
@@ -2098,11 +2200,7 @@ void QmlPlayerBridge::setCaptureRequestedFps(double value) {
     impl_->captureFps = value;
     // Saved as soon as it is typed, as the audio choice is (field report 2026-10-01: the
     // new rate was lost unless another option was changed before closing).
-    auto& i = *impl_;
-    if (!i.captureDevice.empty() && i.captureDevice == i.capturePrefs.videoPath) {
-        i.capturePrefs.requestedFps = value;
-        if (!ui::CapturePreferenceStore(i.dataDir).save(i.capturePrefs)) veyra::log::warn("capture-ui", "capture frame rate not saved");
-    }
+    if(!impl_->persistCaptureSelection())emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
     veyra::log::info("capture-ui", std::format("requested fps={}", value));
     emit captureChanged();
 }
@@ -2110,13 +2208,15 @@ int QmlPlayerBridge::captureAudioIngress() const { return int(settings().capture
 void QmlPlayerBridge::setCaptureAudioIngress(int value) {
     if (value < 0 || value > 2) return;
     auto s = settings(); s.captureAudio = static_cast<engine::CaptureAudioIngress>(value);
-    impl_->commit(std::move(s)); emit settingsChanged();
+    if(impl_->commit(std::move(s))){impl_->prefs["captureAudioIngress"]=value;if(!impl_->savePrefs())emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);}
+    emit settingsChanged();
 }
 int QmlPlayerBridge::captureBufferMode() const { return int(settings().captureBuffer); }
 void QmlPlayerBridge::setCaptureBufferMode(int value) {
     if (value < 0 || value > 2) return;
     auto s = settings(); s.captureBuffer = static_cast<source::CaptureBufferMode>(value);
-    impl_->commit(std::move(s)); emit settingsChanged();
+    if(impl_->commit(std::move(s))){impl_->prefs["captureBufferMode"]=value;if(!impl_->savePrefs())emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);}
+    emit settingsChanged();
 }
 bool QmlPlayerBridge::captureQueryBusy() const { return impl_->captureBusy || impl_->captureDriverSettingsOpen; }
 QString QmlPlayerBridge::captureStatus() const { return impl_->captureStatus; }
@@ -2154,7 +2254,7 @@ void QmlPlayerBridge::refreshCaptureDevices() {
 }
 void QmlPlayerBridge::queryCapture(int kind, std::wstring device) {
     auto& i = *impl_;
-    if (captureQueryBusy()) { if (kind == 0) i.captureStatus = tr("正在查询设备…"); return; }
+    if (captureQueryBusy()) { i.captureNextQuery=std::pair{kind,std::move(device)};return; }
     i.captureBusy = true; i.captureQueryKind = kind;
     i.captureStatus = kind == 0 ? tr("正在查询采集设备…当前播放继续") : tr("正在读取设备支持的格式…");
     i.captureQuery = std::async(std::launch::async, [kind, device] {
@@ -2177,20 +2277,13 @@ void QmlPlayerBridge::tickCapture() {
     if (!i.captureBusy || i.captureQuery.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
     auto q = i.captureQuery.get();
     i.captureBusy = false;
+    if(i.captureNextQuery){auto next=std::move(*i.captureNextQuery);i.captureNextQuery.reset();queryCapture(next.first,std::move(next.second));return;}
     if (q.kind == 0 || q.kind == 2) { i.captureVideo = std::move(q.video); i.captureAudio = std::move(q.audio); i.captureListed = true; }
     // The remembered rate and audio input, matched against the inputs listed now. Both the
     // panel (kind 0) and 继续上次 (kind 2) need it: the resume path skipped it and connected
     // without sound until the panel was opened once (field report 2026-10-02).
     const auto restoreRememberedAudio = [&i] {
-        i.captureFps = i.capturePrefs.requestedFps;
-        const int mode = i.capturePrefs.audioMode;
-        if (mode == source::kCaptureAudioFromVideoDevice) i.captureAudioChoice = mode;
-        else if (!i.capturePrefs.audioPath.empty()) {
-            i.captureAudioChoice = source::kCaptureAudioDisabled;
-            for (size_t k = 0; k < i.captureAudio.size(); ++k)
-                if (i.captureAudio[k].path == i.capturePrefs.audioPath &&
-                    i.captureAudio[k].wasapi == (mode == source::kCaptureAudioWasapi)) i.captureAudioChoice = int(k);
-        } else i.captureAudioChoice = source::kCaptureAudioDisabled;
+        i.restoreCaptureForm();
     };
     if (q.kind == 2 && q.device == i.capturePrefs.videoPath) restoreRememberedAudio();
     if (q.kind == 0) {
@@ -2228,7 +2321,8 @@ void QmlPlayerBridge::tickCapture() {
     } else if (remembered && !i.capturePrefs.formatKey.empty()) {
         if (const auto* f = source::selectCaptureFormat(i.captureFormatList, -1, i.capturePrefs.formatKey)) i.captureFormatKey = f->key;
     } else if (!i.captureFormatList.empty()) i.captureFormatKey = i.captureFormatList.front().key;
-    i.captureStatus = i.captureFormatList.empty() ? tr("未读到有效的 4K 以内采集格式，或设备正被其他应用占用。")
+    if(!i.captureFormatKey.empty()&&!i.persistCaptureSelection())emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
+    i.captureStatus = i.captureFormatList.empty() ? tr("未读到设备上报的采集格式，或设备正被其他应用占用。")
                     : i.captureFormatKey.empty() ? tr("上次格式已不可用，请重新选择格式。")
                     : q.kind == 3 ? tr("驱动设置已关闭。请核对所选格式与设备帧率，再连接。")
                     : source::decklink::isPath(i.captureDevice) ? tr("原生采集先确认有效信号；支持自动检测的卡建议选择自动。HDMI/SDI 跟随 Desktop Video Setup。")
@@ -2251,16 +2345,14 @@ bool QmlPlayerBridge::startCaptureSession() {
         emit notice(tr("采集接口已切换，请刷新并重新选择设备和格式"),true);return false;
     }
     if (device < 0 || !format) { emit notice(tr("请先选择采集设备和格式"), true); return false; }
+    if(!format->supported){emit notice(tr("设备提供此格式，但当前播放器不支持其尺寸或像素布局，请选择其他格式"),true);return false;}
+    if(i.captureAudioMissing){emit notice(tr("上次的音频输入未连接，请插回设备或重新选择音频监听"),true);return false;}
     const int audio = i.captureAudioChoice;
     const source::CaptureDevice* audioDevice = audio >= 0 && size_t(audio) < i.captureAudio.size() ? &i.captureAudio[size_t(audio)] : nullptr;
     const auto path = source::CaptureCardSource::makeCapturePath(unsigned(device), i.captureVideo[size_t(device)], format->index, audio,
                                                                  audioDevice, i.captureColor, i.captureFps, format->key);
     if (path.empty()) { emit notice(tr("无法生成采集连接参数"), true); return false; }
-    auto colors = i.capturePrefs.deviceColors; colors[i.captureDevice] = i.captureColor;
-    i.capturePrefs = {i.captureDevice, format->key, audioDevice ? audioDevice->path : std::wstring{},
-                      audioDevice ? (audioDevice->wasapi ? source::kCaptureAudioWasapi : 0) : audio, i.captureColor,
-                      i.capturePrefs.formatHintDismissed, i.captureFps, std::move(colors)};
-    if (!ui::CapturePreferenceStore(i.dataDir).save(i.capturePrefs)) veyra::log::warn("capture-ui", "capture selection not saved");
+    if(!i.persistCaptureSelection())emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
     i.facade.noteCaptureSession({i.captureDevice, format->key, i.facade.presets().entries().empty() ? std::wstring{} : wideOf(currentPresetName()),
                                  i.captureFps > 0 ? i.captureFps : format->fps, true});
     veyra::log::info("capture-ui", std::format("connect format={} audio={} color={} fps={}", QString::fromStdWString(format->label).toStdString(), audio, i.captureColor, i.captureFps));
@@ -2320,7 +2412,7 @@ void QmlPlayerBridge::setCaptureForceSdr(bool value) {
     auto s = settings();
     if (s.forceSdrPreview == value) return;
     s.forceSdrPreview = value;
-    impl_->commit(std::move(s));
+    if(impl_->commit(std::move(s))){impl_->prefs["captureForceSdr"]=value;if(!impl_->savePrefs())emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);}
     emit settingsChanged();
 }
 bool QmlPlayerBridge::captureFlipVertical() const { return settings().captureFlipVertical; }
@@ -2328,7 +2420,7 @@ void QmlPlayerBridge::setCaptureFlipVertical(bool value) {
     auto s = settings();
     if (s.captureFlipVertical == value) return;
     s.captureFlipVertical = value;
-    impl_->commit(std::move(s));
+    if(impl_->commit(std::move(s))){impl_->prefs["captureFlipVertical"]=value;if(!impl_->savePrefs())emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);}
     emit settingsChanged();
 }
 
