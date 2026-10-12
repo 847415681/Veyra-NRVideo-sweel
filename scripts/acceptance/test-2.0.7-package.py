@@ -11,10 +11,12 @@ parser.add_argument('--label',default='2.0.7-test')
 parser.add_argument('--nvidia-donor',default='E:/项目/Veyra/test-packages/fixes-20261010/Veyra-2.0.6-fixes-20261010-NVIDIA-win64-portable')
 parser.add_argument('--amd-donor',default='E:/项目/Veyra/releases/release-2.0.6-20261007/packages/Veyra-2.0.6-AMD-win64-portable')
 parser.add_argument('--validation-record',default='docs/TEST_2.0.7_REPORT_2026-10-12.md')
+parser.add_argument('--cold-run',help='Separate verification run directory; preserves earlier evidence')
 args=parser.parse_args()
 assert re.fullmatch(r'[a-z0-9][a-z0-9.-]{0,79}',args.task)
 assert re.fullmatch(r'2\.0\.7-[A-Za-z0-9.-]+',args.label)
 assert re.fullmatch(r'docs/[A-Za-z0-9_.-]+\.md',args.validation_record)
+assert args.cold_run is None or re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}',args.cold_run)
 ROOT=Path(__file__).resolve().parents[2];B=Path('E:/项目/Veyra');TASK=args.task;LABEL=args.label
 VALIDATION=args.validation_record
 BUILD=B/'build'/TASK;OUT=B/'test-packages'/TASK;REPORT=B/'reports'/TASK
@@ -172,7 +174,9 @@ def cold():
     assert not any(r.get('Path') and Path(r['Path']).resolve().is_relative_to(own.resolve()) for r in running),running
     rows=json.loads((OUT/'DELIVERY.json').read_text('utf8'))['packages'];results=[]
     for row in rows:
-        flavor=row['vendor'];dest=B/'verify'/TASK/flavor;assert not dest.exists() and dest.resolve().is_relative_to((B/'verify'/TASK).resolve())
+        flavor=row['vendor'];dest=B/'verify'/TASK
+        if args.cold_run:dest=dest/args.cold_run
+        dest=dest/flavor;assert not dest.exists() and dest.resolve().is_relative_to((B/'verify'/TASK).resolve())
         archive=Path(row['archive']);assert sha(archive)==row['sha256']
         pkg.verify_zip(archive)
         with zipfile.ZipFile(archive) as z:
@@ -180,12 +184,12 @@ def cold():
             z.extractall(dest)
         app=dest/Path(row['app']).name;audit(app,flavor)
         for mode in ('d3d12','software'):
-            tag='cold-'+flavor+'-'+mode;profile=B/'tests'/TASK/tag;tmp=B/'tmp'/TASK/tag;logs=B/'logs'/TASK/tag
+            tag='cold-'+(args.cold_run+'-' if args.cold_run else '')+flavor+'-'+mode;profile=B/'tests'/TASK/tag;tmp=B/'tmp'/TASK/tag;logs=B/'logs'/TASK/tag
             for p in (profile,tmp,logs):p.mkdir(parents=True,exist_ok=False)
             document(profile/'qml-preferences.v1.json',dict(language='zh-CN',autoResume=False,rememberPosition=False,prewarmEnhancement=False,gpuPriority='normal',sentinel='retained'))
             env={k:v for k,v in os.environ.items() if not k.upper().startswith(('VEYRA_','QT_','QSG_','QML_'))};win=Path(env['WINDIR'])
             env.update(PATH=str(win/'System32')+';'+str(win),TEMP=str(tmp),TMP=str(tmp),CUDA_CACHE_PATH=str(tmp/'cuda'),QML_DISABLE_DISK_CACHE='1',QT_FORCE_STDERR_LOGGING='1',VEYRA_LOG_FILE=str(logs/'engine.log'))
-            if mode=='software':env['QT_QUICK_BACKEND']='software'
+            if mode=='software':env.update(QT_QUICK_BACKEND='software',VEYRA_UI_RHI='software')
             else:env['VEYRA_UI_RHI']='d3d12'
             command=[str(app/'veyra_qml_ui.exe'),'--data-dir',str(profile),'--page','pro','--size','1280x900','--exit-after','14000','E:/Ai/知识/小七姐/GTAVI_An_Extended_Look_4K_Native.mp4']
             start=time.monotonic()
@@ -194,6 +198,7 @@ def cold():
             errors=[l for l in text.splitlines() if re.search(r'ReferenceError:|TypeError:|Cannot assign|Binding loop|D3D12 ERROR|D3D12 CORRUPTION|\[ERROR\s*\]|\[FATAL\s*\]|no root object',l)]
             presented=[int(v) for v in re.findall(r'\brealPresented=(\d+)',text)]
             assert run.returncode==0 and not errors and presented and max(presented)>=100,(tag,run.returncode,errors,presented)
+            assert ('interface renderer=d3d12' in text) if mode=='d3d12' else ('interface=software' in text),(tag,'requested renderer was not active')
             assert json.loads((profile/'qml-preferences.v1.json').read_text('utf8'))['sentinel']=='retained'
             audit(app,flavor);results.append(dict(vendor=flavor,mode=mode,passed=True,exit=run.returncode,seconds=round(time.monotonic()-start,1),realPresented=max(presented),logs=str(logs),archiveSha256=row['sha256'],exeSha256=sha(app/'veyra_qml_ui.exe')))
             document(OUT/'cold-start.json',dict(passed=len(results)==4,results=results,existingUserProcesses=running,performanceMeasurement=False));print('COLD ZIP PASS',flavor,mode,flush=True)
