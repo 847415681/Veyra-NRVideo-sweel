@@ -478,6 +478,15 @@ VPage {
         }
     }
 
+    // One geometry contract for this layout and Main's native video HWND.
+    // These are available before the first layout pass when a source is opened.
+    readonly property real videoColumnWidth: Math.max(1, root.width - root.inspectorWidth - 14 * 2 - 10)
+    readonly property real metersHeight: Math.max(172, meter3Content.implicitHeight + 28)
+    readonly property real videoCardHeight: Math.max(transport.height + 1,
+        root.height - 14 * 2 - head.height - 10 - root.metersHeight - 10)
+    readonly property rect videoViewport: Qt.rect(14, 14 + head.height + 10,
+        root.videoColumnWidth, root.videoCardHeight - transport.height)
+
     // --- video + transport bar -------------------------------------------
     Rectangle {
         id: vwrap
@@ -486,8 +495,8 @@ VPage {
         anchors.leftMargin: 14
         anchors.top: head.bottom
         anchors.topMargin: 10
-        width: root.width - insp.width - 14 * 2 - 10
-        height: root.height - 14 - head.height - 10 - Math.max(172, meter3Content.implicitHeight + 28) - 10 - 14
+        width: root.videoColumnWidth
+        height: root.videoCardHeight
         radius: Theme.rCard
         color: Theme.card
         border.width: 1
