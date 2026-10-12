@@ -9169,3 +9169,30 @@ harness/final-ui.py最终9组通过：四语言布局、跨列表／节点全局
 全部源码以外产物在E:/项目/Veyra本轮build/tests/logs/tmp/reports/archives目录，私有profile和子进程缓存。源/二进制及原包1626文件、旧树保持校验见validation.json，Git收尾见final.json。BMD／美乐威没有实卡，真实出画和全制式待持卡用户确认；不宣称性能提升、全硬件或长期稳定通过。详细记录docs/PR34_CAPTURE_SETTINGS_REPORT_2026-10-12.md。验证后合入并普通推送main完成PR34，无打包／Release／关机。
 
 2026-10-12 PR34合并收尾：seal.py validate通过834源码／配置、334构建输入、12EXE、11回归、9最终GUI及两个草稿保存场景；旧62树／509脏文件、原包1626文件完整。适配提交b60830c及tested标签封存，GitHub固定head f1f53ace合并成功（7b9332513257363ec3474c7232bf2bc448296f17），隔离候选49eb6bd吸收远端记录，只多同步远端既有star-history.svg。main merge6570f5672ce3496c4b9bfd27750cb59c1917cc4d完整树等于候选907bad1dd0e077647ff632213fde77b8084e00d6，产品源码与实测一致；后续仅本段及报告收尾文档。普通推送／PR状态／61旧树保持／增量最终bundle的实际结果见reports/pr34-capture-settings-20261012/final.json。修正一次PowerShell未引用HEAD^{tree}导致的只读查询错误后，用带引号参数成功取得树SHA；没有执行其失败结果作为合并依据。
+
+
+## 2026-10-12 日志50采集补帧误重置修复
+
+按用户“尝试修复”，main a167831起点，隔离codex/fg-capture-recovery-20261012；archives/fg-capture-recovery-20261012/start.json与增量bundle存档64旧树/515脏文件。最小生产修改仅SceneCadenceAnalyzer两文件：上一间隔改为固定5值中位基线，不缓存帧、不改真实PTS/VRR/预算/队列/UI33ms/250ms/默认GPU优先级。补永久CPU/GPU回归和CMake测试登记。
+
+命令python -X utf8 -B -I tmp/fg-capture-recovery-20261012/scene-test.py before/after：30检查从5失败到0；build.py依赖闭包22项/10EXE，55.4秒，非clean全量；configure.py完整CMake通过。harness/regress.py scene timing contracts capture-cadence、presenter lifecycle video rollback全部通过；capture-cadence-before预期exit1，原生产库224帧2误重置/221生成，修复四组各0/223。真实P010/DLSS/VFG、外部COM链/缓冲引用、resize故障恢复及200ms真断点/D3D12错误0；GTA八轮设置、事务seek、回滚通过。gui-smoke.py GPU/软件生产UI实际GTA播放和正常退出通过。同步图回归不是FPS/显示延迟证据，无实卡或普遍性能收益声明。
+
+工具夹具PATH/环境键、路径转义、旧Ninja缺目标、负对照输出目录断言和GUI日志路径失败已修，未以失败批次冒称通过；详细失败记录见REPORT。严格旧树核对失败于并行claude/xess-flow-tune树的新增修改：63原树完全保持，差异原样记录worktree-audit.json，没有写入/回滚/合入该树。main及原分支tip保持。validation.json核对源码/输入/10EXE/原包1626文件和原日志SHA；runtime/SDK/模型无新增入Git。
+
+全产物E:/项目/Veyra本轮archives/build/tests/logs/tmp/reports；实际命令、原回执与边界见docs/FG_CAPTURE_RECOVERY_REPORT_2026-10-12.md。可用程序tests/fg-capture-recovery-20261012/app/veyra_qml_ui.exe，未合并main/push/打包/Release/关机。最后源码commit/tag/bundle、保护及存储核对见reports/fg-capture-recovery-20261012/final.json。反馈者Elgato/5070Ti/120Hz仍需同设置复测；不强改设备时钟或延长deadline掩盖剩余问题。
+
+## 2026-10-12 专业模式原生视频遮挡播放条
+
+用户要求追溯画面盖住播放条；从34f479e隔离codex/pro-video-geometry-20261012。start/bundle保护65旧树/509脏文件。确认4557ab6新增限速状态选项后统计区动态增高，但Main仍固定减172；常见窗口遮挡56、900宽遮挡90逻辑像素。git历史和真实旧e8300d9 QML普通窗口0遮挡共同定位引入点；旧宽度少14、窄标题差40和播放条固定36的问题一并消除。
+
+生产仅Main/ProPage两QML改动，统一videoViewport及依赖尺寸、按变化事件同步，不加生产Timer/update/requestUpdate，不改33ms/250ms、优先级、引擎、算法或真实配置。保留打开源前非零尺寸。使用原已验EXE c815906d…，Qt6.8.3 qmlcachegen --only-bytecode编译两QML通过，输出build/pro-video-geometry-20261012；不是C++全量clean构建。
+
+命令Python311 -X utf8 -B -I scripts/acceptance/pro-video-geometry-test.py after --renderer d3d12|software --scale 1|1.5 --donor-app E:/项目/Veyra/tests/fg-capture-recovery-20261012/app --media E:/Ai/知识/小七姐/GTAVI_An_Extended_Look_4K_Native.mp4：四模式各13布局（52组合）实际HWND/QML一致、遮挡0，另永久夹具完整复跑软件100%通过。覆盖选项、四语言、720宽、检查器650宽、极简/全屏返回，单进程约26秒，GUI无绑定/D3D错误。before --baseline-ref 4557ab6^ --case normal-active-policy正常完成、遮挡0而旧14/2间隙仍在；160222首次遗漏NodePage同版依赖加载失败，修夹具后160403通过目的对照，未把失败当通过。夹具改独立日志防追加混入，历史QML树完整替换/恢复，异常只结束自有进程；初次屏幕截取被其它窗口遮住，删除副本、不作证据。
+
+tmp/pro-video-geometry-20261012/perf.py before|after d3d12|software顺序各约45秒：同用户4K GTA、原版单层1080p NR、强度1/调控关、普通优先级，实际视频30fps。GPU界面NR5.852→5.839ms/UI36→34提交每秒，软件5.751→5.901/UI38→40；均后台窗口，不宣称前台完整性能通过或提速。四组外部class采样ACCESS_DENIED（增加query权限仍失败）原记录保留；独立产品日志actual=2/state=1/status0确认普通优先级。CPU早期窗口有波动，全部采样及限制见REPORT，不用单次读数宣传下降。没有持续resize循环，修复后每组仅开源和状态初始化共3次SetWindowPos。
+
+git diff --check、Python夹具语法通过。audit.py核对59个QML与356个原件文件；33ms插值/bridge/宿主/presenter源码SHA不变，runtime/SDK/模型无新增进Git。control.py verify：64原树不变，Claude xess-flow-tune树外部并行修改及收尾外部提交推进原样记录、未碰/合入，其余旧tip/main保持。详细命令、回执、失败及边界见docs/PRO_VIDEO_GEOMETRY_REPORT_2026-10-12.md、reports/pro-video-geometry-20261012/validation.json。
+
+全产物在E:/项目/Veyra本轮archives/build/tests/logs/tmp/reports；可用程序tests/pro-video-geometry-20261012/app/veyra_qml_ui.exe，驱动已移除、QML恢复源码。未合并main/push/打包/Release/关机；收尾commit/tag/bundle/清理见reports/pro-video-geometry-20261012/final.json。
+
+收尾tmp缓存清理两次遭自动审批“blocked by policy”拒绝。第二次先只读核验12个路径在本任务内、无链接，固定LiteralPath仍被拦截；没有继续绕过，约40MB缓存保留，cleanup.json如实标记未删。该清理不影响本轮修复完成。

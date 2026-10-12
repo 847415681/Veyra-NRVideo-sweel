@@ -139,6 +139,68 @@ int main() {
         check("scene:duplicate-no-false-break", !r.isCadenceBreak, "interval after a duplicate compares with the last real interval");
     }
 
+    // Log50: Elgato4KPro delivers a positive 1ms PTS increment periodically,
+    // surrounded by ordinary 20.833ms (or 16.683ms) intervals. It is not a
+    // duplicate at the 1ms boundary, even for a static picture. Returning to
+    // normal must not reset the entire temporal graph.
+    for (uint64_t interval : {20833u, 16683u}) {
+        for (double sad : {0.0, 0.01}) {
+            SceneCadenceAnalyzer a;
+            const auto histogram = makeHistogram(0.5);
+            uint64_t pts = 0;
+            unsigned breaks = 0;
+            (void)a.analyze(0, histogram, sad, pts);
+            for (uint64_t frame = 1; frame <= 6060; ++frame) {
+                pts += frame % 101 == 0 ? 1000 : interval;
+                const auto r = a.analyze(frame, histogram, sad, pts);
+                breaks += r.isCadenceBreak;
+            }
+            check("scene:log50-short-pts-no-reset", breaks == 0,
+                  "periodic 1ms timestamp cannot poison the next normal interval");
+            const auto gap = a.analyze(6061, histogram, sad, pts + 200000);
+            check("scene:log50-real-stall-still-breaks", gap.isCadenceBreak,
+                  "robust baseline still detects a real 200ms source stall");
+        }
+    }
+    {
+        SceneCadenceAnalyzer a;
+        const auto histogram = makeHistogram(0.5);
+        uint64_t pts = 0;
+        (void)a.analyze(0, histogram, 0.01, pts);
+        for (uint64_t frame = 1; frame <= 8; ++frame)
+            (void)a.analyze(frame, histogram, 0.01, pts += 16683);
+        (void)a.analyze(9, histogram, 0.01, pts += 1000);
+        (void)a.analyze(10, histogram, 0.01, pts += 2000);
+        check("scene:short-pts-burst-no-reset",
+              !a.analyze(11, histogram, 0.01, pts += 16683).isCadenceBreak,
+              "two timestamp outliers still cannot establish a new cadence");
+        check("scene:short-pts-mailbox-skip",
+              !a.analyze(12, histogram, 0.01, pts += 16683 * 6, 6).isCadenceBreak,
+              "sourceStep normalization remains effective after timestamp jitter");
+    }
+    {
+        SceneCadenceAnalyzer a;
+        const auto histogram = makeHistogram(0.5);
+        uint64_t pts = 0;
+        bool continuous = true;
+        (void)a.analyze(0, histogram, 0.01, pts);
+        for (uint64_t frame = 1; frame <= 2400; ++frame) {
+            // 48/120/60/90Hz VRR is a real variable cadence, not a 60Hz stream.
+            const uint64_t interval[] = {20833, 8333, 16667, 11111};
+            continuous &= !a.analyze(frame, histogram, 0.01,
+                                    pts += interval[frame % 4]).isCadenceBreak;
+        }
+        check("scene:vrr-cadence-preserved", continuous,
+              "variable 48-120Hz input remains continuous");
+        a.reset();
+        (void)a.analyze(0, histogram, 0.01, 0);
+        // Establish a genuinely faster source after reconnect, then stall.
+        (void)a.analyze(1, histogram, 0.01, 2000);
+        check("scene:reset-clears-robust-cadence",
+              a.analyze(2, histogram, 0.01, 22000).isCadenceBreak,
+              "no old slow cadence can mask a break in a fresh fast stream");
+    }
+
     // Reset clears baseline.
     {
         SceneCadenceAnalyzer a;

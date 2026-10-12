@@ -69,11 +69,16 @@ SceneAnalysisResult SceneCadenceAnalyzer::analyze(uint64_t frameId,
     double cadenceDeltaUs = 0;
     if (result.ptsDeltaUs > 0 && result.ptsDeltaUs < 1e15) {
         cadenceDeltaUs = result.ptsDeltaUs / double(sourceStep ? sourceStep : 1);
-        // Check against expected cadence (simplified: if delta is 3x the
-        // previous delta, consider it a break)
-        if (lastCadenceDeltaUs_ > 0 &&
-            cadenceDeltaUs > lastCadenceDeltaUs_ * 3.0 + config_.cadenceBreakPtsJitterUs) {
-            result.isCadenceBreak = true;
+        if (cadenceCount_) {
+            auto intervals = cadenceIntervals_;
+            auto middle = intervals.begin() + cadenceCount_ / 2;
+            std::nth_element(intervals.begin(), middle, intervals.begin() + cadenceCount_);
+            // Log50: ordinary 16.683/20.833ms frames surrounding an isolated
+            // positive 1ms increment used to reset all temporal history. The
+            // median tolerates two outliers, yet adapts to sustained changes.
+            // Use the upper median during startup so one short sample cannot
+            // lower an already observed ordinary interval.
+            result.isCadenceBreak = cadenceDeltaUs > *middle * 3.0 + config_.cadenceBreakPtsJitterUs;
         }
     }
 
@@ -83,7 +88,11 @@ SceneAnalysisResult SceneCadenceAnalyzer::analyze(uint64_t frameId,
         prevPtsUs_ = ptsUs;
     }
 
-    if (cadenceDeltaUs > 0 && !result.isDuplicate) lastCadenceDeltaUs_ = cadenceDeltaUs;
+    if (cadenceDeltaUs > 0 && !result.isDuplicate) {
+        cadenceIntervals_[cadencePosition_] = cadenceDeltaUs;
+        cadencePosition_ = (cadencePosition_ + 1) % cadenceIntervals_.size();
+        if (cadenceCount_ < cadenceIntervals_.size()) ++cadenceCount_;
+    }
     lastResult_ = result;
     return result;
 }

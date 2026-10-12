@@ -4,6 +4,7 @@
 // and cadence changes using histogram + SAD + PTS sequence analysis.
 // Feeds ResetCoordinator with the appropriate ResetReason.
 #include <cstdint>
+#include <array>
 #include <vector>
 
 #include "veyra/core/ResetCoordinator.h"
@@ -55,7 +56,7 @@ public:
                                 uint64_t sourceStep = 1);
 
     // Reset baseline (called on seek/source switch/etc).
-    void reset() { hasBaseline_ = false; prevHistogram_.clear(); lastCadenceDeltaUs_ = 0; }
+    void reset() { hasBaseline_ = false; prevHistogram_.clear(); cadenceCount_ = cadencePosition_ = 0; }
 
     const SceneAnalysisResult& lastResult() const { return lastResult_; }
     uint64_t sceneCutCount() const { return sceneCutCount_; }
@@ -71,7 +72,10 @@ private:
     uint64_t flashCount_ = 0;
     uint64_t duplicateCount_ = 0;
     SceneAnalysisResult lastResult_;
-    double lastCadenceDeltaUs_ = 0; // per-source-frame PTS interval of the previous frame
+    // A single short driver timestamp must not establish the next frame's
+    // expected cadence. Fixed storage, no buffering or source retiming.
+    std::array<double, 5> cadenceIntervals_{};
+    unsigned cadenceCount_ = 0, cadencePosition_ = 0;
 
     double histogramDistance(const std::vector<double>& a, const std::vector<double>& b) const;
 };
