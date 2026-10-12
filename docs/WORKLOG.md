@@ -9315,3 +9315,9 @@ audit.py核对测试/GUI/所有app原件、两份旧final、旧JSON和源码bund
 ## 2026-10-12 用户已验 Claude 内容节奏修复，合并重打 2.0.7
 
 用户确认实机测试通过，授权合并及重打包。开工 main05bc4b5，68旧树/509脏文件和全部分支tip快照、增量源码bundle已verify；隔离codex/test-2.0.7-refresh-20261012完整合入Claude60a93f3/8d11cad，无冲突，产品树与Claude tip相同。详情docs/TEST_2.0.7_REFRESH_2026-10-12.md。现有build/package脚本增加显式任务/版本/来源参数，防止覆盖上次2.0.7。全部产物在E:/项目/Veyra的本轮test-2.0.7-refresh-20261012用途目录。用户正在运行其cadence测试包，保持程序/设置，不做性能对比；单个回归≤300秒，构建≤900秒。当前尚未完成构建/回归/封包，不宣称通过。无push/Release/关机/子Agent。
+
+### 2.0.7 refresh 定向验收及扩展回归限制
+
+独立完整CMake/Ninja548步骤、27目标141.9秒通过，668输入SHA一致；build回执logs/test-2.0.7-refresh-20261012/build-20261012-224305。EXE 6fd35109d3c668f51fd7ce1609c8176e164227e2510473ef5a6276a34b1d713d，2.0.7-test-r2/PE2.0.7.0。regress.py两轮16组通过，timing100条。replay.py三组内容/固定隔帧逐帧真值通过；小低对比运动538/540（已知±3容差的2张）、half540/540恒30、GTA538/538恒30。NV/AMD staging payload1641/2081、runtime48/534、PE95/83审计通过。
+
+扩展--half-rate两次31/34：NR+DLSS同步驱动初始化9–11秒，随后虚拟采集PTS约9秒落后，生成帧舍弃；失败保留。修复前原2.0.7同场A/B也初始化约9.7秒、33/34（同样NR+2X事务超时）。用户cadence播放器一直运行，保留程序/配置，不断言并行负载是唯一原因、不放宽测试或改代码。16组/3回放/用户实卡确认作为本轮去重修复证据，不声称完整34项GPU热切换通过；详细报告docs/TEST_2.0.7_REFRESH_2026-10-12.md。无新性能、显示延迟或AMD/BMD现场通过声明。计划本地main精确树合并、最终ZIP封包与解压冷启动通过后交付，结果另见外部DELIVERY/cold-start/final回执。
