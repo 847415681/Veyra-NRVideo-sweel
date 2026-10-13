@@ -51,6 +51,7 @@ void UpdateChecker::check(bool manual) {
     request.setMaximumRedirectsAllowed(3);
     request.setTransferTimeout(timeoutMs_);
     reply_ = network_.get(request);
+    qInfo().noquote() << "[update-check-start]" << (manual ? "manual" : "automatic");
     reply_->setReadBufferSize(maxBody + 1);
     connect(reply_, &QIODevice::readyRead, this, [this] {
         body_ += reply_->read(maxBody + 1 - body_.size());
