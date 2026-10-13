@@ -135,7 +135,8 @@ finally:
     driver.unlink(missing_ok=True)
 logs=console.read_text('utf8',errors='replace')+'\n'+(O/'engine.log').read_text('utf8',errors='replace')
 errors=[l for l in logs.splitlines() if re.search(r'PRO_GEOMETRY_FAIL|TypeError:|ReferenceError:|Binding loop|Cannot assign|D3D12 ERROR|D3D12 CORRUPTION|failed to load component|no root object',l)]
-if 'interface renderer='+MODE not in logs:errors.append('Requested UI renderer was not observed')
+rendererObserved=('interface=software' in logs and 'OBS game capture compatibility: software UI' in logs) if MODE=='software' else 'interface renderer='+MODE in logs
+if not rendererObserved:errors.append('Requested UI renderer was not observed')
 completed=rc==0 and not errors and 'PRO_GEOMETRY_DONE' in logs and len(rows)==len(cases)
 result=dict(variant=VARIANT,mode=MODE,scale=SCALE,exit=rc,seconds=round(time.monotonic()-start,2),errors=errors,rows=rows,
  passed=completed and all(r['passed'] for r in rows),completed=completed,

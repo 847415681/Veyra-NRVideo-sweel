@@ -10,9 +10,11 @@ p.add_argument('variant',choices=('before','after'))
 p.add_argument('--task',required=True)
 p.add_argument('--donor-app',type=Path,required=True)
 p.add_argument('--media-dir',type=Path,required=True)
+p.add_argument('--stage-label',default='')
 a=p.parse_args();assert re.fullmatch(r'[a-z0-9-]+',a.task)
+assert not a.stage_label or re.fullmatch(r'[a-z0-9-]+',a.stage_label)
 base=Path('E:/项目/Veyra');root=Path(__file__).resolve().parents[2]
-stage=base/'tests'/a.task/('rotation-'+a.variant);log=base/'logs'/a.task/('rotation-'+a.variant+'-'+time.strftime('%H%M%S'));log.mkdir()
+stage=base/'tests'/a.task/('rotation-'+a.variant+('-'+a.stage_label if a.stage_label else ''));log=base/'logs'/a.task/('rotation-'+a.variant+'-'+time.strftime('%H%M%S'));log.mkdir()
 temp=base/'tmp'/a.task/log.name;temp.mkdir(parents=True)
 running=subprocess.check_output(['tasklist','/fo','csv','/nh'],text=True,encoding='mbcs',errors='replace')
 assert not any(line.lower().startswith('"veyra') for line in running.splitlines()),'Another player is active'
