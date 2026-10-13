@@ -618,6 +618,13 @@ The driver is supplied by Windows/NVIDIA. Frame markers delimit Veyra enhancemen
 and presentation, not game input or physical display latency. Generated-frame
 Reflex integration is not enabled; DLSS retains its selected multiplier.
 
+`include/veyra/gfx/NvidiaVrr.h` (2026-10-14) adds, from the same interface
+files, the QueryInterface IDs of NvAPI_DISP_GetDisplayIdByDisplayName and
+NvAPI_Disp_GetVRRInfo and a renamed NV_GET_VRR_INFO_V1 layout (checked against
+the local unmodified copy used for the pacing work). It only reads the
+monitor's variable-refresh state for diagnostics; the driver setting is never
+changed. Same loading rules and the same license as above.
+
 Copyright (c) 2019-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
