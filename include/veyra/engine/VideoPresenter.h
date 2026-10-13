@@ -39,6 +39,7 @@ public:
     void sourceProcessed(pipeline::FrameIdentity);
     PresentationSettings configurePresentation(gfx::D3D12DeviceContext&,PresentationSettings,bool fg,std::wstring& status);
     bool presentationReady(){return sink_.presentationReady();}
+    bool waitPresentationReady(unsigned ms){return sink_.waitPresentationReady(ms);}
     uint64_t beginReflex(){return reflex_.begin();}
     void reflexFrame(uint64_t id){reflexFrame_=id;}
     // True while XeSS owns Present: the low-latency queue and the output

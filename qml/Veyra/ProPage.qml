@@ -1815,7 +1815,7 @@ VPage {
                             }
                             VRow {
                                 label: qsTr("低延迟队列")
-                                hint: qsTr("减少软件排队；屏幕延迟需要实测")
+                                hint: qsTr("只保留一帧在处理，未补帧时加 NVIDIA Reflex；垂直同步本身已不排队")
                                 VSwitch {
                                     objectName: "list-low-queue"
                                     checked: veyra.fgLowQueue

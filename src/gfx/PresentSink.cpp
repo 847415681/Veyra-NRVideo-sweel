@@ -544,13 +544,33 @@ bool PresentSink::configurePacing(bool enabled,bool vsync,bool tearing){
     // Do not install another latency waiter on the provider swap chain.
     if(xess_){pacing_=false;capacityAcquired_=false;desc_.vsync=xess_&&vsync;desc_.tearing=tearing;log::info("pacing",std::format("provider={} applicationWait=0 vsync={} tearing={}","XeSS",desc_.vsync,desc_.tearing));return !enabled;}
     const HRESULT hr=latencyHandle_?swapChain_->SetMaximumFrameLatency(enabled?1:3):enabled?E_NOTIMPL:S_OK;
-    log::info("pacing",std::format("DXGI enabled={} maximumLatency={} vsync={} tearing={} hr=0x{:X}",enabled,enabled?1:3,vsync,tearing,unsigned(hr)));
     pacing_=enabled&&SUCCEEDED(hr);desc_.vsync=vsync;desc_.tearing=tearing;capacityAcquired_=false;
+    unsigned stale=0;
+    if(pacing_){
+        // Re-arm. The latency object keeps the counts released while nobody
+        // waited (latency 3 outside VSync), and one wait per present only holds
+        // whatever queue depth existed at the switch. Probe 2026-10-14
+        // (tmp/claude-latency-min-20261013/dxgi_semaphore_probe.cpp, 320 Hz):
+        // after 600 unwaited Automatic presents the waits never blocked and
+        // 7 presents stayed queued; with the stale counts dropped the depth
+        // matched a fresh chain. Let queued presents retire (bounded), drop the
+        // counts, then allow exactly one present before the first wait, so an
+        // empty queue (paused, first frame) cannot stall on a count that never comes.
+        const auto until=GetTickCount64()+100;
+        for(;;){
+            UINT last=0;DXGI_FRAME_STATISTICS stats{};
+            if(FAILED(swapChain_->GetLastPresentCount(&last))||FAILED(swapChain_->GetFrameStatistics(&stats))||last==stats.PresentCount||GetTickCount64()>until)break;
+            Sleep(1);
+        }
+        while(stale<4096&&WaitForSingleObject(latencyHandle_,0)==WAIT_OBJECT_0)++stale;
+        capacityAcquired_=true;
+    }
+    log::info("pacing",std::format("DXGI enabled={} maximumLatency={} vsync={} tearing={} hr=0x{:X} staleLatencyCounts={}",enabled,enabled?1:3,vsync,tearing,unsigned(hr),stale));
     return SUCCEEDED(hr);
 }
-bool PresentSink::presentationReady(){
+bool PresentSink::waitPresentationReady(unsigned ms){
     if(!pacing_||!latencyHandle_||capacityAcquired_)return true;
-    const auto result=WaitForSingleObject(latencyHandle_,0);
+    const auto result=WaitForSingleObject(latencyHandle_,ms);
     if(result==WAIT_OBJECT_0)capacityAcquired_=true;
     if(result==WAIT_FAILED){log::warn("pacing",std::format("DXGI capacity wait failed error={}",GetLastError()));configurePacing(false,desc_.vsync,desc_.tearing);return true;}
     return capacityAcquired_;

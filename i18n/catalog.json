@@ -15744,6 +15744,90 @@
    "zh-TW": "螢幕 %1 Hz 只顯示得下 %2X：已從 %3X 降到 %2X",
    "en": "A %1 Hz display can only show %2X: lowered from %3X to %2X",
    "ja": "%1 Hz の画面で表示できるのは %2X まで：%3X から %2X に下げました"
+  },
+  {
+   "zh": "只保留一帧在处理，未补帧时加 NVIDIA Reflex；垂直同步本身已不排队",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "只保留一幀在處理，未補幀時加 NVIDIA Reflex；垂直同步本身已不排隊",
+   "en": "Keeps one frame in flight and adds NVIDIA Reflex without frame generation; VSync itself no longer queues",
+   "ja": "処理中のフレームを 1 枚に保ち、フレーム生成なしでは NVIDIA Reflex を追加；垂直同期自体はもうキューを溜めない"
+  },
+  {
+   "zh": "只保留一帧在处理，未补帧时加 Reflex",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "只保留一幀在處理，未補幀時加 Reflex",
+   "en": "One frame in flight; adds Reflex without frame generation",
+   "ja": "処理中は 1 フレームのみ、フレーム生成なしでは Reflex を追加"
+  },
+  {
+   "zh": "垂直同步：屏幕队列 1 帧，读帧前等待刷新",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "垂直同步：螢幕佇列 1 幀，讀幀前等待更新",
+   "en": "VSync: one-frame display queue, waits for the refresh before reading a frame",
+   "ja": "垂直同期：画面キュー 1 フレーム、フレーム読み込み前にリフレッシュを待機"
+  },
+  {
+   "zh": "垂直同步：屏幕队列控制不可用",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "垂直同步：螢幕佇列控制不可用",
+   "en": "VSync: display queue control unavailable",
+   "ja": "垂直同期：画面キューの制御は使用不可"
+  },
+  {
+   "zh": "显示队列恢复失败",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "顯示佇列恢復失敗",
+   "en": "Display queue restore failed",
+   "ja": "表示キューの復元に失敗"
+  },
+  {
+   "zh": "低延迟队列：只保留一帧在处理",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "低延遲佇列：只保留一幀在處理",
+   "en": "Low-latency queue: one frame in flight",
+   "ja": "低遅延キュー：処理中は 1 フレームのみ"
+  },
+  {
+   "zh": "显示队列等待失败，垂直同步屏幕队列不再限制；详见日志",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "顯示佇列等待失敗，垂直同步螢幕佇列不再限制；詳見日誌",
+   "en": "Display queue wait failed; the VSync display queue is no longer limited; see the log",
+   "ja": "表示キューの待機に失敗。垂直同期の画面キューは制限されなくなりました。ログを参照"
+  },
+  {
+   "zh": "不撕裂，也不等待垂直同步（延迟最低）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "不撕裂，也不等待垂直同步（延遲最低）",
+   "en": "no tearing and no VSync wait (lowest latency)",
+   "ja": "ティアリングなし、垂直同期を待たない（最小遅延）"
+  },
+  {
+   "zh": "低延迟队列：只保留一帧在处理（补帧运行，Reflex 不启用）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "低延遲佇列：只保留一幀在處理（補幀運行，Reflex 不啟用）",
+   "en": "Low-latency queue: one frame in flight (frame generation running, Reflex off)",
+   "ja": "低遅延キュー：処理中は 1 フレームのみ（フレーム生成中のため Reflex は無効）"
+  },
+  {
+   "zh": "低延迟队列：只保留一帧在处理 + NVIDIA Reflex（实验）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "低延遲佇列：只保留一幀在處理 + NVIDIA Reflex（實驗）",
+   "en": "Low-latency queue: one frame in flight + NVIDIA Reflex (experimental)",
+   "ja": "低遅延キュー：処理中は 1 フレームのみ + NVIDIA Reflex（実験的）"
+  },
+  {
+   "zh": "低延迟队列：只保留一帧在处理（Reflex 初始化失败）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "低延遲佇列：只保留一幀在處理（Reflex 初始化失敗）",
+   "en": "Low-latency queue: one frame in flight (Reflex initialization failed)",
+   "ja": "低遅延キュー：処理中は 1 フレームのみ（Reflex の初期化に失敗）"
+  },
+  {
+   "zh": "显示同步：自动",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "顯示同步：自動",
+   "en": "Display sync: auto",
+   "ja": "表示の同期：自動"
   }
  ]
 }

@@ -134,7 +134,11 @@ public:
     // The owner re-reads the monitor after a move or mode change.
     void setDisplayRefreshHz(double hz){if(hz>=1.0)displayRefreshHz_=hz;}
     bool configurePacing(bool enabled,bool vsync,bool tearing);
-    bool presentationReady();
+    // Acquires one present of display-queue capacity (the frame latency
+    // object) while pacing; the next Present consumes it. Never blocks with
+    // ms=0. True when not pacing.
+    bool waitPresentationReady(unsigned ms);
+    bool presentationReady(){return waitPresentationReady(0);}
     bool pacingActive()const{return pacing_;}
 
     void resize(uint32_t width, uint32_t height);

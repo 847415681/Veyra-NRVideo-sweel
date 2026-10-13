@@ -1565,7 +1565,7 @@ VPage {
                 }
                 VRow {
                     label: qsTr("低延迟队列")
-                    hint: qsTr("减少排队；不宣称延迟下降")
+                    hint: qsTr("只保留一帧在处理，未补帧时加 Reflex")
                     VSwitch { checked: veyra.fgLowQueue; onToggled: checked => veyra.fgLowQueue = checked }
                 }
             }

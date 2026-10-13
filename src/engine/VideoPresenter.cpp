@@ -489,26 +489,32 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
         return effective;
     }
     providerOwnedPresentation_=false;
-    if(!requested.enabled){
-        // Vertical sync with the default 3-frame queue lets presents pile up behind the
-        // refresh: on a 60 Hz panel that is up to ~50 ms, and a capture user measured
-        // "twice 1.4.4's latency" with 2.0 on vsync against 1.4.4 on tearing (field logs
-        // 2026-10-01). Under vsync the queue stays one deep even without 低延迟队列.
-        const bool shallow=vsync&&sink_.configurePacing(true,vsync,tearing);
-        const bool restored=shallow||sink_.configurePacing(false,vsync,tearing);
-        status=(shallow?L"垂直同步 · 队列深度 1 · ":restored?L"低延迟队列已关闭 · ":L"低延迟队列恢复失败 · ")+sync;if(effective.outputRate==OutputRateMode::Custom)status+=std::format(L" · 输出上限 {:.3f} FPS",effective.customFps);status+=capNotice;return effective;}
-    if(!sink_.configurePacing(true,vsync,tearing)){effective.enabled=false;status=L"显示队列控制不可用 · "+sync;return effective;}
-    // Low latency = queue depth 1, plus Reflex when frame generation is off
-    // (generated outputs would need separately validated out-of-band markers).
-    std::wstring latency=L"低延迟队列：队列深度 1";
-    if(fg)latency+=L"（补帧运行，Reflex 不启用）";
-    else if(reflex_.enable(ctx.device()))latency=L"低延迟队列：队列深度 1 + NVIDIA Reflex（实验）";
-    else latency+=L"（Reflex 初始化失败）";
+    // Only explicit VSync can queue presents behind the display, so only VSync
+    // keeps a one-deep display queue, and the engine really waits for it: it
+    // acquires the latency object before reading the next capture frame
+    // (without frame generation) and before every present, so no frame sits
+    // in DXGI's queue. Before latency-min B3 VSync set latency 1 without
+    // anyone waiting, which does not limit the queue (7 frames in the DXGI
+    // probe; DLSS 6X on 320 Hz 12.2/18.4 ms present->scanout, field: "twice
+    // 1.4.4's latency" on a 60 Hz panel, 2026-10-01). Automatic replaces an
+    // unshown frame and Tearing never waits: acquiring the latency object
+    // there would throttle presents to the refresh, the wait they avoid.
+    const bool paced=vsync&&sink_.configurePacing(true,vsync,tearing);
+    const bool restored=paced||sink_.configurePacing(false,vsync,tearing);
+    const std::wstring queue=paced?L"垂直同步：屏幕队列 1 帧，读帧前等待刷新 · ":vsync?L"垂直同步：屏幕队列控制不可用 · ":restored?L"":L"显示队列恢复失败 · ";
     std::wstring cap;
     if(followDisplay)cap=std::format(L"输出上限：跟随显示器 {:.0f} Hz",requested.customFps);
     else if(requested.outputRate==OutputRateMode::Custom)cap=std::format(L"输出上限：{:.3f} FPS",requested.customFps);
     else cap=L"输出上限：关闭";
-    status=latency+L" · "+cap+L" · "+sync;
+    if(!requested.enabled){status=queue+sync;if(effective.outputRate==OutputRateMode::Custom)status+=L" · "+cap;status+=capNotice;return effective;}
+    // Low-latency queue: one source frame in flight (the next input is read
+    // after the previous one was presented), plus Reflex when frame generation
+    // is off (generated outputs would need separately validated markers).
+    std::wstring latency=L"低延迟队列：只保留一帧在处理";
+    if(fg)latency+=L"（补帧运行，Reflex 不启用）";
+    else if(reflex_.enable(ctx.device()))latency+=L" + NVIDIA Reflex（实验）";
+    else latency+=L"（Reflex 初始化失败）";
+    status=latency+L" · "+cap+L" · "+queue+sync;
     return effective;
 }
 Microsoft::WRL::ComPtr<ID3D12Resource> VideoPresenter::presentedResourceForTest() {

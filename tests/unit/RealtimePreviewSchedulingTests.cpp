@@ -155,6 +155,11 @@ int main() {
         check(displayFgMultiplier(B::XeSS, 4, 60, 144) == 4, "XeSS keeps its multiplier unless bypassed");
         check(displayFgMultiplier(B::Dlss, 6, 0, 60) == 6 && displayFgMultiplier(B::Dlss, 6, 60, 0) == 6, "unknown rates keep the request");
         check(displayFgMultiplier(B::Dlss, 1, 60, 60) == 1, "no generation requested stays unchanged");
+        check(displayFgMultiplier(B::Dlss, 6, 60, 100, true) == 0, "under VSync 60 fps on 100 Hz bypasses: the surplus would queue");
+        check(displayFgMultiplier(B::Dlss, 6, 60, 320, true) == 4, "under VSync a fitting lower multiplier is still used");
+        check(displayFgMultiplier(B::Dlss, 2, 30, 60, true) == 2, "under VSync a fitting request is unchanged");
+        check(displayFgMultiplier(B::XeSS, 4, 60, 144, true) == 0, "under VSync XeSS bypasses when its output does not fit");
+        check(displayFgMultiplier(B::XeSS, 2, 60, 144, true) == 2, "under VSync a fitting XeSS request is unchanged");
 
         DisplayFgBudgetGate gate(15000000);
         check(gate.update(4, 0) && gate.applied() == 4, "first budget decision applies at once");

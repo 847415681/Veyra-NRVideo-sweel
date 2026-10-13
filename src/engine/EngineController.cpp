@@ -1130,6 +1130,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             if(!isImage){liveScheduler=std::make_unique<LiveGpuScheduler>();veyra::log::info("scheduler",std::format("single GPU owner thread={} capacity=2 source={} (bounded enhanced lookahead)",GetCurrentThreadId(),isCapture?"live":"file"));}
             PresentationCadence cadence;
             PresentationSettings presentationEffective;
+            // presentationPaced: VSync keeps a one-deep display queue (latency
+            // object). A failed wait turns pacing off for this configuration.
+            // VEYRA_TEST_LEGACY_VSYNC_QUEUE=1 restores the unwaited VSync queue
+            // (no read gate, waits only with the toggle/cap) for A/B runs.
+            bool presentationPaced=false;
+            static const bool legacyVsyncQueue=GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_VSYNC_QUEUE",nullptr,0)>0;
             uint64_t pacingRevision=0,presenterGeneration=0;
             auto applyPresentation=[&]{
                 PresentationSettings requested;uint64_t revision;
@@ -1140,21 +1146,20 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(presentationEffective.enabled&&!presenter.reflexActive()&&presenter.reflexDisablePending()){
                         std::lock_guard lock(mutex_);snapshot_.presentationEffective=presentationEffective;snapshot_.presentationStatus=presenter.reflexDisablePending()?L"Reflex 调用及驱动撤销失败；请关闭视频后重试":L"Reflex 调用失败，当前使用低排队；详见日志";
                     }
-                    if(presentationEffective.enabled&&!presenter.pacingActive()){
-                        presentationEffective.enabled=false;
-                        std::wstring message;
-                        presentationEffective=presenter.configurePresentation(ctx,presentationEffective,options.fg,message);
-                        cadence.reset();
-                        std::lock_guard lock(mutex_);snapshot_.presentationEffective=presentationEffective;snapshot_.presentationStatus=L"显示队列等待失败；"+message;
+                    if(presentationPaced&&!presenter.pacingActive()){
+                        // The sink already stopped waiting; reconfiguring would arm it again.
+                        presentationPaced=false;cadence.reset();
+                        std::lock_guard lock(mutex_);snapshot_.presentationStatus=L"显示队列等待失败，垂直同步屏幕队列不再限制；详见日志";
                     }
                     return;
                 }
                 if(isImage)requested.enabled=false;
                 std::wstring message;
                 presentationEffective=presenter.configurePresentation(ctx,requested,options.fg,message);
+                presentationPaced=presenter.pacingActive()&&!legacyVsyncQueue;
                 pacingRevision=revision;presenterGeneration=presenter.generation();cadence.reset();
                 {std::lock_guard lock(mutex_);snapshot_.presentationEffective=presentationEffective;snapshot_.presentationRevision=revision;snapshot_.presentationStatus=message;snapshot_.presentationProviderOwned=presenter.providerOwnedPresentation();}
-                veyra::log::info("pacing",std::format("revision={} requested={}/{}/{} effective={}/{}/{}",revision,requested.enabled,unsigned(requested.mode),unsigned(requested.display),presentationEffective.enabled,unsigned(presentationEffective.mode),unsigned(presentationEffective.display)));
+                veyra::log::info("pacing",std::format("revision={} requested={}/{}/{} effective={}/{}/{} displayQueuePaced={}",revision,requested.enabled,unsigned(requested.mode),unsigned(requested.display),presentationEffective.enabled,unsigned(presentationEffective.mode),unsigned(presentationEffective.display),presentationPaced));
             };
             auto drainLivePresentation=[&]{cadence.reset();if(liveScheduler){++presentationDrains;liveScheduler->cancel();pollCompletions();pendingCompletions.clear();}pairLatency.reset();};
             auto advanceLive=[&]{applyPresentation();if(liveScheduler){pollCompletions();if(stop_||(paused_&&!seekPreviewPending)||seekSeconds_>=0){liveScheduler->cancel();cadence.reset();}else liveScheduler->advance(host100ns());}};
@@ -1542,6 +1547,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     const auto enhancementPending=[&]{
                         const bool fgRunning=options.fg&&!fgBypassed;
                         if(presentationEffective.enabled&&!fgRunning&&(isCapture||!fileAwaitingVideo)&&liveScheduler->occupancy()>=1)return true;
+                        // Explicit VSync, live, no generation: throttle only before the
+                        // read. A frame read while the display queue is full would wait
+                        // there a refresh; waiting first lets the mailbox hand over a
+                        // newer frame instead (latency-min B3).
+                        if(isCapture&&presentationPaced&&!fgRunning&&(liveScheduler->occupancy()>=1||!presenter.presentationReady()))return true;
                         // Live sources: never stack a second frame behind one the GPU
                         // is still enhancing. When NR/SR cost more than one source
                         // interval, a second queued frame doubled capture-to-present
@@ -1554,7 +1564,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     while((liveScheduler->occupancy()>=2||!graph->nextFrameSlotAvailable()||enhancementPending())&&!stop_&&(!paused_||seekPreviewPending)&&!liveScheduler->failed()){
                         advanceLive();if(seekSeconds_>=0)break;
                         if(liveScheduler->occupancy()==0&&!graph->nextFrameSlotAvailable()&&elapsedMs(leaseWaitStart)>2000){status(L"等待输出纹理释放超时",true);stop_=true;break;}
-                        if(liveScheduler->occupancy()>=2||!graph->nextFrameSlotAvailable()||enhancementPending())waitLive();
+                        if(liveScheduler->occupancy()>=2||!graph->nextFrameSlotAvailable()||enhancementPending()){
+                            // Only the display queue is outstanding: wake on its latency object
+                            // (acquiring it) instead of a 1 ms poll.
+                            if(isCapture&&presentationPaced&&liveScheduler->occupancy()==0&&pendingCompletions.empty()&&graph->nextFrameSlotAvailable())presenter.waitPresentationReady(1);
+                            else waitLive();
+                        }
                         std::lock_guard lock(mutex_);if(desired_.revision!=options.settings.revision)break;
                     }
                     if(stop_||seekSeconds_>=0||(paused_&&!seekPreviewPending)||liveScheduler->failed()||liveScheduler->occupancy()>=2||!graph->nextFrameSlotAvailable()||enhancementPending())continue;
@@ -1904,7 +1919,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         // measured cadence and decides nothing until it has one.
                         contentFps=dedupActive?contentDedup.contentFps():activeSource->info().averageFps*(halfRate?.5:1.0);
                         refreshHz=displayFgTestHz>0?displayFgTestHz:presenter.displayRefreshHz();
-                        if(contentFps>0&&refreshHz>0&&displayFgGate.update(displayFgMultiplier(options.settings.frameGenerationBackend,options.fgMultiplier,contentFps,refreshHz),host100ns())){
+                        if(contentFps>0&&refreshHz>0&&displayFgGate.update(displayFgMultiplier(options.settings.frameGenerationBackend,options.fgMultiplier,contentFps,refreshHz,presentationVsync(presentationEffective)),host100ns())){
                             const auto applied=displayFgGate.applied();
                             veyra::log::info("display-fg-budget",std::format("revision={} backend={} requested={}X applied={} contentFps={:.3f} refreshHz={:.3f}{} dedup={} halfRate={} display={} (output above the refresh is never shown: lower multiplier, or bypass when the source already fills the panel)",
                                 options.settings.revision,frameGenerationBackendName(options.settings.frameGenerationBackend),options.fgMultiplier,applied?std::format("{}X",applied):std::string("bypass"),contentFps,refreshHz,displayFgTestHz>0?" (test override)":"",dedupActive,halfRate,unsigned(presentationEffective.display)));
@@ -2196,7 +2211,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     }
                     struct LiveStepState {
                         unsigned next=0,handled=0,remaining=0;bool readyReported=false;
-                        Clock::time_point readyStart=Clock::now();std::optional<Clock::time_point> deadlineStart;
+                        Clock::time_point readyStart=Clock::now();std::optional<Clock::time_point> deadlineStart,capacityStart;
                         double readyMs=0,waitMs=0,presentMs=0,ageMs=0;uint64_t count=0,dropped=0;
                         diagnostics::GpuSample blit;
                     };
@@ -2294,8 +2309,21 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                                 // instead of accumulating latency.
                                 if(capInterval>0&&cadence.rateSkipsCandidate(optionalNow,mediaDeadline,interval,capInterval)){++s.dropped;++s.handled;++s.next;s.deadlineStart.reset();continue;}
                                 if(optionalNow<due)return {State::Pending,due};
-                                if(!presenter.presentationReady())return {State::Pending,optionalNow+2000};
                             }
+                            // Explicit VSync: one present of display capacity per present, so a
+                            // frame never waits in DXGI's queue (true when not paced). A generated
+                            // frame waits at most half its interval (<= 2 ms) and is otherwise
+                            // replaced by the next one: waiting longer only moved the queue into
+                            // this scheduler and held the real frame behind it (DLSS 6X replay
+                            // on 320 Hz: callback->present P95 18.4 -> 34.2 ms). The real frame waits.
+                            if((!legacyVsyncQueue||presentationEffective.enabled||presentationEffective.outputRate==OutputRateMode::Custom)&&!presenter.presentationReady()){
+                                if(generated&&!legacyVsyncQueue){
+                                    if(!s.capacityStart)s.capacityStart=Clock::now();
+                                    if(elapsedMs(*s.capacityStart)>std::min(2.0,sourceIntervalMs/std::max(1u,batch.batch.count)/2)){++s.dropped;++s.handled;++s.next;s.deadlineStart.reset();s.capacityStart.reset();continue;}
+                                }
+                                return {State::Pending,optionalNow+2000};
+                            }
+                            s.capacityStart.reset();
                             const auto waited=elapsedMs(*s.deadlineStart);s.deadlineStart.reset();s.waitMs+=waited;flow->cpu(diagnostics::CpuStage::DeadlineWait,waited,host100ns());
                             const bool deviationValid=!isCapture&&!isImage&&!fileAwaitingVideo&&!paused_;
                             const double entryDeviation=deviationValid?nowMs()-itemPtsMs:0;

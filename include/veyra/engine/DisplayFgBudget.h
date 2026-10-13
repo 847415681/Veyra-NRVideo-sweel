@@ -15,14 +15,17 @@ namespace veyra::engine {
 //   1. the output fits the refresh (content x M <= 1.02 x refresh): unchanged;
 //   2. otherwise the largest supported multiplier whose output fits;
 //   3. if none fits but the source is slower than the panel (60 fps on a
-//      100 Hz panel), 2X: it still shows more distinct pictures per refresh;
+//      100 Hz panel), 2X: Automatic replaces the surplus at each refresh and
+//      still shows more distinct pictures per refresh. Under VSync (queued)
+//      the surplus would wait in the display queue instead, so bypass;
 //   4. if the source alone already fills the panel (>= 0.97 x refresh, e.g.
 //      60 fps on 60 Hz), bypass generation: no generated picture can add a
 //      refresh, and real frames present as soon as they are enhanced instead
 //      of waiting half an interval behind a generated one.
 // XeSS changes its interpolation count only through a model switch Intel
 // documents as expensive (shader compilation), so XeSS keeps the requested
-// multiplier and only rule 4 applies (xefgSwapChainSetEnabled).
+// multiplier and only bypasses (xefgSwapChainSetEnabled): under rule 4, and
+// under VSync whenever its output does not fit.
 inline constexpr double kDisplayFgFitTolerance=1.02;
 inline constexpr double kDisplayFgFillRatio=0.97;
 
@@ -38,14 +41,16 @@ constexpr bool displayFgMultiplierSupported(FrameGenerationBackend backend,unsig
 }
 
 // 0 = bypass generation, otherwise a multiplier in [2, requested].
-// Unknown rates keep the request.
-inline unsigned displayFgMultiplier(FrameGenerationBackend backend,unsigned requested,double contentFps,double refreshHz){
+// queued: presents above the refresh wait in the display queue (VSync)
+// instead of being replaced (Automatic). Unknown rates keep the request.
+inline unsigned displayFgMultiplier(FrameGenerationBackend backend,unsigned requested,double contentFps,double refreshHz,bool queued=false){
     if(requested<2||!std::isfinite(contentFps)||!std::isfinite(refreshHz)||contentFps<=0||refreshHz<=0)return requested;
     if(contentFps>=refreshHz*kDisplayFgFillRatio)return 0;
-    if(contentFps*requested<=refreshHz*kDisplayFgFitTolerance||backend==FrameGenerationBackend::XeSS)return requested;
+    if(contentFps*requested<=refreshHz*kDisplayFgFitTolerance)return requested;
+    if(backend==FrameGenerationBackend::XeSS)return queued?0:requested;
     for(unsigned m=requested-1;m>=2;--m)
         if(displayFgMultiplierSupported(backend,m)&&contentFps*m<=refreshHz*kDisplayFgFitTolerance)return m;
-    return 2;
+    return queued?0:2;
 }
 
 // A changed decision applies only after it held for the whole hold time, so a
