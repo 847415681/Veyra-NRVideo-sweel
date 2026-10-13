@@ -109,7 +109,6 @@ try:
     with console.open('wb') as stream:
         command=[str(APP/'veyra_qml_ui.exe'),'--data-dir',str(PROFILE),'--page','home','--size','1400x900','--exit-after','70000']
         if MODE=='software':command.append('--obs-game-capture')
-        if MODE=='software':command.append('--obs-game-capture')
         proc=subprocess.Popen(command,cwd=APP,env=env,stdout=stream,stderr=subprocess.STDOUT)
         while proc.poll() is None:
             if time.monotonic()-start>80:proc.kill();raise TimeoutError('GUI timeout')

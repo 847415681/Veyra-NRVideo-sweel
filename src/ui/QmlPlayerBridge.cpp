@@ -4060,13 +4060,12 @@ double QmlPlayerBridge::sourceFps() const { return impl_->snapshot.nominalSource
 int QmlPlayerBridge::sourceRotation() const { return impl_->snapshot.sourceRotationDegrees; }
 double QmlPlayerBridge::sourceAspect() const {
     const auto& s = impl_->snapshot;
-    // The container's display aspect already accounts for sample aspect ratio and
-    // rotation, so prefer it. The pixel ratio is only a fallback for a source that
-    // reported none, and it is never presented as more than that.
-    if (s.sourceDisplayAspect > 0.01) return s.sourceDisplayAspect;
-    if (s.sourceWidth > 0 && s.sourceHeight > 0)
-        return double(s.sourceWidth) / double(s.sourceHeight);
-    return 0.0;
+    // A known DAR already includes SAR/rotation. With no DAR, rotate the coded
+    // extent as the presenter does; phone files can omit SAR yet carry a matrix.
+    engine::PreviewView view;
+    view.displayAspect=s.sourceDisplayAspect;
+    view.rotationDegrees=s.sourceRotationDegrees;
+    return view.aspect(float(s.sourceWidth),float(s.sourceHeight));
 }
 
 // --- live performance -------------------------------------------------------
@@ -6751,7 +6750,10 @@ double QmlPlayerBridge::previewAspect() const {
     const int mode=impl_->screenFillActive?2:impl_->aspectMode;
     if(mode==4)return 16.0/9;if(mode==5)return 4.0/3;if(mode==6)return 21.0/9;
     const auto e=impl_->snapshot.metrics.resolution.output;
-    if(mode==1&&e.height)return double(e.width)/e.height;
+    if(mode==1&&e.height){
+        engine::PreviewView view;view.mode=1;view.rotationDegrees=impl_->snapshot.sourceRotationDegrees;
+        return view.aspect(float(e.width),float(e.height));
+    }
     return sourceAspect();
 }
 void QmlPlayerBridge::setDisplaySync(int value) {
