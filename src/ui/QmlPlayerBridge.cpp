@@ -6471,6 +6471,10 @@ void QmlPlayerBridge::updateRunStatus() {
         const auto sync=i.presentation.display==engine::DisplaySync::Vsync?tr("垂直同步"):tr("自动显示同步");
         options<<((refresh>0)?tr("%1 · 屏幕 %2 Hz").arg(sync).arg(refresh,0,'f',1):sync);
     }
+    // Variable refresh (NVIDIA G-SYNC / G-SYNC Compatible), set in the driver.
+    if(s.running&&s.displayVrr==4)options<<tr("可变刷新生效中");
+    else if(s.running&&s.displayVrr==3)options<<tr("可变刷新已开启");
+    else if(s.running&&s.displayVrr==2)options<<tr("屏幕支持可变刷新（未开启）");
     if(i.presentation.outputRate!=engine::OutputRateMode::Off){
         if(s.running&&s.presentationEffective.outputRate==engine::OutputRateMode::Off)
             options<<tr("输出限帧 · 当前未生效");

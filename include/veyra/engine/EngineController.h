@@ -125,6 +125,9 @@ struct PlayerSnapshot {
     bool displayFgLimited=false;
     unsigned displayFgMultiplier=0;
     double displayFgRefreshHz=0,displayFgContentFps=0;
+    // Variable refresh of the presenting monitor (NVIDIA only): 0 unknown,
+    // 1 not possible, 2 possible but off, 3 enabled in the driver, 4 active.
+    unsigned displayVrr=0;
     // Runtime-reported DLSSG MultiFrameCountMax: 1 = 2X only, 5 = 6X.
     // 0 = not queried yet (no session). The UI uses this to offer only the
     // multipliers the active GPU can actually honour.

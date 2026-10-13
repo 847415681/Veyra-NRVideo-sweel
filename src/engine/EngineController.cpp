@@ -2556,6 +2556,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     snapshot_.previewSkipped=measured.flow.counters.previewSkippedBeforeGraph;
                     snapshot_.fgBudgetLimited=measured.flow.lastFgRejected100ns>0&&host100ns()-measured.flow.lastFgRejected100ns<10000000;
                     snapshot_.xessGenerationSuppressed=graph->xessEnabled()&&presenter.xessGenerationSuppressed()&&!fgBypassed; // budget bypass is not an overload
+                    {presenter.displayRefreshHz();const auto vrr=presenter.displayVrr();snapshot_.displayVrr=!vrr.known?0u:vrr.enabled||vrr.inVrrMode?4u:vrr.requested?3u:vrr.possible?2u:1u;}
                     snapshot_.nrActive=graph->nrEnabled()&&graphStats.nrEvaluateCount>0;
                     snapshot_.nrAutoActive=graph->autoNrPoolReady();
                     snapshot_.nrAutoPercent=graph->autoNrPoolReady()?AutoNrController::percent(graph->autoNrLevel()):0;

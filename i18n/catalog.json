@@ -15828,6 +15828,27 @@
    "zh-TW": "顯示同步：自動",
    "en": "Display sync: auto",
    "ja": "表示の同期：自動"
+  },
+  {
+   "zh": "可变刷新生效中",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "可變更新生效中",
+   "en": "Variable refresh active",
+   "ja": "可変リフレッシュ動作中"
+  },
+  {
+   "zh": "可变刷新已开启",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "可變更新已開啟",
+   "en": "Variable refresh enabled",
+   "ja": "可変リフレッシュ有効"
+  },
+  {
+   "zh": "屏幕支持可变刷新（未开启）",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "螢幕支援可變更新（未開啟）",
+   "en": "Display supports variable refresh (off)",
+   "ja": "画面は可変リフレッシュに対応（無効）"
   }
  ]
 }

@@ -31,7 +31,7 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
         veyra::log::warn("present","presentation creation cancelled: target window is no longer available");
         return false;
     }
-    viewWidth_=viewHeight_=0;bufferMonitor_=nullptr;monitorWidth_=monitorHeight_=0;refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};
+    viewWidth_=viewHeight_=0;bufferMonitor_=nullptr;monitorWidth_=monitorHeight_=0;refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};vrr_={};refreshQueried_=false;
     ++generation_;
     Status st=Status::Ok;
     // Keep one presentation queue for the native chain's lifetime. A later
@@ -413,7 +413,7 @@ bool VideoPresenter::readPresentedFrameForTest(gfx::D3D12DeviceContext& ctx,gfx:
 void VideoPresenter::close(){
     metadataSent_=false;metadataDirty_=false;lastMetadata_={};sourceMetadata_={};metadataAttempt_={};
     hdrPeakMonitor_=nullptr;hdrPeakInfo_={};hdrPeakQuery_={};
-    refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};
+    refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};vrr_={};refreshQueried_=false;
     retainedFrame_.reset();
     xessInputId_=0;xessWork_={};xessWorkPosition_=0;
     reflex_.close();reflexFrame_=0;
@@ -432,6 +432,9 @@ double VideoPresenter::displayRefreshHz(){
         const double hz=gfx::PresentSink::displayRefreshFps(window_);
         if(refreshMonitor_&&std::abs(hz-refreshHz_)>0.5)veyra::log::info("display-refresh",std::format("monitor refresh={:.3f} Hz (was {:.3f}; window moved or display mode changed)",hz,refreshHz_));
         refreshHz_=hz;refreshMonitor_=monitor;refreshQuery_=now;sink_.setDisplayRefreshHz(hz);
+        const auto vrr=gfx::queryVrr(window_);
+        if(!(vrr==vrr_)||!refreshQueried_)veyra::log::info("display-vrr",std::format("known={} possible={} requested={} active={} displayInVrrMode={} indicator={} status={} refreshHz={:.3f} (NVIDIA G-SYNC / G-SYNC Compatible state of the window's monitor; enabled by the user in the NVIDIA Control Panel, never changed by Veyra)",vrr.known,vrr.possible,vrr.requested,vrr.enabled,vrr.inVrrMode,vrr.indicator,vrr.status,hz));
+        vrr_=vrr;refreshQueried_=true;
     }
     return refreshHz_;
 }

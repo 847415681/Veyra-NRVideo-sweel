@@ -9383,3 +9383,9 @@ v2.0.7 ID 410800361，published_at 2026-10-12T16:24:59Z，latest/非草稿/非�
 改动：XeSS 呈现器与图共用同一个直接队列，真帧提交后立刻打标签并 Present（GPU 顺序保证在增强之后执行），每次循环就是一个完整 XeLL 周期：睡眠→读帧→提交→送显；XeSS 也遵守“GPU 未完成不读下一帧”（等完再从邮箱取最新帧）。GPU 就绪耗时改由完成轮询记录（从任务创建到观察到完成），统计口径不再是“作业等待”。XessPresenter 日志新增 cycleMismatches（送显的源帧不在本周期准备的次数）。测试开关：`VEYRA_TEST_XESS_PRESENT_AFTER_READY=1` 恢复等 GPU 后送显，`VEYRA_TEST_XESS_STACKED_READS=1` 恢复叠读。
 
 验证（采集卡离线，用屏幕采集直播链路 screen-xess，30fps 源，XeSS 2X，320Hz，测量窗口内）：cycleMismatches 旧 922/960 → 新 0/960；回调→送显 P95 3.8→3.0ms；SDK 提交 56→58/s，补帧照常；测试断言 10/10 通过。屏幕采集负载很轻（无 NR），带 NR 的采集卡实测收益待设备上线。
+
+## 2026-10-14 极限低延迟 C1 可变刷新（VRR）检测（Claude）
+
+新增 `include/veyra/gfx/NvidiaVrr.h`：按 ReflexSession 同样的规则只从 System32 加载并常驻 nvapi64.dll，用公开 nvapi（MIT，本地 deps/nvapi-pacing 头文件核对函数 ID 与 NV_GET_VRR_INFO_V1 布局）查询窗口所在显示器的 G-SYNC / G-SYNC Compatible 状态；随刷新率每 2 秒或换屏时重读，变化时写 `display-vrr` 日志；快照 `displayVrr`（0 未知/非 NVIDIA、1 不支持、2 支持未开启、3 已开启、4 生效中），状态栏追加“可变刷新生效中/已开启/屏幕支持可变刷新（未开启）”并补翻译。Veyra 不修改驱动设置。
+
+本机结果：320Hz 显示器 known=true status=0 possible=false（当前连接/设置下不能开 VRR），因此本机无法实测 VRR 对“自动”的效果。用户指引：显示器支持 G-SYNC / FreeSync 时，在 NVIDIA 控制面板“设置 G-SYNC”中开启并选择“为窗口和全屏模式启用”，Veyra 显示同步保持“自动”；VRR 生效后屏幕按帧到达刷新（不超过最高刷新），省掉 0–1 个刷新的等待。多数显示器在 PBP/画中画模式下会关闭 VRR。
