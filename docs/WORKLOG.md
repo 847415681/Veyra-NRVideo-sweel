@@ -9345,3 +9345,15 @@ ZIP/EXE原字节晋级，仅外部下载名去test-r2；包内显示原标识在
 v2.0.7 ID 410800361，published_at 2026-10-12T16:24:59Z，latest/非草稿/非预发布通过；两个运行资产服务器SHA/size等于原test-r2。v2.0.7-sources ID 410800322，两源资产、非latest，未变依赖源保留v2.0.6。main/tag6ede5a7普通atomic推送成功，产品与67ab696相同，后续只补回执文档。remote.py draft/upload/verify-draft/publish/verify-public均通过；public-check.py final全部公开文档/双QR/Ko-fi/Release/下载200，六群原图SHA吻合，飞书带Cookie匿名GET200。最初无Cookie404/循环证据保留，不把它写成知识库本身失效。
 
 旧v2.0.6Release完整稳定字段不变，68其它树/509脏文件/全部原包保护通过。详细docs/RELEASE_2.0.7_REPORT_2026-10-13.md；外部reports/logs回执固定远端正文/资产digest。只读发布辅助检查曾因utf8-sig别名和依赖回执尚未完成失败，原错误说明保留，改编码/顺序后原检查通过，未重发或改资产。原扩展NR+DLSS热切换失败和NV显存/BMD/HDR/AMD实卡限制保留，没有新性能或全硬件通过声明。群公告632字符仅保存给用户，无代发/关机。
+
+## 2026-10-13 4K NR＋XeSS 可见延迟链路排查
+
+用户指定延迟分析会话，要求解释4K无效果约33ms、NR＋补帧100多ms，补充XeSS2X/1080NR/60→30/未手动启用VSync。隔离codex/latency-chain-audit-20261013从main7571919，只读产品审查与正常负载诊断；71旧树head/status及source-before.bundle、输入日志/录像报告SHA固定在archives/latency-chain-audit-20261013，未改更新检查分支、用户程序或真实配置。
+
+读取原录像报告及两张分析截图，没有重解码其15638帧。找到相同时间T9114K60NV12日志：Auto display=2实际sync=1（ef2069f防撕裂改动）；基线也sync=1，不能据此单独判定延迟差原因。XeSS提前返回，绕开普通VSync路径的最大队列1；原日志content=Auto1、固定半帧false、接收60/处理30/覆盖30，重复0。日志汇总脚本 `python -X utf8 -B -I scripts/acceptance/latency-chain-evidence.py --log <cadence测试包日志> --output E:/项目/Veyra/reports/latency-chain-audit-20261013/historical-windows.json` 通过：每条P95中位数，基线回调→Present返回5.458ms，增强52.482ms，NR5.460/光流1.101ms；这不是合并样本P95或光学延迟分解。
+
+原r2EXE6fd35109...私有--data-dir与临时QML，普通GPU优先级，4K60NV12/原版1080NR单层。命令 `python -X utf8 -B -I E:/项目/Veyra/tmp/latency-chain-audit-20261013/capture-trace.py <nr|xess|half-xess|half-xess-tearing>`，每场24s正常负载，均通过；稳态8s后汇总回调→Present返回的日志P95中位数9.545/10.808/10.288/10.897ms。当前320Hz与昨晚PBP60Hz不同，未改用户显示模式，不宣称原场景复现或物理延迟下降。汇总normal-load.json、四组receipt/player/console保存在本轮reports/logs目录。
+
+三个独立隐藏SDK配置探针编译/执行通过，最后按产品AllowTearing/无WaitableObject flags验证：XeSS初始化/启用最大队列返回3，Set1读回1，关闭再开仍1；并未Present，不能声称底层队列实际收紧或毫秒收益。源码tests/latency-chain-audit-20261013/LatencyConfig{,Enabled,ProductFlags}Probe.cpp、编译器启动脚本在tmp、本轮build EXE、config-*-probe日志/回执均在E盘。首编译因cl PATH查找WinError2失败改明确编译器路径；前两探针多用WaitableObject，复核发现后补跑真实flags，并记录原生无该flag返回0x887a0001、XeSS代理接受的差异。
+
+失败完整保留：首场设备名MCS4K-T911匹配不到，改唯一T911后通过；既有trace开关启用后QML diagnosticsReport仅592字节简报，analyze-xess-timeline报无trace，尚无逐帧XeLL Sleep/SDK GPU执行/队列占用。源码核对XeLL取源前调用、XeSS应用pairDelay0/调度等待0，未找到叠加固定A/B相位；共享direct queue仍是待测耦合候选。报告docs/LATENCY_CHAIN_AUDIT_REPORT_2026-10-13.md明确事实、候选和60Hz同场光学A/B缺口，不宣称全部112ms根因已分解。产品实现/QML绘制统计频率/运行组件/模型不变；本轮无需重建产品，独立探针可构建、现成产品四场可运行。无merge/push/Release/新测试包/关机/子Agent。最终输入保护、差异审计和源码bundle回执见reports/latency-chain-audit-20261013/final.json。
