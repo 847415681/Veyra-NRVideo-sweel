@@ -5,6 +5,7 @@
 #include "veyra/engine/FrameGenerationSelection.h"
 #include "veyra/ui/QmlExportQueueModel.h"
 #include "veyra/ui/PlaylistModel.h"
+#include "veyra/ui/UpdateChecker.h"
 #include "veyra/ui/UiLanguage.h"
 #include <QQmlEngine>
 #include <QMetaMethod>
@@ -1064,6 +1065,9 @@ QVariantList QmlPlayerBridge::srBackendChoices() const {
 QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesystem::path dataDirectory,
                                 QObject* parent)
     : QObject(parent), impl_(std::make_unique<Impl>(engine, std::move(dataDirectory))) {
+    auto* checker = new UpdateChecker(version(), this);
+    updates_ = checker;
+    connect(checker, &UpdateChecker::notice, this, &QmlPlayerBridge::notice);
     impl_->playlist = new PlaylistModel(utf8Of((impl_->dataDir / L"playlist.v1.json").wstring()), this);
     connect(impl_->playlist, &PlaylistModel::playRequested, this, [this](const QString& path) {
         openPath(path);
@@ -5519,6 +5523,7 @@ void QmlPlayerBridge::openFeedbackPage() {
 void QmlPlayerBridge::openReleasesPage() {
     QDesktopServices::openUrl(QUrl(QStringLiteral("https://github.com/Likely7/Veyra-NRVideo/releases")));
 }
+QObject* QmlPlayerBridge::updates() const { return updates_; }
 bool QmlPlayerBridge::eventFilter(QObject* watched, QEvent* event) {
     const auto type = event->type();
     if (type == QEvent::KeyPress || type == QEvent::KeyRelease) {

@@ -9345,3 +9345,8 @@ ZIP/EXE原字节晋级，仅外部下载名去test-r2；包内显示原标识在
 v2.0.7 ID 410800361，published_at 2026-10-12T16:24:59Z，latest/非草稿/非预发布通过；两个运行资产服务器SHA/size等于原test-r2。v2.0.7-sources ID 410800322，两源资产、非latest，未变依赖源保留v2.0.6。main/tag6ede5a7普通atomic推送成功，产品与67ab696相同，后续只补回执文档。remote.py draft/upload/verify-draft/publish/verify-public均通过；public-check.py final全部公开文档/双QR/Ko-fi/Release/下载200，六群原图SHA吻合，飞书带Cookie匿名GET200。最初无Cookie404/循环证据保留，不把它写成知识库本身失效。
 
 旧v2.0.6Release完整稳定字段不变，68其它树/509脏文件/全部原包保护通过。详细docs/RELEASE_2.0.7_REPORT_2026-10-13.md；外部reports/logs回执固定远端正文/资产digest。只读发布辅助检查曾因utf8-sig别名和依赖回执尚未完成失败，原错误说明保留，改编码/顺序后原检查通过，未重发或改资产。原扩展NR+DLSS热切换失败和NV显存/BMD/HDR/AMD实卡限制保留，没有新性能或全硬件通过声明。群公告632字符仅保存给用户，无代发/关机。
+
+
+## 2026-10-13 更新检查开工
+
+用户要求启动自动查新版并短暂顶部提示，无更新静默。起点main7571919，隔离codex/update-check-20261013；70旧树/脏文件与增量bundle存档verify通过。实施独立Qt Network异步服务/bridge/顶部8秒可点击提示/设置手动检查/四语。保持33ms/250ms、引擎和真实配置，产物全E盘。当前待构建、HTTP异常及真实GitHub/GUI验证，尚不称完成。详情UPDATE_CHECK_PLAN_2026-10-13.md。

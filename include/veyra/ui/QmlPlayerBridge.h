@@ -102,6 +102,7 @@ class QmlPlayerBridge : public QObject {
     // The loaded runtime components, as the engine reports them. A hand-written
     // list here could drift from what the package actually contains.
     Q_PROPERTY(QVariantList componentList READ componentList NOTIFY snapshotChanged)
+    Q_PROPERTY(QObject* updates READ updates CONSTANT)
 
     // --- capture dialog ----------------------------------------------------
     // Device and format lists come from the source's own enumeration, so the UI
@@ -695,6 +696,7 @@ public:
     Q_INVOKABLE bool presentationOverlayRunning() const;
     Q_INVOKABLE void openFeedbackPage();
     Q_INVOKABLE void openReleasesPage();
+    QObject* updates() const;
     QVariantList audioDevices() const;
     QVariantList gpuMonitorChoices() const;
     QString gpuMonitorName() const;
@@ -1202,6 +1204,7 @@ private:
 
     struct Impl;
     std::unique_ptr<Impl> impl_;
+    QObject* updates_ = nullptr;
 };
 
 } // namespace veyra::ui

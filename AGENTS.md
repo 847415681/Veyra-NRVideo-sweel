@@ -1,5 +1,8 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-13 更新检查授权**：用户要求真正检查更新、每次启动后台检查、新版本顶部小提示自动消失、无更新静默。按 docs/UPDATE_CHECK_PLAN_2026-10-13.md 隔离 codex/update-check-20261013，仅必要 UI 网络服务/bridge/QML/翻译/CMake/验收；覆盖这些接点旧冻结，70旧树/脏文件保护。保持引擎/运行库/用户配置及33ms/250ms刷新，不派Agent。产物全E盘，无main合并/push/Release/关机。
+
+
 > **2026-10-13 2.0.7正式发布授权**：用户明确直接采用已验2.0.7-test-r2两个包发布GitHub、六群原图替换、README/Release加知识库、完整说明2.0.6以来变化。按docs/RELEASE_2.0.7_PLAN_2026-10-13.md，只改发布文档/图片和外部文件名，ZIP/EXE/运行组件逐字节保持。允许本地main合入、普通push nrvideo/main与两个标签、主v2.0.7两资产及独立非latest源码归档；保留原赞助/Discord/Ko-fi/width220。69旧树/509脏文件、旧包和旧Release保护，全产物E盘；无子Agent/代发/关机。不伪称包内test标识被去掉，不把混合模型取舍或合成误差包装成普遍画质/提速，也不宣称NV显存/BMD/HDR现场已根治。
 
 > **2026-10-12 用户确认 Claude 内容节奏修复实机通过并授权合并重打 2.0.7**：从 main05bc4b5 隔离合入 claude/cadence-exact-20261012（60a93f3、8d11cad），按 docs/TEST_2.0.7_REFRESH_2026-10-12.md 重新构建、定向回归、本地 main 合并与 NVIDIA/AMD 完整测试包；显示2.0.7-test-r2。保护68旧树/509脏文件及已交付原包，全部研发产物在E盘新任务目录。不改用户正在运行的播放器/配置、UI频率/默认GPU优先级/运行库/模型，无新push/Release/关机或子Agent授权。

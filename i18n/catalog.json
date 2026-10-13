@@ -15716,6 +15716,48 @@
    "zh-TW": "{} {}X 補幀初始化失敗，未替換後端或降低倍率；請查看工作診斷日誌",
    "en": "{} {}X frame generation could not initialize. The backend and multiplier were retained; see the task diagnostic log.",
    "ja": "{} {}X フレーム生成を初期化できませんでした。バックエンドと倍率は維持されています。タスク診断ログを確認してください。"
+  },
+  {
+   "zh": "发现新版本 %1",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "發現新版本 %1",
+   "en": "New version %1 available",
+   "ja": "新しいバージョン %1 があります"
+  },
+  {
+   "zh": "发现新版本 %1，点击查看更新",
+   "src": "qml/Veyra/UpdateBanner.qml",
+   "zh-TW": "發現新版本 %1，點擊查看更新",
+   "en": "Version %1 available. Click to view the update.",
+   "ja": "バージョン %1 があります。クリックして更新を確認。"
+  },
+  {
+   "zh": "启动时自动检查，有更新时提示",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "啟動時自動檢查，有更新時提示",
+   "en": "Checks on startup; notifies when an update is available",
+   "ja": "起動時に確認し、更新がある場合に通知します"
+  },
+  {
+   "zh": "当前已是最新版本",
+   "src": "src/ui/UpdateChecker.cpp",
+   "zh-TW": "目前已是最新版本",
+   "en": "You are up to date",
+   "ja": "最新バージョンです"
+  },
+  {
+   "zh": "查看更新",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "查看更新",
+   "en": "View update",
+   "ja": "更新を見る"
+  },
+  {
+   "zh": "检查更新失败，请检查网络后重试",
+   "src": "src/ui/UpdateChecker.cpp",
+   "zh-TW": "檢查更新失敗，請檢查網路後重試",
+   "en": "Could not check for updates. Check your connection and try again.",
+   "ja": "更新を確認できませんでした。接続を確認して再試行してください。"
   }
  ]
 }
