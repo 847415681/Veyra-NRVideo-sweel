@@ -9345,3 +9345,15 @@ ZIP/EXE原字节晋级，仅外部下载名去test-r2；包内显示原标识在
 v2.0.7 ID 410800361，published_at 2026-10-12T16:24:59Z，latest/非草稿/非预发布通过；两个运行资产服务器SHA/size等于原test-r2。v2.0.7-sources ID 410800322，两源资产、非latest，未变依赖源保留v2.0.6。main/tag6ede5a7普通atomic推送成功，产品与67ab696相同，后续只补回执文档。remote.py draft/upload/verify-draft/publish/verify-public均通过；public-check.py final全部公开文档/双QR/Ko-fi/Release/下载200，六群原图SHA吻合，飞书带Cookie匿名GET200。最初无Cookie404/循环证据保留，不把它写成知识库本身失效。
 
 旧v2.0.6Release完整稳定字段不变，68其它树/509脏文件/全部原包保护通过。详细docs/RELEASE_2.0.7_REPORT_2026-10-13.md；外部reports/logs回执固定远端正文/资产digest。只读发布辅助检查曾因utf8-sig别名和依赖回执尚未完成失败，原错误说明保留，改编码/顺序后原检查通过，未重发或改资产。原扩展NR+DLSS热切换失败和NV显存/BMD/HDR/AMD实卡限制保留，没有新性能或全硬件通过声明。群公告632字符仅保存给用户，无代发/关机。
+
+## 2026-10-13 极限低延迟 A1/A2（Claude）
+
+用户要求把显示同步“自动”恢复成 2.0.4 前的游戏同款（不撕裂、不等垂直同步），延迟压到极限。排查依据见 E:/项目/Veyra/reports/claude-latency-20261013（112ms 根因、DXGI 小程序、320Hz 实卡）。方案 docs/LATENCY_MIN_PLAN_2026-10-13.md。
+
+改动：`presentationVsync()` 只对 Vsync 返回 true，“自动”= `Present(0,0)`；VideoPresenter 状态文字、ProPage 提示与 catalog 追加条目；PresentSink 每秒记录 presentsAhead，自动模式送显→上屏只按确认上屏的帧统计；RepairContract/UiContract 测试期望按新语义更新。
+
+构建：`py -3.11 -I E:/项目/Veyra/tmp/claude-latency-min-20261013/build.py`（只读复用 build/test-2.0.7-refresh-20261012，main 7571919 与 r2 产品源码一致；重编 19 个对象，未重编的包含者只属于本次不构建的测试程序），回执 logs/claude-latency-min-20261013/build-20261013-205844/receipt.json。
+
+测试（私有程序副本 tests/claude-latency-min-20261013/app）：veyra_repair_contract_tests 259 项 0 失败；veyra_ui_contract_tests 通过；新验收 `scripts/acceptance/latency-min-tests.py` display-sync 12/12（窗口/全屏×低延迟队列×三种模式，实际 Present 参数：自动 sync=0 flags=0，垂直同步 sync=1，允许撕裂 0x200；像素校验通过，D3D12 错误 0），lifecycle 通过。历史 2.0.6 验收脚本仍写死“自动=sync1”，按规则不改旧脚本。
+
+实卡（T911 2K60 NV12 → NR，320Hz，内容不去重）：DLSS 6X（360fps 超刷新率）送显→上屏 P50/P95 由垂直同步语义的 11.8/18.3ms 降到 6.2/8.0ms，插帧过期 44→0.6/s，邮箱等待 11.2→0.3ms；同一 EXE 显式垂直同步仍为 12.2/18.4ms（B3 待做）；DLSS 4X 5.4/7.0ms 与改前一致；XeSS 2X 自动 sync=0 flags=0，补帧正常 120fps，回调→送显 P95 10.0ms；仅 NR 8.9ms、送显→上屏 4.5ms。60Hz PBP 下 XeSS 超刷新率场景本机无法复现，需用户光学复测。日志 logs/claude-latency-min-20261013/<场景>/。

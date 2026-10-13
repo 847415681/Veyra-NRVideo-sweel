@@ -401,14 +401,16 @@ bool PresentSink::present(Status& status)
     const bool beforeOk=!xess_||xess_->beforePresent();
     presentTiming_.beforeMs=split();
     if(!beforeOk){xessFailed_=true;status=Status::WindowFailure;return false;}
-    const bool trackScanout=displayLatencyEnabled_&&!xess_&&syncInterval==1;
+    // Vsync and Automatic Present(0,0) frames are shown at a vblank; a torn
+    // frame has no single vblank to date it by.
+    const bool trackScanout=displayLatencyEnabled_&&!xess_&&!(flags&DXGI_PRESENT_ALLOW_TEARING);
     if(trackScanout)sampleDisplayLatency();
     LARGE_INTEGER presentQpc{};QueryPerformanceCounter(&presentQpc);
     const HRESULT hr = swapChain_->Present(syncInterval, flags);
     presentTiming_.callMs=split();presentTiming_.result=hr;
     UINT presentId=0;
     if(SUCCEEDED(hr)&&trackScanout&&SUCCEEDED(swapChain_->GetLastPresentCount(&presentId)))
-        pendingPresents_[pendingPresentNext_++%pendingPresents_.size()]={presentId,presentQpc.QuadPart};
+        pendingPresents_[pendingPresentNext_++%pendingPresents_.size()]={presentId,presentQpc.QuadPart,syncInterval==0};
     if(presentContractDirty_||attemptedPresentCount_<=3||attemptedPresentCount_%120==0){
         log::info("present-contract",std::format("backend={} sync={} flags=0x{:X} hr=0x{:X}",xess_?"XeSS":"DXGI",syncInterval,flags,unsigned(hr)));
         presentContractDirty_=false;
@@ -484,6 +486,8 @@ PresentSink::FrameStatisticsDelta PresentSink::sampleFrameStatistics(){
         delta.displayedRefresh=uint64_t(stats.PresentRefreshCount-frameStatisticsBasePresentRefresh_);
         delta.refreshes=uint64_t(stats.SyncRefreshCount-frameStatisticsBaseSyncRefresh_);
     }
+    UINT lastPresent=0;
+    if(SUCCEEDED(swapChain_->GetLastPresentCount(&lastPresent)))delta.ahead=int64_t(lastPresent)-int64_t(stats.PresentCount);
     frameStatisticsBaseValid_=true;
     frameStatisticsBasePresents_=presentCount_;
     frameStatisticsBaseDisplayed_=stats.PresentCount;
@@ -513,6 +517,7 @@ void PresentSink::sampleDisplayLatency(){
     // keeping only the newest (and least delayed) one of each burst.
     for(const auto& pending:pendingPresents_){
         if(!pending.qpc||pending.id>stats.PresentCount||(previous&&pending.id<=previous)||stats.PresentCount-pending.id>=pendingPresents_.size())continue;
+        if(pending.replaceable&&pending.id!=stats.PresentCount)continue;
         const double ms=(scanout-double(stats.PresentCount-pending.id)*period-double(pending.qpc))*1000.0/frequency;
         if(ms>=0&&ms<1000&&displayLatencyMs_.size()<4096)displayLatencyMs_.push_back(ms);
     }

@@ -123,7 +123,7 @@ VPage {
         spacing: 0
         VRow {
             label: qsTr("显示同步")
-            hint: qsTr("自动：与屏幕同步防撕裂 · 提交帧率受屏幕刷新率限制 · 想再降延迟可选“允许撕裂”（可能撕裂）或在显卡驱动开启 G-SYNC/FreeSync，最多少等一次刷新（60Hz 约 8 ms）")
+            hint: qsTr("自动（推荐）：不撕裂，也不等待垂直同步，每次刷新显示最新一帧，延迟最低 · 垂直同步：每帧都等刷新，输出帧率超过刷新率时会排队、延迟变大 · 允许撕裂：可能出现撕裂线")
             VSeg {
                 objectName: "presentation-display-sync"
                 options: [{ id: "0", label: qsTr("允许撕裂") }, { id: "1", label: qsTr("垂直同步") }, { id: "2", label: qsTr("自动") }]

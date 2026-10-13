@@ -110,6 +110,10 @@ public:
     struct FrameStatisticsDelta {
         bool supported=false;
         uint64_t presents=0,displayed=0,refreshes=0,displayedRefresh=0;
+        // GetLastPresentCount - last shown PresentCount at the sample, -1 if
+        // either query failed. Under Vsync this is the display queue depth;
+        // with Present(0,0) it also counts frames a newer one will replace.
+        int64_t ahead=-1;
         HRESULT result=S_OK;
     };
     FrameStatisticsDelta sampleFrameStatistics();
@@ -202,7 +206,9 @@ private:
     uint64_t frameStatisticsBasePresents_=0;
     UINT frameStatisticsBasePresentRefresh_=0,frameStatisticsBaseSyncRefresh_=0,frameStatisticsBaseDisplayed_=0;
     void sampleDisplayLatency();
-    struct PendingPresent { UINT id=0; int64_t qpc=0; };
+    // replaceable: Present(0,0); only the frame a later sample names as shown
+    // is dated, a newer present may have replaced the ones in between.
+    struct PendingPresent { UINT id=0; int64_t qpc=0; bool replaceable=false; };
     std::array<PendingPresent,16> pendingPresents_{};
     unsigned pendingPresentNext_=0;
     UINT lastDisplayedPresent_=0,lastSyncRefresh_=0;

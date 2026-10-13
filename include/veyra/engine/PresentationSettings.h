@@ -25,12 +25,19 @@ struct PresentationSettings {
     bool operator==(const PresentationSettings&) const = default;
     bool valid()const{return unsigned(mode)<=2&&unsigned(display)<=2&&unsigned(outputRate)<=2&&std::isfinite(customFps)&&customFps>=1.0&&customFps<=1000.0;}
 };
-// Automatic explicitly synchronizes the final swapchain to the display in
-// both windowed and fullscreen playback. Present(0,0) relies on the negotiated
-// compositor/provider path; it must not be sold as a universal tear-free mode.
-// The explicit Tearing choice keeps the unsynchronized path available.
+// Automatic never waits for vertical sync and never requests tearing: a
+// flip-model Present(0, 0) replaces a frame that has not been shown yet at the
+// next refresh, so the newest finished frame is the one shown and nothing
+// queues behind the display (games running uncapped in a borderless window).
+// Measured 2026-10-13 (claude-latency-20261013, 320 Hz, producer faster than
+// the display): the frame on screen was 1.0 refresh old with Present(0,0) and
+// 6.9 refreshes old with Present(1,0), whose queue the unwaited latency object
+// does not limit. 2.0.6 (ef2069f) had made Automatic identical to Vsync; the
+// 4K NR+XeSS capture measured 112 ms on a 60 Hz panel with it.
+// Explicit Vsync makes every frame wait for a refresh; only explicit Tearing
+// passes DXGI_PRESENT_ALLOW_TEARING.
 constexpr bool presentationVsync(const PresentationSettings& s) {
-    return s.display!=DisplaySync::Tearing;
+    return s.display==DisplaySync::Vsync;
 }
 constexpr bool presentationTearing(const PresentationSettings& s) {
     return s.display==DisplaySync::Tearing;
