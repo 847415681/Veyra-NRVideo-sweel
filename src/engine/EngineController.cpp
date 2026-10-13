@@ -991,6 +991,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 int64_t predictedGpuStart100ns=0;
                 std::optional<double> gpuExecutionMs,fgExecutionMs,firstFgExecutionMs;
                 bool real=false;
+                // B1: presented before the GPU finished; the completion poll
+                // records the GPU-ready time (from jobStart) instead of the job.
+                bool presentedBeforeReady=false;
+                Clock::time_point jobStart{};
                 std::atomic<bool> ready=false;
                 Clock::time_point readyObserved{};
                 std::array<int64_t,pipeline::FrameBatch::Capacity> frameReadyObserved{};
@@ -1123,7 +1127,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         pairLatency.observe(observed,requiredDelay);
                     }
                     completeReset(batch.batch.identity);
-                    watch.readyObserved=Clock::now();watch.ready=true;it=pendingCompletions.erase(it);
+                    watch.readyObserved=Clock::now();
+                    if(watch.presentedBeforeReady&&watch.flow==frameFlow&&liveScheduler){
+                        const double readyMs=std::max(0.0,std::chrono::duration<double,std::milli>(watch.readyObserved-watch.jobStart).count());
+                        watch.flow->cpu(diagnostics::CpuStage::ReadyWait,readyMs,host100ns());
+                        liveReady.add(readyMs);liveStats.readyMs=readyMs;liveStats.readyP95=liveReady.p95();
+                    }
+                    watch.ready=true;it=pendingCompletions.erase(it);
                 }
                 collectTimings();
             };
@@ -1136,6 +1146,17 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // (no read gate, waits only with the toggle/cap) for A/B runs.
             bool presentationPaced=false;
             static const bool legacyVsyncQueue=GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_VSYNC_QUEUE",nullptr,0)>0;
+            // XeSS live presentation (latency-min B1): the presenter records on the
+            // graph's own queue, so a real frame can be tagged and presented right
+            // after its graph submission; GPU order keeps it after the enhancement.
+            // One loop is then one XeLL cycle: sleep -> read -> submit -> present.
+            // Waiting for the CPU fence first let the next source enter the same
+            // cycle, so the following present opened the next cycle and slept
+            // inside Present. VEYRA_TEST_XESS_PRESENT_AFTER_READY=1 restores the
+            // fence wait; VEYRA_TEST_XESS_STACKED_READS=1 lets XeSS read the next
+            // source while the previous one is still on the GPU, as before.
+            static const bool xessPresentAfterReady=GetEnvironmentVariableW(L"VEYRA_TEST_XESS_PRESENT_AFTER_READY",nullptr,0)>0;
+            static const bool xessStackedReads=GetEnvironmentVariableW(L"VEYRA_TEST_XESS_STACKED_READS",nullptr,0)>0;
             uint64_t pacingRevision=0,presenterGeneration=0;
             auto applyPresentation=[&]{
                 PresentationSettings requested;uint64_t revision;
@@ -1558,7 +1579,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         // latency (3 NR layers at 1440p60: 49 ms for 20 ms of GPU
                         // work); waiting and then taking the newest mailbox sample
                         // keeps it at one GPU pass. No effect while the GPU keeps up.
-                        return isCapture&&!(fgRunning&&presentSinkFrameGeneration(options.settings.frameGenerationBackend))&&!pendingCompletions.empty();
+                        return isCapture&&!(fgRunning&&presentSinkFrameGeneration(options.settings.frameGenerationBackend)&&(xessStackedReads||xessPresentAfterReady))&&!pendingCompletions.empty();
                     };
                     const auto leaseWaitStart=Clock::now();
                     while((liveScheduler->occupancy()>=2||!graph->nextFrameSlotAvailable()||enhancementPending())&&!stop_&&(!paused_||seekPreviewPending)&&!liveScheduler->failed()){
@@ -2216,6 +2237,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         diagnostics::GpuSample blit;
                     };
                     auto step=std::make_shared<LiveStepState>();
+                    watch->jobStart=step->readyStart;
+                    const bool submitThenPresent=isCapture&&presenter.xessActive()&&!xessPresentAfterReady;
                     for(unsigned i=0;i<out.batch.count;++i)if(out.batch.frames[i].kind!=pipeline::FrameKind::Generated||out.batch.frames[i].validity==pipeline::GenerationValidity::Valid)++step->remaining;
                     const double sourceIntervalMs=double(isCapture?liveInterval:liveSourceInterval100ns(pkt.duration,activeSource->info().averageFps))/10000;
                     const auto baselineReady=pkt.decodedHost100ns>0?pkt.decodedHost100ns:captureArrival;
@@ -2237,7 +2260,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #ifdef VEYRA_ENABLE_XBOX
                         &xb,
 #endif
-                        &seekDecoded,&seekStarted,&audio,&audioPipe,&audioStarted,&cadence,&ctx,&fileAudioAlignPending,&fileAwaitingVideo,&fileInputEnded,&playbackRate,&frameFlow,&graph,&host100ns,&isCapture,&isImage,&livePresent,&liveScheduler,&nextFgDeadlineLog,&nowMs,&options,&pendingCompletions,&physicalCapture,&presentEntryDeviation,&presentReturnDeviation,&presentationEffective,&presentationGeneration,&presentationSkippedGenerated,&presenter,&ring,&runSessionId,&seekPreviewPending,&traceFrame,&traceSubframes,watch,step,timeline,captureArrival,baselineReady,delayEnhanced,activeSeekId,lineage,jobGeneration,rereadCached,sourceIntervalMs,flow=frameFlow](int64_t now)->LiveGpuScheduler::Step{
+                        &seekDecoded,&seekStarted,&audio,&audioPipe,&audioStarted,&cadence,&ctx,&fileAudioAlignPending,&fileAwaitingVideo,&fileInputEnded,&playbackRate,&frameFlow,&graph,&host100ns,&isCapture,&isImage,&livePresent,&liveScheduler,&nextFgDeadlineLog,&nowMs,&options,&pendingCompletions,&physicalCapture,&presentEntryDeviation,&presentReturnDeviation,&presentationEffective,&presentationGeneration,&presentationSkippedGenerated,&presenter,&ring,&runSessionId,&seekPreviewPending,&traceFrame,&traceSubframes,watch,step,timeline,captureArrival,baselineReady,delayEnhanced,activeSeekId,lineage,jobGeneration,rereadCached,sourceIntervalMs,submitThenPresent,flow=frameFlow](int64_t now)->LiveGpuScheduler::Step{
                         using State=LiveGpuScheduler::State;auto& batch=watch->output;auto& s=*step;
                         auto updatePending=[&](LiveStepState*){
                             unsigned left=0;for(unsigned i=s.next;i<batch.batch.count;++i)if(batch.batch.frames[i].kind!=pipeline::FrameKind::Generated||batch.batch.frames[i].validity==pipeline::GenerationValidity::Valid)++left;
@@ -2257,7 +2280,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             const double itemPtsMs=double(item.pts100ns)/10000;
                             const auto decisionTime=host100ns();
                             const bool generationExpired=generated&&(isCapture?timeline.expired(item.pts100ns,decisionTime,100000):!fileAwaitingVideo&&previewGeneratedExpired(nowMs(),itemPtsMs));
-                            const auto readiness=previewFrameReadiness(item,comparisonMode_!=0||!generatedPresentationCurrent(jobGeneration,presentationGeneration.load()),generationExpired,[&]{return graph->resolveFrame(batch,s.next);});
+                            // B1: an XeSS real frame needs no CPU fence; the queue orders it.
+                            const bool early=submitThenPresent&&!generated&&!watch->ready;
+                            const auto readiness=previewFrameReadiness(item,comparisonMode_!=0||!generatedPresentationCurrent(jobGeneration,presentationGeneration.load()),generationExpired,[&]{return early||graph->resolveFrame(batch,s.next);});
+                            if(early&&readiness==PreviewFrameReadiness::Ready&&!s.readyReported){watch->presentedBeforeReady=true;s.readyReported=true;}
                             if(traceSubframes&&generated&&(readiness==PreviewFrameReadiness::Expired||readiness==PreviewFrameReadiness::Suppressed))
                                 traceFrame(diagnostics::TraceKind::Discarded,item.identity,batch.batch.batchId,item.lease->readyFence,item.pts100ns,item.subframe,unsigned(readiness),isCapture?double(decisionTime-timeline.deadline(item.pts100ns))/10000:nowMs()-itemPtsMs);
                             if(readiness==PreviewFrameReadiness::Pending){
@@ -2423,8 +2449,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         flow->update([&](auto& m){m.counters.cancelledBeforePresent+=batch.batch.count-s.handled;m.gpuReadyWaitMs=s.readyMs;m.deadlineWaitMs=s.waitMs;if(s.count)m.captureArrivalToPresentReturnMs=s.ageMs;m.counters.generatedExpiredAfterEval+=s.dropped;});
                         if(flow!=frameFlow)return;
                         liveStats.submitted+=s.count;liveStats.expired+=s.dropped;
-                        if(s.count){liveStats.waitMs=s.waitMs;liveStats.presentMs=s.presentMs;liveStats.readyMs=s.readyMs;liveStats.ageMs=s.ageMs;liveStats.blit=s.blit;
-                            liveAges.add(s.ageMs);liveWaits.add(s.waitMs);liveReady.add(s.readyMs);liveStats.ageP95=liveAges.p95();liveStats.waitP95=liveWaits.p95();liveStats.presentP95=livePresent.p95();liveStats.readyP95=liveReady.p95();}
+                        if(s.count){liveStats.waitMs=s.waitMs;liveStats.presentMs=s.presentMs;liveStats.ageMs=s.ageMs;liveStats.blit=s.blit;
+                            liveAges.add(s.ageMs);liveWaits.add(s.waitMs);liveStats.ageP95=liveAges.p95();liveStats.waitP95=liveWaits.p95();liveStats.presentP95=livePresent.p95();
+                            // An early (B1) present learns its GPU-ready time in the completion poll.
+                            if(!watch->presentedBeforeReady){liveStats.readyMs=s.readyMs;liveReady.add(s.readyMs);liveStats.readyP95=liveReady.p95();}}
                         liveStats.fps=liveSubmissions.size()>1?double(liveSubmissions.size()-1)*1e7/(liveSubmissions.back()-liveSubmissions.front()):0;
                     })){status(L"视频呈现队列失败",true);break;}
                     frameFlow->update([&](auto& m){m.pendingOutputFrames+=step->remaining;});
