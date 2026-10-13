@@ -70,4 +70,6 @@ python -X utf8 -B -I E:/项目/Veyra/tmp/issues36-37-bmd-20261013/run-tests.py g
 
 软件 UI 首次 9 场几何均通过，但验收器错误地寻找 `interface renderer=software`，实际产品日志为 `interface=software` 与 OBS software UI 提示，导致回执失败。修正为两条实际标识共同确认后重跑，两种缩放全部通过，保留原失败回执。另修正既有显示运动测试向新版 16 常量 shader 传旧 zoom 常量的测试缺陷；新增独立 present-motion 入口避免把 SDK 初始化混入纯映射测试。启动前发现用户播放器时守卫拒绝测试，用户确认关闭后才继续 GPU/窗口回归。
 
+最终审计校验器曾把 catalog 根对象误当数组而失败；修正为读取 `entries` 后，全量确认原 2245 条目（含重复键）原序保留，仅新增 8 条。这个错误未改变翻译数据或产品，失败说明保存在外部 `audit-validation-failure.json`。
+
 最终私有 QA EXE SHA256：`7ce5f602b526c921a854bfbd3edce50443a8f8756713010af4dc9bbc2cb75258`。私有测试 stage 不是交付包，不能使用其沿用的旧包 manifest 声称已重新封包。原 r2 的 **1641 文件**按原 manifest 全部哈希/大小复核；73 旧工作树的 HEAD/status 和原日志保护通过。最终提交、源码 bundle、构建和各回执绑定见 `reports/issues36-37-bmd-20261013/final.json`。本轮未承诺新的全硬件性能、端到端延迟、HDR/NR/补帧竖屏画质或 BMD 现场通过。
