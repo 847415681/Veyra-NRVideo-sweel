@@ -9389,3 +9389,9 @@ v2.0.7 ID 410800361，published_at 2026-10-12T16:24:59Z，latest/非草稿/非�
 新增 `include/veyra/gfx/NvidiaVrr.h`：按 ReflexSession 同样的规则只从 System32 加载并常驻 nvapi64.dll，用公开 nvapi（MIT，本地 deps/nvapi-pacing 头文件核对函数 ID 与 NV_GET_VRR_INFO_V1 布局）查询窗口所在显示器的 G-SYNC / G-SYNC Compatible 状态；随刷新率每 2 秒或换屏时重读，变化时写 `display-vrr` 日志；快照 `displayVrr`（0 未知/非 NVIDIA、1 不支持、2 支持未开启、3 已开启、4 生效中），状态栏追加“可变刷新生效中/已开启/屏幕支持可变刷新（未开启）”并补翻译。Veyra 不修改驱动设置。
 
 本机结果：320Hz 显示器 known=true status=0 possible=false（当前连接/设置下不能开 VRR），因此本机无法实测 VRR 对“自动”的效果。用户指引：显示器支持 G-SYNC / FreeSync 时，在 NVIDIA 控制面板“设置 G-SYNC”中开启并选择“为窗口和全屏模式启用”，Veyra 显示同步保持“自动”；VRR 生效后屏幕按帧到达刷新（不超过最高刷新），省掉 0–1 个刷新的等待。多数显示器在 PBP/画中画模式下会关闭 VRR。
+
+## 2026-10-14 极限低延迟 C2 窗口/全屏送显模式实测 + C3 采集拷贝研究（Claude）
+
+C2（无需管理员）：DXGI 的 GetFrameStatisticsMedia 在这些交换链上不可用（产品日志 compositionMode=-1），改用“送显→上屏”直接判断。探针 `tmp/claude-latency-min-20261013/dxgi_mode_probe.cpp`（320Hz，源略低于刷新）：小弹窗与 1280×720 普通窗口都是约 1.5 个刷新（4.8ms，DWM 合成），无边框全屏约 0.6 个刷新（1.9ms，独立翻转；此时 DXGI 不给刷新计数）。真实程序 `run_app_mode.py`（60fps 文件、无效果、自动）：窗口 P50/P95 4.79/5.98ms，全屏且控制条隐藏 1.94/3.24ms，全屏但控制条显示 5.17/6.26ms（控制窗口盖在画面上，回到合成）。结论：全屏且控制条自动隐藏（鼠标静止约 1.6 秒）时少一个刷新，320Hz 约 3ms，60Hz 约 17ms。
+
+C3：采集回调的拷贝已经是唯一一次 CPU 拷贝（邮箱帧就是 D3D12 上传缓冲）。实卡 2K NV12（5.5MB）每帧 0.26–0.31ms；用户 4K 测试日志 4K NV12（12.4MB）1.2–2.1ms、24.9MB 样本 3.8–5.6ms。探针 `upload_copy_probe.cpp`：单线程写入上传缓冲已达 19–20GB/s（4K NV12 冷数据 0.64ms），2–4 线程无改善（内存/写合并带宽受限），因此不做多线程拷贝。彻底去掉这次拷贝需要自建 DirectShow 分配器，把 GPU 可见的缓冲（可用 OpenExistingHeapFromAddress 打开的带缓存系统内存，避免去重比较读写合并内存过慢）交给驱动、样本持有到 GPU 拷贝完成；属于各驱动行为不同的大改动，采集卡离线无法验证，本轮不实施，作为后续选项记录。
