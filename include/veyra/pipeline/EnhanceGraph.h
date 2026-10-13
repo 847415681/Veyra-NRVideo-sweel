@@ -468,6 +468,12 @@ public:
     // does not travel inside the AVFrame (D3D11VA). It must be provided exactly
     // when frame->format == AV_PIX_FMT_D3D11 and is unused otherwise.
     bool process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId = 0, const ColorDescription* color = nullptr, const HardwareSurfaceInput* hardwareSurface = nullptr, bool retainReferences = true, const FgAdmission& admitFg = {}, unsigned previewMultiplier = 0, bool pausedResidualRefresh = false);
+    // Live output budget (DisplayFgBudget.h): the source already fills the
+    // panel, so frame generation is not run at all - no evaluation, no
+    // FG-only motion work (flow, XeSS motion refinement/copy) - and is not
+    // counted as a budget rejection. Generation resumes with a history reset.
+    void setFgBypass(bool bypass){fgBypass_=bypass;}
+    bool fgBypass()const{return fgBypass_;}
     bool nextFrameSlotAvailable()const {
         const unsigned slot=unsigned(realFrameIndex_%2);
         if(presentationFences_[slot]&&presentationFences_[slot]->GetCompletedValue()<presentationValues_[slot])return false;
@@ -866,6 +872,10 @@ private:
     double prevPtsMs_ = -1.0;
     bool prevValid_ = false;
     bool fgHistorySkipped_ = false;
+    // fgBypass_: see setFgBypass. flowStale_: motion was skipped for a
+    // bypassed frame, so the stored previous flow input is not the previous
+    // source; the next motion frame restarts its history.
+    bool fgBypass_ = false, flowStale_ = false;
     Metrics metrics_{};
     std::string mvecSource_ = "nvof";
 };

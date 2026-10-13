@@ -411,7 +411,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
         }
         veyra::log::info("graph","diagnostic SR motion override active; no product entry point enables this");
     }
-    desc_ = desc;lastSourceColor_={};tracker_={};prevValid_=false;fgHistorySkipped_=false;cadence_.reset();scene_.reset();sceneLastSourceId_=0;previousLuma_.clear();
+    desc_ = desc;lastSourceColor_={};tracker_={};prevValid_=false;fgHistorySkipped_=false;flowStale_=false;cadence_.reset();scene_.reset();sceneLastSourceId_=0;previousLuma_.clear();
     if(desc.videoSrQuality>engine::kVideoSrFsr){veyra::log::error("graph",std::format("invalid video SR quality value={}",desc.videoSrQuality));return false;}
     srcW_ = desc.sourceWidth;
     srcH_ = desc.sourceHeight;
@@ -2359,10 +2359,19 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     };
     // Guidance from original source-space color before SR/NR. Queue waits are GPU-side.
     bool haveFlow = false;
-    const bool runMotion = nvofStandalone_ || (presentSinkFg()&&desc_.fgUsesFlow()) || (fgEnabled_&&desc_.fgUsesFlow()) || (srEnabled_&&desc_.srUsesFlow()&&(desc_.videoSrQuality==0||desc_.videoSrQuality==engine::kVideoSrFsr));
-    if (runMotion && (gpuDis_ || amdOf_ || (nvof_ && nvof_->initialized()))) {
+    // A bypassed FG (setFgBypass) consumes no motion: keep flow only for NR/SR.
+    const bool fgMotion = !fgBypass_ && desc_.fgUsesFlow() && (presentSinkFg() || fgEnabled_);
+    const bool runMotion = nvofStandalone_ || fgMotion || (srEnabled_&&desc_.srUsesFlow()&&(desc_.videoSrQuality==0||desc_.videoSrQuality==engine::kVideoSrFsr));
+    const bool motionBackend = gpuDis_ || amdOf_ || (nvof_ && nvof_->initialized());
+    // XeSS motion refinement only feeds generation.
+    const bool refineFlow = flowRefine_ && !fgBypass_;
+    // After skipped motion frames the stored previous flow input is stale.
+    const bool flowPrevValid = prevValid_ && !flowStale_;
+    if (!runMotion && motionBackend) flowStale_ = true;
+    if (runMotion && motionBackend) {
+        flowStale_ = false;
         const float dims[8] = {uintBits(nvofW_),uintBits(nvofH_),uintBits(nvofW_),uintBits(nvofH_),0,0,0,0};
-        if (prevValid_) {
+        if (flowPrevValid) {
             tracker_.transition(list,nvofInB_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             tracker_.transition(list,nvofInA_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             blitPass_.bind(list,dims,gpuHandleOf(blitPass_,5).ptr,gpuHandleOf(blitPass_,6).ptr);
@@ -2378,11 +2387,11 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         tracker_.transition(list,nvofInB_.Get(),D3D12_RESOURCE_STATE_COMMON);
         if(amdOf_){
             gpuTimer_.mark(list,GpuStage::Flow);
-            if(!amdOf_->dispatch(list,nvofInB_.Get(),!prevValid_))return false;
-            ++metrics_.amdOfExecuteCount;haveFlow=prevValid_;
-            if(!flowRefine_||!haveFlow)gpuTimer_.mark(list,GpuStage::Flow,true);
+            if(!amdOf_->dispatch(list,nvofInB_.Get(),!flowPrevValid))return false;
+            ++metrics_.amdOfExecuteCount;haveFlow=flowPrevValid;
+            if(!refineFlow||!haveFlow)gpuTimer_.mark(list,GpuStage::Flow,true);
         }
-        if(gpuDis_ && prevValid_){
+        if(gpuDis_ && flowPrevValid){
             gpuTimer_.mark(list,GpuStage::Flow);
             tracker_.transition(list,flowTex_.Get(),D3D12_RESOURCE_STATE_COMMON);
             tracker_.transition(list,confTex_.Get(),D3D12_RESOURCE_STATE_COMMON);
@@ -2394,7 +2403,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             ++metrics_.gpuDisExecuteCount;haveFlow=true;
             gpuTimer_.mark(list,GpuStage::Flow,true);
         }
-        if (prevValid_ && !gpuDis_) {
+        if (flowPrevValid && !gpuDis_) {
             if(!amdOf_){
             gpuTimer_.mark(list,GpuStage::Flow);
             if(!submitGraph(slot))return false;
@@ -2413,7 +2422,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 if(!waitForFlow())return false;
             }
             list=ring_.acquireNext(slot,st);if(!list)return false;
-            if(!flowRefine_||!haveFlow)gpuTimer_.mark(list,GpuStage::Flow,true);
+            if(!refineFlow||!haveFlow)gpuTimer_.mark(list,GpuStage::Flow,true);
             }
             if(haveFlow) {
                 if(amdOf_)tracker_.transition(list,amdOf_->sceneChanges(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -2428,7 +2437,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 densifyPass_.bind(list,dc,gpuHandleOf(densifyPass_,0).ptr,gpuHandleOf(densifyPass_,5).ptr);
                 list->Dispatch((nvofW_+15)/16,(nvofH_+15)/16,1);
                 tracker_.uavBarrier(list,flowTex_.Get());tracker_.uavBarrier(list,confTex_.Get());
-                if(flowRefine_){
+                if(refineFlow){
                     // XeSS motion: per-pixel candidate choice, then disocclusion fill.
                     tracker_.transition(list,fgFlowRefined_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                     if(flowConsistency_)tracker_.transition(list,nvofReverseTex_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -2486,7 +2495,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             list->Dispatch((w+15)/16,(h+15)/16,1);tracker_.uavBarrier(list,output);tracker_.transition(list,output,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         };
         adapt(nrFlow_.Get(),nrW_,nrH_,1);adapt(baseFlow_.Get(),workW_,workH_,2);
-        if(flowRefine_){
+        if(refineFlow){
             tracker_.transition(list,fgBaseFlow_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             const float c[8]={uintBits(nvofW_),uintBits(nvofH_),uintBits(workW_),uintBits(workH_),0,0,0,0};
             fgFlowAdaptPass_.bind(list,c,gpuHandleOf(fgFlowAdaptPass_,0).ptr,gpuHandleOf(fgFlowAdaptPass_,1).ptr);
@@ -2933,7 +2942,10 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         tracker_.transition(list, videoFrame_[parity].Get(), D3D12_RESOURCE_STATE_COMMON);
 
     }
-    if(presentSinkFg()){
+    if(presentSinkFg()&&fgBypass_){
+        // Bypassed: the presenter disables XeSS generation and reads no motion.
+        presentMotionValid_[parity]=false;motionPreviousSource_[parity]=previousSource_;
+    }else if(presentSinkFg()){
         // Test-only: fgMotionProbe (never set by the product) also feeds the XeSS
         // present path, held in COMMON, same current->previous pixel convention.
         auto* input=desc_.fgMotionProbe&&!reset?desc_.fgMotionProbe:desc_.fgUsesFlow()&&haveFlow&&!reset?(flowRefine_?fgBaseFlow_.Get():baseFlow_.Get()):nrZeroMotion_.Get();
@@ -2948,7 +2960,10 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         motionPreviousSource_[parity]=previousSource_;
     }
     previousSource_=sourceFrameId;
-    const bool fgBackendAvailable=fgEnabled_&&fgCreated();
+    // A bypassed FG is not a skipped pair: no candidates, no rejection, but
+    // the next generated pair must start from a fresh history.
+    if(fgBypass_&&fgEnabled_&&fgCreated())fgHistorySkipped_=true;
+    const bool fgBackendAvailable=fgEnabled_&&fgCreated()&&!fgBypass_;
     const unsigned fgMultiplier=previewMultiplier&&fgBackendAvailable?std::clamp(previewMultiplier,2u,desc_.fgMultiplier):desc_.fgMultiplier;
     out.fgCandidates=fgBackendAvailable?fgMultiplier-1:0;
     bool resetFg=reset||!prevValid_||fgHistorySkipped_;

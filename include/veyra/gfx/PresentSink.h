@@ -131,6 +131,8 @@ public:
     };
     DisplayLatencySummary takeDisplayLatency();
     double displayRefreshHz()const{return displayRefreshHz_;}
+    // The owner re-reads the monitor after a move or mode change.
+    void setDisplayRefreshHz(double hz){if(hz>=1.0)displayRefreshHz_=hz;}
     bool configurePacing(bool enabled,bool vsync,bool tearing);
     bool presentationReady();
     bool pacingActive()const{return pacing_;}

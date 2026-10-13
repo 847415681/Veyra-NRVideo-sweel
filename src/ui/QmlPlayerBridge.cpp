@@ -6497,6 +6497,11 @@ void QmlPlayerBridge::updateRunStatus() {
         }
         else detail << tr("未补帧");
         if (s.applied.multiplier > 1 && impl_->compareMode != 0) detail << tr("补帧暂停");
+        // Live output budget (DisplayFgBudget.h): what the panel can show.
+        else if (s.applied.multiplier > 1 && s.displayFgLimited && s.displayFgMultiplier <= 1)
+            detail << tr("屏幕 %1 Hz · 内容 %2 fps：补帧已旁路，真帧直接显示（延迟最低）").arg(s.displayFgRefreshHz, 0, 'f', 0).arg(s.displayFgContentFps, 0, 'f', 0);
+        else if (s.applied.multiplier > 1 && s.displayFgLimited)
+            detail << tr("屏幕 %1 Hz 只显示得下 %2X：已从 %3X 降到 %2X").arg(s.displayFgRefreshHz, 0, 'f', 0).arg(s.displayFgMultiplier).arg(s.applied.multiplier);
         else if (s.applied.multiplier > 1 && (s.fgBudgetLimited || s.xessGenerationSuppressed) &&
                  (!rate.policyLimited()||i.history.overloaded)) detail << tr("调度降档");
         // Why VFG cannot hold the requested multiplier. One VFG interpolation
@@ -6524,7 +6529,7 @@ void QmlPlayerBridge::updateRunStatus() {
                     else detail << tr("VFG 每张约 %1 ms，当前负载约可稳定 %2X").arg(*perRun, 0, 'f', 1).arg(fits);
                 }
             }
-            if (refresh > 1 && source > 1 && source * s.applied.multiplier > refresh * 1.02)
+            if (!s.displayFgLimited && refresh > 1 && source > 1 && source * s.applied.multiplier > refresh * 1.02)
                 detail << tr("屏幕 %1 Hz 最多显示约 %2X").arg(refresh, 0, 'f', 0).arg(std::max(1, int(refresh / source)));
         }
         if (s.nominalSourceFps > 0.01) detail << tr("源 %1 fps").arg(s.nominalSourceFps, 0, 'f', 2);

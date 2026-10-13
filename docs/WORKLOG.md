@@ -9357,3 +9357,13 @@ v2.0.7 ID 410800361，published_at 2026-10-12T16:24:59Z，latest/非草稿/非�
 测试（私有程序副本 tests/claude-latency-min-20261013/app）：veyra_repair_contract_tests 259 项 0 失败；veyra_ui_contract_tests 通过；新验收 `scripts/acceptance/latency-min-tests.py` display-sync 12/12（窗口/全屏×低延迟队列×三种模式，实际 Present 参数：自动 sync=0 flags=0，垂直同步 sync=1，允许撕裂 0x200；像素校验通过，D3D12 错误 0），lifecycle 通过。历史 2.0.6 验收脚本仍写死“自动=sync1”，按规则不改旧脚本。
 
 实卡（T911 2K60 NV12 → NR，320Hz，内容不去重）：DLSS 6X（360fps 超刷新率）送显→上屏 P50/P95 由垂直同步语义的 11.8/18.3ms 降到 6.2/8.0ms，插帧过期 44→0.6/s，邮箱等待 11.2→0.3ms；同一 EXE 显式垂直同步仍为 12.2/18.4ms（B3 待做）；DLSS 4X 5.4/7.0ms 与改前一致；XeSS 2X 自动 sync=0 flags=0，补帧正常 120fps，回调→送显 P95 10.0ms；仅 NR 8.9ms、送显→上屏 4.5ms。60Hz PBP 下 XeSS 超刷新率场景本机无法复现，需用户光学复测。日志 logs/claude-latency-min-20261013/<场景>/。
+
+## 2026-10-13 极限低延迟 B2 补帧输出预算（Claude）
+
+用户“全部做掉！”授权 B1–C3。B2：直播来源（采集/串流/屏幕）按 内容帧率×倍数 与屏幕刷新率决定实际倍数（`include/veyra/engine/DisplayFgBudget.h`）：输出放得下不变；放不下降到放得下的最大合法倍数（DLSS 2/3/4/6、VFG 2–8、FSR 2）；连 2X 都放不下但源比屏幕慢（60fps@100Hz）保留 2X；源已占满屏幕（≥0.97×刷新，60fps@60Hz）旁路补帧。XeSS 只做旁路（SetNumInterpolatedFrames 按 Intel 文档会换模型/编译着色器，不做运行中降倍数）。新决定须持续 1.5 秒才生效，设置变更立即重算；“允许撕裂”不做预算；文件播放不受影响。旁路时图不跑补帧、不跑只供补帧的光流/XeSS 运动精修与拷贝，恢复时补帧与光流历史重置；真帧不再等插帧间隔（配对延迟 0），读帧门按“未补帧”处理。刷新率改为换屏或每 2 秒重读。状态栏显示“屏幕 X Hz 只显示得下 NX：已从 MX 降到 NX”或“补帧已旁路，真帧直接显示（延迟最低）”，输出评估不再误报“输出未达标”。测试开关：`VEYRA_TEST_NO_DISPLAY_FG_BUDGET=1` 恢复旧行为，`VEYRA_TEST_DISPLAY_HZ=<hz>` 只替换预算使用的刷新率。
+
+计划修正：原方案“连 2X 都放不下就旁路”在 60fps@75–119Hz 会丢掉补帧带来的额外画面，改为“源已占满屏幕才旁路”。
+
+构建：build.py 新增目标 veyra_realtime_preview_tests，并对包含改动头文件的 Qt moc 生成源重编（快照结构变化，不能混用旧布局）；回执 logs/claude-latency-min-20261013/build-20261013-213309，check_rebuilt 所有链接对象已重编。测试：veyra_realtime_preview_tests 0 失败（新增预算 19 项、防抖 7 项）、veyra_repair_contract_tests、veyra_ui_contract_tests 通过。
+
+实卡（T911 2K60 NV12 → NR，320Hz，logs/claude-latency-min-20261013/b2-*）：DLSS 6X 自动→4X：送显 360→240/s，补帧 GPU P95 7.4→5.7ms，送显→上屏 P50/P95 6.2/8.0→5.0/6.9ms（等于原生 4X）；同 EXE 关预算对照 6X 为 5.6/9.5ms、回调→送显 P95 28.6 vs 26.5ms。显式垂直同步 6X：12.2/18.4→5.7/8.5ms，插帧过期 46→0/s，邮箱等待 10.7→0.3ms。模拟 60Hz（测试开关）DLSS 2X 旁路：回调→送显 P95 8.8ms，与仅 NR 8.9ms 相同（补帧时约 26ms）；XeSS 2X 旁路：SDK 提交 120→60/s、enabled=0、Present 调用 0.64→0.20ms；60→30（30fps 内容）+2X@60Hz 保持 2X（60/s）。仅 NR 不变（8.9ms）。真实 60Hz 屏幕的光学复测仍需用户。

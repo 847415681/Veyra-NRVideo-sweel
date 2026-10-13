@@ -22,6 +22,7 @@
 #include "veyra/engine/RealtimePreviewScheduling.h"
 #include "veyra/engine/CaptureHalfRate.h"
 #include "veyra/engine/ContentDedup.h"
+#include "veyra/engine/DisplayFgBudget.h"
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/source/CaptureCardSource.h"
 #include "veyra/source/DeckLinkCapture.h"
@@ -966,6 +967,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             const bool vfgRetainOverload=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_NO_OVERLOAD_ESTIMATE",nullptr,0)==0;
             int64_t nextVfgOverloadLog=0;
             unsigned previewFgMultiplier=options.fgMultiplier;
+            // Live output budget (DisplayFgBudget.h). fgBypassed persists into
+            // the next iteration's read gate. VEYRA_TEST_NO_DISPLAY_FG_BUDGET=1
+            // restores the unbudgeted multiplier for A/B runs;
+            // VEYRA_TEST_DISPLAY_HZ=<hz> replaces the measured refresh for it.
+            DisplayFgBudgetGate displayFgGate;bool fgBypassed=false;unsigned displayFgApplied=0;
+            static const bool displayFgBudgetEnabled=GetEnvironmentVariableW(L"VEYRA_TEST_NO_DISPLAY_FG_BUDGET",nullptr,0)==0;
+            static const double displayFgTestHz=[]{wchar_t v[16]{};return GetEnvironmentVariableW(L"VEYRA_TEST_DISPLAY_HZ",v,16)?std::clamp(_wtof(v),0.0,1000.0):0.0;}();
             LivePairLatency pairLatency;
             const bool adaptiveCapturePhase=physicalCapture&&GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_CAPTURE_PHASE",nullptr,0)==0;
             int64_t nextFgAdmissionLog=0,nextFgRejectionLog=0;
@@ -1532,14 +1540,15 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // when a lease frees we consume the newest available sample.
                 if(liveScheduler&&!transaction){
                     const auto enhancementPending=[&]{
-                        if(presentationEffective.enabled&&!options.fg&&(isCapture||!fileAwaitingVideo)&&liveScheduler->occupancy()>=1)return true;
+                        const bool fgRunning=options.fg&&!fgBypassed;
+                        if(presentationEffective.enabled&&!fgRunning&&(isCapture||!fileAwaitingVideo)&&liveScheduler->occupancy()>=1)return true;
                         // Live sources: never stack a second frame behind one the GPU
                         // is still enhancing. When NR/SR cost more than one source
                         // interval, a second queued frame doubled capture-to-present
                         // latency (3 NR layers at 1440p60: 49 ms for 20 ms of GPU
                         // work); waiting and then taking the newest mailbox sample
                         // keeps it at one GPU pass. No effect while the GPU keeps up.
-                        return isCapture&&!(options.fg&&presentSinkFrameGeneration(options.settings.frameGenerationBackend))&&!pendingCompletions.empty();
+                        return isCapture&&!(fgRunning&&presentSinkFrameGeneration(options.settings.frameGenerationBackend))&&!pendingCompletions.empty();
                     };
                     const auto leaseWaitStart=Clock::now();
                     while((liveScheduler->occupancy()>=2||!graph->nextFrameSlotAvailable()||enhancementPending())&&!stop_&&(!paused_||seekPreviewPending)&&!liveScheduler->failed()){
@@ -1864,7 +1873,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     nextFgAdmissionLog=now+10000000;if(!admitted)nextFgRejectionLog=now+10000000;
                     veyra::log::info("live-fg-admission",std::format("timeline={} revision={} source={} multiplier={} requestedMultiplier={} admitted={} admittedPairs={} rejectedPairs={} remainingDeadlineMs={:.3f} firstDeadlineMs={:.3f} queuedGpuMs={:.3f} predictedMs={:.3f} elapsedMs={:.3f} blitGpuP95Ms={:.3f} presentCpuP95Ms={:.3f} warmingHistory={} (CPU Present is backpressure, not added GPU cost; firstDeadlineMs=-1 when unused)",timeline,batch.identity.settingsRevision,batch.identity.sourceFrameId,previewFgMultiplier,options.fgMultiplier,admitted,fgAdmittedPairs,fgRejectedPairs,double(deadline-now)/10000,firstDeadline?double(firstDeadline-now)/10000:-1,queuedMs,fgBudget.predicted(now,warmingHistory).value_or(-1),elapsed,blit,livePresent.p95(),warmingHistory));
                 };
-                if(fgBudgetRevision!=options.settings.revision){fgBudget.reset();vfgOverload.reset();pairLatency.reset();fgBudgetRevision=options.settings.revision;}
+                if(fgBudgetRevision!=options.settings.revision){fgBudget.reset();vfgOverload.reset();pairLatency.reset();fgBudgetRevision=options.settings.revision;displayFgGate.reset();}
                 previewFgMultiplier=options.fgMultiplier;
                 // An output cap used to only drop candidates at present time, so
                 // the GPU still generated frames that were thrown away: at 6X on
@@ -1883,6 +1892,39 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         previewFgMultiplier=std::clamp(needed,2u,options.fgMultiplier);
                     }
                 }
+                // Live output budget: never generate what the panel cannot show
+                // (DisplayFgBudget.h). Tearing presents partial frames by the
+                // user's choice, so it keeps the request.
+                {
+                    const bool budgeted=displayFgBudgetEnabled&&isCapture&&!isImage&&options.fg&&options.fgMultiplier>1&&
+                        presentationEffective.display!=DisplaySync::Tearing;
+                    double contentFps=0,refreshHz=0;
+                    if(budgeted){
+                        // Content rate: 60->30 halves the transport; dedup uses its
+                        // measured cadence and decides nothing until it has one.
+                        contentFps=dedupActive?contentDedup.contentFps():activeSource->info().averageFps*(halfRate?.5:1.0);
+                        refreshHz=displayFgTestHz>0?displayFgTestHz:presenter.displayRefreshHz();
+                        if(contentFps>0&&refreshHz>0&&displayFgGate.update(displayFgMultiplier(options.settings.frameGenerationBackend,options.fgMultiplier,contentFps,refreshHz),host100ns())){
+                            const auto applied=displayFgGate.applied();
+                            veyra::log::info("display-fg-budget",std::format("revision={} backend={} requested={}X applied={} contentFps={:.3f} refreshHz={:.3f}{} dedup={} halfRate={} display={} (output above the refresh is never shown: lower multiplier, or bypass when the source already fills the panel)",
+                                options.settings.revision,frameGenerationBackendName(options.settings.frameGenerationBackend),options.fgMultiplier,applied?std::format("{}X",applied):std::string("bypass"),contentFps,refreshHz,displayFgTestHz>0?" (test override)":"",dedupActive,halfRate,unsigned(presentationEffective.display)));
+                            // The pair-phase model and FG cost predictions describe
+                            // the previous multiplier.
+                            if(applied!=displayFgApplied){fgBudget.reset();vfgOverload.reset();pairLatency.reset();}
+                        }
+                    }else displayFgGate.reset();
+                    const bool budgetValid=budgeted&&displayFgGate.valid();
+                    displayFgApplied=budgetValid?displayFgGate.applied():0;
+                    fgBypassed=budgetValid&&displayFgApplied==0;
+                    if(budgetValid&&displayFgApplied>=2)previewFgMultiplier=std::min(previewFgMultiplier,displayFgApplied);
+                    graph->setFgBypass(fgBypassed);
+                    if(graph->xessEnabled())presenter.setXessGenerationSuppressed(fgBypassed);
+                    std::lock_guard lock(mutex_);
+                    snapshot_.displayFgLimited=budgetValid&&(fgBypassed||displayFgApplied<options.fgMultiplier);
+                    snapshot_.displayFgMultiplier=!budgetValid?0u:fgBypassed?1u:displayFgApplied;
+                    snapshot_.displayFgRefreshHz=refreshHz;snapshot_.displayFgContentFps=contentFps;
+                }
+                const bool fgActive=options.fg&&!fgBypassed;
                 {std::lock_guard lock(mutex_);snapshot_.previewFgMultiplier=previewFgMultiplier;}
                 const auto liveInterval=physicalCapture?
                     // A span across frames WE skipped is not the source cadence. Using it
@@ -1891,16 +1933,17 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     // at ~10 pairs/s (field log 2026-10-04, 60 -> 22 fps until refocus).
                     capturePairInterval100ns(pkt.duration,activeSource->info().averageFps,lastProcessedPtsMs,pts,historyReset||gapCandidate):
                     livePhaseInterval100ns(pkt.duration,activeSource->info().averageFps/(isScreen&&halfRate?2:1),isScreen);
-                const auto processingAllowance=isCapture&&options.fg&&!presentSinkFrameGeneration(options.settings.frameGenerationBackend)?
+                const auto processingAllowance=isCapture&&fgActive&&!presentSinkFrameGeneration(options.settings.frameGenerationBackend)?
                     fgBudget.processingAllowance(host100ns(),liveInterval):0;
                 // Present-sink providers own subframe pacing after receiving B.
                 // Graph FG needs the A/B presentation phase; provider FG does not.
-                const auto legacyPairDelay=presentSinkFrameGeneration(options.settings.frameGenerationBackend)?0:liveInterval+processingAllowance;
-                const auto pairDelay=adaptiveCapturePhase&&options.fg&&!presentSinkFrameGeneration(options.settings.frameGenerationBackend)?
+                // A bypassed FG presents real frames as soon as they are ready.
+                const auto legacyPairDelay=presentSinkFrameGeneration(options.settings.frameGenerationBackend)||!fgActive?0:liveInterval+processingAllowance;
+                const auto pairDelay=adaptiveCapturePhase&&fgActive&&!presentSinkFrameGeneration(options.settings.frameGenerationBackend)?
                     pairLatency.select(host100ns(),legacyPairDelay,liveInterval,previewFgMultiplier):legacyPairDelay;
                 // DLSS can reseed after a skipped pair. XeSS
                 // owns generation inside its presenter and has no graph admission.
-                if(isCapture&&!rereadCached&&!presentSinkFrameGeneration(options.settings.frameGenerationBackend)){
+                if(isCapture&&!rereadCached&&fgActive&&!presentSinkFrameGeneration(options.settings.frameGenerationBackend)){
                     const auto presentP95=livePresentGpu.p95();
                     admitFg=[&,presentP95](const pipeline::FrameBatch& batch,bool warmingHistory){
                         // Physical capture and PS5 delivery clocks are not
@@ -2126,15 +2169,15 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     std::lock_guard lock(mutex_);snapshot_.captureHalfRate=halfRate;
                     veyra::log::info("capture-rate",std::format("revision={} requested60To30={} active={} transportFps={} originalPtsPreserved=true",options.settings.revision,options.settings.content==ContentRate::Capture60To30,halfRate,isCapture?activeSource->info().averageFps:0));
                 }
-                const bool pairPacing=pairAnchoredLive&&options.fg;
+                const bool pairPacing=pairAnchoredLive&&fgActive;
                 if(isCapture&&!rereadCached&&(isStream||pairPacing||!liveTimeline.anchored(out.batch.identity.epoch))){
                     const auto duration100ns=liveSourceInterval100ns(pkt.duration,activeSource->info().averageFps);
                     // File replay has no device pacing and still needs its PTS
                     // clock. Physical capture without FG presents as soon as ready.
-                    const bool paceSourcePts=options.fg||!physicalCapture;
-                    if(!liveTimeline.anchored(out.batch.identity.epoch)||(pairPacing&&frames==0))veyra::log::info("capture-timeline",std::format("interval100ns={} packetDurationKnown={} packetDurationPositive={} nominalFps={} FG={} pacing={}",duration100ns,!pkt.duration.isUnknown(),pkt.duration.num>0,activeSource->info().averageFps,options.fg,pairPacing?(isRemote?"decoded-pair":"capture-pair"):paceSourcePts?"source-pts":"capture-ready"));
-                    if(pairPacing||isStream)liveTimeline.resetPair(out.batch.identity.epoch,out.batch.b100ns,liveInputReady,options.fg?pairDelay:0,paceSourcePts);
-                    else if(!liveTimeline.anchored(out.batch.identity.epoch))liveTimeline.reset(out.batch.identity.epoch,out.batch.b100ns,liveInputReady,options.fg?duration100ns:0,paceSourcePts);
+                    const bool paceSourcePts=fgActive||!physicalCapture;
+                    if(!liveTimeline.anchored(out.batch.identity.epoch)||(pairPacing&&frames==0))veyra::log::info("capture-timeline",std::format("interval100ns={} packetDurationKnown={} packetDurationPositive={} nominalFps={} FG={} pacing={}",duration100ns,!pkt.duration.isUnknown(),pkt.duration.num>0,activeSource->info().averageFps,fgActive,pairPacing?(isRemote?"decoded-pair":"capture-pair"):paceSourcePts?"source-pts":"capture-ready"));
+                    if(pairPacing||isStream)liveTimeline.resetPair(out.batch.identity.epoch,out.batch.b100ns,liveInputReady,fgActive?pairDelay:0,paceSourcePts);
+                    else if(!liveTimeline.anchored(out.batch.identity.epoch))liveTimeline.reset(out.batch.identity.epoch,out.batch.b100ns,liveInputReady,fgActive?duration100ns:0,paceSourcePts);
                 }
                 if(!isImage&&!isCapture&&frames==0){anchor=Clock::now();anchorMs=lastAudioClockMs=pts;}
                 double frameWaitMs=0,framePresentMs=0;
@@ -2456,7 +2499,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     }
                     snapshot_.previewSkipped=measured.flow.counters.previewSkippedBeforeGraph;
                     snapshot_.fgBudgetLimited=measured.flow.lastFgRejected100ns>0&&host100ns()-measured.flow.lastFgRejected100ns<10000000;
-                    snapshot_.xessGenerationSuppressed=graph->xessEnabled()&&presenter.xessGenerationSuppressed();
+                    snapshot_.xessGenerationSuppressed=graph->xessEnabled()&&presenter.xessGenerationSuppressed()&&!fgBypassed; // budget bypass is not an overload
                     snapshot_.nrActive=graph->nrEnabled()&&graphStats.nrEvaluateCount>0;
                     snapshot_.nrAutoActive=graph->autoNrPoolReady();
                     snapshot_.nrAutoPercent=graph->autoNrPoolReady()?AutoNrController::percent(graph->autoNrLevel()):0;

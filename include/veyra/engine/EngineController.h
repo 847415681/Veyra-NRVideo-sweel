@@ -118,6 +118,13 @@ struct PlayerSnapshot {
     double playbackRate=1; // requested file-preview transport rate; separate from measurement
     bool fgBudgetLimited=false,xessGenerationSuppressed=false;
     unsigned previewFgMultiplier=0;
+    // Live FG output budget (DisplayFgBudget.h). displayFgLimited: the panel
+    // cannot show the requested multiplier, displayFgMultiplier is the one in
+    // use (1 = generation bypassed because the source already fills the
+    // panel); refresh and content rate are the inputs of that decision.
+    bool displayFgLimited=false;
+    unsigned displayFgMultiplier=0;
+    double displayFgRefreshHz=0,displayFgContentFps=0;
     // Runtime-reported DLSSG MultiFrameCountMax: 1 = 2X only, 5 = 6X.
     // 0 = not queried yet (no session). The UI uses this to offer only the
     // multipliers the active GPU can actually honour.

@@ -66,6 +66,10 @@ public:
     // per-frame history reset, never a per-frame toggle.
     void setXessGenerationSuppressed(bool v){xessGenerationSuppressed_=v;}
     bool xessGenerationSuppressed() const {return xessGenerationSuppressed_;}
+    // Monitor refresh for the live output budget. The swap chain samples it
+    // only at creation; the window may move to another monitor or the mode
+    // may change, so it is re-read on a monitor change and every 2 s.
+    double displayRefreshHz();
     diagnostics::GpuSample blitTiming(ID3D12Fence* f,uint64_t revision=0,uint64_t epoch=0){gpuTimer_.collect(presentationFence_?presentationFence_.Get():f);if((revision&&gpuTimer_.last().identity.settingsRevision!=revision)||(epoch&&gpuTimer_.last().identity.epoch!=epoch)){diagnostics::GpuSample pending;pending.state=diagnostics::SampleState::Pending;return pending;}return gpuTimer_.last().gpu[size_t(diagnostics::GpuStage::Blit)];}
     // Application-side frame-generation timing for present-sink backends
     // (XeSS): the copies, barriers and provider prepare work recorded on
@@ -135,6 +139,8 @@ private:
     bool xessWasEnabled_=false;
     bool xessFailed_=false;
     bool xessGenerationSuppressed_=false;
+    HMONITOR refreshMonitor_=nullptr;double refreshHz_=0;
+    std::chrono::steady_clock::time_point refreshQuery_{};
     uint32_t xessInputId_=0;
     struct XessWork {pipeline::FrameIdentity identity{};uint32_t id=0;};
     std::array<XessWork,4> xessWork_{};
