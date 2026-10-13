@@ -10,6 +10,7 @@
 #include "veyra/sink/AudioGain.h"
 #include "veyra/engine/PreviewView.h"
 #include "veyra/source/CaptureAudioClock.h"
+#include "veyra/source/DeckLinkInputConnection.h"
 #include <iostream>
 #include <vector>
 #include <stdexcept>
@@ -157,6 +158,11 @@ int wmain(int argc,wchar_t** argv){try{
         ui::CapturePreferenceStore store(argv[1]);ui::CapturePreferences p{L"\\\\?\\usb#video-\u91c7\u96c6",L"1920:1080:166833:{SUBTYPE}:RGB32",L"{audio-endpoint}",-3,2};
         require(store.load().videoPath.empty(),"fresh capture preference empty");require(store.save(p),"capture preference atomic save");
         const auto restored=store.load();require(restored.videoPath==p.videoPath&&restored.formatKey==p.formatKey&&restored.audioPath==p.audioPath&&restored.audioMode==p.audioMode&&restored.colorOverride==p.colorOverride,"capture stable identifiers and Unicode round trip");
+        for(uint32_t connection:{1u,2u}){
+            auto native=p;native.videoPath=source::decklink::inputConnectionPath(L"decklink-native:p:0000000000000123:0",connection);native.formatKey=L"decklink:auto";
+            require(store.save(native),"save BMD explicit connection using existing preference format");
+            const auto resumed=store.load();require(resumed.videoPath==native.videoPath&&resumed.formatKey==native.formatKey&&source::decklink::inputConnectionSelection(resumed.videoPath).connection==connection,"resume keeps exact HDMI or SDI connection and automatic signal mode");
+        }
         for(double fps:{0.0,29.97,30.0,40.0,50.0,60.0}){p.requestedFps=fps;require(store.save(p)&&store.load().requestedFps==fps,"device capture rate survives restart");}
         p.requestedFps=-1;require(!store.save(p),"invalid capture rate not persisted");
         p.requestedFps=0;p.colorOverride=5;p.deviceColors={{L"card-A",5},{L"card-B",10}};
