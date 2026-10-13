@@ -63,7 +63,7 @@ void UpdateChecker::check(bool manual) {
 void UpdateChecker::finish() {
     deadline_.stop();
     auto* reply = reply_;
-    body_ += reply->read(maxBody + 1 - body_.size());
+    if (reply->isOpen()) body_ += reply->read(maxBody + 1 - body_.size());
     if (body_.size() > maxBody) failure_ = QStringLiteral("response-too-large");
     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     if (failure_.isEmpty() && (reply->error() != QNetworkReply::NoError || status != 200))

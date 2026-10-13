@@ -89,8 +89,8 @@ private slots:
             QCOMPARE(server.requests, 1);
             QCOMPARE(available.size(), result == "available" ? 1 : 0);
             QCOMPARE(notices.size(), manual && result != "available" ? 1 : 0);
-            QVERIFY(server.request.contains("User-Agent: Veyra-Update-Check"));
-            QVERIFY(!server.request.contains("Authorization:"));
+            QVERIFY(server.request.toLower().contains("user-agent: veyra-update-check"));
+            QVERIFY(!server.request.toLower().contains("authorization:"));
             if (result == "available") {
                 QVERIFY(!checker.latestVersion().isEmpty()); QVERIFY(!checker.releaseUrl().isEmpty());
             } else { QVERIFY(checker.latestVersion().isEmpty()); QVERIFY(checker.releaseUrl().isEmpty()); }
