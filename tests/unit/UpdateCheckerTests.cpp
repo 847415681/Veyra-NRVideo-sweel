@@ -50,29 +50,29 @@ private slots:
     void response_data() {
         QTest::addColumn<QString>("local"); QTest::addColumn<QByteArray>("body");
         QTest::addColumn<int>("http"); QTest::addColumn<QString>("result");
-        QTest::newRow("new") << "2.0.7" << release() << 200 << "available";
-        QTest::newRow("same-test-r2") << "2.0.7-test-r2" << release("v2.0.7") << 200 << "current";
-        QTest::newRow("same") << "2.0.7" << release("v2.0.7") << 200 << "current";
-        QTest::newRow("old") << "2.0.9" << release() << 200 << "current";
-        QTest::newRow("numeric-10-over-9") << "2.0.9" << release("v2.0.10") << 200 << "available";
-        QTest::newRow("numeric-9-below-10") << "2.0.10" << release("v2.0.9") << 200 << "current";
-        QTest::newRow("major") << "2.99.99" << release("v3.0.0") << 200 << "available";
-        QTest::newRow("four-component-local") << "2.0.7.0" << release() << 200 << "available";
-        QTest::newRow("draft") << "2.0.7" << release("v2.0.8", false, true) << 200 << "invalid-release";
-        QTest::newRow("prerelease") << "2.0.7" << release("v2.0.8", true) << 200 << "invalid-release";
-        QTest::newRow("beta-tag") << "2.0.7" << release("v2.0.8-beta") << 200 << "invalid-release";
-        QTest::newRow("sources-tag") << "2.0.7" << release("v2.0.8-sources") << 200 << "invalid-release";
-        QTest::newRow("json") << "2.0.7" << QByteArray("not json") << 200 << "invalid-release";
-        QTest::newRow("array") << "2.0.7" << QByteArray("[]") << 200 << "invalid-release";
-        QTest::newRow("missing-fields") << "2.0.7" << QByteArray("{\"tag_name\":\"v2.0.8\"}") << 200 << "invalid-release";
-        QTest::newRow("untrusted-link") << "2.0.7" << release("v2.0.8", false, false, "https://example.com/update") << 200 << "invalid-release";
-        QTest::newRow("other-repo") << "2.0.7" << release("v2.0.8", false, false, "https://github.com/other/repo/releases/tag/v2.0.8") << 200 << "invalid-release";
-        QTest::newRow("mismatched-tag") << "2.0.7" << release("v2.0.8", false, false, "https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.9") << 200 << "invalid-release";
-        QTest::newRow("overflow") << "2.0.7" << release("v2.0.2147483648") << 200 << "invalid-release";
-        QTest::newRow("unknown-local") << "dev" << release() << 200 << "invalid-release";
-        QTest::newRow("404") << "2.0.7" << release() << 404 << "http-404-network-203";
-        QTest::newRow("rate-limit") << "2.0.7" << release() << 403 << "http-403-network-201";
-        QTest::newRow("too-large") << "2.0.7" << QByteArray(128*1024+1, 'x') << 200 << "response-too-large";
+        QTest::newRow("new") << QStringLiteral("2.0.7") << release() << 200 << QStringLiteral("available");
+        QTest::newRow("same-test-r2") << QStringLiteral("2.0.7-test-r2") << release("v2.0.7") << 200 << QStringLiteral("current");
+        QTest::newRow("same") << QStringLiteral("2.0.7") << release("v2.0.7") << 200 << QStringLiteral("current");
+        QTest::newRow("old") << QStringLiteral("2.0.9") << release() << 200 << QStringLiteral("current");
+        QTest::newRow("numeric-10-over-9") << QStringLiteral("2.0.9") << release("v2.0.10") << 200 << QStringLiteral("available");
+        QTest::newRow("numeric-9-below-10") << QStringLiteral("2.0.10") << release("v2.0.9") << 200 << QStringLiteral("current");
+        QTest::newRow("major") << QStringLiteral("2.99.99") << release("v3.0.0") << 200 << QStringLiteral("available");
+        QTest::newRow("four-component-local") << QStringLiteral("2.0.7.0") << release() << 200 << QStringLiteral("available");
+        QTest::newRow("draft") << QStringLiteral("2.0.7") << release("v2.0.8", false, true) << 200 << QStringLiteral("invalid-release");
+        QTest::newRow("prerelease") << QStringLiteral("2.0.7") << release("v2.0.8", true) << 200 << QStringLiteral("invalid-release");
+        QTest::newRow("beta-tag") << QStringLiteral("2.0.7") << release("v2.0.8-beta") << 200 << QStringLiteral("invalid-release");
+        QTest::newRow("sources-tag") << QStringLiteral("2.0.7") << release("v2.0.8-sources") << 200 << QStringLiteral("invalid-release");
+        QTest::newRow("json") << QStringLiteral("2.0.7") << QByteArray("not json") << 200 << QStringLiteral("invalid-release");
+        QTest::newRow("array") << QStringLiteral("2.0.7") << QByteArray("[]") << 200 << QStringLiteral("invalid-release");
+        QTest::newRow("missing-fields") << QStringLiteral("2.0.7") << QByteArray("{\"tag_name\":\"v2.0.8\"}") << 200 << QStringLiteral("invalid-release");
+        QTest::newRow("untrusted-link") << QStringLiteral("2.0.7") << release("v2.0.8", false, false, "https://example.com/update") << 200 << QStringLiteral("invalid-release");
+        QTest::newRow("other-repo") << QStringLiteral("2.0.7") << release("v2.0.8", false, false, "https://github.com/other/repo/releases/tag/v2.0.8") << 200 << QStringLiteral("invalid-release");
+        QTest::newRow("mismatched-tag") << QStringLiteral("2.0.7") << release("v2.0.8", false, false, "https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.9") << 200 << QStringLiteral("invalid-release");
+        QTest::newRow("overflow") << QStringLiteral("2.0.7") << release("v2.0.2147483648") << 200 << QStringLiteral("invalid-release");
+        QTest::newRow("unknown-local") << QStringLiteral("dev") << release() << 200 << QStringLiteral("invalid-release");
+        QTest::newRow("404") << QStringLiteral("2.0.7") << release() << 404 << QStringLiteral("http-404-network-203");
+        QTest::newRow("rate-limit") << QStringLiteral("2.0.7") << release() << 403 << QStringLiteral("http-403-network-201");
+        QTest::newRow("too-large") << QStringLiteral("2.0.7") << QByteArray(128*1024+1, 'x') << 200 << QStringLiteral("response-too-large");
     }
     void response() {
         QFETCH(QString, local); QFETCH(QByteArray, body); QFETCH(int, http); QFETCH(QString, result);
@@ -139,7 +139,7 @@ int main(int argc, char** argv) {
     if (app.arguments().contains("--live")) {
         UpdateChecker checker("2.0.7-test-r2");
         QObject::connect(&checker, &UpdateChecker::completed, &app, [&](const QString& result) {
-            qInfo().noquote() << "LIVE GitHub result:" << result << "version:" << checker.latestVersion();
+            qInfo().noquote() << QStringLiteral("LIVE GitHub result:") << result << QStringLiteral("version:") << checker.latestVersion();
             app.exit(result == "current" || result == "available" ? 0 : 1);
         });
         checker.check(false); return app.exec();
