@@ -138,7 +138,7 @@ bool checkDisplayMotion(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring)
     D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=1;
     if(FAILED(ctx.device()->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&clearHeap))))return false;
     pipeline::makeUav(ctx.device(),source.Get(),DXGI_FORMAT_R16G16_FLOAT,clearHeap->GetCPUDescriptorHandleForHeapStart());
-    for(unsigned test=0;test<4;++test){
+    for(unsigned test=0;test<8;++test){
         Status st;uint32_t slot=0;auto* list=ring.acquireNext(slot,st);if(!list)return false;
         pipeline::StateTracker states;
         states.transition(list,source.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -149,8 +149,10 @@ bool checkDisplayMotion(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring)
         states.transition(list,output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         // Identity; 2X zoom; view shifted 10% right; explicit history reset.
         const float zoom=test==1?2.0f:1.0f;
-        const float map[16]={640,360,960,540,zoom,test==2?.6f:.5f,.5f,test==3?1.0f:0.0f,
-            zoom,.5f,.5f,0,960,540,0,0};
+        const unsigned turns=test>=4&&test<=6?test-3:test==7?1:0;
+        const float renderW=test==7?303.75f:960*zoom,renderH=540*zoom;
+        const float map[16]={640,360,960,540,renderW,test==2?.6f:.5f,.5f,test==3?1.0f:0.0f,
+            renderH,.5f,.5f,float(turns),960,540,renderW,renderH};
         pass.bind(list,map,gpu.ptr,gpu.ptr+pass.increment);list->Dispatch(w/8,h/8,1);
         states.transition(list,source.Get(),D3D12_RESOURCE_STATE_COMMON);
         states.transition(list,output.Get(),D3D12_RESOURCE_STATE_COMMON);
@@ -160,8 +162,8 @@ bool checkDisplayMotion(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring)
         readStates.transition(list,output.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         if(!ring.submitAndSignal(slot))return false;
         FlowSample sample;if(!readCanonicalFlow(ctx,ring,output.Get(),sample))return false;
-        const float expectedX=test==3?0:test==2?62:-2*zoom;
-        const float expectedY=test==3?0:zoom;
+        const float expectedX=test==3?0:test==2?62:turns==1?-renderW/540.0f:turns==2?2:turns==3?960.0f/540.0f:-2*zoom;
+        const float expectedY=test==3?0:turns==1?-1.125f:turns==2?-1:turns==3?1.125f:zoom;
         const bool ok=std::abs(sample.x-expectedX)<.08f&&std::abs(sample.y-expectedY)<.08f;
         std::cout<<"DISPLAY_MOTION case="<<test<<" actual="<<sample.x<<","<<sample.y<<" expected="<<expectedX<<","<<expectedY<<" pass="<<ok<<std::endl;
         list=ring.acquireNext(slot,st);if(!list)return false;
@@ -177,6 +179,13 @@ bool checkDisplayMotion(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring)
 
 int wmain(int argc,wchar_t** argv){
     if(argc!=3)return 2;
+    if(wcscmp(argv[1],L"present-motion")==0){
+        CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+        gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
+        const bool initialized=ctx.initialize({},status)&&ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status);
+        const bool ok=initialized&&checkDisplayMotion(ctx,ring);
+        if(initialized)ring.drainQueue();ring.shutdown();ctx.shutdown();CoUninitialize();return ok?0:1;
+    }
     const bool dis=std::wstring(argv[1]).find(L"dis")==0;
     const bool pan=wcscmp(argv[1],L"xess-pan2")==0||wcscmp(argv[1],L"xess-pan4")==0;
     const bool recovery=wcscmp(argv[1],L"xess-recovery2")==0||wcscmp(argv[1],L"xess-recovery3")==0||wcscmp(argv[1],L"xess-recovery4")==0||wcscmp(argv[1],L"xess-resize4")==0;

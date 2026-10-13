@@ -15716,6 +15716,62 @@
    "zh-TW": "{} {}X 補幀初始化失敗，未替換後端或降低倍率；請查看工作診斷日誌",
    "en": "{} {}X frame generation could not initialize. The backend and multiplier were retained; see the task diagnostic log.",
    "ja": "{} {}X フレーム生成を初期化できませんでした。バックエンドと倍率は維持されています。タスク診断ログを確認してください。"
+  },
+  {
+   "zh": "保存的 BMD 输入口无效，请重新选择设备和 HDMI/SDI 输入",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "儲存的 BMD 輸入埠無效，請重新選擇裝置及 HDMI/SDI 輸入",
+   "en": "The saved BMD input connection is invalid. Select the device and HDMI/SDI input again.",
+   "ja": "保存された BMD 入力端子が無効です。デバイスと HDMI/SDI 入力を選び直してください。"
+  },
+  {
+   "zh": "这张 BMD 卡当前不提供所选输入口，请刷新并重新选择设备输入",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "這張 BMD 卡目前不提供所選輸入埠，請重新整理並選擇裝置輸入",
+   "en": "This BMD card does not currently expose the selected connector. Refresh and select an available input.",
+   "ja": "この BMD カードは現在、選択した入力端子を提供していません。更新して入力を選び直してください。"
+  },
+  {
+   "zh": "BMD 原生设备当前不可用，请确认设备连接和 Desktop Video 状态，然后刷新设备列表",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "BMD 原生裝置目前不可用，請確認裝置連線與 Desktop Video 狀態，再重新整理裝置清單",
+   "en": "The native BMD device is unavailable. Check its connection and Desktop Video status, then refresh the device list.",
+   "ja": "BMD ネイティブデバイスが利用できません。接続と Desktop Video の状態を確認してデバイス一覧を更新してください。"
+  },
+  {
+   "zh": "BMD 所选输入口不可用，或驱动未应用该输入口；请重新选择 HDMI/SDI 输入",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "所選 BMD 輸入埠不可用，或驅動程式未套用該輸入埠；請重新選擇 HDMI/SDI 輸入",
+   "en": "The selected BMD connector is unavailable or the driver did not apply it. Select the HDMI/SDI input again.",
+   "ja": "選択した BMD 入力端子が利用できないか、ドライバーが設定を適用していません。HDMI/SDI 入力を選び直してください。"
+  },
+  {
+   "zh": "请在视频输入设备列表选择这张 BMD 卡对应的 HDMI/SDI 输入口，再选择自动检测或匹配信号的手动制式。Driver 条目保留驱动当前输入。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "請在視訊輸入裝置清單選擇這張 BMD 卡對應的 HDMI/SDI 輸入埠，再選擇自動偵測或符合訊號的手動制式。Driver 項目保留驅動程式目前輸入。",
+   "en": "Select this BMD card’s HDMI/SDI connector in the video device list, then choose automatic detection or the matching manual signal mode. Driver keeps the current driver input.",
+   "ja": "映像入力デバイス一覧で BMD カードの HDMI/SDI 入力端子を選択し、自動検出または信号に合う手動モードを選んでください。Driver は現在のドライバー入力を維持します。"
+  },
+  {
+   "zh": "BMD 未在 {} 输入检测到有效信号。请在设备列表选择与 OBS 一致的 HDMI/SDI 输入口，并选择自动检测或匹配实际信号的手动制式。",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "BMD 未在 {} 輸入偵測到有效訊號。請在裝置清單選擇與 OBS 相同的 HDMI/SDI 輸入埠，再選擇自動偵測或符合實際訊號的手動制式。",
+   "en": "BMD detected no valid signal on the {} input. Select the same HDMI/SDI connector as OBS, then choose automatic detection or the matching manual signal mode.",
+   "ja": "BMD は {} 入力で有効な信号を検出できませんでした。OBS と同じ HDMI/SDI 端子を選択し、自動検出または実際の信号に合う手動モードを選んでください。"
+  },
+  {
+   "zh": "请在设备列表选择对应的 HDMI/SDI 输入口；Driver 保留驱动当前输入。支持自动检测的卡建议选择自动，信号未锁定时会明确提示。",
+   "src": "qml/Veyra/DialogHost.qml",
+   "zh-TW": "請在裝置清單選擇對應的 HDMI/SDI 輸入埠；Driver 保留驅動程式目前輸入。支援自動偵測的卡建議選擇自動，訊號未鎖定時會明確提示。",
+   "en": "Select the matching HDMI/SDI connector in the device list. Driver keeps the current driver input. Use Auto on cards supporting signal detection; an unlocked signal is reported explicitly.",
+   "ja": "デバイス一覧で該当する HDMI/SDI 入力を選択してください。Driver は現在のドライバー入力を維持します。対応カードでは自動検出を推奨し、信号がロックされない場合は明示します。"
+  },
+  {
+   "zh": "原生采集先确认有效信号；请在设备列表选择对应的 HDMI/SDI 输入，支持自动检测的卡建议选择自动。Driver 保留驱动当前输入。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "原生擷取會先確認有效訊號；請在裝置清單選擇對應的 HDMI/SDI 輸入，支援自動偵測的卡建議選擇自動。Driver 保留驅動程式目前輸入。",
+   "en": "Native capture first verifies a valid signal. Select the matching HDMI/SDI connector and use Auto when supported. Driver keeps the current driver input.",
+   "ja": "ネイティブキャプチャは最初に有効な信号を確認します。該当する HDMI/SDI 入力を選択し、対応カードでは自動検出を使用してください。Driver は現在のドライバー入力を維持します。"
   }
  ]
 }

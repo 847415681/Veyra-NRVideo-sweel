@@ -834,7 +834,7 @@ std::vector<CaptureFormat> CaptureCardSource::formatsByPath(std::wstring_view de
 }
 bool CaptureCardSource::showDeviceProperties(std::wstring_view devicePath,uintptr_t owner,bool inputSelector,std::wstring& error,std::wstring* changedFormatKey){
     error.clear();if(changedFormatKey)changedFormatKey->clear();
-    if(decklink::isPath(devicePath)){error=L"BMD 原生入口跟随 Desktop Video Setup 的 HDMI/SDI 输入设置；请在该程序选择输入口，再使用自动检测或手动制式。";return false;}
+    if(decklink::isPath(devicePath)){error=L"请在视频输入设备列表选择这张 BMD 卡对应的 HDMI/SDI 输入口，再选择自动检测或匹配信号的手动制式。Driver 条目保留驱动当前输入。";return false;}
     ComPtr<IGraphBuilder> graph;ComPtr<ICaptureGraphBuilder2> builder;ComPtr<IBaseFilter> device;ComPtr<IAMStreamConfig> config;
     if(!configuration(devicePath,graph,builder,device,config)){error=L"无法打开驱动设置；请先断开采集并关闭占用设备的应用。";return false;}
     AM_MEDIA_TYPE* before=nullptr;const HRESULT beforeHr=config->GetFormat(&before);

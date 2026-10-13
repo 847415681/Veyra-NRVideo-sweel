@@ -18,6 +18,7 @@ p.add_argument('--donor-app',type=Path,required=True)
 p.add_argument('--media',required=True)
 p.add_argument('--baseline-ref')
 p.add_argument('--case',action='append',dest='selected_cases',help='Run only these named layout cases')
+p.add_argument('--page',choices=('pro','node'),default='pro')
 opts=p.parse_args()
 assert re.fullmatch(r'[a-z0-9-]+',opts.task),'unsafe artifact directory name'
 assert opts.variant!='before' or opts.baseline_ref,'negative control requires an explicit Git reference'
@@ -57,12 +58,22 @@ cases=[dict(name='wide-no-policy',width=1900,height=900),dict(name='wide-active-
  dict(name='traditional',width=1400,height=900,options=True,language='zh-TW'),dict(name='cinema-switch',width=1280,height=800,page='min'),
  dict(name='professional-return',width=1400,height=900,options=True),dict(name='fullscreen',width=1400,height=900,options=True,fullscreen=True),
  dict(name='fullscreen-return',width=1400,height=900,options=True)]
+if opts.page=='node':
+    cases=[dict(name='node-wide',width=1900,height=900),
+        dict(name='node-compact',width=960,height=800,options=True),
+        dict(name='node-english',width=1400,height=900,options=True,language='en'),
+        dict(name='node-minimum',width=720,height=700,options=True,language='ja'),
+        dict(name='node-tall-picture',width=1400,height=900,pictureHeight=600,options=True),
+        dict(name='node-shrink-window',width=960,height=650,pictureHeight=600,options=True),
+        dict(name='node-short-picture',width=1400,height=900,pictureHeight=180,options=True),
+        dict(name='node-fullscreen',width=1400,height=900,fullscreen=True),
+        dict(name='node-fullscreen-return',width=1400,height=900,options=True)]
 if opts.selected_cases:
     selected=set(opts.selected_cases)
     assert selected.issubset({c['name'] for c in cases}),selected
     cases=[c for c in cases if c['name'] in selected]
 MAIN=APP/'qml/Veyra/Main.qml';original=MAIN.read_bytes();driver=APP/'qml/Veyra/ProGeometryProbe.qml'
-write(driver,(R/'scripts/acceptance/pro-video-geometry-probe.qml').read_bytes())
+write(driver,(R/'scripts/acceptance'/('node-video-geometry-probe.qml' if opts.page=='node' else 'pro-video-geometry-probe.qml')).read_bytes())
 text=original.decode('utf8');at=text.rfind('}')
 loader='\n Loader { source:"ProGeometryProbe.qml"; onLoaded: { item.cases='+json.dumps(cases)+'; item.media='+json.dumps(opts.media,ensure_ascii=False)+' } }\n'
 write(MAIN,(text[:at]+loader+text[at:]).encode('utf8'))
@@ -98,6 +109,7 @@ try:
     with console.open('wb') as stream:
         command=[str(APP/'veyra_qml_ui.exe'),'--data-dir',str(PROFILE),'--page','home','--size','1400x900','--exit-after','70000']
         if MODE=='software':command.append('--obs-game-capture')
+        if MODE=='software':command.append('--obs-game-capture')
         proc=subprocess.Popen(command,cwd=APP,env=env,stdout=stream,stderr=subprocess.STDOUT)
         while proc.poll() is None:
             if time.monotonic()-start>80:proc.kill();raise TimeoutError('GUI timeout')
@@ -124,6 +136,7 @@ finally:
     driver.unlink(missing_ok=True)
 logs=console.read_text('utf8',errors='replace')+'\n'+(O/'engine.log').read_text('utf8',errors='replace')
 errors=[l for l in logs.splitlines() if re.search(r'PRO_GEOMETRY_FAIL|TypeError:|ReferenceError:|Binding loop|Cannot assign|D3D12 ERROR|D3D12 CORRUPTION|failed to load component|no root object',l)]
+if 'interface renderer='+MODE not in logs:errors.append('Requested UI renderer was not observed')
 completed=rc==0 and not errors and 'PRO_GEOMETRY_DONE' in logs and len(rows)==len(cases)
 result=dict(variant=VARIANT,mode=MODE,scale=SCALE,exit=rc,seconds=round(time.monotonic()-start,2),errors=errors,rows=rows,
  passed=completed and all(r['passed'] for r in rows),completed=completed,

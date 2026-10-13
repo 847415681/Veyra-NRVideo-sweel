@@ -220,9 +220,7 @@ Window {
             // A second fixed-height formula let the HWND cover the playback bar.
             return proPage.videoViewport
         case "node":
-            // .nodeview padding 14; .nv-top (330px by default, the splitter under
-            // it resizes it) minus its 40px bar.
-            return { x: 14, y: 14, width: Math.max(1, width - 28), height: root.nodeVideoHeight - 40 }
+            return nodePage.videoViewport
         case "exp":
             return ExportLayout.calculate(width, height, exportPage.compactTab).video
         default:
@@ -266,6 +264,7 @@ Window {
             id: nodePage
             pageId: "node"
             dragStripHeight: 14
+            onVideoViewportChanged: if (root.page === "node" && !root.fullscreen) videoHost.syncRect()
             home: pages
             videoHeight: root.nodeVideoHeight
             onVideoHeightEdited: h => { root.nodeVideoHeight = h; videoHost.syncRect() }

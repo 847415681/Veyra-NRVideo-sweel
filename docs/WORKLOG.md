@@ -9345,3 +9345,13 @@ ZIP/EXE原字节晋级，仅外部下载名去test-r2；包内显示原标识在
 v2.0.7 ID 410800361，published_at 2026-10-12T16:24:59Z，latest/非草稿/非预发布通过；两个运行资产服务器SHA/size等于原test-r2。v2.0.7-sources ID 410800322，两源资产、非latest，未变依赖源保留v2.0.6。main/tag6ede5a7普通atomic推送成功，产品与67ab696相同，后续只补回执文档。remote.py draft/upload/verify-draft/publish/verify-public均通过；public-check.py final全部公开文档/双QR/Ko-fi/Release/下载200，六群原图SHA吻合，飞书带Cookie匿名GET200。最初无Cookie404/循环证据保留，不把它写成知识库本身失效。
 
 旧v2.0.6Release完整稳定字段不变，68其它树/509脏文件/全部原包保护通过。详细docs/RELEASE_2.0.7_REPORT_2026-10-13.md；外部reports/logs回执固定远端正文/资产digest。只读发布辅助检查曾因utf8-sig别名和依赖回执尚未完成失败，原错误说明保留，改编码/顺序后原检查通过，未重发或改资产。原扩展NR+DLSS热切换失败和NV显存/BMD/HDR/AMD实卡限制保留，没有新性能或全硬件通过声明。群公告632字符仅保存给用户，无代发/关机。
+
+## 2026-10-13 issues36/37与BMD日志53开工及实现
+
+用户将延迟工作交Claude，要求检查issues37/36并继续修复BMD黑屏。隔离codex/issues36-37-bmd-20261013，从main7571919起；73旧树head/status、input log53 SHA和副本、两issue正文/评论、source-before.bundle固定在archives/issues36-37-bmd-20261013。计划docs/ISSUES_36_37_BMD_PLAN_2026-10-13.md；不改显示同步/队列/XeLL策略，避免干扰Claude。产物全E盘，不派Agent，不改驱动持久偏好/EDID/运行组件或用户真实配置，无合并/push/发布/交付包/关机。
+
+原r2实际GUI负对照：pro-video-geometry-test.py before --page node --task issues36-37-bmd-20261013 --baseline-ref7571919 --donor-app<原r2> --media<GTA4K>，9场完成，其中8场被视频HWND遮24–77DIP；全屏不遮。原因Main固定扣40但节点状态/紧凑条实际64–117。改NodePage响应式viewport并由Main绑定，不加Timer、不改33/250ms；同EXE只换QML后9场全部边界一致。原始日志/receipt在本轮before-d3d12-1-20261013-222518与after-d3d12-1-20261013-222847。
+
+旋转：PreviewView纳入容器顺时针方向、原生尺寸/SAR/选区逆映射；Engine读取SourceInfo的现成方向，UI重置保留元数据；PresentBlit和XeSS PresentMotion共享UV旋转，对照和运动也旋转。新增CPU坐标/GPU四象限与运动方向回归。图内NR/光流仍为原编码坐标，没有增加像素回读/额外旋转pass；离线导出合同不在本修复中改变。现有ExperimentalBackend的显示运动测试仍向新版shader传旧版zoom常量，已按当前16常量合同修正并增加独立present-motion入口，后续需真实GPU验证。
+
+BMD日志53：6次原生尝试均SDI连接0x1、locked0/noInput，另外DirectShow亦黑；不据此断言用户线接错，具体物理口尚未确认。对照固定OBS e7f0b0d输入SetInt与SDK枚举1SDI/2HDMI，Veyra此前只有读取默认口。增加设备实际支持的各输入口稳定选择，旧Driver身份兼容；启用前设置/读回，按端口过滤SDK可用模式，关闭时仅在仍持有该设置时恢复原输入，不写持久偏好、不扫描端口。追加路径/租用控制失败及恢复回归；没有BMD实卡不宣称现场已恢复。8条新增提示三语追加、原2243键保持；首轮保护校验因旧catalog存在重复键而误失败且未写文件，改按完整原列表比较后通过。构建/后续回归尚未完成。

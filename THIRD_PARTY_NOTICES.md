@@ -809,6 +809,12 @@ source timestamps and HDR metadata, and reuses its bounded upload mailbox and
 audio session. Device selection uses persistent/topological IDs plus subdevice
 identity. No OBS binary, driver, EDID writes or VideoProcessor code is included.
 
+The 2026-10-13 follow-up also follows OBS's explicit input-connection selection
+(`IDeckLinkConfiguration::SetInt` before enabling capture). Veyra exposes only
+driver-reported connectors as stable saved identities, verifies the selected
+connector, and restores its temporary selection on close when still owned.
+It does not call `WriteConfigurationToPreferences` or scan physical inputs.
+
 Build-time COM declarations come from the unmodified Blackmagic DeckLink SDK
 12.0 Win IDL files supplied by OBS 31.0.3, pinned to
 [fcd1910bf5116b69404a6ecdda6efedd1d00ebdf](https://github.com/obsproject/obs-studio/tree/fcd1910bf5116b69404a6ecdda6efedd1d00ebdf/plugins/decklink/win/decklink-sdk).

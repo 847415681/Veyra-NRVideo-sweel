@@ -2364,7 +2364,7 @@ void QmlPlayerBridge::tickCapture() {
     i.captureStatus = i.captureFormatList.empty() ? tr("未读到设备上报的采集格式，或设备正被其他应用占用。")
                     : i.captureFormatKey.empty() ? (!i.capturePrefs.formatKey.empty()?tr("此采集卡无此格式，请重新选择分辨率、帧率和像素格式。"):tr("先选择分辨率，再选择该分辨率支持的帧率和像素格式"))
                     : q.kind == 3 ? tr("驱动设置已关闭。请核对所选格式与设备帧率，再连接。")
-                    : source::decklink::isPath(i.captureDevice) ? tr("原生采集先确认有效信号；支持自动检测的卡建议选择自动。HDMI/SDI 跟随 Desktop Video Setup。")
+                    : source::decklink::isPath(i.captureDevice) ? tr("原生采集先确认有效信号；请在设备列表选择对应的 HDMI/SDI 输入，支持自动检测的卡建议选择自动。Driver 保留驱动当前输入。")
                     : captureBlackmagicDevice() ? tr("请选择与输入信号一致的格式。驱动默认格式不代表检测到的信号。")
                     : tr("连接后使用当前增强设置。格式与音频变更需要重新连接。");
     veyra::log::info("capture-ui", std::format("formats={} selected={}", i.captureFormatList.size(), !i.captureFormatKey.empty()));

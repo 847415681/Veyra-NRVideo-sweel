@@ -124,6 +124,14 @@ int wmain(int argc,wchar_t** argv){try{
     const float anchored=(800-500)/(1920.0f*(1000.0f/1920)*v.zoom)+v.centerX;require(std::abs(anchored-.8f)<.0001f,"pointer anchor fixed");
     v.wheel(-3,800,300,1000,600,1920,1080);require(std::abs(v.zoom-1)<.0001f&&std::abs(v.centerX-.5f)<.0001f,"inverse wheel returns same view");
     v.pan(100,0,1000,600,1920,1080);require(std::abs(v.centerX-.4f)<.0001f,"pan measured in displayed pixels");}
+    {engine::PreviewView v;v.rotationDegrees=90;
+        const auto size=v.renderedSize(320,240,64,32);require(size.first==120&&size.second==240,"portrait contain uses rotated extent");
+        const auto source=v.sourcePoint(130,60,320,240,64,32);require(source.first==.25f&&source.second==.75f,"portrait protection maps display corner to coded source");
+        const auto display=v.displayUv(source.first,source.second);require(display.first==.25f&&display.second==.25f,"inverse source/display rotation agrees");
+        v.mode=1;const auto native=v.renderedSize(320,240,64,32);require(native.first==32&&native.second==64,"native-pixel view swaps dimensions for portrait");
+        v.mode=0;v.rotationDegrees=-90;const auto opposite=v.sourceUv(.25f,.25f);require(opposite.first==.75f&&opposite.second==.25f,"opposite display matrix rotates the other way");
+        v.rotationDegrees=180;const auto upsideDown=v.sourceUv(.25f,.25f);require(upsideDown.first==.75f&&upsideDown.second==.75f,"upside-down display matrix maps both axes");
+        v.rotationDegrees=90;v.displayAspect=.75;require(std::abs(v.aspect(64,32)-.75)<.00001,"already-oriented SAR is not inverted twice");}
     ui::UiSessionState state;require(!state.enhanced&&!state.configured.nr&&!state.configured.sr&&state.configured.multiplier==1,"fresh startup effects disabled");state.configured.forceSdrPreview=true;state.enhanced=true;state.configured.nr=true;state.configured.multiplier=4;state.configured.sr=true;state.configured.model.intensity=.37f;state.configured.residual.color=1.4f;
     auto before=state.effective();require(state.mode==ui::Mode::Daily,"startup Daily");state.mode=ui::Mode::Professional;require(state.effective()==before,"mode cannot alter settings");state.enhanced=false;auto bypass=state.effective();require(!bypass.nr&&!bypass.sr&&bypass.multiplier==1,"true full bypass");require(bypass.forceSdrPreview,"master bypass retains SDR display choice");state.enhanced=true;require(state.effective()==before,"restore all settings");
     for(bool input:{false,true})for(bool display:{false,true})for(bool force:{false,true}){engine::EnhancementSettings s;s.forceSdrPreview=force;require(s.useHdrPreview(input,display)==(input&&display&&!force),"HDR output policy");}

@@ -553,6 +553,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                  const auto& si=activeSource->info();
                  snapshot_.sourceWidth=si.width;snapshot_.sourceHeight=si.height;
                  snapshot_.sourceDisplayAspect=si.displayAspect;
+                 previewView_.rotationDegrees=si.rotationDegrees;
                  if(si.width&&si.height&&std::isfinite(si.displayAspect)&&si.displayAspect>0&&std::abs(si.displayAspect-double(si.width)/si.height)>.001)
                      previewView_.displayAspect=si.displayAspect;
                  snapshot_.sourceRotationDegrees=si.rotationDegrees;

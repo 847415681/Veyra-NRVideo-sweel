@@ -375,7 +375,7 @@ Item {
                 hint: captureDialog.live ? qsTr("先断开采集，再配置驱动")
                       : veyra.captureBlackmagicDevice
                         ? (veyra.preferences.blackmagicNativeCapture === true
-                           ? qsTr("原生采集跟随 Desktop Video Setup 的 HDMI/SDI 输入。支持自动检测的卡建议选择自动；信号未锁定时会明确提示。")
+                           ? qsTr("请在设备列表选择对应的 HDMI/SDI 输入口；Driver 保留驱动当前输入。支持自动检测的卡建议选择自动，信号未锁定时会明确提示。")
                            : qsTr("Blackmagic 两个条目可能属于同一张卡。DirectShow 黑屏可尝试下方原生采集开关；手动格式须匹配实际信号。"))
                         : qsTr("配置驱动公开的输入与视频属性；其他采集应用占用设备时请先关闭")
                 RowLayout {
