@@ -3387,9 +3387,13 @@ QVariantMap QmlPlayerBridge::ps5Control() const {
 // leaves it alone but does not set snapshot.capture.
 bool QmlPlayerBridge::captureCardLive() const {
     const auto& s = impl_->snapshot;
+    // Not while Stopping: after 断开 the run keeps `running` until it has torn
+    // down, and the tick would start PS5 手柄控制 again in that window.
+    const bool playing = s.running && !s.image && !s.remotePlay &&
+                         (s.transport == engine::TransportState::Playing || s.transport == engine::TransportState::Paused);
     // Tests only: any playing source stands in for the capture card (no card needed).
-    if (s.running && !s.image && !s.remotePlay && qEnvironmentVariableIsSet("VEYRA_TEST_PS5_CONTROL_ANY_SOURCE")) return true;
-    return impl_->liveKind == QLatin1String("capture") && s.running && s.capture && !s.image && !s.remotePlay;
+    if (playing && qEnvironmentVariableIsSet("VEYRA_TEST_PS5_CONTROL_ANY_SOURCE")) return true;
+    return playing && s.capture && impl_->liveKind == QLatin1String("capture");
 }
 void QmlPlayerBridge::ps5ControlSet(const QString& key, const QVariant& value) {
     static const QHash<QString, QString> keys{{QStringLiteral("enabled"), QStringLiteral("ps5CaptureControl")},
