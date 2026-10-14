@@ -9445,3 +9445,13 @@ VFG：nvidia-vfx 仍 0.2.0.0、Samples v1.3.0.1、无 OTA；官方只支持 batc
 红字：屏幕捕获对话框“帧率上限”行下方（`Theme.err`，提示放在控件下面），文案写成“DLSS5（NR）”以对应软件里的 NR 名称，带繁中/英/日。截图 `dialog-dlss5-214718`（中文）、`dialog-dlss5-en-215209`（英文）；UI 合同（384 个布局用例）与 repair 259/0 通过（`tests-dlss5`）。
 
 PR #7：OPEN、CONFLICTING，基线 05998da 落后 525 个提交；界面部分改的是旧 Win32 界面，2.0.x 用不上；后端文件除 EngineController 外基本未变。读 Chiaki 源码发现 PR 用“视频回调返回 false”丢弃保活画面，会让 `frame_index_prev_complete` 停住，Chiaki 每帧调用 `stream_connection_send_corrupt_frame` 向 PS5 报坏帧并写两条警告；移植应改为收下即丢、不挂音频接收。另有界面线程同步 close、采集等 PS5、按路径字符串保留会话三处要改；再串流用途还需要“后台也转发”和“谁按键就用谁”。方案见 docs/PS5_CAPTURE_CONTROL_QML_PLAN_2026-10-14.md（推荐 A：采集卡对话框加“PS5 手柄控制”分区），等用户拍板。
+
+## 2026-10-14/15 PS5 手柄控制（PR #7 方案 A）实施（Claude）
+
+用户：“方案A吧，开工！”（后台转发默认、分支两项未回复，按推荐：默认关、继续本分支）。记录 docs/PS5_CAPTURE_CONTROL_2026-10-14.md。
+
+实施：采集卡对话框“PS5 手柄控制”分区（开关、共用 PS5 配对的主机选择与状态、PIN、后台转发、手柄名、说明）；PS5 串流对话框“画面用采集卡”指引；主页采集卡“PS5 手柄”标签。后端从 PR #7 移植：controlOnly → discardMedia，视频回调计数后返回 true（PR 返回 false 会让 Chiaki 每帧报坏帧），音频挂空回调（不挂会在 audioreceiver.c 泄漏每帧，方案原写法已更正），控制专用循环（无解码/WASAPI，保活计数驱动 StreamRecovery，高精度 4 ms）。引擎专用控制线程（界面不等主机；非采集卡来源/PS5 串流/PC/Xbox/导出停止它，PS5 串流等它关完≤10 s；有界析构）。手柄“谁按键就用谁”；共享手柄改为引用计数（原来来源切换时旧定时器可能关掉新来源的手柄）。38 条新文案 + 补齐 5 条显示同步翻译，extract --check 缺失 0。
+
+GUI 发现并修复：断开后采集任务拆除期间（Stopping）轮询又把控制连上。
+
+测试：全部构建通过（新代码无警告）；remoteplay 边界默认/200 次压力/双虚拟手柄跟随/原虚拟手柄全过；repair 259/0、UI 合同、realtime preview 0 失败；节奏 4 项通过；screen capture 仍是 HDR 桌面 5 项基线失败。GUI（全部只连 192.0.2.1）：开关、播放中开→5 s 失败→重连→断开、PIN/已连接布局、PS5 对话框行、主页标签、英文、正在连接时退出（0.26 s、cancelled=true）。测试包 r6（a7d8598，EXE eeec127d…）冒烟通过。LivePresentationTests 的 PS5 用例会连真实配对，未跑；真 PS5、真 ViGEm、HDMI 是否降级未测。
