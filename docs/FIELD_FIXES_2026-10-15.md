@@ -59,6 +59,12 @@
 - 回归（`logs/claude-field-20261015/unit-final-013928`）：capture_format_selection 0 失败、repair_contract 259/0、ui_contract PASS、live_timing PASS、present_sink_lifecycle passed=1 debugErrors=0、settings_transaction passed=1 debugErrors=0、qml_quick 68 通过 0 失败。
 - 界面脚本：`tmp/claude-field-20261015/{repro_formats.py,gpu_reconnect.py,run_app_prefs.py,stack_sample.py}`。测试前确认没有其他 Veyra 进程。
 
+## 测试包（基于 2.0.7 r2，只替换 veyra_qml_ui.exe、DialogHost.qml、VIcon.qml，不含任何用户设置）
+- 目录 `E:/项目/Veyra/test-packages/claude-field-20261015/`（DELIVERY.json，打包脚本 `tmp/claude-field-20261015/package.py`，源码 d2239c6）。
+- 覆盖补丁 `Veyra-2.0.7-test-field-patch.zip`（8120432 字节，SHA256 `fa715aad4a4da09247798ef021c74e6227a4091714b7af3df19ef02def3367c1`）：解压到原 2.0.7 文件夹覆盖，NVIDIA/AMD 包通用（两包的 2.0.7 exe 相同），原设置保留。
+- 完整包 `Veyra-2.0.7-test-field-NVIDIA-win64-portable.zip`（714770070 字节，SHA256 `8762448fd9ba43cc1311c84d53b10adb1fd163c259b65c1a6ea2503216d8d9c8`）、`Veyra-2.0.7-test-field-AMD-win64-portable.zip`（355706701 字节，SHA256 `5573da62692e6a4fcc23dcbd62c0d30c626803e9fe5ea6c3870f77fd507390c8`）。
+- 两个完整包用独立数据目录和日志冷启动通过（退出码 0、0 条错误），包目录未写入任何文件。
+
 ## 未验证
 - 用户那张 272 能力项的卡和 RTX 3080 没有实机，本机用测试开关造出同量级格式。
 - 真实 TDR、4070 SUPER、VC-X7PRO 没有实机；自动重连和 DRED 只用模拟的超时和设备移除验证。
