@@ -619,11 +619,13 @@ and presentation, not game input or physical display latency. Generated-frame
 Reflex integration is not enabled; DLSS retains its selected multiplier.
 
 `include/veyra/gfx/NvidiaVrr.h` (2026-10-14) adds, from the same interface
-files, the QueryInterface IDs of NvAPI_DISP_GetDisplayIdByDisplayName and
-NvAPI_Disp_GetVRRInfo and a renamed NV_GET_VRR_INFO_V1 layout (checked against
-the local unmodified copy used for the pacing work). It only reads the
-monitor's variable-refresh state for diagnostics; the driver setting is never
-changed. Same loading rules and the same license as above.
+files, the QueryInterface IDs of NvAPI_DISP_GetDisplayIdByDisplayName,
+NvAPI_Disp_GetVRRInfo and NvAPI_DISP_GetMonitorCapabilities and renamed
+NV_GET_VRR_INFO_V1 and NV_MONITOR_CAPABILITIES_V1 (generic capability bits)
+layouts (checked against the commit above). It only reads the monitor's
+variable-refresh support and state, for diagnostics and to enable the 可变刷新
+switch; the driver setting is never changed. Same loading rules and the same
+license as above.
 
 Copyright (c) 2019-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 

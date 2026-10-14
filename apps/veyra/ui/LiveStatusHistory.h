@@ -42,12 +42,6 @@ inline OutputRateAssessment assessOutputRate(const engine::PlayerSnapshot& s,con
     result.comparison=context.comparison&&s.applied.multiplier>1;
     result.requestedFps=result.contentFps*(result.comparison?1u:s.applied.multiplier);
     result.targetFps=result.requestedFps;
-    // Live output budget: the engine generates only what the panel can show
-    // (1 = generation bypassed), so that is the target, not a shortfall.
-    if(!result.comparison&&s.displayFgLimited&&s.displayFgMultiplier>=1){
-        result.displayLimited=true;
-        result.targetFps=std::min(result.targetFps,result.contentFps*s.displayFgMultiplier);
-    }
     const auto& effective=s.presentationEffective;
     if(effective.outputRate==engine::OutputRateMode::Custom&&effective.customFps>0&&std::isfinite(effective.customFps)){
         result.outputLimited=effective.customFps<result.targetFps*.99;

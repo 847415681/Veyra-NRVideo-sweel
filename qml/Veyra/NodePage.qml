@@ -777,6 +777,19 @@ VPage {
                                 current: String(veyra.displaySync)
                                 onPicked: id => veyra.displaySync = Number(id)
                             }
+                            // 可变刷新 (G-SYNC / FreeSync): greyed when the monitor cannot do it.
+                            RowLayout {
+                                Layout.fillWidth: true
+                                enabled: veyra.vrrState >= 2
+                                opacity: enabled ? 1 : 0.5
+                                NodeLabel { Layout.fillWidth: true; text: qsTr("可变刷新"); wrapMode: Text.WordWrap }
+                                VSwitch {
+                                    objectName: "node-vrr"
+                                    checked: veyra.variableRefresh
+                                    onToggled: checked => veyra.variableRefresh = checked
+                                }
+                            }
+                            NodeLabel { Layout.fillWidth: true; text: veyra.vrrHint; wrapMode: Text.WordWrap; opacity: veyra.vrrState >= 2 ? 1 : 0.5 }
                             NodeLabel { text: qsTr("输出上限") }
                             VSeg {
                                 objectName: "node-output-rate"
@@ -1525,7 +1538,8 @@ VPage {
                 }
                 VRow {
                     label: qsTr("倍率")
-                    hint: veyra.fgMaxMultiplier + qsTr("X 为上限")
+                    hint: veyra.fgDisplayHint.length > 0 ? veyra.fgDisplayHint : veyra.fgMaxMultiplier + qsTr("X 为上限")
+                    hintColor: veyra.fgDisplayHint.length > 0 ? Theme.warn : Theme.t3
                     VSeg {
                         objectName: "node-fg-multiplier"
                         visible: veyra.fgBackendName !== "vfg"

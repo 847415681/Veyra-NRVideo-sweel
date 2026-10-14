@@ -320,6 +320,9 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString runStatus READ runStatus NOTIFY perfChanged)
     Q_PROPERTY(QString runStatusLevel READ runStatusLevel NOTIFY perfChanged)
     Q_PROPERTY(QString runStatusDetail READ runStatusDetail NOTIFY perfChanged)
+    // Live FG output hint ("当前帧率…超出屏幕刷新率，建议降至…"), empty when the
+    // output fits; a suggestion only, the multiplier is never changed.
+    Q_PROPERTY(QString fgDisplayHint READ fgDisplayHint NOTIFY perfChanged)
     Q_PROPERTY(QStringList runOptions READ runOptions NOTIFY perfChanged)
     Q_PROPERTY(double effectiveOutputFps READ effectiveOutputFps NOTIFY perfChanged)
     // Achieved output rate / effective policy target; -1 while unknown.
@@ -340,6 +343,13 @@ class QmlPlayerBridge : public QObject {
     // Presentation: display sync 0 允许撕裂 1 垂直同步 2 自动; output cap 0 关闭
     // 1 跟随显示器 2 自定义 (+ fps). Owned by XeSS when presentationOwned.
     Q_PROPERTY(int displaySync READ displaySync WRITE setDisplaySync NOTIFY presentationChanged)
+    // 可变刷新 switch (persisted with the presentation settings) and the
+    // presenting monitor's VRR level: 0 unknown, 1 the monitor cannot do VRR
+    // (switch greyed), 2 it can but the driver setting is off, 3 possible,
+    // 4 active; vrrHint explains it beside the switch.
+    Q_PROPERTY(bool variableRefresh READ variableRefresh WRITE setVariableRefresh NOTIFY presentationChanged)
+    Q_PROPERTY(int vrrState READ vrrState NOTIFY perfChanged)
+    Q_PROPERTY(QString vrrHint READ vrrHint NOTIFY perfChanged)
     Q_PROPERTY(int outputRateMode READ outputRateMode WRITE setOutputRateMode NOTIFY presentationChanged)
     Q_PROPERTY(double outputCustomFps READ outputCustomFps WRITE setOutputCustomFps NOTIFY presentationChanged)
     Q_PROPERTY(bool presentationOwned READ presentationOwned NOTIFY snapshotChanged)
@@ -862,6 +872,11 @@ public:
     void setContentRate(int value);
     int displaySync() const;
     void setDisplaySync(int value);
+    bool variableRefresh() const;
+    void setVariableRefresh(bool value);
+    int vrrState() const;
+    QString vrrHint() const;
+    QString fgDisplayHint() const;
     Q_INVOKABLE void setPresentationFullscreen(bool value);
     bool fullscreenMemorySafe() const;
     int outputRateMode() const;

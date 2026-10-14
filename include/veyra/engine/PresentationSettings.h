@@ -22,6 +22,9 @@ struct PresentationSettings {
     bool fullscreen=false; // transient UI state, never persisted as a preference
     // Global opt-in compatibility choice; never part of enhancement presets.
     bool hdrFgCompatibility=false;
+    // 可变刷新 switch: where the monitor can run VRR, Automatic presents like
+    // explicit Vsync (G-SYNC/FreeSync + V-SYNC, see presentationVsync below).
+    bool variableRefresh=false;
     bool operator==(const PresentationSettings&) const = default;
     bool valid()const{return unsigned(mode)<=2&&unsigned(display)<=2&&unsigned(outputRate)<=2&&std::isfinite(customFps)&&customFps>=1.0&&customFps<=1000.0;}
 };
@@ -35,7 +38,12 @@ struct PresentationSettings {
 // does not limit. 2.0.6 (ef2069f) had made Automatic identical to Vsync; the
 // 4K NR+XeSS capture measured 112 ms on a 60 Hz panel with it.
 // Explicit Vsync makes every frame wait for a refresh; only explicit Tearing
-// passes DXGI_PRESENT_ALLOW_TEARING.
+// passes DXGI_PRESENT_ALLOW_TEARING. With the 可变刷新 switch on and VRR
+// possible on the monitor, the presenter reports Automatic as Vsync in its
+// effective settings: inside the VRR range the panel starts a refresh when
+// the frame arrives, so the wait is about zero and nothing tears; above the
+// range the one-deep VSync queue holds (Microsoft documents VRR through the
+// tearing flag, which only explicit Tearing may use).
 constexpr bool presentationVsync(const PresentationSettings& s) {
     return s.display==DisplaySync::Vsync;
 }

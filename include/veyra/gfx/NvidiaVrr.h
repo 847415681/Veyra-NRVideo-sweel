@@ -1,34 +1,67 @@
 #pragma once
 #include <windows.h>
+#include <algorithm>
 #include <cstdint>
+#include <cstdlib>
+#include <cwchar>
 #include <mutex>
 #include <string>
 namespace veyra::gfx {
 // Variable refresh (G-SYNC / G-SYNC Compatible) state of the monitor showing
-// a window, for diagnostics and the status line. Veyra never changes it; the
-// user enables it in the NVIDIA Control Panel.
+// a window. Veyra never changes the driver setting; the user enables it in
+// the NVIDIA Control Panel, and the 可变刷新 switch only decides how Veyra
+// presents when it is available (VideoPresenter::configurePresentation).
 // Minimal ABI declarations checked against NVIDIA/nvapi public interfaces
-// (nvapi_interface.h function IDs, NV_GET_VRR_INFO_V1 layout), MIT; same
-// source and loading rules as ReflexSession: System32 nvapi64.dll only, pinned
-// for the life of the process. No SDK header or runtime is distributed.
+// (nvapi_interface.h function IDs, NV_GET_VRR_INFO_V1 and
+// NV_MONITOR_CAPABILITIES_V1 layouts), MIT; same source and loading rules as
+// ReflexSession: System32 nvapi64.dll only, pinned for the life of the
+// process. No SDK header or runtime is distributed.
 struct VrrState {
     bool known=false;      // NVIDIA driver answered for this monitor
-    bool possible=false;   // the display can run VRR with the current mode/connection
-    bool requested=false;  // VRR is enabled for this display in the driver
-    bool enabled=false;    // VRR mode is currently active on the display
+    bool possible=false;   // VRR mode is possible on the display (bIsVRRPossible)
+    bool requested=false;  // VRR mode is requested for the display (bIsVRRRequested)
+    bool enabled=false;    // VRR mode is currently active on the display (bIsVRREnabled)
     bool indicator=false;  // the driver's VRR indicator overlay is on
     bool inVrrMode=false;  // the display itself reports VRR mode
+    bool capsKnown=false;  // generic monitor capabilities answered
+    bool supportsVrr=false;      // the monitor supports VRR at all (supportVRR)
+    bool currentlyCapable=false; // ... with the applied display settings
+    bool trueGsync=false;        // G-SYNC module, not adaptive sync
+    bool simulated=false;        // VEYRA_TEST_VRR_LEVEL override
     int status=0;          // last NvAPI status (0 = OK)
     bool operator==(const VrrState&)const=default;
 };
+// 0 unknown (no NVIDIA driver answer), 1 the monitor cannot do VRR, 2 it can
+// but VRR is not possible now (driver setting off, mode or connection),
+// 3 VRR possible/requested but not active, 4 VRR active on the display.
+constexpr unsigned vrrLevel(const VrrState& s){
+    if(!s.known)return 0;
+    if(s.enabled||s.inVrrMode)return 4;
+    if(s.possible||s.requested)return 3;
+    if(s.supportsVrr||s.currentlyCapable)return 2;
+    return 1;
+}
 inline VrrState queryVrr(HWND window){
+    // Test hook (VEYRA_TEST_VRR_LEVEL=0..4): this rig's monitor reports no VRR
+    // support, so UI and presentation-rule tests simulate a level.
+    static const int testLevel=[]{wchar_t v[4]{};return GetEnvironmentVariableW(L"VEYRA_TEST_VRR_LEVEL",v,4)?std::clamp(_wtoi(v),0,4):-1;}();
+    if(testLevel>=0){
+        VrrState s;s.simulated=true;s.known=testLevel>0;s.capsKnown=s.known;
+        s.supportsVrr=s.currentlyCapable=testLevel>=2;s.possible=s.requested=testLevel>=3;s.enabled=s.inVrrMode=testLevel>=4;
+        return s;
+    }
     struct Info {uint32_t version;uint32_t flags;uint32_t reservedEx[4];};
     static_assert(sizeof(Info)==24);
+    // NV_MONITOR_CAPABILITIES_V1: the union starts right after the one-byte
+    // bIsValidInfo; NV_MONITOR_CAPS_VSDB (49 bytes) is its largest member.
+    struct Caps {uint32_t version;uint16_t size;uint32_t infoType;uint32_t connectorType;uint8_t valid;uint8_t data[49];};
+    static_assert(sizeof(Caps)==68);
     using Query=void*(__cdecl*)(uint32_t);
     using Init=int(__cdecl*)();
     using IdByName=int(__cdecl*)(const char*,uint32_t*);
     using GetVrr=int(__cdecl*)(uint32_t,Info*);
-    static std::once_flag once;static IdByName idByName=nullptr;static GetVrr getVrr=nullptr;static bool ready=false;
+    using GetCaps=int(__cdecl*)(uint32_t,Caps*);
+    static std::once_flag once;static IdByName idByName=nullptr;static GetVrr getVrr=nullptr;static GetCaps getCaps=nullptr;static bool ready=false;
     std::call_once(once,[]{
         wchar_t system[MAX_PATH]{};GetSystemDirectoryW(system,MAX_PATH);
         const std::wstring path=std::wstring(system)+L"\\nvapi64.dll";
@@ -40,6 +73,7 @@ inline VrrState queryVrr(HWND window){
         auto init=reinterpret_cast<Init>(query(0x0150E828));
         idByName=reinterpret_cast<IdByName>(query(0xAE457190));
         getVrr=reinterpret_cast<GetVrr>(query(0xDF8FDA57));
+        getCaps=reinterpret_cast<GetCaps>(query(0x3B05C7E1)); // NvAPI_DISP_GetMonitorCapabilities, optional
         ready=init&&idByName&&getVrr&&init()==0;
     });
     VrrState state;
@@ -57,6 +91,13 @@ inline VrrState queryVrr(HWND window){
     state.known=true;
     state.enabled=info.flags&1u;state.possible=info.flags&2u;state.requested=info.flags&4u;
     state.indicator=info.flags&8u;state.inVrrMode=info.flags&16u;
+    if(getCaps){
+        Caps caps{};caps.version=uint32_t(sizeof(Caps))|(1u<<16);caps.size=uint16_t(sizeof(Caps));caps.infoType=0x1002; // NV_MONITOR_CAPS_TYPE_GENERIC
+        if(getCaps(displayId,&caps)==0&&(caps.valid&1u)){
+            state.capsKnown=true;
+            state.supportsVrr=caps.data[0]&1u;state.trueGsync=caps.data[0]&4u;state.currentlyCapable=caps.data[0]&16u;
+        }
+    }
     return state;
 }
 }

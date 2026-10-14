@@ -9395,3 +9395,17 @@ v2.0.7 ID 410800361，published_at 2026-10-12T16:24:59Z，latest/非草稿/非�
 C2（无需管理员）：DXGI 的 GetFrameStatisticsMedia 在这些交换链上不可用（产品日志 compositionMode=-1），改用“送显→上屏”直接判断。探针 `tmp/claude-latency-min-20261013/dxgi_mode_probe.cpp`（320Hz，源略低于刷新）：小弹窗与 1280×720 普通窗口都是约 1.5 个刷新（4.8ms，DWM 合成），无边框全屏约 0.6 个刷新（1.9ms，独立翻转；此时 DXGI 不给刷新计数）。真实程序 `run_app_mode.py`（60fps 文件、无效果、自动）：窗口 P50/P95 4.79/5.98ms，全屏且控制条隐藏 1.94/3.24ms，全屏但控制条显示 5.17/6.26ms（控制窗口盖在画面上，回到合成）。结论：全屏且控制条自动隐藏（鼠标静止约 1.6 秒）时少一个刷新，320Hz 约 3ms，60Hz 约 17ms。
 
 C3：采集回调的拷贝已经是唯一一次 CPU 拷贝（邮箱帧就是 D3D12 上传缓冲）。实卡 2K NV12（5.5MB）每帧 0.26–0.31ms；用户 4K 测试日志 4K NV12（12.4MB）1.2–2.1ms、24.9MB 样本 3.8–5.6ms。探针 `upload_copy_probe.cpp`：单线程写入上传缓冲已达 19–20GB/s（4K NV12 冷数据 0.64ms），2–4 线程无改善（内存/写合并带宽受限），因此不做多线程拷贝。彻底去掉这次拷贝需要自建 DirectShow 分配器，把 GPU 可见的缓冲（可用 OpenExistingHeapFromAddress 打开的带缓存系统内存，避免去重比较读写合并内存过慢）交给驱动、样本持有到 GPU 拷贝完成；属于各驱动行为不同的大改动，采集卡离线无法验证，本轮不实施，作为后续选项记录。
+
+## 2026-10-14 极限低延迟：补帧改为提示、可变刷新开关、垂直同步测量修正（Claude）
+
+用户决定：“不要自动降档，做一个提示好了，当前帧率超出屏幕刷新率，建议降至xxx来获得更好的延迟体验”；“可变刷新率做成开关，在显示里面可以开启，如果屏幕不支持显示灰色”。
+
+补帧提示：B2 的自动降倍数与旁路全部撤回（EnhanceGraph 回到 main 版本；读帧门、配对延迟、准入、节奏回到按用户倍数）。`DisplayFgBudget.h` 只算建议 `displayFgSuggestion`：输出放得下不提示；源已占满屏幕（≥0.97×刷新，如 60Hz 屏 + 60fps 源）建议关闭补帧；否则建议放得下的最大可选倍数（DLSS 2/3/4/6、XeSS 2–4、VFG 2–8、FSR 只有 2X）；都放不下且源比屏幕慢时，自动模式只在请求高于 2X 时建议 2X，垂直同步建议关闭。新建议持续 1.5 秒才显示，只对直播、非撕裂。状态栏与补帧“倍率”下方（专业页、节点页，黄色）显示“当前帧率 N fps 超出屏幕刷新率 M Hz，建议降至 KX 来获得更好的延迟体验”或“……建议关闭补帧……”。日志 `display-fg-hint`。去掉 `VEYRA_TEST_NO_DISPLAY_FG_BUDGET`（已无行为可对比），保留 `VEYRA_TEST_DISPLAY_HZ`。
+
+可变刷新开关：`NvidiaVrr.h` 增加 NvAPI_DISP_GetMonitorCapabilities（supportVRR / currentlyCapableOfVRR / isTrueGsync），统一等级 `gfx::vrrLevel`：0 无法检测（非 NVIDIA）、1 屏幕不支持（开关变灰）、2 支持但当前不可用（驱动未开等）、3 可用、4 生效中。`PresentationSettings.variableRefresh` 随显示设置保存（prefs `presentation.vrr`）。开关开、等级≥3 且显示同步为“自动”时，呈现按显式垂直同步走：G-SYNC/FreeSync + V-SYNC，沿用 B3 一帧队列；可变刷新范围内屏幕随帧刷新，等待约为 0，不撕裂；Microsoft 文档的撕裂标志方案只留给“允许撕裂”。显示器与驱动状态每 2 秒重读，变化即重配（NVAPI 调用移到快照锁外）。专业页“显示”和节点页输出框加开关与说明（按等级给出原因与操作）。本机 320Hz 屏驱动报告 supportVRR=0，开关为灰；`VEYRA_TEST_VRR_LEVEL=0..4` 可模拟。真实 VRR 是否生效需在支持的屏幕上由用户验证。
+
+测量修正：垂直同步时 `PresentSink::sampleDisplayLatency` 用“每帧至少占一个刷新”的上界给统计落后的旧帧定时。60fps@320Hz 统计晚一帧时，5ms 上屏的帧被算成约 19ms（晚两帧约 31ms）。现在只对连发（相邻送显不超过 1.25 个刷新）的旧帧使用该上界，否则跳过。补帧超刷新时的连发仍计入。
+
+实卡（T911 恢复在线，2K60 NV12 → NR，320Hz）：DLSS 6X 不再自动降：289 次/秒送显，提示“建议降至 4X”，送显→上屏 4.9/8.9ms（降到 4X 时为 5.0/6.9ms）。仅 NR：显式垂直同步 4.98/6.42ms（修正后），自动 4.87/6.18ms，回调→送显 P95 9.1 / 9.3ms，即 B3 在 60fps 源下不增加延迟。修正前同一垂直同步 P95 19.3ms，旧队列（`VEYRA_TEST_LEGACY_VSYNC_QUEUE=1`）同样有 19ms 尖刺，确认是测量问题。XeSS 2X+NR（B1 实卡）：XeLL 周期错位 0，回调→送显返回 P95 10.0→3.0ms（现在送显先于 GPU 完成，上屏时间仍受 GPU 约 8ms 约束）；模拟 60Hz 提示“建议关闭补帧”，XeSS 仍 120/s。可变刷新模拟等级 3：pacing 日志 effective=Vsync、displayQueuePaced=true、vrrSync=true，状态“可变刷新 · 未生效”。截图：显示页开关在真实屏上为灰、模拟可用时可开；补帧页黄色提示正确。
+
+测试：veyra_realtime_preview_tests 0 失败（提示 27 项、防抖 7 项）；repair 259/0；ui contract 通过；latency-min-tests display-sync、lifecycle 通过；回放 6X 垂直同步 4/0（送显→上屏 5.69/6.05ms）、屏幕 XeSS 10/0、生命周期 13/0。build.py 现在对改动的 QObject 头重跑 moc（新属性需要新的元对象，只重编旧生成文件不够）。

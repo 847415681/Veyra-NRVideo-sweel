@@ -31,7 +31,7 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
         veyra::log::warn("present","presentation creation cancelled: target window is no longer available");
         return false;
     }
-    viewWidth_=viewHeight_=0;bufferMonitor_=nullptr;monitorWidth_=monitorHeight_=0;refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};vrr_={};refreshQueried_=false;
+    viewWidth_=viewHeight_=0;bufferMonitor_=nullptr;monitorWidth_=monitorHeight_=0;refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};vrr_={};refreshQueried_=false;vrrSync_=false;
     ++generation_;
     Status st=Status::Ok;
     // Keep one presentation queue for the native chain's lifetime. A later
@@ -413,7 +413,7 @@ bool VideoPresenter::readPresentedFrameForTest(gfx::D3D12DeviceContext& ctx,gfx:
 void VideoPresenter::close(){
     metadataSent_=false;metadataDirty_=false;lastMetadata_={};sourceMetadata_={};metadataAttempt_={};
     hdrPeakMonitor_=nullptr;hdrPeakInfo_={};hdrPeakQuery_={};
-    refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};vrr_={};refreshQueried_=false;
+    refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};vrr_={};refreshQueried_=false;vrrSync_=false;
     retainedFrame_.reset();
     xessInputId_=0;xessWork_={};xessWorkPosition_=0;
     reflex_.close();reflexFrame_=0;
@@ -433,7 +433,7 @@ double VideoPresenter::displayRefreshHz(){
         if(refreshMonitor_&&std::abs(hz-refreshHz_)>0.5)veyra::log::info("display-refresh",std::format("monitor refresh={:.3f} Hz (was {:.3f}; window moved or display mode changed)",hz,refreshHz_));
         refreshHz_=hz;refreshMonitor_=monitor;refreshQuery_=now;sink_.setDisplayRefreshHz(hz);
         const auto vrr=gfx::queryVrr(window_);
-        if(!(vrr==vrr_)||!refreshQueried_)veyra::log::info("display-vrr",std::format("known={} possible={} requested={} active={} displayInVrrMode={} indicator={} status={} refreshHz={:.3f} (NVIDIA G-SYNC / G-SYNC Compatible state of the window's monitor; enabled by the user in the NVIDIA Control Panel, never changed by Veyra)",vrr.known,vrr.possible,vrr.requested,vrr.enabled,vrr.inVrrMode,vrr.indicator,vrr.status,hz));
+        if(!(vrr==vrr_)||!refreshQueried_)veyra::log::info("display-vrr",std::format("level={} known={} monitorSupportsVrr={} currentlyCapable={} trueGsync={} capsKnown={} possible={} requested={} active={} displayInVrrMode={} indicator={} simulated={} status={} refreshHz={:.3f} (NVIDIA G-SYNC / G-SYNC Compatible state of the window's monitor; enabled by the user in the NVIDIA Control Panel, never changed by Veyra)",gfx::vrrLevel(vrr),vrr.known,vrr.supportsVrr,vrr.currentlyCapable,vrr.trueGsync,vrr.capsKnown,vrr.possible,vrr.requested,vrr.enabled,vrr.inVrrMode,vrr.indicator,vrr.simulated,vrr.status,hz));
         vrr_=vrr;refreshQueried_=true;
     }
     return refreshHz_;
@@ -477,9 +477,18 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
         effective.outputRate=OutputRateMode::Off;
         capNotice=L" · 此补帧提供方暂不支持独立输出限帧；已保留设置";
     }
+    // 可变刷新: with VRR possible on this monitor, Automatic presents like
+    // explicit Vsync - the G-SYNC/FreeSync + V-SYNC combination. Inside the
+    // VRR range the panel starts a refresh when the frame arrives, so the
+    // VSync wait is about zero and nothing tears; above the range the
+    // one-deep VSync queue below holds. Without VRR (switch off, another
+    // monitor, driver setting off) Automatic stays Present(0,0).
+    displayRefreshHz();
+    vrrSync_=vrrSyncWanted(requested,vrr_);
+    if(vrrSync_){requested.display=DisplaySync::Vsync;effective.display=DisplaySync::Vsync;}
     const bool vsync=presentationVsync(requested),tearing=presentationTearing(requested);
     providerOwnedPresentation_=xessActive();
-    const std::wstring sync=requested.display==DisplaySync::Automatic?L"显示同步：自动 · 不撕裂，也不等待垂直同步（延迟最低）":vsync?L"显示同步：垂直同步":L"显示同步：允许撕裂";
+    const std::wstring sync=vrrSync_?L"显示同步：自动 + 可变刷新 · 屏幕跟着画面刷新，不撕裂":requested.display==DisplaySync::Automatic?L"显示同步：自动 · 不撕裂，也不等待垂直同步（延迟最低）":vsync?L"显示同步：垂直同步":L"显示同步：允许撕裂";
     if(!reflexDisabled){effective.enabled=false;sink_.configurePacing(false,vsync,tearing);status=L"Reflex 驱动状态撤销失败；低延迟队列已停用 · "+sync;return effective;}
     if(xessActive()){
         // The provider owns Present for its generated frames, so neither the
@@ -504,7 +513,7 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
     // there would throttle presents to the refresh, the wait they avoid.
     const bool paced=vsync&&sink_.configurePacing(true,vsync,tearing);
     const bool restored=paced||sink_.configurePacing(false,vsync,tearing);
-    const std::wstring queue=paced?L"垂直同步：屏幕队列 1 帧，读帧前等待刷新 · ":vsync?L"垂直同步：屏幕队列控制不可用 · ":restored?L"":L"显示队列恢复失败 · ";
+    const std::wstring queue=paced?(vrrSync_?L"可变刷新：超过屏幕最高刷新时只排 1 帧 · ":L"垂直同步：屏幕队列 1 帧，读帧前等待刷新 · "):vsync?L"垂直同步：屏幕队列控制不可用 · ":restored?L"":L"显示队列恢复失败 · ";
     std::wstring cap;
     if(followDisplay)cap=std::format(L"输出上限：跟随显示器 {:.0f} Hz",requested.customFps);
     else if(requested.outputRate==OutputRateMode::Custom)cap=std::format(L"输出上限：{:.3f} FPS",requested.customFps);

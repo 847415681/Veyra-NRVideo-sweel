@@ -1,5 +1,6 @@
 #include "veyra/ui/QmlPlayerBridge.h"
 #include "veyra/gfx/PresentSink.h"
+#include "veyra/gfx/NvidiaVrr.h"
 #include <QElapsedTimer>
 #include "veyra/ui/EffectAvailability.h"
 #include "veyra/engine/FrameGenerationSelection.h"
@@ -390,6 +391,12 @@ struct QmlPlayerBridge::Impl {
     QString runStatus, runLevel, runDetail;
     QStringList runOptions;
     double effectiveOutputFps=-1;
+    // FG output hint for the 倍率 row; 可变刷新 level (gfx::vrrLevel) of the
+    // presenting monitor, or of the main window's monitor while idle.
+    QString fgDisplayHint;
+    int vrrState=0;
+    gfx::VrrState idleVrr{};
+    std::chrono::steady_clock::time_point idleVrrQuery{};
     std::atomic<double> gpuUtil{-1.0};
     // Hardware adapters in Windows' high-performance order (discrete first). The
     // sampler only counts engines of the adapter whose LUID is in gpuMonitorLuid
@@ -1248,6 +1255,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             pr.display = static_cast<engine::DisplaySync>(std::clamp(saved.value(QStringLiteral("display")).toInt(), 0, 2));
             pr.outputRate = static_cast<engine::OutputRateMode>(std::clamp(saved.value(QStringLiteral("outputRate")).toInt(), 0, 2));
             pr.customFps = std::clamp(saved.value(QStringLiteral("customFps"), 60.0).toDouble(), 1.0, 1000.0);
+            pr.variableRefresh = saved.value(QStringLiteral("vrr")).toBool();
         }
         if (pr.valid()) impl_->engine.requestPresentation(pr);
         impl_->aspectMode = std::clamp(impl_->prefs.value(QStringLiteral("aspect")).toInt(), 0, 6);
@@ -6471,10 +6479,25 @@ void QmlPlayerBridge::updateRunStatus() {
         const auto sync=i.presentation.display==engine::DisplaySync::Vsync?tr("垂直同步"):tr("自动显示同步");
         options<<((refresh>0)?tr("%1 · 屏幕 %2 Hz").arg(sync).arg(refresh,0,'f',1):sync);
     }
-    // Variable refresh (NVIDIA G-SYNC / G-SYNC Compatible), set in the driver.
-    if(s.running&&s.displayVrr==4)options<<tr("可变刷新生效中");
-    else if(s.running&&s.displayVrr==3)options<<tr("可变刷新已开启");
-    else if(s.running&&s.displayVrr==2)options<<tr("屏幕支持可变刷新（未开启）");
+    // Variable refresh (NVIDIA G-SYNC / G-SYNC Compatible): the presenting
+    // monitor while playing, otherwise the main window's monitor (NVAPI,
+    // at most every 2 s). The driver setting is the user's; the 可变刷新
+    // switch decides how Veyra presents when it is possible.
+    int vrrLevel=int(s.displayVrr);
+    if(!s.running){
+        const auto now=std::chrono::steady_clock::now();
+        if(i.idleVrrQuery==std::chrono::steady_clock::time_point{}||now-i.idleVrrQuery>=std::chrono::seconds(2)){
+            HWND host=owner;
+            if(!host)if(auto* window=QGuiApplication::focusWindow())host=reinterpret_cast<HWND>(window->winId());
+            if(host){i.idleVrr=gfx::queryVrr(host);i.idleVrrQuery=now;}
+        }
+        vrrLevel=int(gfx::vrrLevel(i.idleVrr));
+    }
+    if(i.presentation.variableRefresh){
+        if(vrrLevel>=4)options<<tr("可变刷新 · 生效中");
+        else if(vrrLevel==3)options<<tr("可变刷新 · 未生效");
+        else options<<tr("可变刷新 · 当前屏幕不可用");
+    }else if(s.running&&vrrLevel>=4)options<<tr("屏幕可变刷新生效中");
     if(i.presentation.outputRate!=engine::OutputRateMode::Off){
         if(s.running&&s.presentationEffective.outputRate==engine::OutputRateMode::Off)
             options<<tr("输出限帧 · 当前未生效");
@@ -6486,6 +6509,17 @@ void QmlPlayerBridge::updateRunStatus() {
     if(!s.capture&&std::abs(s.playbackRate-1.0)>.001)options<<tr("播放速度 %1×").arg(s.playbackRate,0,'f',2);
     if(i.compareMode!=0)options<<tr("画面对比 · 补帧暂停");
     QStringList detail;
+    // Live output hint: also shown under the 倍率 control (fgDisplayHint).
+    QString fgHint;
+    if (s.running && !s.image && s.applied.multiplier > 1 && i.compareMode == 0 && s.displayFgSuggestion > 0 &&
+        s.displayFgContentFps > 0 && s.displayFgRefreshHz > 0) {
+        const double output = s.displayFgContentFps * s.applied.multiplier;
+        fgHint = s.displayFgSuggestion == 1
+            ? tr("当前帧率 %1 fps 超出屏幕刷新率 %2 Hz，建议关闭补帧来获得更好的延迟体验")
+                  .arg(output, 0, 'f', 0).arg(s.displayFgRefreshHz, 0, 'f', 0)
+            : tr("当前帧率 %1 fps 超出屏幕刷新率 %2 Hz，建议降至 %3X 来获得更好的延迟体验")
+                  .arg(output, 0, 'f', 0).arg(s.displayFgRefreshHz, 0, 'f', 0).arg(s.displayFgSuggestion);
+    }
     if (s.running && !s.image) {
         if (s.applied.multiplier > 1) {
             QString backend;
@@ -6501,11 +6535,9 @@ void QmlPlayerBridge::updateRunStatus() {
         }
         else detail << tr("未补帧");
         if (s.applied.multiplier > 1 && impl_->compareMode != 0) detail << tr("补帧暂停");
-        // Live output budget (DisplayFgBudget.h): what the panel can show.
-        else if (s.applied.multiplier > 1 && s.displayFgLimited && s.displayFgMultiplier <= 1)
-            detail << tr("屏幕 %1 Hz · 内容 %2 fps：补帧已旁路，真帧直接显示（延迟最低）").arg(s.displayFgRefreshHz, 0, 'f', 0).arg(s.displayFgContentFps, 0, 'f', 0);
-        else if (s.applied.multiplier > 1 && s.displayFgLimited)
-            detail << tr("屏幕 %1 Hz 只显示得下 %2X：已从 %3X 降到 %2X").arg(s.displayFgRefreshHz, 0, 'f', 0).arg(s.displayFgMultiplier).arg(s.applied.multiplier);
+        // Live output hint (DisplayFgBudget.h): a suggestion only, the
+        // multiplier stays the user's choice.
+        else if (!fgHint.isEmpty()) detail << fgHint;
         else if (s.applied.multiplier > 1 && (s.fgBudgetLimited || s.xessGenerationSuppressed) &&
                  (!rate.policyLimited()||i.history.overloaded)) detail << tr("调度降档");
         // Why VFG cannot hold the requested multiplier. One VFG interpolation
@@ -6533,7 +6565,7 @@ void QmlPlayerBridge::updateRunStatus() {
                     else detail << tr("VFG 每张约 %1 ms，当前负载约可稳定 %2X").arg(*perRun, 0, 'f', 1).arg(fits);
                 }
             }
-            if (!s.displayFgLimited && refresh > 1 && source > 1 && source * s.applied.multiplier > refresh * 1.02)
+            if (fgHint.isEmpty() && refresh > 1 && source > 1 && source * s.applied.multiplier > refresh * 1.02)
                 detail << tr("屏幕 %1 Hz 最多显示约 %2X").arg(refresh, 0, 'f', 0).arg(std::max(1, int(refresh / source)));
         }
         if (s.nominalSourceFps > 0.01) detail << tr("源 %1 fps").arg(s.nominalSourceFps, 0, 'f', 2);
@@ -6553,9 +6585,10 @@ void QmlPlayerBridge::updateRunStatus() {
     const QString text = detail.join(QStringLiteral(" · "));
     const double gpu = i.gpuUtil.load();
     const double target=active&&f.rateWindowReady&&rate.targetFps>0?rate.targetFps:-1;
-    const bool changed = ratioChanged || active || status != i.runStatus || level != i.runLevel || text != i.runDetail || options!=i.runOptions || std::abs(target-i.effectiveOutputFps)>.05 || std::abs(gpu - i.gpuPublished) > 0.05;
+    const bool changed = ratioChanged || active || status != i.runStatus || level != i.runLevel || text != i.runDetail || options!=i.runOptions || std::abs(target-i.effectiveOutputFps)>.05 || std::abs(gpu - i.gpuPublished) > 0.05 ||
+                         fgHint != i.fgDisplayHint || vrrLevel != i.vrrState;
     i.runStatus = status; i.runLevel = level; i.runDetail = text; i.gpuPublished = gpu;
-    i.runOptions=options;i.effectiveOutputFps=target;
+    i.runOptions=options;i.effectiveOutputFps=target;i.fgDisplayHint=fgHint;i.vrrState=vrrLevel;
     if (changed) emit perfChanged();
 }
 
@@ -6768,6 +6801,29 @@ void QmlPlayerBridge::setDisplaySync(int value) {
     impl_->presentation.display = static_cast<engine::DisplaySync>(value);
     applyPresentation();
 }
+bool QmlPlayerBridge::variableRefresh() const { return impl_->presentation.variableRefresh; }
+void QmlPlayerBridge::setVariableRefresh(bool value) {
+    if (impl_->presentation.variableRefresh == value) return;
+    impl_->presentation.variableRefresh = value;
+    applyPresentation();
+}
+int QmlPlayerBridge::vrrState() const { return impl_->vrrState; }
+QString QmlPlayerBridge::vrrHint() const {
+    // The 可变刷新 switch is available (not grey) from level 2: the monitor
+    // can do VRR even if the driver setting is still off.
+    const bool on = impl_->presentation.variableRefresh, running = impl_->snapshot.running;
+    switch (impl_->vrrState) {
+    case 0: return tr("无法检测屏幕是否支持（目前只支持 NVIDIA 显卡）");
+    case 1: return tr("当前屏幕不支持可变刷新");
+    case 2: return tr("屏幕支持，但驱动未开启：NVIDIA 控制面板 → 设置 G-SYNC");
+    case 3:
+        if (!on) return tr("屏幕跟着画面刷新：不撕裂，也几乎不用等刷新");
+        return running ? tr("已开启，屏幕还没进入可变刷新：全屏并隐藏控制栏，或在 NVIDIA 控制面板为窗口模式开启 G-SYNC")
+                       : tr("已开启，播放时生效");
+    default: return on ? tr("生效中：屏幕跟着画面刷新") : tr("屏幕正处于可变刷新（驱动已开启）");
+    }
+}
+QString QmlPlayerBridge::fgDisplayHint() const { return impl_->fgDisplayHint; }
 int QmlPlayerBridge::outputRateMode() const { return int(impl_->presentation.outputRate); }
 void QmlPlayerBridge::setOutputRateMode(int value) {
     if (value < 0 || value > 2 || int(impl_->presentation.outputRate) == value) return;
@@ -6788,12 +6844,13 @@ void QmlPlayerBridge::applyPresentation() {
     if (!p.valid()) return;
     impl_->engine.requestPresentation(p);
     impl_->prefs[QStringLiteral("presentation")] = QVariantMap{
-        {"lowQueue", p.enabled}, {"display", int(p.display)}, {"outputRate", int(p.outputRate)}, {"customFps", p.customFps}};
+        {"lowQueue", p.enabled}, {"display", int(p.display)}, {"outputRate", int(p.outputRate)}, {"customFps", p.customFps}, {"vrr", p.variableRefresh}};
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "presentation settings not saved");
-    veyra::log::info("ui-presentation", std::format("lowQueue={} display={} outputRate={} customFps={:.3f}",
-        p.enabled, int(p.display), int(p.outputRate), p.customFps));
+    veyra::log::info("ui-presentation", std::format("lowQueue={} display={} outputRate={} customFps={:.3f} variableRefresh={}",
+        p.enabled, int(p.display), int(p.outputRate), p.customFps, p.variableRefresh));
     emit presentationChanged();
     emit settingsChanged();
+    emit perfChanged();
 }
 
 // --- design gap B8-B11: compare and aspect ------------------------------------

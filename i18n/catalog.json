@@ -15725,27 +15725,6 @@
    "ja": "表示の同期：自動 · ティアリングなし、垂直同期を待たない（最小遅延）"
   },
   {
-   "zh": "自动（推荐）：不撕裂，也不等待垂直同步，每次刷新显示最新一帧，延迟最低 · 垂直同步：每帧都等刷新，输出帧率超过刷新率时会排队、延迟变大 · 允许撕裂：可能出现撕裂线",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "自動（推薦）：不撕裂，也不等待垂直同步，每次更新顯示最新一幀，延遲最低 · 垂直同步：每幀都等更新，輸出幀率超過更新率時會排隊、延遲變大 · 允許撕裂：可能出現撕裂線",
-   "en": "Auto (recommended): no tearing and no VSync wait; each refresh shows the newest frame for the lowest latency · VSync: every frame waits for a refresh and queues up, adding latency, when output exceeds the refresh rate · Allow tearing: tear lines may appear",
-   "ja": "自動（推奨）：ティアリングなし、垂直同期を待たず、毎回のリフレッシュで最新フレームを表示し遅延が最小 · 垂直同期：全フレームがリフレッシュを待ち、出力がリフレッシュレートを超えるとキューが溜まり遅延が増加 · ティアリングを許可：ティアリングが発生する場合あり"
-  },
-  {
-   "zh": "屏幕 %1 Hz · 内容 %2 fps：补帧已旁路，真帧直接显示（延迟最低）",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "螢幕 %1 Hz · 內容 %2 fps：補幀已旁路，真幀直接顯示（延遲最低）",
-   "en": "%1 Hz display · %2 fps content: frame generation bypassed, real frames shown directly (lowest latency)",
-   "ja": "%1 Hz の画面 · コンテンツ %2 fps：フレーム生成をバイパスし、実フレームを直接表示（最小遅延）"
-  },
-  {
-   "zh": "屏幕 %1 Hz 只显示得下 %2X：已从 %3X 降到 %2X",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "螢幕 %1 Hz 只顯示得下 %2X：已從 %3X 降到 %2X",
-   "en": "A %1 Hz display can only show %2X: lowered from %3X to %2X",
-   "ja": "%1 Hz の画面で表示できるのは %2X まで：%3X から %2X に下げました"
-  },
-  {
    "zh": "只保留一帧在处理，未补帧时加 NVIDIA Reflex；垂直同步本身已不排队",
    "src": "qml/ProPage.qml",
    "zh-TW": "只保留一幀在處理，未補幀時加 NVIDIA Reflex；垂直同步本身已不排隊",
@@ -15830,25 +15809,144 @@
    "ja": "表示の同期：自動"
   },
   {
-   "zh": "可变刷新生效中",
+   "zh": "无法检测屏幕是否支持（目前只支持 NVIDIA 显卡）",
    "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "可變更新生效中",
-   "en": "Variable refresh active",
-   "ja": "可変リフレッシュ動作中"
+   "zh-TW": "無法偵測螢幕是否支援（目前只支援 NVIDIA 顯示卡）",
+   "en": "Cannot detect whether the display supports it (NVIDIA GPUs only for now)",
+   "ja": "ディスプレイの対応を検出できません（現在は NVIDIA GPU のみ）"
   },
   {
-   "zh": "可变刷新已开启",
+   "zh": "当前屏幕不支持可变刷新",
    "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "可變更新已開啟",
-   "en": "Variable refresh enabled",
-   "ja": "可変リフレッシュ有効"
+   "zh-TW": "目前螢幕不支援可變更新",
+   "en": "This display does not support variable refresh",
+   "ja": "このディスプレイは可変リフレッシュに対応していません"
   },
   {
-   "zh": "屏幕支持可变刷新（未开启）",
+   "zh": "屏幕支持，但驱动未开启：NVIDIA 控制面板 → 设置 G-SYNC",
    "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "螢幕支援可變更新（未開啟）",
-   "en": "Display supports variable refresh (off)",
-   "ja": "画面は可変リフレッシュに対応（無効）"
+   "zh-TW": "螢幕支援，但驅動程式未開啟：NVIDIA 控制面板 → 設定 G-SYNC",
+   "en": "The display supports it, but the driver has it off: NVIDIA Control Panel → Set up G-SYNC",
+   "ja": "ディスプレイは対応していますが、ドライバーで無効です：NVIDIA コントロールパネル → G-SYNC の設定"
+  },
+  {
+   "zh": "屏幕跟着画面刷新：不撕裂，也几乎不用等刷新",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "螢幕跟著畫面更新：不撕裂，也幾乎不用等更新",
+   "en": "The display refreshes when each frame arrives: no tearing and almost no waiting",
+   "ja": "フレームが届いた時点で画面を更新：ティアリングなし、待ち時間もほぼなし"
+  },
+  {
+   "zh": "已开启，屏幕还没进入可变刷新：全屏并隐藏控制栏，或在 NVIDIA 控制面板为窗口模式开启 G-SYNC",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已開啟，螢幕還沒進入可變更新：全螢幕並隱藏控制列，或在 NVIDIA 控制面板為視窗模式開啟 G-SYNC",
+   "en": "On, but the display is not in variable refresh yet: go fullscreen with the controls hidden, or enable G-SYNC for windowed mode in the NVIDIA Control Panel",
+   "ja": "オンですが、まだ可変リフレッシュになっていません：全画面でコントロールバーを隠すか、NVIDIA コントロールパネルでウィンドウモードの G-SYNC を有効にしてください"
+  },
+  {
+   "zh": "已开启，播放时生效",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已開啟，播放時生效",
+   "en": "On; applies during playback",
+   "ja": "オン（再生中に有効）"
+  },
+  {
+   "zh": "生效中：屏幕跟着画面刷新",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "生效中：螢幕跟著畫面更新",
+   "en": "Active: the display refreshes with each frame",
+   "ja": "動作中：画面がフレームに合わせて更新"
+  },
+  {
+   "zh": "屏幕正处于可变刷新（驱动已开启）",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "螢幕正處於可變更新（驅動程式已開啟）",
+   "en": "The display is in variable refresh (enabled by the driver)",
+   "ja": "ディスプレイは可変リフレッシュ中（ドライバーで有効）"
+  },
+  {
+   "zh": "可变刷新 · 生效中",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "可變更新 · 生效中",
+   "en": "Variable refresh · active",
+   "ja": "可変リフレッシュ · 動作中"
+  },
+  {
+   "zh": "可变刷新 · 未生效",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "可變更新 · 未生效",
+   "en": "Variable refresh · not active",
+   "ja": "可変リフレッシュ · 未動作"
+  },
+  {
+   "zh": "可变刷新 · 当前屏幕不可用",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "可變更新 · 目前螢幕不可用",
+   "en": "Variable refresh · unavailable on this display",
+   "ja": "可変リフレッシュ · このディスプレイでは使用不可"
+  },
+  {
+   "zh": "屏幕可变刷新生效中",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "螢幕可變更新生效中",
+   "en": "Display variable refresh active",
+   "ja": "ディスプレイの可変リフレッシュ動作中"
+  },
+  {
+   "zh": "当前帧率 %1 fps 超出屏幕刷新率 %2 Hz，建议关闭补帧来获得更好的延迟体验",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "目前幀率 %1 fps 超出螢幕更新率 %2 Hz，建議關閉補幀來獲得更好的延遲體驗",
+   "en": "Current frame rate %1 fps exceeds the %2 Hz refresh rate; turn frame generation off for lower latency",
+   "ja": "現在のフレームレート %1 fps が画面のリフレッシュレート %2 Hz を超えています。遅延を抑えるにはフレーム生成をオフにしてください"
+  },
+  {
+   "zh": "当前帧率 %1 fps 超出屏幕刷新率 %2 Hz，建议降至 %3X 来获得更好的延迟体验",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "目前幀率 %1 fps 超出螢幕更新率 %2 Hz，建議降至 %3X 來獲得更好的延遲體驗",
+   "en": "Current frame rate %1 fps exceeds the %2 Hz refresh rate; lower it to %3X for lower latency",
+   "ja": "現在のフレームレート %1 fps が画面のリフレッシュレート %2 Hz を超えています。遅延を抑えるには %3X に下げてください"
+  },
+  {
+   "zh": "可变刷新",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "可變更新",
+   "en": "Variable refresh",
+   "ja": "可変リフレッシュ"
+  },
+  {
+   "zh": "自动（推荐）：不撕裂，也不等待垂直同步，每次刷新显示最新一帧，延迟最低 · 垂直同步：每帧都等到刷新才显示，比自动多等最多一个刷新 · 允许撕裂：可能出现撕裂线",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "自動（推薦）：不撕裂，也不等待垂直同步，每次更新顯示最新一幀，延遲最低 · 垂直同步：每幀都等到更新才顯示，比自動多等最多一次更新 · 允許撕裂：可能出現撕裂線",
+   "en": "Auto (recommended): no tearing and no VSync wait; each refresh shows the newest frame for the lowest latency · VSync: every frame waits for a refresh, at most one refresh longer than Auto · Allow tearing: tear lines may appear",
+   "ja": "自動（推奨）：ティアリングなし、垂直同期を待たず、毎回のリフレッシュで最新フレームを表示し遅延が最小 · 垂直同期：全フレームがリフレッシュを待って表示され、自動より最大 1 リフレッシュ分長く待つ · ティアリングを許可：ティアリングが発生する場合あり"
+  },
+  {
+   "zh": "显示同步：自动 + 可变刷新",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "顯示同步：自動 + 可變更新",
+   "en": "Display sync: auto + variable refresh",
+   "ja": "表示の同期：自動 + 可変リフレッシュ"
+  },
+  {
+   "zh": "屏幕跟着画面刷新，不撕裂",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "螢幕跟著畫面更新，不撕裂",
+   "en": "the display refreshes with each frame, no tearing",
+   "ja": "画面がフレームに合わせて更新、ティアリングなし"
+  },
+  {
+   "zh": "显示同步：自动 + 可变刷新 · 屏幕跟着画面刷新，不撕裂",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "顯示同步：自動 + 可變更新 · 螢幕跟著畫面更新，不撕裂",
+   "en": "Display sync: auto + variable refresh · the display refreshes with each frame, no tearing",
+   "ja": "表示の同期：自動 + 可変リフレッシュ · 画面がフレームに合わせて更新、ティアリングなし"
+  },
+  {
+   "zh": "可变刷新：超过屏幕最高刷新时只排 1 帧",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "可變更新：超過螢幕最高更新時只排 1 幀",
+   "en": "Variable refresh: at most 1 frame queued above the maximum refresh",
+   "ja": "可変リフレッシュ：最大リフレッシュを超える時だけ 1 フレーム待機"
   }
  ]
 }

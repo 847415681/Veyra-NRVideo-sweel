@@ -133,36 +133,39 @@ int main() {
         check(!gate.suppressed(), "reset clears suppression state");
     }
 
-    // --- Live FG output budget (latency-min B2)
+    // --- Live FG output hint (latency-min; suggestion only, never applied)
     {
         using B = FrameGenerationBackend;
-        check(displayFgMultiplier(B::Dlss, 6, 60, 320) == 4, "DLSS 6X at 60 fps on 320 Hz lowers to 4X (5X is not a DLSS multiplier)");
-        check(displayFgMultiplier(B::Dlss, 4, 60, 320) == 4, "DLSS 4X at 60 fps on 320 Hz fits and is unchanged");
-        check(displayFgMultiplier(B::Dlss, 2, 60, 320) == 2, "2X below the refresh is unchanged");
-        check(displayFgMultiplier(B::Vfg, 8, 60, 320) == 5, "VFG 8X at 60 fps on 320 Hz lowers to 5X");
-        check(displayFgMultiplier(B::Dlss, 3, 60, 144) == 2, "3X at 60 fps on 144 Hz lowers to 2X");
-        check(displayFgMultiplier(B::Dlss, 4, 60, 240) == 4, "4X at 60 fps on 240 Hz fits exactly");
-        check(displayFgMultiplier(B::Dlss, 2, 60, 119.88) == 2, "2X at 60 fps on 119.88 Hz is within the fit tolerance");
-        check(displayFgMultiplier(B::Dlss, 2, 60, 60) == 0, "60 fps on 60 Hz bypasses generation");
-        check(displayFgMultiplier(B::Dlss, 2, 59.94, 60) == 0, "59.94 fps capture on 60 Hz bypasses generation");
-        check(displayFgMultiplier(B::Dlss, 2, 60, 59.94) == 0, "60 fps on 59.94 Hz bypasses generation");
-        check(displayFgMultiplier(B::XeSS, 2, 60, 60) == 0, "XeSS bypasses when the source fills the panel");
-        check(displayFgMultiplier(B::Fsr, 2, 60, 60) == 0, "FSR bypasses when the source fills the panel");
-        check(displayFgMultiplier(B::Dlss, 2, 30, 60) == 2, "a 30 fps game with 2X on 60 Hz keeps generation");
-        check(displayFgMultiplier(B::Dlss, 4, 30, 60) == 2, "a 30 fps game with 4X on 60 Hz lowers to 2X");
-        check(displayFgMultiplier(B::Dlss, 6, 60, 100) == 2, "60 fps on 100 Hz keeps 2X: it still adds pictures per refresh");
-        check(displayFgMultiplier(B::Dlss, 2, 40, 60) == 2, "40 fps on 60 Hz keeps 2X");
-        check(displayFgMultiplier(B::XeSS, 4, 60, 144) == 4, "XeSS keeps its multiplier unless bypassed");
-        check(displayFgMultiplier(B::Dlss, 6, 0, 60) == 6 && displayFgMultiplier(B::Dlss, 6, 60, 0) == 6, "unknown rates keep the request");
-        check(displayFgMultiplier(B::Dlss, 1, 60, 60) == 1, "no generation requested stays unchanged");
-        check(displayFgMultiplier(B::Dlss, 6, 60, 100, true) == 0, "under VSync 60 fps on 100 Hz bypasses: the surplus would queue");
-        check(displayFgMultiplier(B::Dlss, 6, 60, 320, true) == 4, "under VSync a fitting lower multiplier is still used");
-        check(displayFgMultiplier(B::Dlss, 2, 30, 60, true) == 2, "under VSync a fitting request is unchanged");
-        check(displayFgMultiplier(B::XeSS, 4, 60, 144, true) == 0, "under VSync XeSS bypasses when its output does not fit");
-        check(displayFgMultiplier(B::XeSS, 2, 60, 144, true) == 2, "under VSync a fitting XeSS request is unchanged");
+        check(displayFgSuggestion(B::Dlss, 6, 60, 320) == 4, "DLSS 6X at 60 fps on 320 Hz suggests 4X (5X is not a DLSS multiplier)");
+        check(displayFgSuggestion(B::Dlss, 4, 60, 320) == 0, "DLSS 4X at 60 fps on 320 Hz fits: no hint");
+        check(displayFgSuggestion(B::Dlss, 2, 60, 320) == 0, "2X below the refresh: no hint");
+        check(displayFgSuggestion(B::Vfg, 8, 60, 320) == 5, "VFG 8X at 60 fps on 320 Hz suggests 5X");
+        check(displayFgSuggestion(B::Dlss, 3, 60, 144) == 2, "3X at 60 fps on 144 Hz suggests 2X");
+        check(displayFgSuggestion(B::Dlss, 4, 60, 240) == 0, "4X at 60 fps on 240 Hz fits exactly");
+        check(displayFgSuggestion(B::Dlss, 2, 60, 119.88) == 0, "2X at 60 fps on 119.88 Hz is within the fit tolerance");
+        check(displayFgSuggestion(B::Dlss, 2, 60, 60) == 1, "60 fps on 60 Hz suggests turning generation off");
+        check(displayFgSuggestion(B::Dlss, 2, 59.94, 60) == 1, "59.94 fps capture on 60 Hz suggests off");
+        check(displayFgSuggestion(B::Dlss, 2, 60, 59.94) == 1, "60 fps on 59.94 Hz suggests off");
+        check(displayFgSuggestion(B::XeSS, 2, 60, 60) == 1, "XeSS 2X with the source filling the panel suggests off");
+        check(displayFgSuggestion(B::Fsr, 2, 60, 60) == 1, "FSR 2X with the source filling the panel suggests off");
+        check(displayFgSuggestion(B::Dlss, 2, 30, 60) == 0, "a 30 fps game with 2X on 60 Hz: no hint");
+        check(displayFgSuggestion(B::Dlss, 4, 30, 60) == 2, "a 30 fps game with 4X on 60 Hz suggests 2X");
+        check(displayFgSuggestion(B::Dlss, 6, 60, 100) == 2, "60 fps on 100 Hz with 6X suggests 2X: it still adds pictures per refresh");
+        check(displayFgSuggestion(B::Dlss, 2, 60, 100) == 0, "60 fps on 100 Hz with 2X: no hint (Automatic replaces the surplus)");
+        check(displayFgSuggestion(B::Dlss, 2, 40, 60) == 0, "40 fps on 60 Hz with 2X: no hint");
+        check(displayFgSuggestion(B::XeSS, 4, 60, 144) == 2, "XeSS 4X at 60 fps on 144 Hz suggests 2X");
+        check(displayFgSuggestion(B::XeSS, 4, 60, 200) == 3, "XeSS 4X at 60 fps on 200 Hz suggests 3X");
+        check(displayFgSuggestion(B::Fsr, 2, 60, 100) == 0, "FSR has no lower multiplier than 2X: no hint on 100 Hz");
+        check(displayFgSuggestion(B::Dlss, 6, 0, 60) == 0 && displayFgSuggestion(B::Dlss, 6, 60, 0) == 0, "unknown rates suggest nothing");
+        check(displayFgSuggestion(B::Dlss, 1, 60, 60) == 0, "no generation requested: no hint");
+        check(displayFgSuggestion(B::Dlss, 6, 60, 100, true) == 1, "under VSync 60 fps on 100 Hz suggests off: the surplus would wait");
+        check(displayFgSuggestion(B::Dlss, 2, 60, 100, true) == 1, "under VSync 2X at 60 fps on 100 Hz suggests off");
+        check(displayFgSuggestion(B::Dlss, 6, 60, 320, true) == 4, "under VSync a fitting lower multiplier is suggested");
+        check(displayFgSuggestion(B::Dlss, 2, 30, 60, true) == 0, "under VSync a fitting request: no hint");
+        check(displayFgSuggestion(B::XeSS, 4, 60, 144, true) == 2, "under VSync XeSS 4X on 144 Hz suggests 2X");
 
         DisplayFgBudgetGate gate(15000000);
-        check(gate.update(4, 0) && gate.applied() == 4, "first budget decision applies at once");
+        check(gate.update(4, 0) && gate.applied() == 4, "first hint decision applies at once");
         check(!gate.update(0, 10000000) && gate.applied() == 4, "a new decision waits for the hold");
         check(!gate.update(2, 20000000) && gate.applied() == 4, "a different candidate restarts the hold");
         check(!gate.update(0, 30000000) && !gate.update(0, 44000000) && gate.applied() == 4, "1.4 s of a candidate is not enough");

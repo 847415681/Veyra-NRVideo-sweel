@@ -5,6 +5,7 @@ Item {
     id: row
     property string label: ""
     property string hint: ""
+    property color hintColor: Theme.t3
     property string value: ""
     // Narrow panels with a wide control (导出 输出设置): the hint runs under the
     // whole row instead of being squeezed beside the control.
@@ -53,7 +54,7 @@ Item {
             Text {
                 visible: row.hint.length > 0 && !row.hintBelow
                 text: row.hint
-                color: Theme.t3
+                color: row.hintColor
                 font.family: Theme.fontUi
                 font.pixelSize: 11
                 wrapMode: Text.Wrap
@@ -82,7 +83,7 @@ Item {
         anchors.top: mainRow.bottom
         anchors.topMargin: 6
         text: row.hint
-        color: Theme.t3
+        color: row.hintColor
         font.family: Theme.fontUi
         font.pixelSize: 11
         wrapMode: Text.WordWrap

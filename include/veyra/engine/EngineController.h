@@ -118,16 +118,18 @@ struct PlayerSnapshot {
     double playbackRate=1; // requested file-preview transport rate; separate from measurement
     bool fgBudgetLimited=false,xessGenerationSuppressed=false;
     unsigned previewFgMultiplier=0;
-    // Live FG output budget (DisplayFgBudget.h). displayFgLimited: the panel
-    // cannot show the requested multiplier, displayFgMultiplier is the one in
-    // use (1 = generation bypassed because the source already fills the
-    // panel); refresh and content rate are the inputs of that decision.
-    bool displayFgLimited=false;
-    unsigned displayFgMultiplier=0;
+    // Live FG output hint (DisplayFgBudget.h), never applied automatically:
+    // 0 = the output fits the panel, 1 = suggest turning generation off,
+    // otherwise the suggested lower multiplier. Refresh and content rate are
+    // the inputs of that suggestion.
+    unsigned displayFgSuggestion=0;
     double displayFgRefreshHz=0,displayFgContentFps=0;
-    // Variable refresh of the presenting monitor (NVIDIA only): 0 unknown,
-    // 1 not possible, 2 possible but off, 3 enabled in the driver, 4 active.
+    // Variable refresh of the presenting monitor (NVIDIA only, gfx::vrrLevel):
+    // 0 unknown, 1 the monitor cannot do VRR, 2 it can but VRR is not possible
+    // now, 3 possible, 4 active. presentationVrrSync: the 可变刷新 switch made
+    // Automatic present like Vsync for it.
     unsigned displayVrr=0;
+    bool presentationVrrSync=false;
     // Runtime-reported DLSSG MultiFrameCountMax: 1 = 2X only, 5 = 6X.
     // 0 = not queried yet (no session). The UI uses this to offer only the
     // multipliers the active GPU can actually honour.
