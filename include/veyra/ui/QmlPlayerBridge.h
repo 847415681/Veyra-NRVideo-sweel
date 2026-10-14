@@ -181,6 +181,11 @@ class QmlPlayerBridge : public QObject {
     // forwarding and gyro calibration. `ps5` carries the form state.
     Q_PROPERTY(QVariantMap ps5 READ ps5 NOTIFY ps5Changed)
     Q_PROPERTY(QVariantList ps5Profiles READ ps5Profiles NOTIFY ps5Changed)
+    // PS5 手柄控制 (采集卡对话框): a controller-only Remote Play session beside the
+    // capture card, using the pairing selected in the PS5 dialog. {available,
+    // enabled, background, state: off|starting|connected|pin|recovering|failed|
+    // nopair, message, keepaliveFps (-1 = not yet), pad, gyro, touch}
+    Q_PROPERTY(QVariantMap ps5Control READ ps5Control NOTIFY ps5ControlChanged)
     // PC streaming (Moonlight / Sunshine): hosts, pairing, apps and stream settings live in
     // `moonlight` (null when the build has no Moonlight); capture state and the stats overlay here.
     Q_PROPERTY(QObject* moonlight READ moonlightModel CONSTANT)
@@ -666,6 +671,7 @@ public:
 
     QVariantMap ps5() const;
     QVariantList ps5Profiles() const;
+    QVariantMap ps5Control() const;
     QObject* moonlightModel() const;
     bool moonlightCaptured() const;
     bool moonlightStatsVisible() const;
@@ -690,6 +696,9 @@ public:
     Q_INVOKABLE void ps5SendLoginPin(const QString& pin);
     Q_INVOKABLE void ps5Cancel();
     Q_INVOKABLE void ps5Calibrate();
+    // key: enabled | background (saved preferences ps5CaptureControl / ps5ControlBackground).
+    Q_INVOKABLE void ps5ControlSet(const QString& key, const QVariant& value);
+    Q_INVOKABLE void ps5ControlRestart();
     QString remotePlayHost() const;
     void setRemotePlayHost(const QString& value);
     QString remotePlayPin() const;
@@ -1163,6 +1172,7 @@ signals:
     void playlistRequested();
     void nodeAnchorsChanged();
     void ps5Changed();
+    void ps5ControlChanged();
     void moonlightUiChanged();
     void imageBatchChanged();
     void audioDevicesChanged();
@@ -1237,6 +1247,11 @@ private:
     void tickImageBatch();
     void tickCapture();
     void tickPs5();
+    void tickPs5Control(bool force = false);
+    // restart: replace a running session (another pairing, or the user asked).
+    void startPs5Control(bool restart);
+    void stopPs5Control();
+    bool captureCardLive() const;
     void tickMoonlight();
     void tickXbox();
     void tickPlaylist();

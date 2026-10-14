@@ -19,11 +19,38 @@ bool ControllerInput::start(uint32_t preferredDevice){
     initialized_=SDL_InitSubSystem(SDL_INIT_GAMEPAD);return initialized_;
 }
 void ControllerInput::stop(){
+    for(auto* pad:others_)SDL_CloseGamepad(pad);
+    others_.clear();follow_=false;
     releaseEffects();if(hapticStream_){SDL_DestroyAudioStream(hapticStream_);hapticStream_=nullptr;}
     if(audioInitialized_){SDL_QuitSubSystem(SDL_INIT_AUDIO);audioInitialized_=false;}hapticAttempted_=false;
     touchQueue_.clear();touchState_={};haveGyro_=haveAccel_=false;calibrating_=false;gyroBias_={};enumerateAt_=0;
     if(gamepad_){SDL_CloseGamepad(gamepad_);gamepad_=nullptr;}
     if(initialized_){SDL_QuitSubSystem(SDL_INIT_GAMEPAD);initialized_=false;}
+}
+void ControllerInput::setFollowLastPressed(bool on){
+    if(!on){for(auto* pad:others_)SDL_CloseGamepad(pad);others_.clear();}
+    if(on!=follow_)enumerateAt_=0;
+    follow_=on;
+}
+bool ControllerInput::opened(uint32_t id)const{
+    if(gamepad_&&SDL_GetGamepadID(gamepad_)==id)return true;
+    return std::any_of(others_.begin(),others_.end(),[id](SDL_Gamepad* pad){return SDL_GetGamepadID(pad)==id;});
+}
+void ControllerInput::activate(SDL_Gamepad* pad){
+    gamepad_=pad;
+    touchQueue_.clear();touchState_={};sensorStamp_=0;haveGyro_=haveAccel_=false;gyroBias_={};calibrating_=false;touchIds_={-1,-1};gyro_=SDL_GamepadHasSensor(gamepad_,SDL_SENSOR_GYRO)&&SDL_SetGamepadSensorEnabled(gamepad_,SDL_SENSOR_GYRO,true);
+    accel_=SDL_GamepadHasSensor(gamepad_,SDL_SENSOR_ACCEL)&&SDL_SetGamepadSensorEnabled(gamepad_,SDL_SENSOR_ACCEL,true);
+    std::string line=std::string("device opened gyro=")+(gyro_?"1":"0")+" accel="+(accel_?"1":"0")+" touchpads="+std::to_string(SDL_GetNumGamepadTouchpads(gamepad_));
+    if(follow_){const char* name=SDL_GetGamepadName(gamepad_);line+=std::string(" active (follow last pressed, ")+std::to_string(others_.size()+1)+" open) name="+(name?name:"?");}
+    veyra::log::info("remoteplay-input",line);
+}
+// The pad stops being read: its rumble/trigger effects and haptic stream end.
+void ControllerInput::deactivate(){
+    releaseEffects();if(hapticStream_){SDL_DestroyAudioStream(hapticStream_);hapticStream_=nullptr;}hapticAttempted_=false;
+    if(gamepad_&&SDL_GamepadConnected(gamepad_)){
+        if(gyro_)SDL_SetGamepadSensorEnabled(gamepad_,SDL_SENSOR_GYRO,false);
+        if(accel_)SDL_SetGamepadSensorEnabled(gamepad_,SDL_SENSOR_ACCEL,false);
+    }
 }
 ControllerState ControllerInput::poll(bool focused){
     ControllerState state;if(!initialized_)return state;
@@ -31,15 +58,20 @@ ControllerState ControllerInput::poll(bool focused){
     // Only this module initializes SDL; drain its input events rather than
     // accumulating an unconsumed second application event queue.
 
-    if(gamepad_&&!SDL_GamepadConnected(gamepad_)){releaseEffects();if(hapticStream_){SDL_DestroyAudioStream(hapticStream_);hapticStream_=nullptr;}hapticAttempted_=false;SDL_CloseGamepad(gamepad_);gamepad_=nullptr;enumerateAt_=0;}
+    if(gamepad_&&!SDL_GamepadConnected(gamepad_)){deactivate();SDL_CloseGamepad(gamepad_);gamepad_=nullptr;enumerateAt_=0;}
+    if(follow_){
+        std::erase_if(others_,[](SDL_Gamepad* pad){if(SDL_GamepadConnected(pad))return false;SDL_CloseGamepad(pad);return true;});
+        if(!gamepad_&&!others_.empty()){auto* next=others_.front();others_.erase(others_.begin());activate(next);}
+    }
     const auto now=monotonic100ns();
-    if(!gamepad_&&now>=enumerateAt_){
+    // Follow mode keeps enumerating while a pad is open: a virtual pad created
+    // by a streaming tool joins after the local one.
+    if((!gamepad_||follow_)&&now>=enumerateAt_){
         int count=0;auto* ids=SDL_GetGamepads(&count);
-        for(int i=0;i<count&&!gamepad_;++i)if(!preferredDevice_||ids[i]==preferredDevice_)gamepad_=SDL_OpenGamepad(ids[i]);
-        if(gamepad_){
-            touchQueue_.clear();touchState_={};sensorStamp_=0;haveGyro_=haveAccel_=false;gyroBias_={};calibrating_=false;touchIds_={-1,-1};gyro_=SDL_GamepadHasSensor(gamepad_,SDL_SENSOR_GYRO)&&SDL_SetGamepadSensorEnabled(gamepad_,SDL_SENSOR_GYRO,true);
-            accel_=SDL_GamepadHasSensor(gamepad_,SDL_SENSOR_ACCEL)&&SDL_SetGamepadSensorEnabled(gamepad_,SDL_SENSOR_ACCEL,true);
-            veyra::log::info("remoteplay-input",std::string("device opened gyro=")+(gyro_?"1":"0")+" accel="+(accel_?"1":"0")+" touchpads="+std::to_string(SDL_GetNumGamepadTouchpads(gamepad_)));
+        for(int i=0;i<count&&(follow_||!gamepad_);++i){
+            if((preferredDevice_&&ids[i]!=preferredDevice_)||opened(ids[i]))continue;
+            auto* pad=SDL_OpenGamepad(ids[i]);if(!pad)continue;
+            if(!gamepad_)activate(pad);else others_.push_back(pad);
         }
         SDL_free(ids);enumerateAt_=now+10000000;
     }
@@ -49,6 +81,10 @@ ControllerState ControllerInput::poll(bool focused){
     }
     SDL_Event event;
     while(SDL_PollEvent(&event)){
+        if(follow_&&focused&&gamepad_&&event.type==SDL_EVENT_GAMEPAD_BUTTON_DOWN&&event.gbutton.which!=SDL_GetGamepadID(gamepad_)){
+            const auto it=std::find_if(others_.begin(),others_.end(),[&](SDL_Gamepad* pad){return SDL_GetGamepadID(pad)==event.gbutton.which;});
+            if(it!=others_.end()){auto* next=*it;others_.erase(it);deactivate();others_.push_back(gamepad_);activate(next);}
+        }
         if(!focused||!gamepad_)continue;
         if((event.type==SDL_EVENT_GAMEPAD_TOUCHPAD_DOWN||event.type==SDL_EVENT_GAMEPAD_TOUCHPAD_UP||event.type==SDL_EVENT_GAMEPAD_TOUCHPAD_MOTION)&&event.gtouchpad.which==SDL_GetGamepadID(gamepad_)){
             const auto& touch=event.gtouchpad;
@@ -164,8 +200,9 @@ bool ControllerInput::calibrate(){
 }
 ControllerInput::Capabilities ControllerInput::capabilities()const{
     if(!gamepad_)return {};
+    const char* name=SDL_GetGamepadName(gamepad_);
     return {true,gyro_,accel_,SDL_GetNumGamepadTouchpads(gamepad_)>0,
-        SDL_GetGamepadType(gamepad_)==SDL_GAMEPAD_TYPE_PS5,hapticStream_!=nullptr,calibrating_};
+        SDL_GetGamepadType(gamepad_)==SDL_GAMEPAD_TYPE_PS5,hapticStream_!=nullptr,calibrating_,name?name:""};
 }
 
 }

@@ -62,6 +62,8 @@ struct ChiakiBackend::Impl {
     std::atomic<uint64_t> callbackRejected=0,transportErrors=0,assemblyErrors=0;
     std::atomic<int64_t> serverTargetBitrate=-1;
     std::atomic<uint64_t> qualityReports=0;
+    // PS5 手柄控制: set before the session starts, read only by the callbacks.
+    bool discardMedia=false;
     // Only the upstream audio/Opus callback thread reads/writes these fields.
     std::uint32_t channels=0,rate=0;
     std::uint64_t sampleIndex=0;
@@ -115,6 +117,10 @@ struct ChiakiBackend::Impl {
         const ChiakiVeyraVideoSampleInfo* info,void* user) noexcept {
         auto& self=*static_cast<Impl*>(user);
         if(!self.active.load()||!data||!size||!info)return false;
+        // Counted and accepted, never rejected: a false return makes Chiaki drop
+        // the reference frame, leave the last complete frame behind and send a
+        // corrupt-frame report to the console for every following sample.
+        if(self.discardMedia){++self.videoCallbacks;return true;}
         try{
             const auto nal=inspectAnnexB({data,size},self.profile.codec);
             if(!nal.valid || (!nal.hasConfig&&!nal.hasPicture)){++self.callbackRejected;return false;}
@@ -131,6 +137,10 @@ struct ChiakiBackend::Impl {
             const bool accepted=self.token.video(std::move(sample));if(!accepted)++self.callbackRejected;return accepted;
         }catch(...){self.apiError=-1001;self.token.failed(-1001);return false;}
     }
+    // PS5 手柄控制 plays the capture card's audio. A sink is still attached: with
+    // no frame callback Chiaki's audio receiver returns before freeing each
+    // buffered frame. Nothing is decoded.
+    static void discardAudio(std::uint8_t*,std::size_t,void* user) noexcept {++static_cast<Impl*>(user)->audioCallbacks;}
     static void opusSettings(std::uint32_t channels,std::uint32_t rate,void* user) noexcept {
         auto& self=*static_cast<Impl*>(user);
         // Sample position stays monotonic across repeated Opus headers within
@@ -166,11 +176,12 @@ ChiakiBackend::~ChiakiBackend(){
         }
     }catch(...){if(p_){p_->active=false;(void)p_.release();}}
 }
-BackendResult ChiakiBackend::start(const NativeConnectRequest& request,SessionInbox::Token token){
+BackendResult ChiakiBackend::start(const NativeConnectRequest& request,SessionInbox::Token token,bool discardMedia){
     if(p_)return {false,-1100,"already_initialized"};
     if(!validHost(request.host)||request.video.validate()||token.generation()==0)return {false,-1101,"validate_connect"};
     auto init=initializeChiaki();if(!init.ok)return init;
     p_=std::make_unique<Impl>(std::move(token));auto& s=*p_;s.host=request.host;s.profile=request.video;
+    s.discardMedia=discardMedia;
     // Verbose formatting has per-packet overhead: enable only for explicit diagnostics.
     // Callback above whitelists numeric quality fields and never forwards raw text.
     const bool qualityTrace=std::getenv("VEYRA_TEST_PS5_QUALITY_TRACE")!=nullptr;
@@ -184,15 +195,18 @@ BackendResult ChiakiBackend::start(const NativeConnectRequest& request,SessionIn
         request.video.fps==30?CHIAKI_VIDEO_FPS_PRESET_30:CHIAKI_VIDEO_FPS_PRESET_60);
     info.video_profile.codec=request.video.codec==Codec::H264?CHIAKI_CODEC_H264:request.video.codec==Codec::H265Hdr?CHIAKI_CODEC_H265_HDR:CHIAKI_CODEC_H265;
     info.video_profile.bitrate=request.video.bitrateKbps;
-    info.video_profile_auto_downgrade=false;info.enable_keyboard=false;info.enable_dualsense=!request.viewOnly;
+    info.video_profile_auto_downgrade=false;info.enable_keyboard=false;info.enable_dualsense=!request.viewOnly||discardMedia;
     info.auto_regist=false;info.packet_loss_max=0.05;info.enable_idr_on_fec_failure=true;
     const auto code=chiaki_session_init(&s.session,&info,&s.log);
     wipe(info.regist_key,sizeof(info.regist_key));wipe(info.morning,sizeof(info.morning));wipe(info.psn_account_id,sizeof(info.psn_account_id));
     if(code!=CHIAKI_ERR_SUCCESS){auto out=s.record(code,"chiaki_session_init");s.token.failed(out.code);p_.reset();return out;}
     s.initialized=true;
-    chiaki_opus_decoder_init(&s.opus,&s.log);s.opusInitialized=true;
-    chiaki_opus_decoder_set_cb(&s.opus,Impl::opusSettings,Impl::opusFrame,&s);
-    ChiakiAudioSink sink{};chiaki_opus_decoder_get_sink(&s.opus,&sink);chiaki_session_set_audio_sink(&s.session,&sink);
+    if(discardMedia){ChiakiAudioSink sink{};sink.user=&s;sink.frame_cb=Impl::discardAudio;chiaki_session_set_audio_sink(&s.session,&sink);}
+    else{
+        chiaki_opus_decoder_init(&s.opus,&s.log);s.opusInitialized=true;
+        chiaki_opus_decoder_set_cb(&s.opus,Impl::opusSettings,Impl::opusFrame,&s);
+        ChiakiAudioSink sink{};chiaki_opus_decoder_get_sink(&s.opus,&sink);chiaki_session_set_audio_sink(&s.session,&sink);
+    }
     ChiakiAudioSink hapticSink{};hapticSink.user=&s;hapticSink.frame_cb=Impl::hapticsCallback;
     chiaki_session_set_haptics_sink(&s.session,&hapticSink);
     chiaki_session_set_event_cb(&s.session,Impl::eventCallback,&s);

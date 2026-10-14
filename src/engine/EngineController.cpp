@@ -81,6 +81,10 @@ EngineController::EngineController(){
     worker_=std::thread(&EngineController::dispatch,this);
 }
 EngineController::~EngineController(){
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    // The PS5 手柄控制 thread starts closing its session now; joined below.
+    controlThread_.request_stop();
+#endif
     {std::lock_guard lock(mutex_);shutdown_=true;pending_={};stop_=true;}wake_.notify_one();
     if(!worker_.joinable()){watchdog_.reset();return;}
     // Field logs(15): an owner thread blocked inside a driver call never returns,
@@ -97,6 +101,20 @@ EngineController::~EngineController(){
         }
     }
     worker_.join();
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    if(controlThread_.joinable()){
+        const auto closing=Clock::now();
+        {std::unique_lock lock(controlMutex_);
+            while(!controlIdle_.wait_for(lock,std::chrono::milliseconds(100),[&]{return controlExited_;})){
+                if(elapsedMs(closing)<8000.0)continue;
+                veyra::log::error("engine-hang","shutdown: PS5 controller-only session still closing after 8 s; ending the process instead of waiting");
+                Logger::instance().flush();
+                TerminateProcess(GetCurrentProcess(),0);
+            }
+        }
+        controlThread_.join();
+    }
+#endif
     // The watchdog callback reads snapshot_ and hangPreviousStatus_. Detach it
     // while all controller members are still alive, before reverse destruction
     // reaches hangPreviousStatus_ (declared after watchdog_).
@@ -162,6 +180,10 @@ void EngineController::open(HWND video,const std::wstring& path,PlayerOptions op
     // keep them across the snapshot round-trip below.
     const bool captureCpuUnpack=opts.captureCpuUnpack;
     const bool softwareDecode=opts.softwareDecode;const bool hardwareDecodeOnly=opts.hardwareDecodeOnly;
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    // PS5 手柄控制 belongs to a capture card source; any other source ends it.
+    if(!path.starts_with(L"capture:")&&!path.starts_with(L"capture2:"))stopRemoteControl();
+#endif
     {std::lock_guard lock(mutex_);snapshot_={};requestedPlaybackRate_=1;activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_);}
     opts.captureReplayForTest=captureReplay;
     opts.captureCpuUnpack=captureCpuUnpack;
@@ -170,13 +192,82 @@ void EngineController::open(HWND video,const std::wstring& path,PlayerOptions op
 }
 #ifdef VEYRA_ENABLE_REMOTEPLAY
 void EngineController::openRemotePlay(HWND window,source::RemotePlayConnectDesc desc,PlayerOptions opts){
+    stopRemoteControl();
     auto request=std::make_shared<source::RemotePlayConnectDesc>(std::move(desc));
     {std::lock_guard lock(mutex_);snapshot_={};requestedPlaybackRate_=1;activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;snapshot_.remotePlay=true;snapshot_.capture=true;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_);}
-    post([this,window,request,opts]{paused_=false;seekSeconds_=-1;run(window,L"remoteplay:",opts,request);});
+    post([this,window,request,opts]{paused_=false;seekSeconds_=-1;waitRemoteControlIdle();run(window,L"remoteplay:",opts,request);});
 }
-remoteplay::ControllerFeedback EngineController::remotePlayFeedback(){std::lock_guard lock(mutex_);return activeRemote_?activeRemote_->takeFeedback():remoteplay::ControllerFeedback{};}
-void EngineController::remotePlayController(const remoteplay::ControllerState& state){std::lock_guard lock(mutex_);if(activeRemote_)activeRemote_->controller(state);}
-void EngineController::remotePlayLoginPin(std::string pin){std::lock_guard lock(mutex_);if(activeRemote_)activeRemote_->loginPin(std::move(pin));}
+// A PS5 stream (activeRemote_) takes precedence; otherwise PS5 手柄控制.
+remoteplay::ControllerFeedback EngineController::remotePlayFeedback(){std::lock_guard lock(mutex_);if(activeRemote_)return activeRemote_->takeFeedback();return controlRemote_?controlRemote_->takeFeedback():remoteplay::ControllerFeedback{};}
+void EngineController::remotePlayController(const remoteplay::ControllerState& state){std::lock_guard lock(mutex_);if(activeRemote_)activeRemote_->controller(state);else if(controlRemote_)controlRemote_->controller(state);}
+void EngineController::remotePlayLoginPin(std::string pin){std::lock_guard lock(mutex_);if(activeRemote_)activeRemote_->loginPin(std::move(pin));else if(controlRemote_)controlRemote_->loginPin(std::move(pin));}
+void EngineController::startRemoteControl(source::RemotePlayConnectDesc desc){
+    desc.controlOnly=true;desc.request.viewOnly=false;
+    auto request=std::make_shared<source::RemotePlayConnectDesc>(std::move(desc));
+    {std::lock_guard lock(controlMutex_);controlPending_=std::move(request);
+        if(!controlThread_.joinable())controlThread_=std::jthread([this](std::stop_token stop){controlLoop(stop);});}
+    controlWake_.notify_all();
+}
+void EngineController::stopRemoteControl(){
+    {std::lock_guard lock(controlMutex_);if(!controlThread_.joinable())return;
+        controlPending_=std::shared_ptr<source::RemotePlayConnectDesc>{};}
+    controlWake_.notify_all();
+}
+void EngineController::controlLoop(std::stop_token stop){
+    for(;;){
+        std::shared_ptr<source::RemotePlayConnectDesc> request;
+        {std::unique_lock lock(controlMutex_);
+            if(!controlWake_.wait(lock,stop,[&]{return controlPending_.has_value();}))break;
+            request=std::move(*controlPending_);controlPending_.reset();controlBusy_=true;controlStarting_=bool(request);}
+        // One Remote Play slot per console: the old session ends before a new one starts.
+        std::shared_ptr<source::RemotePlaySessionSource> old;
+        {std::lock_guard lock(mutex_);old=std::move(controlRemote_);}
+        if(old){const auto closing=Clock::now();old->close();veyra::log::info("remoteplay-control",std::format("controller-only session closed in {:.0f} ms",elapsedMs(closing)));}
+        if(request&&!stop.stop_requested()){
+            auto session=std::make_shared<source::RemotePlaySessionSource>();
+            const bool ok=session->connect(std::move(*request));
+            veyra::log::info("remoteplay-control",std::format("controller-only session start ok={} alive={}",ok,session->alive()));
+            // Kept even when the start failed: its status carries the reason.
+            std::lock_guard lock(mutex_);controlRemote_=std::move(session);
+        }
+        {std::lock_guard lock(controlMutex_);controlBusy_=controlStarting_=false;}
+        controlIdle_.notify_all();
+    }
+    std::shared_ptr<source::RemotePlaySessionSource> last;
+    {std::lock_guard lock(mutex_);last=std::move(controlRemote_);}
+    if(last)last->close();
+    {std::lock_guard lock(controlMutex_);controlBusy_=controlStarting_=false;controlPending_.reset();controlExited_=true;}
+    controlIdle_.notify_all();
+}
+// A PS5 stream needs the console's only Remote Play slot: wait until the
+// controller-only session has closed (bounded, and cut short by Stop).
+void EngineController::waitRemoteControlIdle(){
+    const auto deadline=Clock::now()+std::chrono::seconds(10);
+    std::unique_lock lock(controlMutex_);
+    while((controlBusy_||controlPending_.has_value())&&!stop_.load()){
+        if(Clock::now()>=deadline){veyra::log::warn("remoteplay-control","controller-only session still closing after 10 s; starting the PS5 stream anyway");return;}
+        controlIdle_.wait_for(lock,std::chrono::milliseconds(100));
+    }
+}
+EngineController::RemoteControlStatus EngineController::remoteControlStatus()const{
+    RemoteControlStatus out;
+    std::shared_ptr<source::RemotePlaySessionSource> session;
+    {std::lock_guard lock(mutex_);session=controlRemote_;}
+    {std::lock_guard lock(controlMutex_);out.starting=controlStarting_||(controlPending_.has_value()&&*controlPending_);}
+    out.requested=out.starting||bool(session);
+    if(!session)return out;
+    out.alive=session->alive();out.failed=session->failed();
+    const auto s=session->sessionSnapshot();
+    out.connected=s.state==remoteplay::SessionState::WaitingFirstFrame||s.state==remoteplay::SessionState::Streaming;
+    out.pinRequired=s.state==remoteplay::SessionState::LoginPinRequired;
+    const auto recovery=session->recoveryStatus();out.recovering=recovery.active;out.message=recovery.message;
+    const auto rates=session->rates();out.keepaliveReady=rates.ready;out.keepaliveFps=rates.receivedFps;
+    return out;
+}
+bool EngineController::remoteControlRequested()const{
+    {std::lock_guard lock(mutex_);if(controlRemote_)return true;}
+    std::lock_guard lock(controlMutex_);return controlStarting_||(controlPending_.has_value()&&*controlPending_);
+}
 #endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
 // Input goes straight to the session: the shared pointer is copied under the lock, the send is not.
@@ -196,6 +287,9 @@ remoteplay::ControllerFeedback EngineController::xboxFeedback(){std::shared_ptr<
 #endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
 void EngineController::openMoonlight(HWND window,source::MoonlightConnectDesc desc,PlayerOptions opts){
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    stopRemoteControl();
+#endif
     auto request=std::make_shared<source::MoonlightConnectDesc>(std::move(desc));
     {std::lock_guard lock(mutex_);snapshot_={};requestedPlaybackRate_=1;activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;snapshot_.moonlightActive=true;snapshot_.capture=true;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_);}
     post([this,window,request,opts]{paused_=false;seekSeconds_=-1;run(window,L"moonlight:",opts,{},request);});
@@ -203,6 +297,9 @@ void EngineController::openMoonlight(HWND window,source::MoonlightConnectDesc de
 #endif
 #ifdef VEYRA_ENABLE_XBOX
 void EngineController::openXbox(HWND window,source::XboxConnectDesc desc,PlayerOptions opts){
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    stopRemoteControl();
+#endif
     auto request=std::make_shared<source::XboxConnectDesc>(std::move(desc));
     {std::lock_guard lock(mutex_);snapshot_={};requestedPlaybackRate_=1;activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;snapshot_.xboxActive=true;snapshot_.capture=true;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_);}
     post([this,window,request,opts]{paused_=false;seekSeconds_=-1;run(window,L"xbox:",opts,{},{},request);});
@@ -271,6 +368,9 @@ void EngineController::startExport(const std::wstring& input,const std::wstring&
         veyra::log::warn("node-order","export has no runtime node-order transport; request rejected before posting");
         status(L"节点链尚未接入导出执行器，请切换列表模式后导出",false);return;
     }
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    stopRemoteControl(); // the export replaces the capture run it belonged to
+#endif
     const auto frozen=opts.snapshot();const int audioStream=opts.audioStreamIndex;
     post([this,input,output,frozen,audioStream,hevc]{prewarmed_.reset();CoInitializeEx(nullptr,COINIT_MULTITHREADED);auto options=PlayerOptions::from(frozen);options.audioStreamIndex=audioStream;bool ok=exportVideo(input,output,options,hevc,stop_,[this](double p,const std::wstring& s){std::lock_guard lock(mutex_);snapshot_.status=s;snapshot_.position=p;snapshot_.duration=1;snapshot_.running=true;});{std::lock_guard lock(mutex_);snapshot_.running=false;snapshot_.failed=!ok&&!stop_;}CoUninitialize();});
 }

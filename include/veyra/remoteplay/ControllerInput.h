@@ -1,6 +1,8 @@
 #pragma once
 #include "Types.h"
 #include <deque>
+#include <string>
+#include <vector>
 struct SDL_Gamepad;
 struct SDL_AudioStream;
 namespace veyra::remoteplay {
@@ -9,16 +11,25 @@ class ControllerInput {
 public:
     ~ControllerInput(){stop();}
     bool start(uint32_t preferredDevice=0);
-    void stop();
+    void stop(); // also turns follow mode off
+    // 谁按键就用谁 (PS5 手柄控制): every pad is opened and the one whose button went
+    // down last is the one read, so a streaming tool's virtual pad that appears
+    // after a local pad still works. Off (default): the first pad found.
+    void setFollowLastPressed(bool on);
     ControllerState poll(bool focused);
     void feedback(ControllerFeedback,bool focused);
     void releaseEffects();
     bool calibrate();
     bool connected()const{return gamepad_!=nullptr;}
-    struct Capabilities {bool connected=false,gyro=false,accel=false,touch=false,triggers=false,haptics=false,calibrating=false;};
+    struct Capabilities {bool connected=false,gyro=false,accel=false,touch=false,triggers=false,haptics=false,calibrating=false;std::string name;};
     Capabilities capabilities()const;
 private:
+    void activate(SDL_Gamepad*);
+    void deactivate();
+    bool opened(uint32_t id)const;
     SDL_Gamepad* gamepad_=nullptr;
+    std::vector<SDL_Gamepad*> others_; // follow mode: open, not read
+    bool follow_=false;
     bool initialized_=false;
     HostTime enumerateAt_=0;uint32_t preferredDevice_=0;
     std::array<int8_t,2> touchIds_{-1,-1};uint8_t nextTouchId_=0;

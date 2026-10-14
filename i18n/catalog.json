@@ -16122,6 +16122,307 @@
    "zh-TW": "如果要開啟 DLSS5（NR），建議幀率設定 60，減少 DLSS5 需要處理的畫面量，減輕負擔",
    "en": "If you turn on DLSS5 (NR), set the frame rate limit to 60: DLSS5 then has fewer frames to process and less load",
    "ja": "DLSS5（NR）を使う場合はフレームレート上限を 60 にしてください。DLSS5 が処理するフレームが減り、負荷が軽くなります"
+  },
+  {
+   "zh": "PS5 主机",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "PS5 主機",
+   "en": "PS5 console",
+   "ja": "PS5 本体"
+  },
+  {
+   "zh": "PS5 仍会发一路 720p 30fps、约 5 Mbps 的保活画面，本机收到即丢弃；PS5 同一时间只允许一个远程游玩连接。再串流时记得打开上面的「音频监听」。",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "PS5 仍會發一路 720p 30fps、約 5 Mbps 的保活畫面，本機收到即丟棄；PS5 同一時間只允許一個遠程遊玩連線。再串流時記得打開上面的「音訊監聽」。",
+   "en": "The PS5 still sends a 720p 30 fps keepalive picture of about 5 Mbps, which this PC drops on arrival. A PS5 allows one Remote Play connection at a time. When re-streaming, turn on Audio monitoring above.",
+   "ja": "PS5 は 720p 30fps・約 5 Mbps の維持用映像を送り続けますが、この PC は受け取ってすぐ破棄します。PS5 のリモートプレイ接続は同時に 1 つだけです。再ストリーミングするときは上の「音声モニター」をオンにしてください。"
+  },
+  {
+   "zh": "PS5 手柄",
+   "src": "qml/HomePage.qml",
+   "zh-TW": "PS5 手把",
+   "en": "PS5 pad",
+   "ja": "PS5 コントローラー"
+  },
+  {
+   "zh": "PS5 手柄控制",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "PS5 手把控制",
+   "en": "PS5 controller control",
+   "ja": "PS5 コントローラー操作"
+  },
+  {
+   "zh": "PS5 手柄控制中断，正在重新连接（{}/3）…",
+   "src": "src/source/RemotePlaySessionSource.cpp",
+   "zh-TW": "PS5 手把控制中斷，正在重新連接（{}/3）…",
+   "en": "PS5 controller control interrupted, reconnecting ({}/3)…",
+   "ja": "PS5 コントローラー操作が中断されました。再接続中（{}/3）…"
+  },
+  {
+   "zh": "PS5 手柄控制已停止",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "PS5 手把控制已停止",
+   "en": "PS5 controller control stopped",
+   "ja": "PS5 コントローラー操作を停止しました"
+  },
+  {
+   "zh": "PS5 手柄控制已连接",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "PS5 手把控制已連接",
+   "en": "PS5 controller control connected",
+   "ja": "PS5 コントローラー操作に接続しました"
+  },
+  {
+   "zh": "PS5 手柄控制已连接 · 保活画面 %1 fps（收到即丢弃）",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "PS5 手把控制已連接 · 保活畫面 %1 fps（收到即丟棄）",
+   "en": "PS5 controller control connected · keepalive picture %1 fps (dropped on arrival)",
+   "ja": "PS5 コントローラー操作に接続しました · 維持用映像 %1 fps（受信後すぐ破棄）"
+  },
+  {
+   "zh": "PS5 手柄控制没有恢复，请检查主机及网络后重新打开；无需重新配对。",
+   "src": "src/source/RemotePlaySessionSource.cpp",
+   "zh-TW": "PS5 手把控制沒有恢復，請檢查主機及網路後重新打開；無需重新配對。",
+   "en": "PS5 controller control did not recover; check the console and network, then turn it on again. No need to pair again.",
+   "ja": "PS5 コントローラー操作が復帰しませんでした。本体とネットワークを確認してからオンにし直してください。再ペアリングは不要です。"
+  },
+  {
+   "zh": "PS5 手柄控制设置保存失败",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "PS5 手把控制設定儲存失敗",
+   "en": "PS5 controller control setting could not be saved",
+   "ja": "PS5 コントローラー操作の設定を保存できませんでした"
+  },
+  {
+   "zh": "PS5 手柄控制连接失败，请检查主机及网络；已保存的配对无需重输。",
+   "src": "src/source/RemotePlaySessionSource.cpp",
+   "zh-TW": "PS5 手把控制連接失敗，請檢查主機及網路；已儲存的配對無需重輸。",
+   "en": "PS5 controller control could not connect; check the console and network. Saved pairing does not need to be re-entered.",
+   "ja": "PS5 コントローラー操作の接続に失敗しました。本体とネットワークを確認してください。保存済みのペアリングは再入力不要です。"
+  },
+  {
+   "zh": "PS5 手柄控制：还没有配对的 PS5，先在「PS5 串流」里配对一次",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "PS5 手把控制：還沒有配對的 PS5，先在「PS5 串流」裡配對一次",
+   "en": "PS5 controller control: no PS5 is paired yet. Pair one once under PS5 streaming",
+   "ja": "PS5 コントローラー操作：ペアリング済みの PS5 がありません。先に「PS5 ストリーミング」で一度ペアリングしてください"
+  },
+  {
+   "zh": "PS5 提示时填写，不是 8 位配对码",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "PS5 提示時填寫，不是 8 位配對碼",
+   "en": "Enter it when the PS5 asks; not the 8-digit pairing code",
+   "ja": "PS5 に求められたら入力します。8 桁のペアリングコードではありません"
+  },
+  {
+   "zh": "PS5 的 HDMI 接了采集卡时，可以只用远程游玩传手柄、画面用采集卡原画（可 4K/HDR），也方便再串流给掌机",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "PS5 的 HDMI 接了擷取卡時，可以只用遠程遊玩傳手把、畫面用擷取卡原畫（可 4K/HDR），也方便再串流給掌機",
+   "en": "With the PS5 HDMI on a capture card, Remote Play can carry only the controller while the picture comes from the capture card (4K/HDR possible), which also suits re-streaming to a handheld",
+   "ja": "PS5 の HDMI をキャプチャーカードにつないでいる場合、リモートプレイはコントローラーだけを送り、映像はキャプチャーカードの元映像（4K/HDR 可）を使えます。携帯機への再ストリーミングにも便利です"
+  },
+  {
+   "zh": "PS5 要求输入登录 PIN",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "PS5 要求輸入登入 PIN",
+   "en": "The PS5 asks for the sign-in PIN",
+   "ja": "PS5 がサインイン PIN を求めています"
+  },
+  {
+   "zh": "PS5 要求输入登录 PIN：在采集卡面板「PS5 手柄控制」里填写",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "PS5 要求輸入登入 PIN：在擷取卡面板「PS5 手把控制」裡填寫",
+   "en": "The PS5 asks for the sign-in PIN: enter it under PS5 controller control in the capture card panel",
+   "ja": "PS5 がサインイン PIN を求めています：キャプチャーカードパネルの「PS5 コントローラー操作」で入力してください"
+  },
+  {
+   "zh": "再串流时建议打开：Veyra 不在前台也继续转发。打开后在这台电脑上用别的程序时，手柄也会操作 PS5",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "再串流時建議打開：Veyra 不在前景也繼續轉發。打開後在這台電腦上用別的程式時，手把也會操作 PS5",
+   "en": "Recommended when re-streaming: input keeps going while Veyra is not in front. While on, the controller also drives the PS5 when you use other programs on this PC",
+   "ja": "再ストリーミングするときはオン推奨：Veyra が前面になくても転送を続けます。オンの間は、この PC で他のソフトを使っていてもコントローラーが PS5 を操作します"
+  },
+  {
+   "zh": "去配对",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "去配對",
+   "en": "Pair",
+   "ja": "ペアリングへ"
+  },
+  {
+   "zh": "后台也转发手柄",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "背景也轉發手把",
+   "en": "Forward the controller in the background",
+   "ja": "バックグラウンドでもコントローラーを転送"
+  },
+  {
+   "zh": "和「PS5 串流」共用配对",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "和「PS5 串流」共用配對",
+   "en": "Shares pairings with PS5 streaming",
+   "ja": "「PS5 ストリーミング」とペアリングを共有"
+  },
+  {
+   "zh": "已在「采集卡」里打开 PS5 手柄控制：连接采集卡时只用远程游玩传手柄",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "已在「擷取卡」裡打開 PS5 手把控制：連接擷取卡時只用遠程遊玩傳手把",
+   "en": "PS5 controller control is on under Capture card: with the capture card connected, Remote Play carries only the controller",
+   "ja": "「キャプチャーカード」で PS5 コントローラー操作がオンです：キャプチャーカード接続中はリモートプレイでコントローラーだけを送ります"
+  },
+  {
+   "zh": "已结束 PS5 手柄控制：PS5 同一时间只允许一个远程游玩连接",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已結束 PS5 手把控制：PS5 同一時間只允許一個遠程遊玩連線",
+   "en": "PS5 controller control ended: a PS5 allows one Remote Play connection at a time",
+   "ja": "PS5 コントローラー操作を終了しました：PS5 のリモートプレイ接続は同時に 1 つだけです"
+  },
+  {
+   "zh": "已连接",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "已連接",
+   "en": "Connected",
+   "ja": "接続済み"
+  },
+  {
+   "zh": "无陀螺仪",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "無陀螺儀",
+   "en": "no gyro",
+   "ja": "ジャイロなし"
+  },
+  {
+   "zh": "有陀螺仪",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "有陀螺儀",
+   "en": "gyro",
+   "ja": "ジャイロあり"
+  },
+  {
+   "zh": "未检测到手柄",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "未偵測到手把",
+   "en": "No controller detected",
+   "ja": "コントローラーが見つかりません"
+  },
+  {
+   "zh": "用远程游玩控制 PS5",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "用遠程遊玩控制 PS5",
+   "en": "Control the PS5 through Remote Play",
+   "ja": "リモートプレイで PS5 を操作"
+  },
+  {
+   "zh": "画面和声音来自采集卡，手柄经 PS5 远程游玩发给主机。把处理后的画面再串流给掌机或别的电脑时，用那边的手柄玩 PS5",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "畫面和聲音來自擷取卡，手把經 PS5 遠程遊玩發給主機。把處理後的畫面再串流給掌機或別的電腦時，用那邊的手把玩 PS5",
+   "en": "Picture and sound come from the capture card; the controller goes to the console through PS5 Remote Play. When this picture is re-streamed to a handheld or another PC, play the PS5 with the controller there",
+   "ja": "映像と音声はキャプチャーカードから、コントローラーは PS5 リモートプレイで本体へ送ります。処理した映像を携帯機や別の PC に再ストリーミングするとき、そちらのコントローラーで PS5 を遊べます"
+  },
+  {
+   "zh": "画面用采集卡",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "畫面用擷取卡",
+   "en": "Picture from a capture card",
+   "ja": "映像はキャプチャーカード"
+  },
+  {
+   "zh": "谁按键就用谁：本机手柄、串流软件建的虚拟手柄都可以",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "誰按鍵就用誰：本機手把、串流軟體建的虛擬手把都可以",
+   "en": "Whichever controller pressed a button last is used: a controller on this PC or a virtual one made by streaming software",
+   "ja": "最後にボタンを押したコントローラーを使います：この PC のコントローラーでも、ストリーミングソフトが作る仮想コントローラーでも可"
+  },
+  {
+   "zh": "还没有配对的 PS5，先在「PS5 串流」里配对一次",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "還沒有配對的 PS5，先在「PS5 串流」裡配對一次",
+   "en": "No PS5 is paired yet. Pair one once under PS5 streaming",
+   "ja": "ペアリング済みの PS5 がありません。先に「PS5 ストリーミング」で一度ペアリングしてください"
+  },
+  {
+   "zh": "连接中",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "連接中",
+   "en": "Connecting",
+   "ja": "接続中"
+  },
+  {
+   "zh": "配对…",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "配對…",
+   "en": "Pairing…",
+   "ja": "ペアリング…"
+  },
+  {
+   "zh": "采集卡设置",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "擷取卡設定",
+   "en": "Capture card settings",
+   "ja": "キャプチャーカード設定"
+  },
+  {
+   "zh": "采集卡连上后自动连接 PS5",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "擷取卡連上後自動連接 PS5",
+   "en": "Connects to the PS5 once the capture card is connected",
+   "ja": "キャプチャーカードの接続後に PS5 へ自動接続します"
+  },
+  {
+   "zh": "重连",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "重連",
+   "en": "Reconnect",
+   "ja": "再接続"
+  },
+  {
+   "zh": "重连中",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "重連中",
+   "en": "Reconnecting",
+   "ja": "再接続中"
+  },
+  {
+   "zh": "需要 PIN",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "需要 PIN",
+   "en": "PIN needed",
+   "ja": "PIN が必要"
+  },
+  {
+   "zh": " + NVIDIA Reflex（实验）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": " + NVIDIA Reflex（實驗）",
+   "en": " + NVIDIA Reflex (experimental)",
+   "ja": " + NVIDIA Reflex（実験的）"
+  },
+  {
+   "zh": "可变刷新：超过屏幕最高刷新时只排 1 帧 · ",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "可變刷新：超過螢幕最高刷新時只排 1 幀 · ",
+   "en": "Variable refresh: only 1 frame queued above the display maximum · ",
+   "ja": "可変リフレッシュ：画面の最大リフレッシュを超えると 1 フレームだけキュー · "
+  },
+  {
+   "zh": "垂直同步：屏幕队列 1 帧，读帧前等待刷新 · ",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "垂直同步：螢幕佇列 1 幀，讀幀前等待刷新 · ",
+   "en": "VSync: 1-frame display queue, waits for refresh before reading a frame · ",
+   "ja": "垂直同期：画面キュー 1 フレーム、フレーム読み込み前にリフレッシュを待機 · "
+  },
+  {
+   "zh": "垂直同步：屏幕队列控制不可用 · ",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "垂直同步：螢幕佇列控制不可用 · ",
+   "en": "VSync: display queue control unavailable · ",
+   "ja": "垂直同期：画面キュー制御は使用できません · "
+  },
+  {
+   "zh": "显示队列恢复失败 · ",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "顯示佇列恢復失敗 · ",
+   "en": "Display queue could not be restored · ",
+   "ja": "表示キューを復元できませんでした · "
   }
  ]
 }
