@@ -9409,3 +9409,17 @@ C3：采集回调的拷贝已经是唯一一次 CPU 拷贝（邮箱帧就是 D3D
 实卡（T911 恢复在线，2K60 NV12 → NR，320Hz）：DLSS 6X 不再自动降：289 次/秒送显，提示“建议降至 4X”，送显→上屏 4.9/8.9ms（降到 4X 时为 5.0/6.9ms）。仅 NR：显式垂直同步 4.98/6.42ms（修正后），自动 4.87/6.18ms，回调→送显 P95 9.1 / 9.3ms，即 B3 在 60fps 源下不增加延迟。修正前同一垂直同步 P95 19.3ms，旧队列（`VEYRA_TEST_LEGACY_VSYNC_QUEUE=1`）同样有 19ms 尖刺，确认是测量问题。XeSS 2X+NR（B1 实卡）：XeLL 周期错位 0，回调→送显返回 P95 10.0→3.0ms（现在送显先于 GPU 完成，上屏时间仍受 GPU 约 8ms 约束）；模拟 60Hz 提示“建议关闭补帧”，XeSS 仍 120/s。可变刷新模拟等级 3：pacing 日志 effective=Vsync、displayQueuePaced=true、vrrSync=true，状态“可变刷新 · 未生效”。截图：显示页开关在真实屏上为灰、模拟可用时可开；补帧页黄色提示正确。
 
 测试：veyra_realtime_preview_tests 0 失败（提示 27 项、防抖 7 项）；repair 259/0；ui contract 通过；latency-min-tests display-sync、lifecycle 通过；回放 6X 垂直同步 4/0（送显→上屏 5.69/6.05ms）、屏幕 XeSS 10/0、生命周期 13/0。build.py 现在对改动的 QObject 头重跑 moc（新属性需要新的元对象，只重编旧生成文件不够）。
+
+## 2026-10-14 DLSS 性能模式、双卡运算、全屏 Home 面板（Claude）
+
+用户：“零缓冲先不做吧，现在做”。三件事：适配 NVIDIA 新的 DLSS 帧生成性能模式；双卡用户指定运算显卡；极简全屏 Home 呼出专业模式调整菜单、节点模式呼出节点画布。透传“先出方案给我，先不动”。运行库来源经 AskUserQuestion 由用户选“打包进运行库”。记录 docs/FG_GPU_HOME_2026-10-14.md，透传方案 docs/PC_GAME_PASSTHROUGH_PLAN_2026-10-14.md。
+
+性能模式：NVIDIA App 11.0.9 把 DLSS-G 310.9.16（nvapp_override）放进 `%ProgramData%\NVIDIA\NGX\models\dlssg\versions\20318480`。模式由创建时参数 `DLSSG.LiteCandidateBlendingEnabled` 打开，逐帧设置无效；字符串检索只有 310.9.16 含该参数名（310.9.1、310.7、驱动自带版本没有）。`EnhancementSettings::dlssgLite` → GraphDescription → `DlssFgBackend::CreateDesc::lite`；`NgxCoreHost::initialize` 增加优先目录（feature path = dlssg-lite, runtime/experimental），`NgxCoreCache` 键加目录；`EffectChain` 与图的 live-accept 在开关变化时重建；导出强制标准模式。状态 1 生效、2 包里没有运行库、3 RTX 40/30（FgCompatibilitySession，解锁补丁只认 310.9.1）不启用。UI：补帧方式为 DLSS 时列表/节点页出现“DLSS 性能模式”（偏好 `dlssgPerformance`），提示随状态变化。实测 T911 2K60 NV12 + NR：6X 补帧 GPU P95 8.1→3.3ms、过期帧 7.7→1.0/s、送显→上屏 P95 9.59→7.45ms、回调→送显 P95 31.5→26.8ms；4X 5.6→2.8ms（`logs/claude-fg-gpu-home-20261014/lite-{off,on}-6x-*`、`fg-ota-4x-*`）。
+
+双卡：设置 → 性能，“GPU 占用监控”下新增“同时用这块显卡运算”（偏好 `computeOnMonitorGpu`）。`gfx::setPreferredAdapterLuid` → 环境变量 `VEYRA_COMPUTE_ADAPTER_LUID`（导出子进程继承）；D3D12DeviceContext 先找该 LUID、找不到按默认顺序并记录；预热设备不在该卡时重建；`effectGpu`/VFG 判定用同一块卡。修正：桥接构造时运算卡要在能力采样和链路恢复之前确定（原顺序下 AMD 运算卡仍显示 DLSS/NVOF）；运行中切换按重启规则迁移（DLSS→可用方式、NVOF→FidelityFX、不支持的效果关闭保留参数、保存）。实测 AMD 核显：`compute adapter preference=0000000000014A59 used=yes`，60 次/秒送显，补帧自动 FSR 3.1 2X + FidelityFX 光流；运行中 DLSS 4X → AMD 当场改 FSR 2X，120 次/秒，无错误（`gpu-amd-133803`、`pro-amd-fg2-134748`、`switch-live-134832`、截图 `set-gpu-amd2-134129`）。
+
+全屏 Home：`Main.qml` 的 `toggleQuickPanel`：极简全屏按 Home 时专业页（节点模式时节点页）在画面下面瞬间切换为当前页（`instantPage` 跳过下沉动画），面板关闭或退出全屏时回到原页；`NodePage.overlay` 只显示画布，作为画面底部面板（max(260, 42%)，`videoCover` 挖洞，“Home 关闭”）。实测（PostMessage Home/Esc + PrintWindow）：极简→列表面板→回极简；节点→底部画布→Esc 退出全屏回极简；`leaving=` 为空（`home-min-134319`、`home-node-134358`）。面板开着时用户自己换页（如切换极简/专业）就在那一页结束面板，关闭后不再跳回原页，下次 Home 一次打开（`home-min2-141025`、`home-switch-141039`）。
+
+透传调研：粉丝 VeyraOverlay 只解出文本与源码到 `downloads/fan-overlay-mod-20261014`（未运行）。显示器捕获实测：控制条窗口在捕获打开后约 0.1 秒才显示，affinity 0x0（主窗口 0x11），会被捕获进画面；PrintWindow 截 Veyra 全黑（`mon-aff-135651`）。
+
+测试：build.py 全目标；repair 259/0，ui contract 通过，realtime preview 0 失败；节奏 r4-replay-6x-vsync、r4-lifecycle、r4-screen-xess、r4-screen-dlss（4X）全部通过（`logs/claude-fg-gpu-home-20261014/r4-*`、`tests-135843`；日志修正后重建再跑 `tests-141200` 通过）。性能模式目录日志改用 UTF-8（`path::string()` 在系统代码页表示不了的路径上会抛异常），核心初始化只记目录长度；复测 `lite-recheck-141131`：state=1、参数=1、Create 成功。打包：`package-portable.ps1` 2.0.8 起加入 dlssg-lite 条目（身份不符即拒绝）；THIRD_PARTY_NOTICES 增加 310.9.16 一节。

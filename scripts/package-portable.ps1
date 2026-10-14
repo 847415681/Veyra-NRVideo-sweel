@@ -51,6 +51,13 @@ $runtimeFiles = @(
   @{ Name='libxell.dll'; Folder='runtime_local/intel/experimental'; Source='runtime_local/intel/experimental/libxell.dll'; Hash='D2030DCD694FDA8F2EC7E044B13E6DB8F0B56D4BA9113A5EFAD334E3F3DED8C7'; Category='official-intel-xess-sdk-3.0.2'; Experimental=$true },
   @{ Name='libxess_fg.dll'; Folder='runtime_local/intel/experimental'; Source='runtime_local/intel/experimental/libxess_fg.dll'; Hash='EC5E0C65E075570C6EDE72618BB666D0BE0C2E10B2EA9762C0FE8CB8E375AB27'; Category='official-intel-xess-sdk-3.0.2'; Experimental=$true }
 )
+if ([version]$Version -ge [version]'2.0.8') {
+  # DLSS 性能模式 (user-approved 2026-10-14): NVIDIA's DLSS-G performance-mode build
+  # 310.9.16, delivered by NVIDIA App 11.0.9 over the air (nvapp_override model). NGX
+  # loads it ahead of runtime/experimental only while the switch is on; 310.9.1 above
+  # stays the default and the only target of the RTX 40/30 unlock patches.
+  $runtimeFiles += @{ Name='nvngx_dlssg.dll'; Folder='runtime/experimental/dlssg-lite'; Source='runtime_local/nvidia/dlssg-lite/nvngx_dlssg.dll'; Hash='CADEE1AA6DB3907BABDC3285DA2AEBC4553D92B89C38BA3EAE8ABD8BBA1BEA72'; Signature='Valid'; Size=7506544; Version='310.9.16.0'; Category='user-approved-nvidia-app-ota-dlssg-310.9.16-performance-mode'; Experimental=$true }
+}
 if ([version]$Version -ge [version]'1.3.1') {
   if ([version]$Version -ge [version]'2.0.0') {
     # New candidates ship exactly two NR versions. Historical 1.x manifests

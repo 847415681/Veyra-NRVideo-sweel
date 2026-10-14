@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-14 DLSS 性能模式 / 双卡运算 / 全屏 Home 面板（Claude）**：用户“零缓冲先不做吧，现在做”：1）适配 NVIDIA App 新增的 DLSS 帧生成性能模式；2）设置“GPU 占用监控”下加“同时用这块显卡运算”；3）PC 游戏：极简全屏 Home 要能呼出专业模式调整菜单，节点模式呼出节点画布；鼠标透传“先出方案给我，先不动”。分支 `claude/fg-gpu-home-20261014`（基于 e550f96，latency-min 之上），产物 `{用途}/claude-fg-gpu-home-20261014`，记录 docs/FG_GPU_HOME_2026-10-14.md。性能模式 = NGX 创建参数 `DLSSG.LiteCandidateBlendingEnabled` + 只有它支持的 310.9.16 运行库；用户选择“打包进运行库”，授权把 NVIDIA App OTA 下发的 310.9.16 放入 `runtime/experimental/dlssg-lite`（具名例外，见 Release Runtime Pack 规则）；只用于 RTX 50（40/30 解锁补丁只认 310.9.1），默认关，导出用标准模式。双卡：`VEYRA_COMPUTE_ADAPTER_LUID` 软偏好（导出子进程继承），能力与默认补帧方式跟随运算卡，运行中切换按重启规则迁移。透传方案 docs/PC_GAME_PASSTHROUGH_PLAN_2026-10-14.md，未实施，等用户拍板。不改其它运行库/模型/驱动/用户配置；无 merge/push/Release/子 Agent；测试≤300秒、构建≤900秒。
+
 > **2026-10-13 2.0.7正式发布授权**：用户明确直接采用已验2.0.7-test-r2两个包发布GitHub、六群原图替换、README/Release加知识库、完整说明2.0.6以来变化。按docs/RELEASE_2.0.7_PLAN_2026-10-13.md，只改发布文档/图片和外部文件名，ZIP/EXE/运行组件逐字节保持。允许本地main合入、普通push nrvideo/main与两个标签、主v2.0.7两资产及独立非latest源码归档；保留原赞助/Discord/Ko-fi/width220。69旧树/509脏文件、旧包和旧Release保护，全产物E盘；无子Agent/代发/关机。不伪称包内test标识被去掉，不把混合模型取舍或合成误差包装成普遍画质/提速，也不宣称NV显存/BMD/HDR现场已根治。
 
 > **2026-10-12 用户确认 Claude 内容节奏修复实机通过并授权合并重打 2.0.7**：从 main05bc4b5 隔离合入 claude/cadence-exact-20261012（60a93f3、8d11cad），按 docs/TEST_2.0.7_REFRESH_2026-10-12.md 重新构建、定向回归、本地 main 合并与 NVIDIA/AMD 完整测试包；显示2.0.7-test-r2。保护68旧树/509脏文件及已交付原包，全部研发产物在E盘新任务目录。不改用户正在运行的播放器/配置、UI频率/默认GPU优先级/运行库/模型，无新push/Release/关机或子Agent授权。
@@ -319,6 +321,7 @@ renodx-dlss5-1.addon64
 - **运行时保护。** Veyra 启动时校验 manifest、SHA-256、签名和 GPU/驱动兼容性；校验或初始化失败时只禁用对应增强功能，基础播放器、采集和导出仍可启动。不得静默下载未知二进制，也不得把失败伪装为增强已生效。
 - **发布说明。** Release Notes、README、软件内组件页必须写明“实验运行时 / community experimental”，不得宣称 NVIDIA 官方合作、认证、支持或完整官方 DLSS 5 集成；同时保留 Veyra 自身版本、runtime 版本、哈希和卸载说明。
 - **范围最小化。** 用户包只包含运行所需 DLL/模型与适用许可证、notice、manifest；绝不包含 SDK 开发文件、样例、私有测试媒体、日志、PDB、LIB 或游戏文件。官方 SDK 中明确可集成分发的组件仍须逐项保留其许可证与来源记录。
+- **DLSS-G 310.9.16 性能模式运行库（2026-10-14 用户授权，具名例外）。** 用户在对话中选择“打包进运行库”，允许把 NVIDIA App 11.0.9 OTA 下发、存于 `%ProgramData%\NVIDIA\NGX\models\dlssg\versions\20318480\files\160_E658700.bin` 的 `nvngx_dlssg.dll` 原样放入 `runtime/experimental/dlssg-lite/`：310.9.16.0，7,506,544 bytes，SHA-256 `CADEE1AA6DB3907BABDC3285DA2AEBC4553D92B89C38BA3EAE8ABD8BBA1BEA72`，Authenticode Valid（NVIDIA Corporation）。Release 前先复制到 gitignore 的 `runtime_local/nvidia/dlssg-lite/`，由 `package-portable.ps1`（2.0.8 起）校验身份后打包。例外只覆盖这一个身份：版本、哈希、签名不同的文件，其它 OTA 模型或驱动缓存文件都不适用，需要重新询问；push/Release 仍需另行授权。
 - **人工发布。** 任何 push、GitHub Release、Runtime Pack 上传、替换或删除都必须由用户在当前对话明确授权；无人值守 Goal 仍禁止发布。若平台或权利方要求移除，先移除/下架 Runtime Pack，再保留不含该 Pack 的 Veyra 基础包。
 
 ## 当前修复验收

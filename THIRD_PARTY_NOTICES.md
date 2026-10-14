@@ -360,6 +360,28 @@ before its dispatch), so that validation mode is skipped for the FSR SR
 configuration with an explicit log line. See
 [AMD FSR frame generation integration record](docs/FSR_FRAMEGEN_INTEGRATION_2026-09-16.md).
 
+## DLSS-G 310.9.16 performance-mode runtime (2026-10-14)
+
+`runtime/experimental/dlssg-lite/nvngx_dlssg.dll` is NVIDIA's DLSS Frame
+Generation 310.9.16.0 (7,506,544 bytes, SHA-256
+`CADEE1AA6DB3907BABDC3285DA2AEBC4553D92B89C38BA3EAE8ABD8BBA1BEA72`, Authenticode
+valid, signer NVIDIA Corporation), unmodified. NVIDIA App 11.0.9 delivers it over
+the air as an `nvapp_override` model for the "DLSS Frame Generation performance
+mode (beta)" setting; it was taken from that model store
+(`%ProgramData%\NVIDIA\NGX\models\dlssg\versions\20318480\files\160_E658700.bin`)
+with the user's explicit approval on 2026-10-14, as a named exception to the
+project's rule against driver-cache binaries. It ships only as a Release runtime
+asset (never in Git), listed in `release-runtime-manifest.json` by
+`scripts/package-portable.ps1` from 2.0.8.
+
+Veyra's "DLSS 性能模式" switch adds this directory ahead of
+`runtime/experimental` in the NGX feature path and creates DLSS-G with NVIDIA's
+create-time parameter `DLSSG.LiteCandidateBlendingEnabled = 1`. The switch is
+off by default, export keeps the standard model, and RTX 40/30 (whose
+multi-frame unlock patches are keyed to 310.9.1) are refused. This is not an
+NVIDIA partnership, certification or support; the runtime remains NVIDIA
+proprietary software under NVIDIA's terms.
+
 ## DLSS-G 310.9.1 provider patches: DLSSG-Transfusion (2026-09-30)
 
 SilyNoMeta/DLSSG-Transfusion, tag `v1.4.5.3-rtx20-30-40`, commit
