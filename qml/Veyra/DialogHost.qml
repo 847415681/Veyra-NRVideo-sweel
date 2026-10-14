@@ -292,7 +292,7 @@ Item {
                     text: captureDialog.live
                           ? veyra.sourceSummary.replace("x", "×") + " · " + veyra.captureFps.toFixed(2) + " fps"
                             + (veyra.sourceFormatText.split(" · ").length > 2 ? " · " + veyra.sourceFormatText.split(" · ")[1] : "")
-                          : captureDialog.labelOf(veyra.captureFormats, veyra.captureFormatKey, qsTr("选择设备和格式后连接"))
+                          : (veyra.captureFormatLabel.length ? veyra.captureFormatLabel : qsTr("选择设备和格式后连接"))
                     color: Theme.t2
                     font.family: Theme.fontMono
                     font.pixelSize: 11
@@ -357,7 +357,8 @@ Item {
             }
             VRow {
                 label: qsTr("像素格式")
-                hint: { const f = veyra.captureFormats.find(x => x.id === veyra.captureFormatKey); return f && f.costHint ? qsTr("该格式比低延迟格式多一道处理环节，高分辨率/高帧率下建议优先低延迟格式") : qsTr("只列出当前分辨率和帧率下的像素格式") }
+                // Never search veyra.captureFormats here: a card can list 15000+ (logs(18)).
+                hint: veyra.captureFormatCostHint ? qsTr("该格式比低延迟格式多一道处理环节，高分辨率/高帧率下建议优先低延迟格式") : qsTr("只列出当前分辨率和帧率下的像素格式")
                 VSelect {
                     objectName: "capture-format"
                     enabled: !veyra.captureQueryBusy && veyra.captureResolutionId.length > 0 && veyra.captureFrameRateId.length > 0

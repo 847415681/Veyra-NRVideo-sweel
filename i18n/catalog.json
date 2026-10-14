@@ -15716,6 +15716,20 @@
    "zh-TW": "{} {}X 補幀初始化失敗，未替換後端或降低倍率；請查看工作診斷日誌",
    "en": "{} {}X frame generation could not initialize. The backend and multiplier were retained; see the task diagnostic log.",
    "ja": "{} {}X フレーム生成を初期化できませんでした。バックエンドと倍率は維持されています。タスク診断ログを確認してください。"
+  },
+  {
+   "zh": "将自动重新连接采集卡一次",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "將自動重新連接擷取卡一次",
+   "en": "the capture card will be reconnected once automatically",
+   "ja": "キャプチャーカードを一度だけ自動で再接続します"
+  },
+  {
+   "zh": "GPU 已重置，正在自动重新连接采集卡",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "GPU 已重置，正在自動重新連接擷取卡",
+   "en": "The GPU was reset; reconnecting the capture card automatically",
+   "ja": "GPU がリセットされました。キャプチャーカードを自動で再接続しています"
   }
  ]
 }

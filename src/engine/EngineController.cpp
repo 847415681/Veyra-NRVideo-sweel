@@ -365,6 +365,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     if(!prewarmEnabled_||!ordinaryFile)prewarmed_.reset();
     auto gpu=prewarmed_?std::move(prewarmed_):std::make_unique<PreviewGpuSession>();
     auto& ctx=gpu->context;auto& ring=gpu->ring;source::MediaFileSource source;
+    // A GPU hang is reported before Windows resets the GPU (field logs: 13 s later). DRED can
+    // only name the stopped command list after the removal, so teardown checks once more.
+    bool gpuFailureAwaitingRemoval=false;
     sink::AudioPipeline audioPipe;sink::AudioRenderer audio;VideoPresenter presenter;
     auto& coreCache=gpu->core;auto& recentGraphCache=gpu->recent;auto& graph=gpu->graph;
     auto& graphBytes=gpu->graphBytes;auto cacheBudgetPolledAt=Clock::now();
@@ -1208,6 +1211,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // (-1 = forever), to exercise the hang watchdog and bounded shutdown.
             wchar_t testHangText[16]{};
             int testHangMs=GetEnvironmentVariableW(L"VEYRA_TEST_ENGINE_HANG_MS",testHangText,16)?_wtoi(testHangText):0;
+            // Test hook: VEYRA_TEST_GPU_FAILURE=<frames>:<removeAfterMs> fails live presentation
+            // once, as a GPU frame-ready timeout does, and removes this device that many ms
+            // later as the driver reset does (-1 = never), for the recovery paths.
+            wchar_t testGpuFailureText[32]{};int testGpuFailureFrames=0,testGpuRemoveMs=-1;bool testGpuFailure=false;
+            if(GetEnvironmentVariableW(L"VEYRA_TEST_GPU_FAILURE",testGpuFailureText,32)){
+                testGpuFailureFrames=_wtoi(testGpuFailureText);
+                if(const wchar_t* colon=wcschr(testGpuFailureText,L':'))testGpuRemoveMs=_wtoi(colon+1);
+            }
             // Declared LAST before the loop on purpose: it is destroyed first at
             // scope exit, so the scheduler (whose queued step/finish lambdas
             // capture the locals above by reference) is torn down before any of
@@ -1256,8 +1267,18 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(audioStarted)publishAudioStatus();
                 if(audioStarted&&injectFileEndpointLoss&&!fileEndpointLossInjected&&frames>=20){audioPipe.requestEndpointLossForTest();fileEndpointLossInjected=true;}
                 advanceLive();
-                if(liveScheduler&&liveScheduler->failed()){
-                    if(recoverXessPresentation())continue;
+                if(testGpuFailureFrames>0&&frames>=uint64_t(testGpuFailureFrames)&&liveScheduler){
+                    testGpuFailureFrames=0;testGpuFailure=true;
+                    veyra::log::warn("engine-test",std::format("simulating a GPU frame-ready timeout; device removal after {} ms",testGpuRemoveMs));
+                    if(testGpuRemoveMs>=0){
+                        Microsoft::WRL::ComPtr<ID3D12Device5> device;
+                        if(SUCCEEDED(ctx.device()->QueryInterface(IID_PPV_ARGS(&device))))
+                            std::thread([device,delay=testGpuRemoveMs]{Sleep(DWORD(delay));device->RemoveDevice();veyra::log::warn("engine-test","device removed");}).detach();
+                    }
+                }
+                if((liveScheduler&&liveScheduler->failed())||testGpuFailure){
+                    if(!testGpuFailure&&recoverXessPresentation())continue;
+                    testGpuFailure=false;
                     bool alive=ctx.reportDeviceFailure("live-presentation-failed");
                     // A GPU hang is noticed here about two seconds before Windows resets the
                     // GPU, and DRED only says which command list stopped once the device is
@@ -1265,6 +1286,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     // Wait for that, bounded, and report again.
                     for(int i=0;alive&&i<50;++i){Sleep(100);uint32_t removed=0;alive=ctx.checkDeviceAlive(removed);}
                     if(!alive)ctx.reportDeviceFailure("live-presentation-failed-after-reset");
+                    gpuFailureAwaitingRemoval=alive;
+                    {std::lock_guard lock(mutex_);snapshot_.gpuFailed=true;}
                     status(alive?L"视频队列或呈现失败；GPU 未报告设备移除，请查看诊断":L"GPU 设备已移除或驱动已重置；请稍后重新连接，可切换 NR 运行库后重试",true);break;
                 }
                 const float gain=muted_?0.0f:volume_.load();audio.setGain(gain);
@@ -2531,6 +2554,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     veyra::log::info("engine","teardown: closing sources");
     captureSource.close();screenSource.close();source.close();av_frame_free(&cachedFrame);av_frame_free(&imageFrame);
     veyra::log::info("engine","teardown: sources closed");
+    if(gpuFailureAwaitingRemoval){
+        // Usually the drain above already waited for the reset; allow it a little longer.
+        uint32_t removed=0;bool alive=ctx.checkDeviceAlive(removed);
+        for(int i=0;alive&&i<20;++i){Sleep(100);alive=ctx.checkDeviceAlive(removed);}
+        if(!alive)ctx.reportDeviceFailure("live-presentation-failed-at-teardown");
+        else veyra::log::warn("gpu-failure","device still not removed at teardown; no DRED report available");
+    }
     gpu->shutdown();
     {std::lock_guard lock(mutex_);snapshot_.running=false;snapshot_.audioEndpointRecovering=false;snapshot_.audioRebuffering=false;}
     CoUninitialize();

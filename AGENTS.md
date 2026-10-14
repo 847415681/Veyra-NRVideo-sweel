@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-15 现场修复（Claude）**：用户提交 veyra-qml(56).log（卡顿、未响应后条栏图标消失，重连采集后恢复）与 logs(18).zip（2.0.7 打开采集卡闪退），要求排查修复、汇报后关机。存档 `checkpoint/pre-claude-field-20261015`（main 7571919）与 E 盘 `archives/claude-field-20261015`，分支 `claude/field-20261015`。只改采集格式列表缓存/桥接属性/枚举去重、界面设备重建后图标重绘、采集卡 GPU 失败后自动重连一次、收尾补写 DRED 及三个默认不生效的测试开关（`VEYRA_TEST_CAPTURE_EXTRA_RATES`、`VEYRA_TEST_UI_DEVICE_REMOVE`、`VEYRA_TEST_GPU_FAILURE`）。不改默认 GPU 优先级/NR 版本、运行库、模型、驱动、用户配置；无 merge/push/Release、无子 Agent。长时间变卡与 GPU 卡死根因未定，不宣称已修复。详见 docs/FIELD_FIXES_2026-10-15.md。
+
 > **2026-10-13 2.0.7正式发布授权**：用户明确直接采用已验2.0.7-test-r2两个包发布GitHub、六群原图替换、README/Release加知识库、完整说明2.0.6以来变化。按docs/RELEASE_2.0.7_PLAN_2026-10-13.md，只改发布文档/图片和外部文件名，ZIP/EXE/运行组件逐字节保持。允许本地main合入、普通push nrvideo/main与两个标签、主v2.0.7两资产及独立非latest源码归档；保留原赞助/Discord/Ko-fi/width220。69旧树/509脏文件、旧包和旧Release保护，全产物E盘；无子Agent/代发/关机。不伪称包内test标识被去掉，不把混合模型取舍或合成误差包装成普遍画质/提速，也不宣称NV显存/BMD/HDR现场已根治。
 
 > **2026-10-12 用户确认 Claude 内容节奏修复实机通过并授权合并重打 2.0.7**：从 main05bc4b5 隔离合入 claude/cadence-exact-20261012（60a93f3、8d11cad），按 docs/TEST_2.0.7_REFRESH_2026-10-12.md 重新构建、定向回归、本地 main 合并与 NVIDIA/AMD 完整测试包；显示2.0.7-test-r2。保护68旧树/509脏文件及已交付原包，全部研发产物在E盘新任务目录。不改用户正在运行的播放器/配置、UI频率/默认GPU优先级/运行库/模型，无新push/Release/关机或子Agent授权。

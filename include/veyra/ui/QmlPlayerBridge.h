@@ -87,6 +87,9 @@ class QmlPlayerBridge : public QObject {
     // --- shell preferences -------------------------------------------------
     // Kept by the facade so they survive a restart, and read by the shell.
     Q_PROPERTY(bool reducedMotion READ reducedMotion WRITE setReducedMotion NOTIFY settingsChanged)
+    // Counts interface graphics devices recreated after a loss (a GPU reset, logs 56). VIcon
+    // re-feeds its path when it changes: Qt 6.8.3's curve renderer leaves recreated nodes empty.
+    Q_PROPERTY(int uiDeviceGeneration READ uiDeviceGeneration NOTIFY uiDeviceGenerationChanged)
     Q_PROPERTY(QString defaultPage READ defaultPage WRITE setDefaultPage NOTIFY settingsChanged)
     Q_PROPERTY(QString defaultPageLabel READ defaultPageLabel NOTIFY settingsChanged)
     // Used by the shell to open on the saved page. Set from the command line in
@@ -121,6 +124,10 @@ class QmlPlayerBridge : public QObject {
     // the choice is remembered in capture-preferences.v1 for "continue".
     Q_PROPERTY(QVariantList captureFormats READ captureFormats NOTIFY captureChanged)
     Q_PROPERTY(QString captureFormatKey READ captureFormatKey WRITE setCaptureFormatKey NOTIFY captureChanged)
+    // The selected format's label ("" when none) and whether it gets the cost hint, so the
+    // dialog never searches captureFormats itself (logs(18): 15474 formats hung it).
+    Q_PROPERTY(QString captureFormatLabel READ captureFormatLabel NOTIFY captureChanged)
+    Q_PROPERTY(bool captureFormatCostHint READ captureFormatCostHint NOTIFY captureChanged)
     // Resolution, frame rate and pixel format are three views of captureFormatKey.
     // Changing one retargets that key to a media type the device actually enumerated.
     Q_PROPERTY(QVariantList captureResolutionOptions READ captureResolutionOptions NOTIFY captureChanged)
@@ -551,6 +558,9 @@ public:
     void setColorTemperature(double v);
 
     bool reducedMotion() const;
+    int uiDeviceGeneration() const;
+    // main.cpp: a window's scene graph came back after its graphics device was lost.
+    void noteUiDeviceRecreated(const QString& window);
     void setReducedMotion(bool value);
     QString defaultPage() const;
     void setDefaultPage(const QString& value);
@@ -574,6 +584,8 @@ public:
     void setCaptureFlipVertical(bool value);
     QVariantList captureFormats() const;
     QString captureFormatKey() const;
+    QString captureFormatLabel() const;
+    bool captureFormatCostHint() const;
     void setCaptureFormatKey(const QString& key);
     QVariantList captureResolutionOptions() const;
     QString captureResolutionId() const;
@@ -1145,6 +1157,7 @@ signals:
     void exportChanged();
     // Emitted when the capture device or screen-target lists are re-enumerated.
     void captureChanged();
+    void uiDeviceGenerationChanged();
     // User-facing notices the UI shows as a transient message: a rejected
     // chain edit, an export that finished, a failed open.
     void notice(const QString& text, bool isError);

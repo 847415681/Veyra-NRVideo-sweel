@@ -913,6 +913,20 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         });
         frameLog->start(10000);
     }
+    // A GPU reset takes the interface's own device too (logs 56): Qt cleans up the scene
+    // graph and builds it again on a new device, but Qt 6.8.3's curve-rendered Shapes come
+    // back empty, so every icon was missing. Tell the icons to rebuild their paths.
+    {
+        const auto watch = [&app, &bridge](QQuickWindow* w, const QString& name) {
+            auto lost = std::make_shared<std::atomic<bool>>(false);
+            QObject::connect(w, &QQuickWindow::sceneGraphInvalidated, &app, [lost] { lost->store(true); }, Qt::DirectConnection);
+            QObject::connect(w, &QQuickWindow::sceneGraphInitialized, &bridge, [lost, &bridge, name] {
+                if (lost->exchange(false)) bridge.noteUiDeviceRecreated(name);
+            }, Qt::QueuedConnection);
+        };
+        watch(window, QStringLiteral("main"));
+        if (auto* bar = window->findChild<QQuickWindow*>(QStringLiteral("fullscreenBar"))) watch(bar, QStringLiteral("controlBar"));
+    }
     // Test only: VEYRA_TEST_DPI_FLIP=<ms> sends the window the WM_DPICHANGED a move to a
     // 150 % screen would, then back to 100 % three seconds later, so the screen-change
     // crash (field report 2026-10-01, two monitors) can be reproduced on one monitor.
@@ -926,6 +940,24 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         };
         QTimer::singleShot(flip, &app, [send] { send(144); });
         QTimer::singleShot(flip + 3000, &app, [send] { send(96); });
+    }
+    // Test only: VEYRA_TEST_UI_DEVICE_REMOVE=<ms> removes the interface's own D3D12 device
+    // on its render thread, as a GPU reset does (logs 56: "Graphics device lost, cleaning up
+    // scenegraph and releasing RHI"), so the interface's recovery can be checked without one.
+    if (const auto remove = qEnvironmentVariableIntValue("VEYRA_TEST_UI_DEVICE_REMOVE"); remove > 0) {
+        QTimer::singleShot(remove, &app, [window] {
+            auto pending = std::make_shared<QMetaObject::Connection>();
+            *pending = QObject::connect(window, &QQuickWindow::beforeRendering, window, [window, pending] {
+                QObject::disconnect(*pending);
+                auto* device = window->rendererInterface()
+                    ? static_cast<ID3D12Device*>(window->rendererInterface()->getResource(window, QSGRendererInterface::DeviceResource)) : nullptr;
+                ID3D12Device5* device5 = nullptr;
+                const bool ok = device && SUCCEEDED(device->QueryInterface(IID_PPV_ARGS(&device5)));
+                veyra::log::warn("ui-device-test", std::format("removing the interface D3D12 device ok={}", ok));
+                if (ok) { device5->RemoveDevice(); device5->Release(); }
+            }, Qt::DirectConnection);
+            window->update();
+        });
     }
 
     // Before every open, place the native window and force the pending layout to

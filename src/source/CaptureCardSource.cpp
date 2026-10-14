@@ -8,6 +8,7 @@
 #include "veyra/source/CaptureSignalProbe.h"
 #include "veyra/pipeline/CaptureUploadFrame.h"
 #include "veyra/source/NativeCaptureSink.h"
+#include <unordered_set>
 #include <avrt.h>
 #include "veyra/source/CaptureBuffer.h"
 #include "veyra/source/CaptureFormatRank.h"
@@ -765,6 +766,7 @@ std::wstring CaptureCardSource::makeCapturePath(unsigned videoIndex,const Captur
 }
 std::vector<CaptureFormat> enumerateFormats(IAMStreamConfig* config,bool preferDriverCurrent=false,IBaseFilter* device=nullptr,IPin* capturePin=nullptr){
     std::vector<CaptureFormat> out;if(!config)return out;int count=0,size=0;
+    std::unordered_set<std::wstring> keys;   // a driver may list 100+ rates per capability (logs(18): 32759 types)
     ComPtr<IPin> pin=capturePin;if(!pin)config->QueryInterface(IID_PPV_ARGS(&pin));
     ComPtr<IAMVideoControl> control;if(device)device->QueryInterface(IID_PPV_ARGS(&control));
     if(!control&&pin)pin->QueryInterface(IID_PPV_ARGS(&control));
@@ -802,7 +804,7 @@ std::vector<CaptureFormat> enumerateFormats(IAMStreamConfig* config,bool preferD
                 scan=interlaced?std::format(L"隔行（{:.2f} 场/秒）",fps*((flags&AMINTERLACE_1FieldPerSample)?1:2)):L"逐行";}
             const std::wstring scanMark=scan.empty()?std::wstring{}:L" · "+scan;
             const bool supported=width<=3840&&height<=2160&&(!knownRaw||valid);
-            if(std::none_of(out.begin(),out.end(),[&](const CaptureFormat& f){return f.key==key;}))
+            if(keys.insert(key).second)
                 out.push_back({i,width,height,fps,std::format(L"{} x {} @ {:.3f} fps{} · {} · {} · {}{}{} [format {}]",width,height,fps,scanMark,pixel,support,captureFormatTierLabel(tier),current?L" · 驱动默认":L"",supported?L"":L" · 当前播放器不支持",i),key,rank,int(tier),current,pixel,scan,interlaced,interval,supported});
             }
         }
