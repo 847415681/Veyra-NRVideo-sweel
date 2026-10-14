@@ -9423,3 +9423,17 @@ C3：采集回调的拷贝已经是唯一一次 CPU 拷贝（邮箱帧就是 D3D
 透传调研：粉丝 VeyraOverlay 只解出文本与源码到 `downloads/fan-overlay-mod-20261014`（未运行）。显示器捕获实测：控制条窗口在捕获打开后约 0.1 秒才显示，affinity 0x0（主窗口 0x11），会被捕获进画面；PrintWindow 截 Veyra 全黑（`mon-aff-135651`）。
 
 测试：build.py 全目标；repair 259/0，ui contract 通过，realtime preview 0 失败；节奏 r4-replay-6x-vsync、r4-lifecycle、r4-screen-xess、r4-screen-dlss（4X）全部通过（`logs/claude-fg-gpu-home-20261014/r4-*`、`tests-135843`；日志修正后重建再跑 `tests-141200` 通过）。性能模式目录日志改用 UTF-8（`path::string()` 在系统代码页表示不了的路径上会抛异常），核心初始化只记目录长度；复测 `lite-recheck-141131`：state=1、参数=1、Create 成功。打包：`package-portable.ps1` 2.0.8 起加入 dlssg-lite 条目（身份不符即拒绝）；THIRD_PARTY_NOTICES 增加 310.9.16 一节。
+
+## 2026-10-14 游戏模式（穿透）实施、显示器捕获修正、双卡切回、VFG 调研（Claude）
+
+用户：“在捕获内加一个开关，热键就用你这个吧，不要倒计时，并且如果是捕获显示器，直接去掉黄色的指示框，全屏Veyra后相当于也能直接操作整个电脑一样，然后把你没注意到的内容处理好，顺便看看VFG有没有更新性能优化，现在VFG高档位还是太吃性能了，耗时太长了”。
+
+游戏模式：屏幕捕获对话框“游戏”分区开关（`passthrough`），开始后不倒计时，移到目标显示器全屏，出画即穿透；Home 面板收回操作，再按 Home / Esc / 点画面还给程序；Ctrl+Alt+Home 退出；捕获结束自动退出全屏。`include/veyra/ui/GamePassthrough.h`：RegisterHotKey（Ctrl+Alt+Home 注册失败拒绝进入）、置顶、前台移交（AttachThreadInput 兜底）、窗口捕获时同屏他程序到前台画面退后、GUI 3 秒无心跳由看门狗线程 DWM cloak。主窗口穿透改用 Qt 标志（Main.qml 绑定 `passthroughActive`）+ 补 WS_EX_NOACTIVATE：软件界面主窗口不是分层窗口，外加的 WS_EX_LAYERED 被 Qt 去掉（`game-softui2`），交给 Qt 后两种渲染器都稳定（`game-softui4`、`game-gpuui4`）。游戏模式捕获不带指针、裁剪归零、窗口捕获也去黄框；独占全屏与窗口未铺满给提示；穿透期间隐藏控制条/播放列表。
+
+显示器捕获修正（全部显示器捕获）：IsBorderRequired(false)（access=4 Allowed）；控制条窗口晚于捕获打开约 0.1 秒显示、未被排除（affinity 0x0）→ 打开时连隐藏 Qt 窗口一起排除，之后显示的窗口在 GUI 线程显示前排除；引擎线程不持锁调用窗口函数（`mon-aff2` 控制条 0x11）。borderless 放 URI cursor 字段 bit1，旧 URI 兼容并有测试。
+
+双卡：切回运算卡时恢复上次被迁移的列表补帧设置（`computeFgMemory`，DLSS 4X→FSR 2X→DLSS 4X，`switch-back-151042`）。审查：VFG 按 LUID 选 CUDA 设备，其余都在同一 D3D12 设备。310.9.16 核对后放 `releases/runtime-staging/dlssg-lite-310.9.16`（附锁行）。
+
+VFG：nvidia-vfx 仍 0.2.0.0、Samples v1.3.0.1、无 OTA；官方只支持 batch 1、三档模型。实测每张：4K Low 1.10 / Medium 3.2 / High 17.3–17.5 ms，1080p Medium 2.9 / High 15.1–15.4 ms（`vfg-4k-*`、`vfg-1080-*`），High 开销与分辨率基本无关，无法在 Veyra 侧加速。
+
+测试：build.py 全目标（新增 `only <target>` 用于原版对照）；repair 259/0、UI 合同、realtime preview 0 失败；r6 节奏 4 项通过；`veyra_screen_capture_tests` borderless 两项通过，5 项 RGB 颜色检查在原版代码同样失败（HDR 桌面，`tests-183824/veyra_screen_capture_tests_baseline.txt`）。GUI：`game-monitor`、`game-window2/3`、`game-escclick`、`game-hang2`、`game-softui4`、`game-gpuui4`、`dialog-game`。

@@ -70,3 +70,37 @@
 - RTX 40/30 实卡未测（这两代不启用性能模式）。
 - 真实双独显未测（本机只有 RTX 5070 + AMD 核显）。
 - 透传按方案等待拍板。
+
+
+## 6. 第二轮（用户：“在捕获内加一个开关…把你没注意到的内容处理好，顺便看看 VFG”）
+
+- **游戏模式（穿透）**：已实施，见 [PC_GAME_MODE_2026-10-14.md](PC_GAME_MODE_2026-10-14.md)。
+  显示器捕获同时修正两处：去掉黄色边框；控制条不再被捕获进画面。
+- **双卡切回恢复补帧设置**：在 AMD 上被换成 FSR 2X 的 DLSS 4X，切回后恢复为 DLSS 4X。
+  - 只在列表模式记住，偏好键 `computeFgMemory`，用一次即清除。
+  - 实测 `switch-back-151042`。
+- **双卡代码审查**：
+  - VFG 按 D3D12 适配器 LUID 选择 CUDA 设备；NVOF、NGX、NVENC 都用同一个 D3D12 设备。
+  - 只有全新配置的默认值（NR 运行库、FSR 超分默认值）仍按性能最强的卡选择，其余都跟随运算卡。
+- **310.9.16 发布准备**：核对身份后复制到 `E:/项目/Veyra/releases/runtime-staging/dlssg-lite-310.9.16/`，
+  附 `runtime-lock-row.json`。
+  - 2.0.x 的打包方式是“版本运行库锁 + 上一版包作运行库来源”，下次打 NVIDIA 包时把这一行加进去即可。
+  - 主仓库的 `runtime_local` 没动：其中 `nvidia/nvngx_dlssg.dll` 是 310.7，`package-portable.ps1`
+    并不是 2.0.x 的打包路径。
+- **VFG**：NVIDIA 没有新版本。
+  - PyPI 与 pypi.nvidia.com 上 `nvidia-vfx` 最新为 0.2.0.0（2026-09-30）；VFX SDK Samples 最新 v1.3.0.1，
+    与当前集成版本相同。
+  - NGX 模型目录里没有 VFG 的 OTA。
+  - 官方文档：每次 `NvVFX_Run` 生成一帧，只支持 batch 1；只有 Low / Medium / High 三档，没有性能参数。
+  - 实测每张 GPU 耗时（RTX 5070，CUDA 事件）：
+    - 4K：Low 1.10 ms、Medium 3.2 ms、High 17.3–17.5 ms；
+    - 1080p：Medium 2.9 ms、High 15.1–15.4 ms。
+  - High 约为 Medium 的 5 倍，而且几乎不随分辨率变化，开销在模型本身。10-11 的深挖已确认子帧不复用、
+    调用方式不浪费、多实例收益很小。
+  - 结论：没有可以在 Veyra 侧把 High 本身做快的办法。可选做法：
+    - 用已有的“高+中 / 高+低”混合档；
+    - 60fps 源用 High 2X 已占满显卡，30fps 源才适合；
+    - 等 NVIDIA 新 SDK（近一年约每 2–6 个月一版）。
+
+回归：repair 259/0、UI 合同、realtime preview 0 失败；节奏 4 项通过；`veyra_screen_capture_tests`
+5 项 RGB 颜色检查失败，原版代码同样失败（本机 HDR 桌面），见游戏模式记录。
