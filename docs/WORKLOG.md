@@ -9351,6 +9351,6 @@ v2.0.7 ID 410800361，published_at 2026-10-12T16:24:59Z，latest/非草稿/非�
 - 授权：用户提交 veyra-qml(56).log、logs(18).zip 和条栏截图，要求排查修复两个问题、汇报后关机。存档 checkpoint/pre-claude-field-20261015（main 7571919）与 E:/项目/Veyra/archives/claude-field-20261015；分支 claude/field-20261015。
 - logs(18)：272 个能力项 × 120 帧率 = 15474 个格式（PR34 起列出全部帧率）。本机用 VEYRA_TEST_CAPTURE_EXTRA_RATES=160 在 T911 造出 15558 个格式复现卡死；主线程栈证明 QML 的 captureFormats.find 每个元素都重读整个列表（O(n²)）。桥接按输入缓存四个列表、新增 captureFormatLabel/captureFormatCostHint、枚举去重改哈希；15558 个格式时界面心跳最大 0.30 秒，选择 73/46/14 ms。
 - 日志 56：9 次 GPU 卡死（nvlddmkm 153），界面与视频共用 D3D12 设备一起停；Qt 重建界面后曲线渲染的 Shape 图标全空（本机移除界面设备复现）。修复：场景图重建后 VIcon 重设路径；采集卡会话因 GPU 失败结束后自动重连一次（十分钟内再失败交给用户）；收尾时设备已移除则补写 DRED。长时间变卡与卡死根因未定，默认值不改。
-- 构建/回归：tmp/claude-field-20261015/build.py，最终 build-20261015-013917，exe a79714fb…；7 组单元/集成测试与 qml_quick 68/0 通过（logs/claude-field-20261015/unit-final-013928）；界面脚本证据见 docs/FIELD_FIXES_2026-10-15.md。
+- 构建/回归：tmp/claude-field-20261015/build.py，最终 build-20261015-013917，exe a79714fb…；6 组单元/集成测试与 qml_quick 68/0 通过（logs/claude-field-20261015/unit-final-013928）；界面脚本证据见 docs/FIELD_FIXES_2026-10-15.md。
 - 测试包：E:/项目/Veyra/test-packages/claude-field-20261015（覆盖补丁 fa715aad4a4da092…，NVIDIA 8762448fd9ba43cc…，AMD 5573da62692e6a4f…），冷启动通过；SHA256 全文见 docs/FIELD_FIXES_2026-10-15.md。
 - 不 merge/push/Release，不改默认 GPU 优先级/NR 版本、运行库、模型、驱动、用户配置；无子 Agent。
