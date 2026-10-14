@@ -9437,3 +9437,11 @@ C3：采集回调的拷贝已经是唯一一次 CPU 拷贝（邮箱帧就是 D3D
 VFG：nvidia-vfx 仍 0.2.0.0、Samples v1.3.0.1、无 OTA；官方只支持 batch 1、三档模型。实测每张：4K Low 1.10 / Medium 3.2 / High 17.3–17.5 ms，1080p Medium 2.9 / High 15.1–15.4 ms（`vfg-4k-*`、`vfg-1080-*`），High 开销与分辨率基本无关，无法在 Veyra 侧加速。
 
 测试：build.py 全目标（新增 `only <target>` 用于原版对照）；repair 259/0、UI 合同、realtime preview 0 失败；r6 节奏 4 项通过；`veyra_screen_capture_tests` borderless 两项通过，5 项 RGB 颜色检查在原版代码同样失败（HDR 桌面，`tests-183824/veyra_screen_capture_tests_baseline.txt`）。GUI：`game-monitor`、`game-window2/3`、`game-escclick`、`game-hang2`、`game-softui4`、`game-gpuui4`、`dialog-game`。
+
+## 2026-10-14 屏幕捕获 DLSS5 帧率提示；PR #7 适配方案（Claude）
+
+用户：“你要在屏幕捕获的地方加一行红字，如果要开启DLSS5，建议帧率设置60，减少dlss5需要处理的画面量，减轻负担，然后你看一下…pr7…但是这个设置ui不知道怎么设计比较好，你给想想然后看看怎么适配”。
+
+红字：屏幕捕获对话框“帧率上限”行下方（`Theme.err`，提示放在控件下面），文案写成“DLSS5（NR）”以对应软件里的 NR 名称，带繁中/英/日。截图 `dialog-dlss5-214718`（中文）、`dialog-dlss5-en-215209`（英文）；UI 合同（384 个布局用例）与 repair 259/0 通过（`tests-dlss5`）。
+
+PR #7：OPEN、CONFLICTING，基线 05998da 落后 525 个提交；界面部分改的是旧 Win32 界面，2.0.x 用不上；后端文件除 EngineController 外基本未变。读 Chiaki 源码发现 PR 用“视频回调返回 false”丢弃保活画面，会让 `frame_index_prev_complete` 停住，Chiaki 每帧调用 `stream_connection_send_corrupt_frame` 向 PS5 报坏帧并写两条警告；移植应改为收下即丢、不挂音频接收。另有界面线程同步 close、采集等 PS5、按路径字符串保留会话三处要改；再串流用途还需要“后台也转发”和“谁按键就用谁”。方案见 docs/PS5_CAPTURE_CONTROL_QML_PLAN_2026-10-14.md（推荐 A：采集卡对话框加“PS5 手柄控制”分区），等用户拍板。
