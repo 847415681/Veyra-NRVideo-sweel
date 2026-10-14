@@ -3387,6 +3387,8 @@ QVariantMap QmlPlayerBridge::ps5Control() const {
 // leaves it alone but does not set snapshot.capture.
 bool QmlPlayerBridge::captureCardLive() const {
     const auto& s = impl_->snapshot;
+    // Tests only: any playing source stands in for the capture card (no card needed).
+    if (s.running && !s.image && !s.remotePlay && qEnvironmentVariableIsSet("VEYRA_TEST_PS5_CONTROL_ANY_SOURCE")) return true;
     return impl_->liveKind == QLatin1String("capture") && s.running && s.capture && !s.image && !s.remotePlay;
 }
 void QmlPlayerBridge::ps5ControlSet(const QString& key, const QVariant& value) {
