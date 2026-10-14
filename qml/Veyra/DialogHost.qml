@@ -1214,6 +1214,9 @@ Item {
             }
             VRow {
                 label: qsTr("帧率上限")
+                hint: qsTr("如果要开启 DLSS5（NR），建议帧率设置 60，减少 DLSS5 需要处理的画面量，减轻负担")
+                hintColor: Theme.err
+                hintBelow: true
                 VSeg {
                     options: [{ id: "0", label: qsTr("跟随") }, { id: "1", label: "30" }, { id: "2", label: "60" }, { id: "3", label: "120" }, { id: "4", label: "144" }, { id: "5", label: "240" }]
                     current: String(screenDialog.o.fps)

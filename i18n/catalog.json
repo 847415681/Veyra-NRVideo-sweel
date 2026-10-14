@@ -16115,6 +16115,13 @@
    "zh-TW": "遊戲視窗沒有鋪滿螢幕：畫面會放大顯示，滑鼠點到的位置可能和看到的不一致；建議把遊戲設為無邊框全螢幕",
    "en": "The game window does not fill the screen: the picture is enlarged, so clicks may not land where you see them. Set the game to borderless fullscreen",
    "ja": "ゲームのウィンドウが画面全体を覆っていません。映像が拡大されるため、クリック位置が見た位置とずれることがあります。ゲームをボーダーレス全画面にしてください"
+  },
+  {
+   "zh": "如果要开启 DLSS5（NR），建议帧率设置 60，减少 DLSS5 需要处理的画面量，减轻负担",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "如果要開啟 DLSS5（NR），建議幀率設定 60，減少 DLSS5 需要處理的畫面量，減輕負擔",
+   "en": "If you turn on DLSS5 (NR), set the frame rate limit to 60: DLSS5 then has fewer frames to process and less load",
+   "ja": "DLSS5（NR）を使う場合はフレームレート上限を 60 にしてください。DLSS5 が処理するフレームが減り、負荷が軽くなります"
   }
  ]
 }
