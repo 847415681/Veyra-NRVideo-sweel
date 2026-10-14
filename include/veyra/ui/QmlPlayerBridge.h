@@ -213,6 +213,9 @@ class QmlPlayerBridge : public QObject {
     // 2026-10-02: the orb used to add the integrated and the discrete GPU together.
     Q_PROPERTY(QVariantList gpuMonitorChoices READ gpuMonitorChoices CONSTANT)
     Q_PROPERTY(QString gpuMonitorName READ gpuMonitorName NOTIFY preferencesChanged)
+    // 设置 -> "同时用这块显卡运算" (preference computeOnMonitorGpu): the GPU picked
+    // for monitoring also runs enhancement, frame generation and export.
+    Q_PROPERTY(QString computeGpuHint READ computeGpuHint NOTIFY preferencesChanged)
     Q_PROPERTY(QString audioOutputStatus READ audioOutputStatus NOTIFY audioDevicesChanged)
     Q_PROPERTY(bool audioOutputFallback READ audioOutputFallback NOTIFY audioDevicesChanged)
     Q_PROPERTY(QString logFile READ logFile CONSTANT)
@@ -335,6 +338,11 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool amdFlowHalf READ amdFlowHalf WRITE setAmdFlowHalf NOTIFY settingsChanged)
     // 边缘神盾: refined optical-flow motion for XeSS (EnhancementSettings::fgMotionRefine).
     Q_PROPERTY(bool edgeAegis READ edgeAegis WRITE setEdgeAegis NOTIFY settingsChanged)
+    // DLSS 性能模式: NVIDIA's DLSS-G performance mode (EnhancementSettings::dlssgLite);
+    // available when the package carries its runtime (runtime/experimental/dlssg-lite).
+    Q_PROPERTY(bool dlssgLite READ dlssgLite WRITE setDlssgLite NOTIFY settingsChanged)
+    Q_PROPERTY(bool dlssgLiteAvailable READ dlssgLiteAvailable CONSTANT)
+    Q_PROPERTY(QString dlssgLiteHint READ dlssgLiteHint NOTIFY snapshotChanged)
     Q_PROPERTY(int contentRate READ contentRate WRITE setContentRate NOTIFY settingsChanged)
     Q_PROPERTY(int hdrOutputMode READ hdrOutputMode WRITE setHdrOutputMode NOTIFY settingsChanged)
     Q_PROPERTY(int fgMotionSource READ fgMotionSource WRITE setFgMotionSource NOTIFY settingsChanged)
@@ -707,6 +715,7 @@ public:
     Q_INVOKABLE void openReleasesPage();
     QVariantList audioDevices() const;
     QVariantList gpuMonitorChoices() const;
+    QString computeGpuHint() const;
     QString gpuMonitorName() const;
     QString audioOutputStatus() const;
     bool audioOutputFallback() const;
@@ -868,6 +877,10 @@ public:
     void setAmdFlowHalf(bool value);
     bool edgeAegis() const;
     void setEdgeAegis(bool value);
+    bool dlssgLite() const;
+    void setDlssgLite(bool value);
+    bool dlssgLiteAvailable() const;
+    QString dlssgLiteHint() const;
     int contentRate() const;
     void setContentRate(int value);
     int displaySync() const;

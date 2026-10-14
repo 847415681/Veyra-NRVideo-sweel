@@ -98,7 +98,8 @@ bool NgxCoreHost::initialize(ID3D12Device* device,
                              const std::wstring& runtimeDir,
                              const char* projectId,
                              const char* engineVersion,
-                             Status& status)
+                             Status& status,
+                             const std::wstring& priorityDirectory)
 {
     if (initialized_) {
         status = Status::InvalidArgument;
@@ -111,10 +112,11 @@ bool NgxCoreHost::initialize(ID3D12Device* device,
         return false;
     }
 
-    const wchar_t* featurePaths[] = { runtimeDir.c_str() };
+    const bool priority = !priorityDirectory.empty();
+    const wchar_t* featurePaths[] = { priority ? priorityDirectory.c_str() : runtimeDir.c_str(), runtimeDir.c_str() };
     NVSDK_NGX_FeatureCommonInfo common{};
     common.PathListInfo.Path = const_cast<const wchar_t**>(featurePaths);
-    common.PathListInfo.Length = 1;
+    common.PathListInfo.Length = priority ? 2 : 1;
     if (GetEnvironmentVariableW(L"VEYRA_TEST_NGX_VERBOSE", nullptr, 0)) {
         common.LoggingInfo.LoggingCallback = runtimeLog;
         common.LoggingInfo.MinimumLoggingLevel = NVSDK_NGX_LOGGING_LEVEL_ON;
@@ -126,8 +128,8 @@ bool NgxCoreHost::initialize(ID3D12Device* device,
         engineVersion, runtimeDir.c_str(), device, &common, NVSDK_NGX_Version_API, sehCode);
     initResult_ = static_cast<uint64_t>(result);
 
-    veyra::log::info("ngx", std::format("core-host: Init_with_ProjectID result={} seh={} runtimeDirLen={} projectId={}",
-        veyra::ngxResultString(initResult_), sehCode, runtimeDir.size(), projectId));
+    veyra::log::info("ngx", std::format("core-host: Init_with_ProjectID result={} seh={} runtimeDirLen={} projectId={} priorityDirLen={}",
+        veyra::ngxResultString(initResult_), sehCode, runtimeDir.size(), projectId, priorityDirectory.size()));
 
     if (result != NVSDK_NGX_Result_Success) {
         status = Status::DeviceFailure;

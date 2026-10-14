@@ -633,6 +633,15 @@ VPage {
                             }
                         }
                         VRow {
+                            label: qsTr("同时用这块显卡运算")
+                            hint: veyra.computeGpuHint
+                            VSwitch {
+                                objectName: "set-compute-gpu"
+                                checked: veyra.preferences.computeOnMonitorGpu === true
+                                onToggled: v => veyra.setPreference("computeOnMonitorGpu", v)
+                            }
+                        }
+                        VRow {
                             label: qsTr("全屏显存增长保护")
                             hint: qsTr("检测异常增长时自动退出全屏；默认关闭")
                             VSwitch {

@@ -1752,6 +1752,18 @@ VPage {
                                 }
                             }
                             VRow {
+                                label: qsTr("DLSS 性能模式")
+                                visible: veyra.fgBackendName === "dlss"
+                                enabled: veyra.dlssgLiteAvailable
+                                opacity: enabled ? 1 : 0.5
+                                hint: veyra.dlssgLiteHint
+                                VSwitch {
+                                    objectName: "list-dlssg-lite"
+                                    checked: veyra.dlssgLite
+                                    onToggled: checked => veyra.dlssgLite = checked
+                                }
+                            }
+                            VRow {
                                 label: qsTr("VFG 质量")
                                 visible: veyra.fgBackendName === "vfg"
                                 hint: qsTr("高质量更耗时；混合档：每对原帧的中间帧用前一档，其余用后一档")

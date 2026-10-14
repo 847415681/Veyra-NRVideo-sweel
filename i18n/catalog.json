@@ -6568,13 +6568,6 @@
    "ja": "ショートカットを保存できませんでした"
   },
   {
-   "zh": "快速调节只在专业模式的列表视图可用",
-   "src": "qml/Main.qml",
-   "zh-TW": "快速調節只在專業模式的列表視圖可用",
-   "en": "Quick settings are available only in Pro mode's list view",
-   "ja": "クイック設定はプロモードのリスト表示でのみ使えます"
-  },
-  {
    "zh": "性能",
    "src": "qml/NodePage.qml",
    "zh-TW": "性能",
@@ -15947,6 +15940,90 @@
    "zh-TW": "可變更新：超過螢幕最高更新時只排 1 幀",
    "en": "Variable refresh: at most 1 frame queued above the maximum refresh",
    "ja": "可変リフレッシュ：最大リフレッシュを超える時だけ 1 フレーム待機"
+  },
+  {
+   "zh": "DLSS 性能模式",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "DLSS 效能模式",
+   "en": "DLSS performance mode",
+   "ja": "DLSS パフォーマンスモード"
+  },
+  {
+   "zh": "引擎未接受 DLSS 性能模式，原设置保留",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "引擎未接受 DLSS 效能模式，原設定保留",
+   "en": "The engine did not accept the DLSS performance mode; the previous setting is kept",
+   "ja": "エンジンが DLSS パフォーマンスモードを受け付けませんでした。元の設定を維持します"
+  },
+  {
+   "zh": "此软件包没有附带性能模式所需的 DLSS 帧生成 310.9.16 运行库",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "此軟體包沒有附帶效能模式所需的 DLSS 幀生成 310.9.16 執行庫",
+   "en": "This package does not include the DLSS Frame Generation 310.9.16 runtime the performance mode needs",
+   "ja": "このパッケージにはパフォーマンスモードに必要な DLSS フレーム生成 310.9.16 ランタイムが含まれていません"
+  },
+  {
+   "zh": "目前只支持 RTX 50 系列：40/30 系的多帧解锁只适用于原版运行库",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "目前只支援 RTX 50 系列：40/30 系的多幀解鎖只適用於原版執行庫",
+   "en": "RTX 50 series only for now: the RTX 40/30 multi-frame unlock works with the standard runtime only",
+   "ja": "現在は RTX 50 シリーズのみ対応：RTX 40/30 のマルチフレーム解除は標準ランタイムでのみ動作します"
+  },
+  {
+   "zh": "生效中：NVIDIA DLSS 帧生成性能模式（测试版）",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "生效中：NVIDIA DLSS 幀生成效能模式（測試版）",
+   "en": "Active: NVIDIA DLSS Frame Generation performance mode (beta)",
+   "ja": "動作中：NVIDIA DLSS フレーム生成パフォーマンスモード（ベータ）"
+  },
+  {
+   "zh": "NVIDIA 新增的性能模式（测试版）：补帧更省 GPU，高倍率更稳，画质可能略降；导出仍用标准模式",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "NVIDIA 新增的效能模式（測試版）：補幀更省 GPU，高倍率更穩，畫質可能略降；匯出仍用標準模式",
+   "en": "NVIDIA's new performance mode (beta): frame generation uses less GPU and holds high multipliers better, possibly at slightly lower quality; export keeps the standard mode",
+   "ja": "NVIDIA の新しいパフォーマンスモード（ベータ）：フレーム生成の GPU 負荷が減り高倍率でも安定、画質はやや落ちる場合あり。書き出しは標準モードのまま"
+  },
+  {
+   "zh": "同时用这块显卡运算",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "同時用這塊顯示卡運算",
+   "en": "Also compute on this GPU",
+   "ja": "このGPUで処理も行う"
+  },
+  {
+   "zh": "关闭时增强、补帧和导出用性能最强的显卡",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "關閉時增強、補幀和匯出用效能最強的顯示卡",
+   "en": "When off, enhancement, frame generation and export use the most powerful GPU",
+   "ja": "オフのときは補正・フレーム生成・書き出しに最も高性能な GPU を使います"
+  },
+  {
+   "zh": "增强、补帧和导出都在「%1」上运行；切换后重新打开视频生效",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "增強、補幀和匯出都在「%1」上執行；切換後重新開啟影片生效",
+   "en": "Enhancement, frame generation and export run on \"%1\"; reopen the video after switching",
+   "ja": "補正・フレーム生成・書き出しは「%1」で実行します。切り替え後は動画を開き直してください"
+  },
+  {
+   "zh": "上面选“自动”时仍用性能最强的显卡；选一块显卡后它也负责运算",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "上面選「自動」時仍用效能最強的顯示卡；選一塊顯示卡後它也負責運算",
+   "en": "With \"Auto\" above, the most powerful GPU is still used; pick a GPU above to compute on it too",
+   "ja": "上で「自動」の場合は最も高性能な GPU を使用。GPU を選ぶとその GPU で処理も行います"
+  },
+  {
+   "zh": "运算显卡已切换为「%1」，重新打开视频后生效",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "運算顯示卡已切換為「%1」，重新開啟影片後生效",
+   "en": "Compute GPU switched to \"%1\"; it applies after reopening the video",
+   "ja": "処理用 GPU を「%1」に切り替えました。動画を開き直すと反映されます"
+  },
+  {
+   "zh": "运算显卡已恢复默认（性能最强的显卡），重新打开视频后生效",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "運算顯示卡已恢復預設（效能最強的顯示卡），重新開啟影片後生效",
+   "en": "Compute GPU back to the default (the most powerful GPU); it applies after reopening the video",
+   "ja": "処理用 GPU を既定（最も高性能な GPU）に戻しました。動画を開き直すと反映されます"
   }
  ]
 }

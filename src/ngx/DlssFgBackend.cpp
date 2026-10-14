@@ -15,6 +15,7 @@
 #include "veyra/NgxResult.h"
 #include "veyra/ngx/NgxCoreHost.h"
 #include "veyra/ngx/FgCompatibilitySession.h"
+#include "veyra/ngx/DlssgLite.h"
 
 namespace veyra::ngx {
 
@@ -226,6 +227,10 @@ bool DlssFgBackend::create(NgxCoreHost& coreHost,
         NVSDK_NGX_DLSSG_ResourceFlags_BidirectionalDistortionField;
     params->Set(NVSDK_NGX_DLSSG_Parameter_ResourceAlwaysProvided_Flags, alwaysFlags);
     params->Set(NVSDK_NGX_DLSSG_Parameter_ResourceNeverProvided_Flags, neverFlags);
+    // Performance mode: read by the 310.9.16 runtime at create only; older
+    // runtimes ignore the name. Always written so a reused block never keeps it.
+    params->Set(kDlssgLiteParameter, desc.lite ? 1u : 0u);
+    log::info("ngx", std::format("fg-backend: {}={}", kDlssgLiteParameter, desc.lite ? 1 : 0));
     log::info("ngx", std::format("fg-backend: ResourceAlwaysProvided=0x{:X} ResourceNeverProvided=0x{:X}",
         alwaysFlags, neverFlags));
 

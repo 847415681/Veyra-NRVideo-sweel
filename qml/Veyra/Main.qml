@@ -127,6 +127,12 @@ Window {
         // Tell the bridge where the user is, so a command like "open a file" can
         // behave differently from home than from the professional page.
         if (veyra.currentPage !== page) veyra.currentPage = page
+        // A page the user picks while the Home panel is up ends it there: closing
+        // the panel later does not snap back to the page it was opened from.
+        if (quickPanel && !instantPage) {
+            quickReturnPage = ""
+            if (page !== "pro" && page !== "node") quickPanel = false
+        }
         // Test the page itself: the cinema binding may not have caught up with
         // this change yet, and a stale value shrank the page after min instead.
         // Leaving 极简 gives the window back the height it had before (core.js
@@ -148,7 +154,7 @@ Window {
         // later with its [data-in] items rising. Reduced motion shows it at once.
         const prev = shownPage
         if (prev === page) return
-        leavingPage = Theme.reduced || prev === "" ? "" : prev
+        leavingPage = Theme.reduced || prev === "" || instantPage ? "" : prev
         // Leaving a page without a picture (home, settings): an open may follow in
         // the same call (openPath navigates, then opens) and the engine samples the
         // host size once, so the rect is placed now, not 150 ms later. There is no
@@ -257,7 +263,7 @@ Window {
             // Also follows wrapping status text and the compact header/transport.
             onVideoViewportChanged: if (root.page === "pro" && !root.fullscreen) videoHost.syncRect()
             home: pages
-            overlay: root.quickPanelShown
+            overlay: root.quickPanelShown && root.page === "pro"
             onRequestFullscreen: root.toggleFullscreen()
             onRequestPage: p => root.goPage(p)
             onRequestDialog: key => dialogs.open(key)
@@ -268,6 +274,7 @@ Window {
             dragStripHeight: 14
             home: pages
             videoHeight: root.nodeVideoHeight
+            overlay: root.quickPanelShown && root.page === "node"
             onVideoHeightEdited: h => { root.nodeVideoHeight = h; videoHost.syncRect() }
             onRequestFullscreen: root.toggleFullscreen()
             onRequestPage: p => root.goPage(p)
@@ -371,17 +378,38 @@ Window {
     property bool fullTarget: false
     property int fullRestoreVisibility: Window.Windowed
     property bool fullLocked: false
-    // Fullscreen quick-adjust panel (Home): the list mode's inspector on the left
-    // of the picture, with the performance orbs. List mode only.
+    // Fullscreen quick-adjust panel (Home): the professional mode's own controls
+    // over the picture - the list inspector (with the performance orbs) in list
+    // mode, the node canvas along the bottom in node mode (veyra.nodeMode). From
+    // 极简 the professional page becomes current underneath the fullscreen picture
+    // while the panel is open, and 极简 returns when it closes.
     property bool quickPanel: false
-    readonly property bool quickPanelShown: fullscreen && quickPanel && page === "pro" && !fullLocked
+    property string quickReturnPage: ""
+    // A page change the user cannot see (under the fullscreen picture) skips the
+    // sink animation, so the old page never flashes over the picture.
+    property bool instantPage: false
+    readonly property bool quickPanelShown: fullscreen && quickPanel && (page === "pro" || page === "node") && !fullLocked
+    function switchPageInstantly(p) { instantPage = true; page = p; instantPage = false }
+    function toggleQuickPanel() {
+        if (quickPanel) { closeQuickPanel(); return }
+        const target = veyra.nodeMode === 1 ? "node" : "pro"
+        if (page !== target) {
+            if (page !== "pro" && page !== "node") quickReturnPage = page
+            switchPageInstantly(target)
+        }
+        quickPanel = true
+    }
+    function closeQuickPanel() {
+        quickPanel = false
+        if (quickReturnPage !== "") { const p = quickReturnPage; quickReturnPage = ""; switchPageInstantly(p) }
+    }
     onQuickPanelShownChanged: veyra.logUi("ui-fullscreen", "quick panel shown=" + quickPanelShown)
     onFullscreenChanged: {
         veyra.setPresentationFullscreen(fullscreen)
         fullTarget = fullscreen
         if (!fullscreen) {
             fullLocked = false
-            quickPanel = false
+            closeQuickPanel()
             if (cinema && !maximized) height = Math.round(pictureHeight)
         }
         fullControls = true
@@ -490,7 +518,7 @@ Window {
             if (pressOnCover) return
             if (root.page !== "min" && root.page !== "pro" && root.page !== "node" && !root.fullscreen) return
             if (dialogs.dialog !== "" || !veyra.hasSource) return
-            if (root.fullscreen && root.quickPanelShown && proPage.overlayContains(p.x, p.y)) return
+            if (root.fullscreen && root.quickPanelShown && (proPage.overlayContains(p.x, p.y) || nodePage.overlayContains(p.x, p.y))) return
             if (!root.fullscreen && !root.pictureContains(p)) return
             root.contentItem.forceActiveFocus()
             if (veyra.isCapture || veyra.duration <= 0) return
@@ -506,7 +534,7 @@ Window {
             const p = eventPoint.position
             if (pressOnCover) return
             if (root.fullscreen) {
-                if (root.quickPanelShown && proPage.overlayContains(p.x, p.y)) return
+                if (root.quickPanelShown && (proPage.overlayContains(p.x, p.y) || nodePage.overlayContains(p.x, p.y))) return
                 root.toggleFullscreen()
                 return
             }
@@ -602,14 +630,12 @@ Window {
     }
     Shortcut { sequences: ["F11", "Alt+Return", "Alt+Enter"]; onActivated: root.toggleFullscreen() }
     Shortcut { sequence: "Esc"; enabled: root.fullscreen; onActivated: root.toggleFullscreen() }
-    // Home: the fullscreen quick-adjust panel, list mode only.
+    // Home: the fullscreen quick-adjust panel, from 极简 or 专业 (list or node view).
     Shortcut {
         sequence: "Home"
-        enabled: root.fullscreen && !root.fullLocked && dialogs.dialog === ""
-        onActivated: {
-            if (root.page !== "pro") { toast.show(qsTr("快速调节只在专业模式的列表视图可用"), false); return }
-            root.quickPanel = !root.quickPanel
-        }
+        enabled: root.fullscreen && !root.fullLocked && dialogs.dialog === "" &&
+                 (root.page === "min" || root.page === "pro" || root.page === "node")
+        onActivated: root.toggleQuickPanel()
     }
     // 5 s steps (field request 2026-10-02).
     Shortcut { sequence: "Left"; onActivated: veyra.seekBy(-5) }

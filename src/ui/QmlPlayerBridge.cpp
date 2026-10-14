@@ -1,6 +1,8 @@
 #include "veyra/ui/QmlPlayerBridge.h"
 #include "veyra/gfx/PresentSink.h"
 #include "veyra/gfx/NvidiaVrr.h"
+#include "veyra/ngx/DlssgLite.h"
+#include "veyra/RuntimePaths.h"
 #include <QElapsedTimer>
 #include "veyra/ui/EffectAvailability.h"
 #include "veyra/engine/FrameGenerationSelection.h"
@@ -448,6 +450,21 @@ struct QmlPlayerBridge::Impl {
                 id.toStdString(), uint32_t(d.AdapterLuid.HighPart), d.AdapterLuid.LowPart, d.DedicatedVideoMemory >> 20));
         }
     }
+    // The monitored GPU also computes when 设置 -> "同时用这块显卡运算" is on
+    // and a specific GPU (not 自动) is chosen; otherwise the default order.
+    QString computeGpuName;
+    uint64_t computeLuid = 0;
+    void applyComputeGpu() {
+        const QString wanted = prefString("monitorGpu");
+        const GpuAdapter* chosen = nullptr;
+        for (const auto& a : gpuAdapters) if (!wanted.isEmpty() && a.id == wanted) chosen = &a;
+        const bool follow = prefBool("computeOnMonitorGpu", false) && chosen;
+        computeLuid = follow ? (uint64_t(chosen->luidHigh) << 32 | chosen->luidLow) : 0;
+        computeGpuName = follow ? chosen->name : QString();
+        gfx::setPreferredAdapterLuid(computeLuid);
+        veyra::log::info("perf", std::format("compute gpu follow={} wanted={} using={}", follow, wanted.isEmpty() ? "auto" : wanted.toStdString(),
+            follow ? chosen->name.toStdString() : "default order (highest-performance adapter)"));
+    }
     void resolveGpuMonitor() {
         const QString wanted = prefString("monitorGpu");
         const GpuAdapter* chosen = gpuAdapters.empty() ? nullptr : &gpuAdapters.front();
@@ -868,21 +885,37 @@ static uint32_t primaryGpuVendor() {
 // FSR 4 ML frame generation needs an AMD RX 9000; on other GPUs the provider crashed the
 // whole program (field report 2026-10-01). Known non-AMD adapters are refused up front.
 static bool fsr4Possible() { return currentEffectCapabilities().value("fsr4").toMap().value("available").toBool(); }
-// The menu checks the same default DXGI preference as the engine. The native
-// backend then verifies CUDA compute capability and the exact adapter LUID.
-static bool vfgHardwarePossible(){
-    static const bool supported=[] {
-        Microsoft::WRL::ComPtr<IDXGIFactory6> factory;
-        if(FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))))return false;
+// The adapter the engine opens: the user's compute GPU when one is chosen
+// (gfx::preferredAdapterLuid) and usable, else the first D3D12 hardware
+// adapter in DXGI's high-performance order, as D3D12DeviceContext picks it.
+// UI thread only; cached per preference.
+static const DXGI_ADAPTER_DESC1* engineAdapterDesc(){
+    static uint64_t cachedFor=~0ull;static DXGI_ADAPTER_DESC1 cached{};static bool found=false;
+    const uint64_t preferred=gfx::preferredAdapterLuid();
+    if(cachedFor==preferred)return found?&cached:nullptr;
+    cachedFor=preferred;found=false;
+    Microsoft::WRL::ComPtr<IDXGIFactory6> factory;
+    if(FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))))return nullptr;
+    for(int pass=preferred?0:1;pass<2&&!found;++pass)
         for(UINT i=0;;++i){Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
-            if(factory->EnumAdapterByGpuPreference(i,DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,IID_PPV_ARGS(&adapter))==DXGI_ERROR_NOT_FOUND)break;
-            if(!adapter)break;DXGI_ADAPTER_DESC1 d{};
-            if(FAILED(adapter->GetDesc1(&d))||(d.Flags&DXGI_ADAPTER_FLAG_SOFTWARE)||FAILED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_12_0,__uuidof(ID3D12Device),nullptr)))continue;
-            const auto name=QString::fromWCharArray(d.Description);
-            return d.VendorId==0x10DE&&(name.contains(QStringLiteral("GeForce RTX 40"),Qt::CaseInsensitive)||
-                name.contains(QStringLiteral("GeForce RTX 50"),Qt::CaseInsensitive)||name.contains(QStringLiteral("Ada"),Qt::CaseInsensitive)||name.contains(QStringLiteral("Blackwell"),Qt::CaseInsensitive));
-        }return false;
-    }();return supported;
+            if(FAILED(factory->EnumAdapterByGpuPreference(i,DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,IID_PPV_ARGS(&adapter)))||!adapter)break;
+            DXGI_ADAPTER_DESC1 d{};
+            if(FAILED(adapter->GetDesc1(&d))||(d.Flags&DXGI_ADAPTER_FLAG_SOFTWARE))continue;
+            const uint64_t luid=uint64_t(uint32_t(d.AdapterLuid.HighPart))<<32|d.AdapterLuid.LowPart;
+            if(pass==0&&luid!=preferred)continue;
+            if(FAILED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_12_0,__uuidof(ID3D12Device),nullptr)))continue;
+            cached=d;found=true;break;
+        }
+    return found?&cached:nullptr;
+}
+// The menu checks the same adapter as the engine. The native backend then
+// verifies CUDA compute capability and the exact adapter LUID.
+static bool vfgHardwarePossible(){
+    const auto* d=engineAdapterDesc();
+    if(!d)return false;
+    const auto name=QString::fromWCharArray(d->Description);
+    return d->VendorId==0x10DE&&(name.contains(QStringLiteral("GeForce RTX 40"),Qt::CaseInsensitive)||
+        name.contains(QStringLiteral("GeForce RTX 50"),Qt::CaseInsensitive)||name.contains(QStringLiteral("Ada"),Qt::CaseInsensitive)||name.contains(QStringLiteral("Blackwell"),Qt::CaseInsensitive));
 }
 static unsigned normalizeFgMultiplier(unsigned value,engine::FrameGenerationBackend backend,unsigned cap){
     value=std::clamp(value,2u,cap);
@@ -891,28 +924,17 @@ static unsigned normalizeFgMultiplier(unsigned value,engine::FrameGenerationBack
 bool QmlPlayerBridge::amdNrGpu() const { return primaryGpuVendor()==0x1002; }
 
 static ui::EffectGpu effectGpu() {
-    static const auto gpu = [] {
-        ui::EffectGpu result;
-        Microsoft::WRL::ComPtr<IDXGIFactory6> factory;
-        if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) return result;
-        for (UINT i = 0;; ++i) {
-            Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
-            if (FAILED(factory->EnumAdapterByGpuPreference(i, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&adapter)))) break;
-            DXGI_ADAPTER_DESC1 d{};
-            if (FAILED(adapter->GetDesc1(&d)) || (d.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) ||
-                FAILED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), nullptr))) continue;
-            const auto name = QString::fromWCharArray(d.Description);
-            result.vendor = d.VendorId;
-            result.deviceId = d.DeviceId;
-            result.rtx = name.contains("RTX", Qt::CaseInsensitive);
-            result.blackwell = name.contains("RTX 50", Qt::CaseInsensitive) || name.contains("Blackwell", Qt::CaseInsensitive);
-            result.ada = name.contains("RTX 40", Qt::CaseInsensitive) || name.contains("Ada", Qt::CaseInsensitive);
-            result.rx9000 = name.contains("RX 90", Qt::CaseInsensitive);
-            break;
-        }
-        return result;
-    }();
-    return gpu;
+    ui::EffectGpu result;
+    const auto* d = engineAdapterDesc();
+    if (!d) return result;
+    const auto name = QString::fromWCharArray(d->Description);
+    result.vendor = d->VendorId;
+    result.deviceId = d->DeviceId;
+    result.rtx = name.contains("RTX", Qt::CaseInsensitive);
+    result.blackwell = name.contains("RTX 50", Qt::CaseInsensitive) || name.contains("Blackwell", Qt::CaseInsensitive);
+    result.ada = name.contains("RTX 40", Qt::CaseInsensitive) || name.contains("Ada", Qt::CaseInsensitive);
+    result.rx9000 = name.contains("RX 90", Qt::CaseInsensitive);
+    return result;
 }
 
 static QVariantMap scanEffectCapabilities() {
@@ -1081,6 +1103,12 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     connect(impl_->playlist, &PlaylistModel::error, this, [this](const QString& text) {
         veyra::log::warn("playlist", text.toStdString()); emit notice(text, true);
     });
+    // The compute GPU decides which effects exist, so it is settled before
+    // anything below samples the capabilities or restores the saved chain.
+    impl_->loadPrefs();
+    impl_->enumerateGpuAdapters();
+    impl_->resolveGpuMonitor();
+    impl_->applyComputeGpu();
     connect(this,&QmlPlayerBridge::snapshotChanged,this,
         [this,ceiling=fgMaxMultiplier(),text=fgProviderText()]() mutable {
             const auto nextCeiling=fgMaxMultiplier();const auto nextText=fgProviderText();
@@ -1100,12 +1128,9 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         reported=next;emit effectCapabilitiesChanged();emit fgChoicesChanged();
     });
     capabilityTimer->start(2000);
-    impl_->loadPrefs();
     applyPreference(QStringLiteral("gpuPriority"));
     applyPreference(QStringLiteral("prewarmEnhancement"));
     impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));
-    impl_->enumerateGpuAdapters();
-    impl_->resolveGpuMonitor();
     connect(&impl_->exportQueue,&QmlExportQueueModel::changed,this,&QmlPlayerBridge::exportChanged);
     if (qApp) qApp->installEventFilter(this);
 #ifdef VEYRA_ENABLE_MOONLIGHT
@@ -1224,6 +1249,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         if (p.contains(QStringLiteral("edgeAegis"))) {
             const bool on = p.value(QStringLiteral("edgeAegis")).toBool();
             if (s.fgMotionRefine != on) { s.fgMotionRefine = on; changed = true; }
+        }
+        if (p.contains(QStringLiteral("dlssgPerformance"))) {
+            const bool on = p.value(QStringLiteral("dlssgPerformance")).toBool();
+            if (s.dlssgLite != on) { s.dlssgLite = on; changed = true; }
         }
         if (!defaultFlowApplied && p.contains(QStringLiteral("contentRate"))) {
             const int rate = p.value(QStringLiteral("contentRate")).toInt();
@@ -5305,7 +5334,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"listInspectorWidth", {376, 4000}}};
     static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
-                                   "magewellLowLatency", "blackmagicNativeCapture", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility"};
+                                   "magewellLowLatency", "blackmagicNativeCapture", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -5423,7 +5452,47 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
             impl_->exportQueue.refresh();
         }
     }
-    else if (key == QLatin1String("monitorGpu")) { impl_->resolveGpuMonitor(); impl_->gpuUtil = -1.0; emit perfChanged(); }
+    else if (key == QLatin1String("monitorGpu") || key == QLatin1String("computeOnMonitorGpu")) {
+        if (key == QLatin1String("monitorGpu")) { impl_->resolveGpuMonitor(); impl_->gpuUtil = -1.0; emit perfChanged(); }
+        const auto before = impl_->computeLuid;
+        impl_->applyComputeGpu();
+        if (impl_->computeLuid != before) {
+            // Effect availability follows the compute GPU (NVIDIA-only effects on another card).
+            (void)currentEffectCapabilities(true);
+            // The chain is checked against the new card the way a restart checks it:
+            // DLSS moves to an available backend, NVOF to FidelityFX flow, and stages
+            // the card cannot run are switched off with their parameters kept.
+            auto candidate = impl_->currentSession();
+            const auto previous = candidate;
+            QStringList disabled;
+            for (auto& configuration : candidate.configurations) {
+                const auto reason = disableUnavailableEffects(configuration);
+                if (!reason.isEmpty()) disabled << reason;
+            }
+            if (candidate != previous) {
+                auto next = impl_->facade.pendingSettings();
+                const auto& configuration = candidate.configurations[size_t(candidate.active)];
+                configuration.apply(next);
+                if (next.validate().empty() && impl_->facade.applySettings(next, engine::runtimeOrder(configuration.chain))) {
+                    impl_->session = candidate;
+                    impl_->restoreConfiguration(configuration);
+                    impl_->revalidate();
+                    impl_->options = engine::PlayerOptions::from(next, engine::runtimeOrder(impl_->activeRuntime()));
+                    if (!impl_->persistSession()) veyra::log::warn("effect-availability", "compute gpu refit not saved");
+                    emit chainChanged(); emit settingsChanged();
+                } else veyra::log::warn("effect-availability", "compute gpu refit not accepted; chain unchanged");
+                if (!disabled.isEmpty()) {
+                    const auto message = tr("已关闭当前硬件或包不支持的效果，参数仍保留：") + disabled.join("; ");
+                    veyra::log::warn("effect-availability", message.toStdString());
+                    emit notice(message, false);
+                }
+            }
+            emit effectCapabilitiesChanged(); emit fgChoicesChanged();
+            if (impl_->snapshot.running)
+                emit notice(impl_->computeLuid ? tr("运算显卡已切换为「%1」，重新打开视频后生效").arg(impl_->computeGpuName)
+                                               : tr("运算显卡已恢复默认（性能最强的显卡），重新打开视频后生效"), false);
+        }
+    }
 }
 QVariantList QmlPlayerBridge::gpuMonitorChoices() const {
     QVariantList out;
@@ -5432,6 +5501,11 @@ QVariantList QmlPlayerBridge::gpuMonitorChoices() const {
     return out;
 }
 QString QmlPlayerBridge::gpuMonitorName() const { return impl_->gpuMonitorName; }
+QString QmlPlayerBridge::computeGpuHint() const {
+    if (!impl_->prefBool("computeOnMonitorGpu", false)) return tr("关闭时增强、补帧和导出用性能最强的显卡");
+    if (impl_->computeLuid) return tr("增强、补帧和导出都在「%1」上运行；切换后重新打开视频生效").arg(impl_->computeGpuName);
+    return tr("上面选“自动”时仍用性能最强的显卡；选一块显卡后它也负责运算");
+}
 QString QmlPlayerBridge::uiLanguage() const { return i18n::current(); }
 void QmlPlayerBridge::setQmlEngine(QQmlEngine* engine) {
     impl_->qmlEngine = engine;
@@ -6767,6 +6841,27 @@ void QmlPlayerBridge::setEdgeAegis(bool value) {
     impl_->prefs[QStringLiteral("edgeAegis")] = value;
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "edge aegis not saved");
     emit settingsChanged();
+}
+bool QmlPlayerBridge::dlssgLite() const { return settings().dlssgLite; }
+void QmlPlayerBridge::setDlssgLite(bool value) {
+    auto s = settings();
+    if (s.dlssgLite == value) return;
+    s.dlssgLite = value;
+    if (!impl_->commit(std::move(s))) { emit notice(tr("引擎未接受 DLSS 性能模式，原设置保留"), true); return; }
+    impl_->prefs[QStringLiteral("dlssgPerformance")] = value;
+    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "DLSS performance mode not saved");
+    emit settingsChanged();
+}
+bool QmlPlayerBridge::dlssgLiteAvailable() const {
+    static const bool present = ngx::dlssgLiteRuntimePresent(runtime::localRuntimeDirectory());
+    return present;
+}
+QString QmlPlayerBridge::dlssgLiteHint() const {
+    if (!dlssgLiteAvailable()) return tr("此软件包没有附带性能模式所需的 DLSS 帧生成 310.9.16 运行库");
+    const auto& s = impl_->snapshot;
+    if (s.running && s.dlssgLiteState == 3) return tr("目前只支持 RTX 50 系列：40/30 系的多帧解锁只适用于原版运行库");
+    if (s.running && s.dlssgLiteState == 1) return tr("生效中：NVIDIA DLSS 帧生成性能模式（测试版）");
+    return tr("NVIDIA 新增的性能模式（测试版）：补帧更省 GPU，高倍率更稳，画质可能略降；导出仍用标准模式");
 }
 int QmlPlayerBridge::contentRate() const { return int(settings().content); }
 void QmlPlayerBridge::setContentRate(int value) {

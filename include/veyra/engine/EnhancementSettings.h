@@ -350,6 +350,9 @@ struct EnhancementSettings {
     // UI "边缘神盾": refined optical-flow motion for XeSS frame generation (edge refinement
     // and the uncovered-background fill). A global control kept in shell preferences.
     bool fgMotionRefine=true;
+    // UI "DLSS 性能模式": NVIDIA's DLSS-G performance mode (ngx/DlssgLite.h),
+    // DLSS frame generation only. A global control kept in shell preferences.
+    bool dlssgLite=false;
     ContentRate content=ContentRate::Transport;
     AudioSyncMode audioSync=AudioSyncMode::Automatic;
     int32_t audioOffsetMs=0;
@@ -404,6 +407,7 @@ struct EnhancementSettings {
         // Only XeSS frame generation with optical-flow motion reads the refined vectors.
         if(!(multiplier>1&&frameGenerationBackend==FrameGenerationBackend::XeSS&&motionUsesFlow(fgMotion,frameGenerationBackend)))
             active.fgMotionRefine=defaults.fgMotionRefine;
+        if(!(multiplier>1&&frameGenerationBackend==FrameGenerationBackend::Dlss))active.dlssgLite=defaults.dlssgLite;
         return active;
     }
     bool sameActiveVideoParameters(const EnhancementSettings& other) const {

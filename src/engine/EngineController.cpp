@@ -364,6 +364,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
         !path.starts_with(L"capture:")&&!path.starts_with(L"capture2:")&&!path.starts_with(L"screen:")&&
         extension!=L".png"&&extension!=L".jpg"&&extension!=L".jpeg";
     if(!prewarmEnabled_||!ordinaryFile)prewarmed_.reset();
+    // A prewarmed session belongs to the adapter that was preferred when it
+    // started; a different compute GPU choice opens a new one.
+    if(prewarmed_&&prewarmed_->context.initialized()&&gfx::preferredAdapterLuid()&&prewarmed_->context.adapter().luid!=gfx::preferredAdapterLuid())prewarmed_.reset();
     auto gpu=prewarmed_?std::move(prewarmed_):std::make_unique<PreviewGpuSession>();
     auto& ctx=gpu->context;auto& ring=gpu->ring;source::MediaFileSource source;
     sink::AudioPipeline audioPipe;sink::AudioRenderer audio;VideoPresenter presenter;
@@ -747,6 +750,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 fgMultiFrameMaxCap_=graph->fgMultiFrameCountMax();
                 snapshot_.fgMultiFrameMax=fgMultiFrameMaxCap_;
                 snapshot_.fgCapabilityKnown=fgMultiFrameMaxCap_>0;
+                snapshot_.dlssgLiteState=graph->dlssgLiteState();
                 const auto xessState=gfx::XessMfgUnlock::snapshot();
                 // Unknown until the XeSS provider actually ran: a DLSS-only
                 // session must not restrict the XeSS choices in the UI.

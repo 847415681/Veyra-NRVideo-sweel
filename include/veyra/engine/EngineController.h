@@ -135,6 +135,9 @@ struct PlayerSnapshot {
     // multipliers the active GPU can actually honour.
     int fgMultiFrameMax=0;
     bool fgCapabilityKnown=false;
+    // DLSS-G performance mode of the active graph (EnhanceGraph::dlssgLiteState):
+    // 0 not requested, 1 active, 2 runtime missing, 3 GPU keeps the default runtime.
+    uint32_t dlssgLiteState=0;
     // XeSS frame-generation ceiling (generated frames; 1 = stock 2X, 3 = 4X).
     // 0 = no XeSS session has reported yet; the settings UI then falls back to
     // the audited-provider probe.
