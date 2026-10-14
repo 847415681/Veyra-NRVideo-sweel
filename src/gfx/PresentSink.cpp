@@ -514,10 +514,18 @@ void PresentSink::sampleDisplayLatency(){
     // newest one: under VSync each holds at least one vblank, so present p was
     // on screen no later than (PresentCount - p) vblanks earlier. Counting them
     // with that bound keeps bursts of late frames in the sample instead of
-    // keeping only the newest (and least delayed) one of each burst.
+    // keeping only the newest (and least delayed) one of each burst. The
+    // bound is only tight for a burst: presents issued at most about one
+    // refresh apart. After an idle gap the older present's vblank is unknown
+    // and it is skipped; dating it through the bound reported a 60 fps frame
+    // on a 320 Hz panel, shown ~5 ms after its Present, as ~19 ms (31 ms) when
+    // the statistics trailed by one (two) presents (2026-10-14).
+    double newestQpc=0;
+    for(const auto& pending:pendingPresents_)if(pending.qpc&&pending.id==stats.PresentCount)newestQpc=double(pending.qpc);
     for(const auto& pending:pendingPresents_){
         if(!pending.qpc||pending.id>stats.PresentCount||(previous&&pending.id<=previous)||stats.PresentCount-pending.id>=pendingPresents_.size())continue;
         if(pending.replaceable&&pending.id!=stats.PresentCount)continue;
+        if(pending.id!=stats.PresentCount&&(!newestQpc||newestQpc-double(pending.qpc)>double(stats.PresentCount-pending.id)*period*1.25))continue;
         const double ms=(scanout-double(stats.PresentCount-pending.id)*period-double(pending.qpc))*1000.0/frequency;
         if(ms>=0&&ms<1000&&displayLatencyMs_.size()<4096)displayLatencyMs_.push_back(ms);
     }
