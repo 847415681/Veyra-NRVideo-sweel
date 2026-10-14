@@ -151,6 +151,11 @@ class QmlPlayerBridge : public QObject {
     // method 0 WGC / 1 DXGI (monitor only), fps cap index into {follow,30,60,120,144,240},
     // pointer, crop margins in source pixels, and "fill the window".
     Q_PROPERTY(QVariantMap screenOptions READ screenOptions NOTIFY captureChanged)
+    // 游戏模式 (screen option "passthrough", ui/GamePassthrough.h): gameMode while the
+    // current source is such a capture (opening or live); passthroughActive while the
+    // fullscreen picture is click-through and the captured program has the input.
+    Q_PROPERTY(bool gameMode READ gameMode NOTIFY gameModeChanged)
+    Q_PROPERTY(bool passthroughActive READ passthroughActive NOTIFY gameModeChanged)
 
     // Subtitles (P4-c): the engine's SubtitleLoader reads the embedded tracks and
     // the same-name external file; the old shell's SubtitleOverlay draws them as a
@@ -626,6 +631,14 @@ public:
     Q_INVOKABLE bool startCaptureSession();
     Q_INVOKABLE bool setScreenOption(const QString& key, const QVariant& value);
     Q_INVOKABLE bool startScreenCapture();
+    bool gameMode() const;
+    bool passthroughActive() const;
+    // The Home panel is open: the picture stays on top but takes the input back.
+    Q_INVOKABLE void setGamePanelOpen(bool open);
+    // Index into Qt.application.screens of the monitor 游戏模式 covers, or -1.
+    Q_INVOKABLE int gameModeScreenIndex() const;
+    // Test only (VEYRA_TEST_UI_BLOCK): blocks the GUI thread to exercise the hang release.
+    Q_INVOKABLE void testBlockUi(int ms);
 
     QVariantList screenTargets() const;
     QString screenTargetId() const;
@@ -1052,6 +1065,8 @@ public:
     // window of the QML window and hands it over; the bridge never draws QML
     // into it and Qt never touches its swapchain.
     void attachVideoWindow(qulonglong nativeHandle);
+    // The QML main window: 游戏模式 changes its styles and owns its hotkeys.
+    void attachMainWindow(qulonglong nativeHandle);
 
     // Run immediately before the engine opens a source. The presenter reads the
     // host window's client size once, when it initialises, and builds the
@@ -1182,8 +1197,15 @@ signals:
     void overlayRestartSuggested(const QString& kind);
     // The UI moves to a page by name when a command implies it.
     void navigate(const QString& page);
+    void gameModeChanged();
+    // 游戏模式 hotkeys: 0 = Home (adjust panel), 1 = Ctrl+Alt+Home (leave).
+    void gameHotkey(int which);
+    // The game-mode capture ended or failed, or the GUI hung, while the picture was in
+    // front: the UI leaves fullscreen and shows the reason.
+    void gameModeStopped(const QString& reason);
 
 private:
+    void updateGameMode();
     // The settings the UI is showing: the facade's pending copy, which the
     // engine has been asked to apply. Every settings property reads this, so
     // they can never disagree with each other.

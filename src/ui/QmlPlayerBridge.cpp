@@ -3,6 +3,11 @@
 #include "veyra/gfx/NvidiaVrr.h"
 #include "veyra/ngx/DlssgLite.h"
 #include "veyra/RuntimePaths.h"
+#include "veyra/ui/GamePassthrough.h"
+#include <QGuiApplication>
+#include <QScreen>
+#include <QtGui/qscreen_platform.h>
+#include <shellapi.h>
 #include <QElapsedTimer>
 #include "veyra/ui/EffectAvailability.h"
 #include "veyra/engine/FrameGenerationSelection.h"
@@ -450,6 +455,13 @@ struct QmlPlayerBridge::Impl {
                 id.toStdString(), uint32_t(d.AdapterLuid.HighPart), d.AdapterLuid.LowPart, d.DedicatedVideoMemory >> 20));
         }
     }
+    // 游戏模式: the native side, the capture it belongs to and what the UI reported.
+    ui::GamePassthrough game;
+    std::wstring gameModeUri;          // the screen URI startScreenCapture opened in game mode
+    uint64_t gameModeSessionId = 0;    // its engine session once the open ran
+    bool gameModeLive = false, gamePanelOpen = false, gameRefused = false;
+    bool gameModeShown = false, passthroughShown = false;
+    HMONITOR gameMonitor = nullptr;
     // The monitored GPU also computes when 设置 -> "同时用这块显卡运算" is on
     // and a specific GPU (not 自动) is chosen; otherwise the default order.
     QString computeGpuName;
@@ -1133,6 +1145,30 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));
     connect(&impl_->exportQueue,&QmlExportQueueModel::changed,this,&QmlPlayerBridge::exportChanged);
     if (qApp) qApp->installEventFilter(this);
+    // 游戏模式. The native filter also keeps windows shown during a monitor capture
+    // out of that capture, so it is installed for every run.
+    if (qApp) qApp->installNativeEventFilter(&impl_->game);
+    impl_->game.onEvent = [this](ui::GamePassthrough::Event event) {
+        using E = ui::GamePassthrough::Event;
+        switch (event) {
+        case E::PanelHotkey: emit gameHotkey(0); break;
+        case E::ExitHotkey: emit gameHotkey(1); break;
+        case E::HomeUnavailable:
+            emit notice(tr("Home 已被其它软件占用：游戏模式里不能用 Home 呼出调整面板，按 Ctrl+Alt+Home 退出后再调整"), true); break;
+        case E::ExitUnavailable:
+            emit notice(tr("Ctrl+Alt+Home 已被其它软件占用，游戏模式不能穿透操作；关闭占用它的软件后重新全屏"), true); break;
+        case E::HangReleased:
+            // Publish Off before the foreground goes back to Veyra; stay out of
+            // click-through until fullscreen is left.
+            impl_->gameRefused = true;
+            if (impl_->passthroughShown) { impl_->passthroughShown = false; emit gameModeChanged(); }
+            impl_->game.apply(ui::GamePassthrough::Mode::Off);
+            emit gameModeStopped(tr("界面卡住超过 3 秒，已退出游戏模式")); break;
+        }
+    };
+    auto* gameBeat = new QTimer(this);
+    connect(gameBeat, &QTimer::timeout, this, [this] { impl_->game.heartbeat(); });
+    gameBeat->start(250);
 #ifdef VEYRA_ENABLE_MOONLIGHT
     setupMoonlight();
 #endif
@@ -1415,6 +1451,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         // snapshot is not part of the player snapshot.
         if (impl_->exportQueue.queue().needsTick()) pollExport();
         tickPlaylist();
+        updateGameMode();
     });
     impl_->timer->start(16);
     startGpuSampler();
@@ -2456,6 +2493,10 @@ void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring&
         impl_->engine.previewView({});
         impl_->engine.open(impl_->videoWindow, uri, impl_->options);
         impl_->openingSessionId = impl_->engine.snapshot().sessionId;
+        // Only the exact capture startScreenCapture opened in 游戏模式 is one.
+        impl_->gameModeSessionId = !impl_->gameModeUri.empty() && uri == impl_->gameModeUri ? impl_->openingSessionId : 0;
+        impl_->gameModeLive = false;
+        impl_->gameModeUri.clear();
         refreshSubtitles({});
     });
 }
@@ -2522,7 +2563,7 @@ QVariantList QmlPlayerBridge::screenTargets() const {
 }
 QVariantMap QmlPlayerBridge::screenOptions() const {
     QVariantMap d{{"kind", 0}, {"method", 0}, {"fps", 0}, {"cursor", true}, {"fill", false},
-                  {"left", 0}, {"top", 0}, {"right", 0}, {"bottom", 0}};
+                  {"left", 0}, {"top", 0}, {"right", 0}, {"bottom", 0}, {"passthrough", false}};
     const auto saved = impl_->prefs.value("screen").toMap();
     for (auto it = saved.begin(); it != saved.end(); ++it) if (d.contains(it.key())) d[it.key()] = it.value();
     if (d.value("kind").toInt() == 0) d["method"] = 0;           // DXGI is monitors only
@@ -2538,7 +2579,7 @@ bool QmlPlayerBridge::setScreenOption(const QString& key, const QVariant& value)
         const auto [low, high] = ranges.value(key);
         if (!ok || n < low || n > high) { emit notice(tr("数值超出范围"), true); return false; }
         saved[key] = n;
-    } else if (key == QLatin1String("cursor") || key == QLatin1String("fill")) {
+    } else if (key == QLatin1String("cursor") || key == QLatin1String("fill") || key == QLatin1String("passthrough")) {
         saved[key] = value.toBool();
     } else return false;
     impl_->prefs["screen"] = saved;
@@ -2560,13 +2601,97 @@ bool QmlPlayerBridge::startScreenCapture() {
     value.cursor = o.value("cursor").toBool();
     value.left = o.value("left").toUInt(); value.top = o.value("top").toUInt();
     value.right = o.value("right").toUInt(); value.bottom = o.value("bottom").toUInt();
-    veyra::log::info("screen-ui", std::format("start kind={} method={} fps={} cursor={} crop={},{},{},{} fill={}", int(value.kind), int(value.method),
-        value.fps, value.cursor, value.left, value.top, value.right, value.bottom, o.value("fill").toBool()));
+    // 游戏模式: the real pointer is drawn on top, so the picture carries none (a
+    // second, late pointer otherwise), the picture must match the screen 1:1 for
+    // clicks to land where they are seen (no crop), and the yellow border goes.
+    const bool game = o.value("passthrough").toBool();
+    if (game) {
+        value.cursor = false; value.borderless = true;
+        value.left = value.top = value.right = value.bottom = 0;
+        const HWND window = value.kind == source::ScreenTargetKind::Window ? reinterpret_cast<HWND>(value.target) : nullptr;
+        impl_->gameMonitor = window ? MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST) : reinterpret_cast<HMONITOR>(value.target);
+        impl_->game.setTarget(window, impl_->gameMonitor, !window);
+        impl_->gameModeUri = value.uri();
+        // Two cases the picture cannot cover well, said up front.
+        QUERY_USER_NOTIFICATION_STATE state{};
+        if (SUCCEEDED(SHQueryUserNotificationState(&state)) && state == QUNS_RUNNING_D3D_FULL_SCREEN)
+            emit notice(tr("检测到独占全屏的游戏：Windows 不允许其它窗口盖在它上面，请把游戏改成无边框窗口或窗口化"), true);
+        MONITORINFO monitor{}; monitor.cbSize = sizeof(monitor);
+        RECT client{}; POINT origin{};
+        if (window && GetMonitorInfoW(impl_->gameMonitor, &monitor) && GetClientRect(window, &client) && ClientToScreen(window, &origin) &&
+            (origin.x != monitor.rcMonitor.left || origin.y != monitor.rcMonitor.top ||
+             client.right != monitor.rcMonitor.right - monitor.rcMonitor.left || client.bottom != monitor.rcMonitor.bottom - monitor.rcMonitor.top)) {
+            veyra::log::info("game-mode", std::format("captured window does not fill its monitor: client={}x{} at {},{}", client.right, client.bottom, origin.x, origin.y));
+            emit notice(tr("游戏窗口没有铺满屏幕：画面会放大显示，鼠标点到的位置可能和看到的不一致；建议把游戏设为无边框全屏"), false);
+        }
+    } else impl_->gameModeUri.clear();
+    veyra::log::info("screen-ui", std::format("start kind={} method={} fps={} cursor={} crop={},{},{},{} fill={} gameMode={}", int(value.kind), int(value.method),
+        value.fps, value.cursor, value.left, value.top, value.right, value.bottom, o.value("fill").toBool(), game));
     openSourceUri(value.uri(), wideOf(screenTargetLabel()));
     impl_->screenFillActive = o.value("fill").toBool();
     impl_->screenFitClient = impl_->screenFitImage = QSize();
     rememberSource(QStringLiteral("screen"), screenTargetLabel());
     return true;
+}
+bool QmlPlayerBridge::gameMode() const { return impl_->gameModeSessionId != 0; }
+bool QmlPlayerBridge::passthroughActive() const { return impl_->passthroughShown; }
+void QmlPlayerBridge::attachMainWindow(qulonglong nativeHandle) { impl_->game.attach(reinterpret_cast<HWND>(nativeHandle)); }
+void QmlPlayerBridge::setGamePanelOpen(bool open) {
+    if (impl_->gamePanelOpen == open) return;
+    impl_->gamePanelOpen = open;
+    updateGameMode();
+}
+int QmlPlayerBridge::gameModeScreenIndex() const {
+    if (!impl_->gameMonitor) return -1;
+    const auto screens = QGuiApplication::screens();
+    for (int i = 0; i < screens.size(); ++i) {
+        const auto* native = screens[i]->nativeInterface<QNativeInterface::QWindowsScreen>();
+        if (native && native->handle() == impl_->gameMonitor) return i;
+    }
+    return -1;
+}
+void QmlPlayerBridge::testBlockUi(int ms) {
+    if (GetEnvironmentVariableW(L"VEYRA_TEST_UI_BLOCK", nullptr, 0) == 0) return;
+    veyra::log::warn("game-mode", std::format("test: GUI thread blocked for {} ms", ms));
+    Sleep(DWORD(std::clamp(ms, 0, 20000)));
+}
+// 游戏模式 state: click-through while the game-mode capture is live and the picture
+// is fullscreen, the panel while the Home panel is open, otherwise a normal window.
+void QmlPlayerBridge::updateGameMode() {
+    using Mode = ui::GamePassthrough::Mode;
+    auto& i = *impl_;
+    const auto& s = i.snapshot;
+    if (i.gameModeSessionId) {
+        const bool same = s.sessionId == i.gameModeSessionId;
+        if (same && s.running && !s.failed) i.gameModeLive = true;
+        const bool ended = (same && (s.failed || (i.gameModeLive && !s.running))) || s.sessionId > i.gameModeSessionId;
+        if (ended) {
+            const bool shown = i.game.mode() != Mode::Off;
+            veyra::log::info("game-mode", std::format("capture session {} ended failed={} pictureInFront={}", i.gameModeSessionId, s.failed, shown));
+            i.gameModeSessionId = 0; i.gameModeLive = false;
+            if (shown) {
+                if (i.passthroughShown) { i.passthroughShown = false; emit gameModeChanged(); }
+                i.game.apply(Mode::Off);
+                const QString why = s.failed ? uiText(s.status) : QString();
+                emit gameModeStopped(why.isEmpty() ? tr("捕获已结束，已退出游戏模式") : why);
+            }
+        }
+    }
+    if (!i.presentation.fullscreen) i.gameRefused = false;
+    Mode want = Mode::Off;
+    if (i.gameModeSessionId && i.gameModeLive && i.presentation.fullscreen && !i.gameRefused)
+        want = i.gamePanelOpen ? Mode::Panel : Mode::Through;
+    // A refusal (the exit hotkey is taken) holds until fullscreen is left.
+    if (want != Mode::Off && i.game.mode() == Mode::Off && !i.game.arm()) { i.gameRefused = true; want = Mode::Off; }
+    if (want != i.game.mode()) {
+        // QML binds the window's click-through flags to passthroughActive: publish
+        // first, so Qt has changed the window before the foreground moves.
+        const bool through = want == Mode::Through;
+        if (through != i.passthroughShown) { i.passthroughShown = through; emit gameModeChanged(); }
+        i.game.apply(want);
+    }
+    const bool mode = i.gameModeSessionId != 0;
+    if (mode != i.gameModeShown) { i.gameModeShown = mode; emit gameModeChanged(); }
 }
 QString QmlPlayerBridge::screenTargetId() const { return impl_->screenTarget; }
 void QmlPlayerBridge::setScreenTargetId(const QString& value) {
@@ -5464,11 +5589,37 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
             // the card cannot run are switched off with their parameters kept.
             auto candidate = impl_->currentSession();
             const auto previous = candidate;
+            // Switching back gives the list mode its frame generation again (DLSS 4X
+            // moved to FSR 2X by the last switch returns as DLSS 4X) once the card runs it.
+            const auto caps = currentEffectCapabilities();
+            const auto runs = [&](const QString& id) { return caps.value(id).toMap().value("available").toBool(); };
+            auto& active = candidate.configurations[size_t(candidate.active)];
+            const bool listMode = !active.editor;
+            const auto memory = impl_->prefs.value(QStringLiteral("computeFgMemory")).toMap();
+            bool restored = false;
+            if (listMode && !memory.isEmpty()) {
+                const auto backend = engine::FrameGenerationBackend(memory.value(QStringLiteral("backend")).toInt());
+                const auto flow = engine::OpticalFlowBackend(memory.value(QStringLiteral("flow")).toInt());
+                if (runs(fgEffectId(backend))) {
+                    active.fgBackend = backend;
+                    active.chain.fgMultiplier = memory.value(QStringLiteral("multiplier")).toUInt();
+                    if (flow != engine::OpticalFlowBackend::Nvidia || runs(QStringLiteral("flow0"))) active.opticalFlowBackend = flow;
+                    impl_->prefs.remove(QStringLiteral("computeFgMemory"));
+                    restored = true;
+                    veyra::log::info("effect-availability", std::format("compute gpu switch restored backend={} multiplier={}",
+                        engine::frameGenerationBackendName(backend), active.chain.fgMultiplier));
+                }
+            }
             QStringList disabled;
             for (auto& configuration : candidate.configurations) {
                 const auto reason = disableUnavailableEffects(configuration);
                 if (!reason.isEmpty()) disabled << reason;
             }
+            const auto& before = previous.configurations[size_t(previous.active)];
+            if (listMode && !restored && (before.fgBackend != active.fgBackend || before.opticalFlowBackend != active.opticalFlowBackend))
+                impl_->prefs[QStringLiteral("computeFgMemory")] = QVariantMap{{QStringLiteral("backend"), int(before.fgBackend)},
+                    {QStringLiteral("multiplier"), int(before.chain.fgMultiplier)}, {QStringLiteral("flow"), int(before.opticalFlowBackend)}};
+            if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "compute gpu frame generation memory not saved");
             if (candidate != previous) {
                 auto next = impl_->facade.pendingSettings();
                 const auto& configuration = candidate.configurations[size_t(candidate.active)];
@@ -6883,6 +7034,7 @@ void QmlPlayerBridge::setPresentationFullscreen(bool value) {
     impl_->presentation.fullscreen=value;
     impl_->engine.requestPresentation(impl_->presentation);
     emit presentationChanged();
+    updateGameMode();
 }
 double QmlPlayerBridge::previewAspect() const {
     const int mode=impl_->screenFillActive?2:impl_->aspectMode;

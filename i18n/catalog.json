@@ -638,11 +638,11 @@
    "ja": "DLSS フレーム生成"
   },
   {
-   "zh": "DXGI 为显示器兼容方式，无鼠标指针",
+   "zh": "DXGI 为显示器兼容方式，无鼠标指针；捕获显示器时不显示黄色边框，Veyra 自己也不会出现在截图和录屏里",
    "src": "qml/DialogHost.qml",
-   "zh-TW": "DXGI 為顯示器相容方式，無滑鼠指標",
-   "en": "DXGI is the display-compatible mode, without the mouse pointer",
-   "ja": "DXGI はディスプレイ互換モードで、マウスポインターは映りません"
+   "zh-TW": "DXGI 為顯示器相容方式，無滑鼠指標；擷取顯示器時不顯示黃色邊框，Veyra 自己也不會出現在截圖和錄影裡",
+   "en": "DXGI is the display-compatible mode, without the mouse pointer. A display capture shows no yellow border, and Veyra itself stays out of screenshots and recordings",
+   "ja": "DXGI はディスプレイ互換モードで、マウスポインターは映りません。ディスプレイのキャプチャでは黄色い枠を表示せず、Veyra 自身もスクリーンショットや録画に映りません"
   },
   {
    "zh": "Dolby / DTS 位流",
@@ -16024,6 +16024,97 @@
    "zh-TW": "運算顯示卡已恢復預設（效能最強的顯示卡），重新開啟影片後生效",
    "en": "Compute GPU back to the default (the most powerful GPU); it applies after reopening the video",
    "ja": "処理用 GPU を既定（最も高性能な GPU）に戻しました。動画を開き直すと反映されます"
+  },
+  {
+   "zh": "Home 已被其它软件占用：游戏模式里不能用 Home 呼出调整面板，按 Ctrl+Alt+Home 退出后再调整",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "Home 已被其他軟體佔用：遊戲模式裡不能用 Home 叫出調整面板，按 Ctrl+Alt+Home 退出後再調整",
+   "en": "Another program has taken Home: in game mode Home cannot open the adjust panel; press Ctrl+Alt+Home to leave, then adjust",
+   "ja": "Home が他のソフトに使われています。ゲームモード中は Home で調整パネルを開けません。Ctrl+Alt+Home で終了してから調整してください"
+  },
+  {
+   "zh": "Ctrl+Alt+Home 已被其它软件占用，游戏模式不能穿透操作；关闭占用它的软件后重新全屏",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "Ctrl+Alt+Home 已被其他軟體佔用，遊戲模式不能穿透操作；關閉佔用它的軟體後重新全螢幕",
+   "en": "Another program has taken Ctrl+Alt+Home, so game mode cannot pass input through; close that program and go fullscreen again",
+   "ja": "Ctrl+Alt+Home が他のソフトに使われているため、ゲームモードで操作を通せません。そのソフトを閉じてから全画面にし直してください"
+  },
+  {
+   "zh": "界面卡住超过 3 秒，已退出游戏模式",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "介面卡住超過 3 秒，已退出遊戲模式",
+   "en": "The interface stopped responding for more than 3 s; game mode was left",
+   "ja": "画面が 3 秒以上応答しなかったため、ゲームモードを終了しました"
+  },
+  {
+   "zh": "捕获已结束，已退出游戏模式",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "擷取已結束，已退出遊戲模式",
+   "en": "The capture ended; game mode was left",
+   "ja": "キャプチャが終了したため、ゲームモードを終了しました"
+  },
+  {
+   "zh": "游戏模式用真实指针，画面里不再画一个",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "遊戲模式使用真實指標，畫面裡不再畫一個",
+   "en": "Game mode uses the real pointer, so the picture does not draw a second one",
+   "ja": "ゲームモードでは実際のポインターを使い、映像には描きません"
+  },
+  {
+   "zh": "游戏模式不裁剪，画面和屏幕一一对应，点到哪里就是哪里",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "遊戲模式不裁切，畫面和螢幕一一對應，點到哪裡就是哪裡",
+   "en": "Game mode does not crop: the picture matches the screen, so clicks land where you see them",
+   "ja": "ゲームモードでは切り抜きません。映像と画面が一致し、見た位置をそのままクリックできます"
+  },
+  {
+   "zh": "游戏",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "遊戲",
+   "en": "Game",
+   "ja": "ゲーム"
+  },
+  {
+   "zh": "游戏模式",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "遊戲模式",
+   "en": "Game mode",
+   "ja": "ゲームモード"
+  },
+  {
+   "zh": "开始后 Veyra 在这块屏幕上全屏，键鼠和手柄直接操作屏幕上的任何程序，就像直接用电脑；Home 调整画面，Ctrl+Alt+Home 退出",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "開始後 Veyra 在這塊螢幕上全螢幕，鍵鼠和手把直接操作螢幕上的任何程式，就像直接用電腦；Home 調整畫面，Ctrl+Alt+Home 退出",
+   "en": "Veyra goes fullscreen on this screen; keyboard, mouse and gamepad work every program on it as if you used the computer directly. Home adjusts the picture, Ctrl+Alt+Home leaves",
+   "ja": "開始すると Veyra がこの画面で全画面になり、キーボード・マウス・ゲームパッドで画面上のどのソフトもそのまま操作できます。Home で映像を調整、Ctrl+Alt+Home で終了"
+  },
+  {
+   "zh": "开始后 Veyra 在游戏所在的屏幕上全屏盖住游戏，键鼠和手柄照常操作游戏；Home 调整画面，Ctrl+Alt+Home 退出。游戏请设为无边框全屏",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "開始後 Veyra 在遊戲所在的螢幕上全螢幕蓋住遊戲，鍵鼠和手把照常操作遊戲；Home 調整畫面，Ctrl+Alt+Home 退出。遊戲請設為無邊框全螢幕",
+   "en": "Veyra goes fullscreen over the game on its screen; keyboard, mouse and gamepad still play the game. Home adjusts the picture, Ctrl+Alt+Home leaves. Set the game to borderless fullscreen",
+   "ja": "開始すると Veyra がゲームのある画面で全画面になってゲームを覆い、キーボード・マウス・ゲームパッドはそのままゲームを操作します。Home で映像を調整、Ctrl+Alt+Home で終了。ゲームはボーダーレス全画面にしてください"
+  },
+  {
+   "zh": "游戏模式：调整画面 / 退出",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "遊戲模式：調整畫面 / 退出",
+   "en": "Game mode: adjust picture / leave",
+   "ja": "ゲームモード：映像を調整 / 終了"
+  },
+  {
+   "zh": "检测到独占全屏的游戏：Windows 不允许其它窗口盖在它上面，请把游戏改成无边框窗口或窗口化",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "偵測到獨佔全螢幕的遊戲：Windows 不允許其他視窗蓋在它上面，請把遊戲改成無邊框視窗或視窗化",
+   "en": "An exclusive-fullscreen game is running: Windows lets no other window cover it. Switch the game to borderless or windowed mode",
+   "ja": "排他的フルスクリーンのゲームを検出しました。Windows は他のウィンドウを重ねられません。ゲームをボーダーレスまたはウィンドウモードにしてください"
+  },
+  {
+   "zh": "游戏窗口没有铺满屏幕：画面会放大显示，鼠标点到的位置可能和看到的不一致；建议把游戏设为无边框全屏",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "遊戲視窗沒有鋪滿螢幕：畫面會放大顯示，滑鼠點到的位置可能和看到的不一致；建議把遊戲設為無邊框全螢幕",
+   "en": "The game window does not fill the screen: the picture is enlarged, so clicks may not land where you see them. Set the game to borderless fullscreen",
+   "ja": "ゲームのウィンドウが画面全体を覆っていません。映像が拡大されるため、クリック位置が見た位置とずれることがあります。ゲームをボーダーレス全画面にしてください"
   }
  ]
 }

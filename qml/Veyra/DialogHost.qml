@@ -1185,11 +1185,25 @@ Item {
                 }
             }
         }
+        DSection { text: qsTr("游戏") }
+        DGroup {
+            VRow {
+                label: qsTr("游戏模式")
+                hint: screenDialog.o.kind === 1
+                      ? qsTr("开始后 Veyra 在这块屏幕上全屏，键鼠和手柄直接操作屏幕上的任何程序，就像直接用电脑；Home 调整画面，Ctrl+Alt+Home 退出")
+                      : qsTr("开始后 Veyra 在游戏所在的屏幕上全屏盖住游戏，键鼠和手柄照常操作游戏；Home 调整画面，Ctrl+Alt+Home 退出。游戏请设为无边框全屏")
+                VSwitch {
+                    objectName: "screen-game-mode"
+                    checked: screenDialog.o.passthrough === true
+                    onToggled: checked => veyra.setScreenOption("passthrough", checked)
+                }
+            }
+        }
         DSection { text: qsTr("采集") }
         DGroup {
             VRow {
                 label: qsTr("采集方式")
-                hint: screenDialog.o.kind === 1 ? qsTr("DXGI 为显示器兼容方式，无鼠标指针") : qsTr("窗口只能用 Windows Graphics Capture")
+                hint: screenDialog.o.kind === 1 ? qsTr("DXGI 为显示器兼容方式，无鼠标指针；捕获显示器时不显示黄色边框，Veyra 自己也不会出现在截图和录屏里") : qsTr("窗口只能用 Windows Graphics Capture")
                 VSeg {
                     enabled: screenDialog.o.kind === 1
                     opacity: enabled ? 1 : 0.5
@@ -1208,17 +1222,21 @@ Item {
             }
             VRow {
                 label: qsTr("显示鼠标指针")
+                hint: screenDialog.o.passthrough === true ? qsTr("游戏模式用真实指针，画面里不再画一个") : ""
                 VSwitch {
-                    enabled: screenDialog.o.method === 0
-                    checked: screenDialog.o.cursor === true
+                    enabled: screenDialog.o.method === 0 && screenDialog.o.passthrough !== true
+                    opacity: enabled ? 1 : 0.5
+                    checked: screenDialog.o.cursor === true && screenDialog.o.passthrough !== true
                     onToggled: checked => veyra.setScreenOption("cursor", checked)
                 }
             }
             VRow {
                 label: qsTr("裁剪（像素）")
-                hint: qsTr("左 / 上 / 右 / 下，按源像素")
+                hint: screenDialog.o.passthrough === true ? qsTr("游戏模式不裁剪，画面和屏幕一一对应，点到哪里就是哪里") : qsTr("左 / 上 / 右 / 下，按源像素")
                 RowLayout {
                     spacing: 4
+                    enabled: screenDialog.o.passthrough !== true
+                    opacity: enabled ? 1 : 0.5
                     Repeater {
                         model: ["left", "top", "right", "bottom"]
                         delegate: VTextField {

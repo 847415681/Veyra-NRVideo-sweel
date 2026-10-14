@@ -54,6 +54,9 @@ int wmain(int argc,wchar_t** argv){
     if(!ctx.initialize(dd,st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,st))return 4;
     source::ScreenCaptureOptions options;check(options.fps==0,"default follows display refresh");options.target=uint64_t(child.window);options.fps=60;options.cursor=false;
     source::ScreenCaptureOptions parsed;check(source::ScreenCaptureOptions::parse(options.uri(),parsed)&&parsed.target==options.target,"URI round trip");check(!source::ScreenCaptureOptions::parse(options.uri()+L":3",parsed),"reject malformed URI");
+    {source::ScreenCaptureOptions game=options;game.borderless=true;game.cursor=false;source::ScreenCaptureOptions back;
+     check(source::ScreenCaptureOptions::parse(game.uri(),back)&&back.borderless&&!back.cursor&&back.target==game.target,"borderless URI round trip");
+     game.borderless=false;game.cursor=true;check(source::ScreenCaptureOptions::parse(game.uri(),back)&&!back.borderless&&back.cursor,"old cursor field keeps the border");}
     source::SourceOpenDesc desc;desc.path=options.uri();desc.d3d12Device=ctx.device();desc.d3d12Queue=ctx.directQueue();source::ScreenCaptureSource source;
     bool opened=source.open(desc);check(opened,"WGC open");if(!opened){std::wcerr<<source.status()<<std::endl;return 5;}
     pipeline::FramePacket p;const AVFrame* f=nullptr;bool frame=next(source,p,&f);check(frame,"WGC first real frame");if(!frame)return 6;

@@ -29,7 +29,10 @@ Window {
     // The software scene graph cannot draw the Shape background. Keep the native
     // window opaque as well, including while its first frame is being produced.
     color: typeof vySoftwareUi !== "undefined" && vySoftwareUi ? (cinema ? Theme.videoBlack : Theme.bgOuter) : "transparent"
+    // 游戏模式 click-through (ui/GamePassthrough.h): Qt's own flags, so Qt keeps the
+    // window's layered/transparent/no-activate styles in both interface renderers.
     flags: Qt.Window | Qt.FramelessWindowHint
+           | (veyra.passthroughActive ? (Qt.WindowTransparentForInput | Qt.WindowDoesNotAcceptFocus) : 0)
     title: "Veyra " + veyra.version
 
     // Page ids match the prototype's PAGES keys so a design screenshot and an
@@ -300,7 +303,10 @@ Window {
         onStartPs5: if (root.page === "home") root.goPage("min")
         onStartMoonlight: if (root.page === "home") root.goPage("min")
         onStartXbox: if (root.page === "home") root.goPage("min")
-        onStartScreen: if (root.page === "home") root.goPage("min")
+        onStartScreen: {
+            if (root.page === "home") root.goPage("min")
+            if (veyra.screenOptions.passthrough === true) root.enterGameFullscreen()
+        }
     }
 
     // The dock floats above every page and retracts on its own.
@@ -403,7 +409,47 @@ Window {
         quickPanel = false
         if (quickReturnPage !== "") { const p = quickReturnPage; quickReturnPage = ""; switchPageInstantly(p) }
     }
-    onQuickPanelShownChanged: veyra.logUi("ui-fullscreen", "quick panel shown=" + quickPanelShown)
+    onQuickPanelShownChanged: {
+        veyra.logUi("ui-fullscreen", "quick panel shown=" + quickPanelShown)
+        veyra.setGamePanelOpen(quickPanelShown)
+    }
+    // 游戏模式 (屏幕捕获 → 游戏模式): fullscreen on the captured monitor (or the
+    // monitor of the captured window); the bridge then makes the picture click-through
+    // so the program underneath keeps the keyboard, mouse and gamepad.
+    function enterGameFullscreen() {
+        const i = veyra.gameModeScreenIndex()
+        const screens = Qt.application.screens
+        if (i >= 0 && i < screens.length) {
+            const s = screens[i]
+            const inside = x + width / 2 >= s.virtualX && x + width / 2 < s.virtualX + s.width &&
+                           y + height / 2 >= s.virtualY && y + height / 2 < s.virtualY + s.height
+            if (!inside) {
+                if (fullscreen) toggleFullscreen()
+                x = s.virtualX + Math.max(0, Math.round((s.width - width) / 2))
+                y = s.virtualY + Math.max(0, Math.round((s.height - height) / 2))
+            }
+        }
+        if (!fullscreen) toggleFullscreen()
+        veyra.logUi("game-mode", "fullscreen for game mode on screen " + i)
+    }
+    Connections {
+        target: veyra
+        // Home: the adjust panel takes the input back / gives it to the program again.
+        // Ctrl+Alt+Home: leave the fullscreen picture (and with it the click-through).
+        function onGameHotkey(which) {
+            if (!root.fullscreen) return
+            if (which === 1) { root.closeQuickPanel(); root.toggleFullscreen(); return }
+            root.fullLocked = false
+            root.toggleQuickPanel()
+        }
+        function onGameModeStopped(reason) {
+            if (root.fullscreen) root.toggleFullscreen()
+            toast.show(reason, true)
+        }
+        function onGameModeChanged() {
+            if (veyra.passthroughActive && playlistWindow.visible) playlistWindow.hide()
+        }
+    }
     onFullscreenChanged: {
         veyra.setPresentationFullscreen(fullscreen)
         fullTarget = fullscreen
@@ -519,6 +565,8 @@ Window {
             if (root.page !== "min" && root.page !== "pro" && root.page !== "node" && !root.fullscreen) return
             if (dialogs.dialog !== "" || !veyra.hasSource) return
             if (root.fullscreen && root.quickPanelShown && (proPage.overlayContains(p.x, p.y) || nodePage.overlayContains(p.x, p.y))) return
+            // 游戏模式: a click on the picture beside the panel returns to the game.
+            if (root.fullscreen && root.quickPanelShown && veyra.gameMode) { root.closeQuickPanel(); return }
             if (!root.fullscreen && !root.pictureContains(p)) return
             root.contentItem.forceActiveFocus()
             if (veyra.isCapture || veyra.duration <= 0) return
@@ -588,7 +636,7 @@ Window {
         // an open dialog, which lives in the main window below it.
         cinema: root.cinema && !root.fullscreen
         pillTop: (root.maximized ? root.height : root.pictureHeight) - 46
-        shown: veyra.hasSource && !root.pillHidden && (root.fullscreen ? root.fullControls && !root.fullLocked
+        shown: veyra.hasSource && !root.pillHidden && !veyra.passthroughActive && (root.fullscreen ? root.fullControls && !root.fullLocked
                                                    : root.cinema && root.shownPage === "min"
                                                      && root.leavingPage === "" && dialogs.dialog === ""
                                                      && root.visibility !== Window.Minimized)
@@ -629,7 +677,12 @@ Window {
         onActivated: root.goPage(root.page === "min" ? "pro" : "min")
     }
     Shortcut { sequences: ["F11", "Alt+Return", "Alt+Enter"]; onActivated: root.toggleFullscreen() }
-    Shortcut { sequence: "Esc"; enabled: root.fullscreen; onActivated: root.toggleFullscreen() }
+    // In 游戏模式 Esc closes the adjust panel and gives the input back to the game.
+    Shortcut {
+        sequence: "Esc"
+        enabled: root.fullscreen
+        onActivated: veyra.gameMode && root.quickPanelShown ? root.closeQuickPanel() : root.toggleFullscreen()
+    }
     // Home: the fullscreen quick-adjust panel, from 极简 or 专业 (list or node view).
     Shortcut {
         sequence: "Home"
