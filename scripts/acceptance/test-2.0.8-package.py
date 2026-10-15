@@ -130,14 +130,14 @@ def refresh(flavor):
 本版修复（请优先测试）：
 - 抖音直播伴侣：直播伴侣运行时，GPU 优先级从“实时”暂时降为“高”，退出后自动恢复；启动时检测到它，界面改用软件绘制（和小飞机、NVIDIA 信息浮窗、游戏加加相同）。请开着直播伴侣用采集卡 + NR 测试；如果仍然卡死，日志会记下同时运行的软件和注入模块。
 - 圆刚 GC550 等采集卡勾选音频监听后无画面、反复“采集信号中断/重新连接”（GitHub #38）：音频来自采集卡自身时不再强制系统时钟；仍然只有声音没画面时，下一次重连自动换另一种时钟方式。
-- 拖动 NR、RTX Video HDR、调色、保护区域、HDR 曲线等滑块不再卡顿。
-- 窗口捕获时拖动被捕获窗口的大小，画面不再冻结；尺寸稳定约 0.3 秒后切换到新尺寸。
+- 拖动 NR、RTX Video HDR、调色、保护区域、HDR 曲线等滑块改为局部更新，减少界面卡顿；移动节点的结构性重建仍有成本。
+- 窗口捕获连续改尺寸时保留旧尺寸画面，稳定约 0.3 秒后再重建；最终切换仍有一次初始化耗时。
 - 开关点过一次后不再跟丢设置，例如应用预设或在另一页修改同一设置（GitHub #29）。
 - 日志不再无限增长：超过 16 MB 时，启动时把旧内容移到 veyra-qml.old.log；单次运行超过 64 MB 时轮换一次。
 
 本版合入：DLSS 帧生成性能模式（RTX 50，运行库 310.9.16 在 runtime/experimental/dlssg-lite，默认关闭）；设置里“同时用这块显卡运算”（双卡）；全屏 Home 呼出专业/节点面板；屏幕捕获“游戏模式”；PS5 手柄控制（画面走采集卡）；显示同步“自动”低延迟、补帧帧率提示、可变刷新开关；启动检查更新；竖屏旋转、节点模式画面遮挡、BMD 输入记忆；采集格式过多导致的卡死；GPU 重置后图标消失与自动重连；帧率菜单只列常用帧率（可勾选显示全部）；原尺寸 RTX Video SR 只处理压缩视频。
 
-本次构建与回归见 {VALIDATION}。AMD 包只做了内容与启动检查，不代表 AMD 实卡增强验证。
+本次构建与回归见 {VALIDATION}。AMD 包只做了内容与启动检查，不代表 AMD 实卡增强验证。VFG 合成校验有一次间歇失败，独立完整复测通过，原因未定，不能据此声称已经修复；本地测试包保留这项限制。
 
 对应源码在上一级目录 Veyra-{LABEL}-source.zip；依赖源码 Veyra-2.0.6-dependency-source.zip 和字幕 FFmpeg 源码 FFmpeg-9.0.1-slices256-dav1d-zlib-source.zip 不变。构建方法见 docs/BUILD_2.0.8_TEST.md。
 运行库清单记录原版和社区版的身份；社区版 HashMismatch/NotSigned 按实际记录，不锁定用户自行替换的兼容 DLL。运行库、SDK、模型和私有素材没有混入应用源码。
@@ -148,7 +148,7 @@ def manifest(flavor,source=False):
     data=dict(schema=3,version='2.0.8',candidate=LABEL,displayVersion=LABEL,gpuPackage=flavor,localOnly=True,releaseReady=False,
         sourceArchiveCommit=git('rev-parse','HEAD'),mainCommit=git('rev-parse','main'),productSourceCommit=build['head'],exeSha256=sha(BUILD/'veyra_qml_ui.exe'),
         validationRecord=VALIDATION,peVersions=dict(file='2.0.8.0',product='2.0.8.0'),
-        knownIssues=['AMD/Intel enhancement and Blackmagic field validation require affected hardware','Douyin live companion compatibility not reproduced locally (not installed); field confirmation needed'],
+        knownIssues=['AMD/Intel enhancement, GC550 and Blackmagic field validation require affected hardware','Douyin live companion compatibility not reproduced locally (not installed); process-name simulation only; field confirmation needed','VFG synthetic async validation failed 22 checks once, then 2425 checks passed in an isolated rerun; cause unresolved; see validation record'],
         correspondingSource=dict(application='../'+SOURCE.name,applicationSha256=sha(SOURCE) if source else None,
             dependencies='../'+DEPSOURCE.name,dependencySha256=DEPSHA,ffmpeg='../'+FFSOURCE.name,ffmpegSha256=FFSHA,
             instructions='docs/BUILD_2.0.8_TEST.md',displayVersionOverride='-DVEYRA_DISPLAY_VERSION='+LABEL),files=payload(app))

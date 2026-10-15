@@ -9531,3 +9531,15 @@ BMD日志53：5次进入原生协商的尝试均SDI连接0x1、locked0/noInput�
 三个独立隐藏SDK配置探针编译/执行通过，最后按产品AllowTearing/无WaitableObject flags验证：XeSS初始化/启用最大队列返回3，Set1读回1，关闭再开仍1；并未Present，不能声称底层队列实际收紧或毫秒收益。源码tests/latency-chain-audit-20261013/LatencyConfig{,Enabled,ProductFlags}Probe.cpp、编译器启动脚本在tmp、本轮build EXE、config-*-probe日志/回执均在E盘。首编译因cl PATH查找WinError2失败改明确编译器路径；前两探针多用WaitableObject，复核发现后补跑真实flags，并记录原生无该flag返回0x887a0001、XeSS代理接受的差异。
 
 失败完整保留：首场设备名MCS4K-T911匹配不到，改唯一T911后通过；既有trace开关启用后QML diagnosticsReport仅592字节简报，analyze-xess-timeline报无trace，尚无逐帧XeLL Sleep/SDK GPU执行/队列占用。源码核对XeLL取源前调用、XeSS应用pairDelay0/调度等待0，未找到叠加固定A/B相位；共享direct queue仍是待测耦合候选。报告docs/LATENCY_CHAIN_AUDIT_REPORT_2026-10-13.md明确事实、候选和60Hz同场光学A/B缺口，不宣称全部112ms根因已分解。产品实现/QML绘制统计频率/运行组件/模型不变；本轮无需重建产品，独立探针可构建、现成产品四场可运行。无merge/push/Release/新测试包/关机/子Agent。最终输入保护、差异审计和源码bundle回执见reports/latency-chain-audit-20261013/final.json。
+
+## 2026-10-15 Codex 接手 Claude 2.0.8 收尾
+
+实际读取本机 Claude 会话15638198-4910-4628-aab4-c96c62aebd18，继承用户要求：B1–B5、直播伴侣兼容、#38、全部当前修复合本地main、打NVIDIA/AMD测试包。保留原Claude分支f074e40，复用同一E盘树切codex/test-2.0.8-handoff-20261015；计划docs/TEST_2.0.8_HANDOFF_PLAN_2026-10-15.md，详细报告docs/TEST_2.0.8_REPORT_2026-10-15.md。77旧树HEAD/status、509脏文件SHA、原会话和增量bundle保存在archives/test-2.0.8-handoff-20261015。没有子Agent、真实配对主机、驱动/用户配置修改、远端push/Release或关机。
+
+99435ae只修两个夹具：Telemetry保留33ms和高频次数上限，去掉50ms后必须居中的调度假设；file-continuity只将NGX启动等待由8s改为30s并隔离稳态测量，100帧/音频等待/0.15s要求保持。原2.0.7也有原夹具超时记录，未重编修正后的旧版夹具。最终35目标构建21.9s通过（既有fresh目录上的增量，不是冷构建）；命令chcp65001后python -X utf8 -B -I scripts/acceptance/test-2.0.8-build.py --task claude-release-2.0.8-20261015 --label 2.0.8-test。build-20261015-160951回执679输入、35EXE；产品EXEa4676e9a5bf08738dcc85c6c6909045f0593ebadcf857e6108904e90d4df2432。后续仅文档/打包脚本改变，679输入复核不变。
+
+定向4场通过（tests-161215）；批跑40场中38场零失败，屏幕捕获5项严格RGB阈值与原2.0.7基线完全相同（HDR桌面），不能算全项通过；VFG首轮22项像素检查失败、无GPU/API报错，独立完整复测2425/2425和人工延迟200ms输入依赖189/189通过。VFG源码/测试对main无差异，根因未定，不靠重复通过冒充修复。原始失败、基线缺着色器初次失败和QA误删Qt导入失败全保留，详见报告。
+
+实际GUI：六效果器NR单步节点4.95ms/专业5.05ms，对照Claude同脚本原65–80ms，只表示UI响应；移动节点仍61–64ms。窗口捕获NR+FG连续缩放只在稳定后重建一次，有最终约0.5s初始化成本；进程名模拟伴侣启动software、实时5→高4→伴侣退出恢复5；启动/运行日志轮换通过，生产16MB/64MB不变。实际DLSS性能模式和VFG Low4X呈现生成帧1233/4768、无错误；首解析器错把实际[vfg]当vfg-gpu，修解析后仅复核既有日志，原回执保留。日志在logs/claude-release-2.0.8-20261015的handoff-*、log-rotation-165437和logs/test-2.0.8-handoff-20261015各探针。
+
+后续本地main快进、stage/seal/cold及最终保护复核回执写入reports/test-2.0.8-handoff-20261015/final.json和test-packages/claude-release-2.0.8-20261015。两包保留VFG间歇校验限制、releaseReady=false；GC550/BMD/AMD和真实直播伴侣负载需现场验证。未将模拟或NVIDIA本机播放当作对应硬件验收。
