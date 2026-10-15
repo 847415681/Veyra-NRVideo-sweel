@@ -25,6 +25,9 @@ Rectangle {
         property bool exportPaused: false
         property bool exportHevc: false
         property bool exportCompletionSound: true
+        // 导出时关闭正在播放的内容 reads the preference map like the real bridge.
+        property var preferences: ({ exportStopsPlayback: true })
+        function setPreference(key, value) { const next = Object.assign({}, preferences); next[key] = value; preferences = next; return true }
         property bool exportSelectionEditable: true
         property int exportContainer: 0
         property int exportSrTargetIndex: -1
@@ -99,6 +102,23 @@ Rectangle {
                     verify(point.x>=0&&point.x+select.width<=scroll.width+1,"resolution must fit horizontally")
                 }
             }
+        }
+        function test_stop_playback_switch_follows_preference(){
+            // GitHub #29: the switch writes back through its owner and keeps following the
+            // setting when it changes elsewhere, also after it has been clicked.
+            fixture.width=1920;fixture.height=1080
+            fixture.Window.window.width=1920;fixture.Window.window.height=1080
+            waitForPolish(fixture.Window.window)
+            backend.setPreference("exportStopsPlayback",true)
+            const sw=findChild(page,"export-stop-playback");verify(sw!==null)
+            compare(sw.checked,true)
+            backend.setPreference("exportStopsPlayback",false);compare(sw.checked,false)
+            backend.setPreference("exportStopsPlayback",true);compare(sw.checked,true)
+            const p=sw.mapToItem(null,sw.width/2,sw.height/2)
+            verify(sw.visible&&p.x>0&&p.y>0&&p.x<fixture.Window.window.width&&p.y<fixture.Window.window.height,"switch on screen at "+p.x+","+p.y)
+            mouseClick(sw)
+            compare(backend.preferences.exportStopsPlayback,false);compare(sw.checked,false)
+            backend.setPreference("exportStopsPlayback",true);compare(sw.checked,true)
         }
         function test_queue_actions(){
             mouseClick(findChild(page,"export-add-files"));compare(backend.additions,1);compare(backend.starts,0)

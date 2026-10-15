@@ -19,7 +19,7 @@ Item {
         || GraphicsInfo.api === GraphicsInfo.Software
     // Bumped when the interface's graphics device was lost and recreated (GPU reset): Qt
     // 6.8.3's curve renderer then leaves the new nodes empty until the path changes.
-    readonly property int deviceGeneration: (typeof veyra !== "undefined" && veyra) ? veyra.uiDeviceGeneration : 0
+    readonly property int deviceGeneration: (typeof veyra !== "undefined" && veyra) ? (veyra.uiDeviceGeneration || 0) : 0
 
     implicitWidth: size
     implicitHeight: size
