@@ -2029,8 +2029,9 @@ VPage {
                             summary: veyra.hdrCurve ? qsTr("已开启") : qsTr("已关闭")
                             on: veyra.hdrCurve
                             onToggled: on => veyra.hdrCurve = on
-                            // 每台显示设备一套配置（自定义）：按显示器身份记住曲线，
-                            // 换设备（投影仪 / 电视）时自动套用那台设备上的设置。
+                            // One remembered curve per display (custom): settings are keyed by the
+                            // monitor's identity, so moving to the projector or the TV applies that
+                            // device's own curve.
                             VRow {
                                 label: qsTr("按显示设备记忆")
                                 hint: veyra.hdrDisplayProfileCount > 0
@@ -2046,8 +2047,9 @@ VPage {
                                     onClicked: veyra.forgetHdrDisplayProfiles()
                                 }
                             }
-                            // 曲线图（自定义）：由 C++ 用与着色器相同的公式采样，
-                            // 虚线是"不做任何处理"的参考线，橙线是当前曲线。
+                            // Curve graph (custom): C++ samples it with the very formula the shader
+                            // runs. The dotted line is the untouched reference, the orange one the
+                            // curve in force.
                             Canvas {
                                 id: hdrCurveCanvas
                                 Layout.fillWidth: true
@@ -2069,12 +2071,12 @@ VPage {
                                         var v = Math.max(n, minN) / minN;
                                         return Math.log(v) / Math.log(maxN / minN);
                                     }
-                                    // 参考线：未启用任何调整时曲线与它重合
+                                    // Reference: the curve coincides with it when nothing is applied
                                     ctx.strokeStyle = Theme.t3;
                                     ctx.lineWidth = 1;
                                     ctx.beginPath();
                                     ctx.moveTo(0, h); ctx.lineTo(w, 0); ctx.stroke();
-                                    // 当前曲线
+                                    // Curve in force
                                     ctx.strokeStyle = g.enabled ? "#F5C84B" : Theme.t3;
                                     ctx.lineWidth = 2;
                                     ctx.beginPath();
@@ -2086,8 +2088,9 @@ VPage {
                                     ctx.stroke();
                                 }
                             }
-                            // 一键按片源选档（自定义）：用片源自带的峰值 / 平均亮度
-                            // 决定档位与强度，界面只解释理由，不做测量。
+                            // One-click pick from the source (custom): the container's own peak and
+                            // frame-average numbers choose the preset. The panel only explains the
+                            // reason; it never measures anything here.
                             VRow {
                                 label: qsTr("按片源自动选档")
                                 hint: {
@@ -2128,8 +2131,9 @@ VPage {
                                     onClicked: veyra.applyRecommendedHdrTuning()
                                 }
                             }
-                            // 实时裁剪表（自定义）：由呈现器每 15 帧探测一帧算出，
-                            // 因此只在播放中、曲线开启时才有数字。
+                            // Live clipping table (custom): the presenter probes one frame every 15
+                            // and derives it, so it only carries numbers while playback runs with the
+                            // curve on.
                             VRow {
                                 objectName: "list-hdrcurve-live"
                                 label: qsTr("实时裁剪")
@@ -2153,7 +2157,8 @@ VPage {
                                     : veyra.hdrCurveCoverage.aboveCeiling > 5 ? qsTr("偏高")
                                     : veyra.hdrCurveCoverage.aboveCeiling > 0 ? qsTr("轻微") : qsTr("未触及")
                             }
-                            // 高光预警（自定义）：片源峰值 vs 曲线生效后的硬上限。
+                            // Highlight warning (custom): the source peak against the hard ceiling
+                            // the curve actually applies.
                             VRow {
                                 label: qsTr("高光预警")
                                 hint: !veyra.hdrSourceInfo.valid ? qsTr("片源没有携带亮度信息")
@@ -2167,8 +2172,9 @@ VPage {
                                              : qsTr("上限已覆盖片源峰值，不会裁剪"))
                                 value: veyra.hdrPeakWarning.clipped ? qsTr("会压缩") : qsTr("安全")
                             }
-                            // 选档方式（自定义）：整档预设 / 自由组合。两套写的是同一条曲线，
-                            // 所以切换只影响界面，不影响存档或画面。
+                            // Preset mode (custom): whole preset or composed. Both write the same
+                            // curve, so switching only changes the wording here - not the archive and
+                            // not the picture.
                             Text {
                                 Layout.fillWidth: true
                                 visible: true
@@ -2213,8 +2219,10 @@ VPage {
                                         required property var modelData
                                         text: modelData.label
                                         ghost: true
-                                        // 两套预设写的是同一条曲线，所以数值上可能同时匹配（「不补偿」时自由组合就等于整档预设）。
-                                        // 只让当前模式那一行点亮，免得看起来像两个模式同时生效。
+                                        // Both systems write one curve, so a value can match in both at
+                                        // once (with no compensation the composed pair equals a whole
+                                        // preset). Light only the active mode's row, so it never looks
+                                        // like two modes are in force.
                                         primary: veyra.hdrPresetMode !== "axes" && veyra.hdrTuningPreset === modelData.id
                                         onClicked: veyra.applyHdrTuningPreset(modelData.id)
                                     }
@@ -2255,7 +2263,8 @@ VPage {
                                         required property var modelData
                                         text: modelData.label
                                         ghost: true
-                                        // 只按曲线实际等于哪个组合点亮：当前是整档预设（或手动微调过）时不亮任何一项，
+                                        // Light strictly on a real match: nothing lights when the curve
+                                        // came from the whole-preset side (or was tuned by hand),
             // 与整档预设显示"自定义"的行为一致。
             primary: veyra.hdrPresetMode === "axes" && veyra.hdrAxesMatch.content === modelData.id
                                         onClicked: veyra.applyHdrAxesPreset(modelData.id, veyra.hdrAxes.environment !== "" ? veyra.hdrAxes.environment : "compensate")
@@ -2341,12 +2350,13 @@ VPage {
                                 color: Theme.t3
                                 font.family: Theme.fontUi; font.pixelSize: 11
                             }
-                            // 人话滑杆（自定义）：技术参数翻译成三根好懂的滑杆，
-                            // 精确参数仍在下面的「高级」里。
+                            // Plain-language dials (custom): the technical numbers become three
+                            // readable sliders; the exact values stay in Advanced below.
                             VRow {
                                 label: qsTr("暗部提亮")
                                 hint: qsTr("0 = 不动；10 = 暗部最亮，高光不受影响")
-                                // 档位只是快捷方式：同时给出真实参数，避免"碰一下跳值"的困惑。
+                                // The step is only a shortcut: the real value is shown beside it, so
+                                // touching the slider cannot look like a mysterious jump.
                                 value: veyra.hdrDials.shadowLift + " / 10（"
                                     + (Number(veyra.hdrCurveParams.shadowLiftEv100 ?? 0) / 100).toFixed(2) + " EV）"
                                 VSlider {
@@ -2391,7 +2401,7 @@ VPage {
                                     onMoved: value => veyra.setHdrDial("highlight", Math.round(value))
                                 }
                             }
-                            // 影片记忆与开播自动推荐（自定义）
+                            // Per-title memory and the automatic pick on open (custom)
                             VRow {
                                 label: qsTr("记住每部影片")
                                 hint: veyra.hdrTitleCount > 0
