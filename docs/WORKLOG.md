@@ -9368,3 +9368,11 @@ v2.0.7 ID 410800361，published_at 2026-10-12T16:24:59Z，latest/非草稿/非�
 - 用户选“只给压缩视频”：屏幕捕获和无压缩采集格式在原尺寸不跑超分（回到 2.0.6）；文件、串流、MJPEG/H.264 采集照旧；放大与 DLSS/FSR 规则不变；超分说明文字与翻译更新。
 - 验证：effect_chain 新增 4 项通过，回归全部通过；T911 4K60 NV12 开超分 sr=0、耗时 0，MJPEG 开超分 sr=1。详见 docs/FIELD_FIXES_2026-10-15.md。
 - 测试包 r3：E:/项目/Veyra/test-packages/claude-field-20261015-r3（补丁 ec6a00855830a3d7…，NVIDIA a66911f17c90bba1…，AMD 2c63b522754e2517…），冷启动通过。
+
+## 2026-10-15 2.0.8 发布前审查（Claude，用户追加）
+
+- 用户：“准备发2.0.8，整个软件审一遍，看看有没有已知bug和性能缺陷”。只审查和测量，不改产品，不合并、不 push。
+- 待合入：field（7 个提交）、fg-gpu-home（20 个，含 latency-min 的 10 个）、codex issues36-37-bmd（5 个）、codex update-check（5 个）、latency-chain-audit（文档和验收脚本）。merge-tree 试算只在 AGENTS/WORKLOG/catalog 末尾追加和偏好白名单一行冲突，两项都保留。dlssg-lite 运行库进正式包需要用户授权。
+- 实测缺陷：拖动参数滑块时每次 chainChanged 占 UI 线程 65–80 ms（约 12–15 fps）；窗口捕获改尺寸每次整图重建（NR + 补帧约 0.6 秒冻结）；日志没有大小上限（现场 129–186 MB）；VSwitch 点击断开绑定（#29）；组件列表随快照每次读盘并解析 manifest。
+- 开着的 issue 18 个，7 个合入后可关；#33 本机 280+ 次缩放未复现；#38 的日志未下载。详见 docs/AUDIT_2.0.8_2026-10-15.md。
+- 收尾：私有程序副本（自有 68.5 MB，另有硬链接 974 MB）、独立配置和空运行目录已删除，脚本和日志保留。
