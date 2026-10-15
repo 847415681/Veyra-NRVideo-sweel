@@ -59,6 +59,17 @@
 - 回归（`logs/claude-field-20261015/unit-final-013928`）：capture_format_selection 0 失败、repair_contract 259/0、ui_contract PASS、live_timing PASS、present_sink_lifecycle passed=1 debugErrors=0、settings_transaction passed=1 debugErrors=0、qml_quick 68 通过 0 失败。
 - 界面脚本：`tmp/claude-field-20261015/{repro_formats.py,gpu_reconnect.py,run_app_prefs.py,stack_sample.py}`。测试前确认没有其他 Veyra 进程。
 
+## 追加（用户 2026-10-15）：帧率菜单只列常用帧率，加“显示全部可用帧率”
+
+用户：“不要列出那么多帧率，选也选不过来呀，把常见的帧率加入 比如30 50 60 120 144 240，然后要注意有些卡他报出来的不是整数的比如有些卡的60 是59.94……如果有些二货采集卡会有那么多帧率的情况下，加个勾选显示全部可用帧率好了”。
+
+- 常用帧率：24、25、30、50、60、100、120、144、165、240。驱动报的帧率与其中之一相差不超过 0.15% 就算常用，所以 59.94、29.97、119.88、143.86、239.76 以及 60.00024、240.004 这类非整数都按对应的常用帧率显示（列出驱动的真实值，不改写）。
+- 帧率菜单默认只列该分辨率下的常用帧率，同一帧率只列一行；当前选中的帧率始终列出；某个分辨率一个常用帧率都没有时列出全部。两个列表都按帧率从高到低排（跟随信号/设备默认在最前，同帧率逐行在隔行前）。
+- 有被隐藏的帧率时，帧率下面出现“显示全部可用帧率”开关（说明里写出隐藏的个数），打开后列出驱动报的全部帧率；开关保存在界面偏好 `captureShowAllFrameRates`，默认关。
+- 换分辨率时如果原帧率在新分辨率下没有，改选它的第一个常用帧率，而不是驱动列表的第一行（例如不会落到 1 fps）。
+- 代码：`CaptureFormatSelection.h`（`captureCommonFrameRate`、`captureVisibleFrameRates`、`captureDefaultFrameRate`）、桥接 `captureHiddenFrameRates`、`DialogHost.qml` 开关行、四语翻译。
+- 验证：单元测试新增 1–120 fps + 59.94 的卡（短列表 8 行 120/100/60/59.94/50/30/25/24、隐藏 113、显示全部 121）、选中的非常用帧率保留、同一 60 fps 两个间隔只列一行、无常用帧率的分辨率全列且不出开关、换分辨率落到 24 而不是 1 fps，全部通过。T911 原样：1080p 7 个帧率（240.004、120、60、59.94、50、30、29.97）全是常用，不出开关，行为不变（`logs/claude-field-20261015/rates-t911-095201`）。模拟每项多报 1–160 fps：1080p 短列表 11 行（240.004 到 24），开关显示隐藏 153 个，打开后 164 行（`rates-160-sorted-095436`、`rates-menu-095540`）；英文界面开关行不溢出（`rates-en-095732`）。回归：`logs/claude-field-20261015/unit-rates-final-095820` 全部通过（qml_quick 68/0）。
+
 ## 测试包（基于 2.0.7 r2，只替换 veyra_qml_ui.exe、DialogHost.qml、VIcon.qml，不含任何用户设置）
 - 目录 `E:/项目/Veyra/test-packages/claude-field-20261015/`（DELIVERY.json，打包脚本 `tmp/claude-field-20261015/package.py`，源码 d2239c6）。
 - 覆盖补丁 `Veyra-2.0.7-test-field-patch.zip`（8120432 字节，SHA256 `fa715aad4a4da09247798ef021c74e6227a4091714b7af3df19ef02def3367c1`）：解压到原 2.0.7 文件夹覆盖，NVIDIA/AMD 包通用（两包的 2.0.7 exe 相同），原设置保留。

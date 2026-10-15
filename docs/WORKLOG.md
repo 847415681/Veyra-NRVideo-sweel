@@ -9354,3 +9354,9 @@ v2.0.7 ID 410800361，published_at 2026-10-12T16:24:59Z，latest/非草稿/非�
 - 构建/回归：tmp/claude-field-20261015/build.py，最终 build-20261015-013917，exe a79714fb…；6 组单元/集成测试与 qml_quick 68/0 通过（logs/claude-field-20261015/unit-final-013928）；界面脚本证据见 docs/FIELD_FIXES_2026-10-15.md。
 - 测试包：E:/项目/Veyra/test-packages/claude-field-20261015（覆盖补丁 fa715aad4a4da092…，NVIDIA 8762448fd9ba43cc…，AMD 5573da62692e6a4f…），冷启动通过；SHA256 全文见 docs/FIELD_FIXES_2026-10-15.md。
 - 不 merge/push/Release，不改默认 GPU 优先级/NR 版本、运行库、模型、驱动、用户配置；无子 Agent。
+
+## 2026-10-15 帧率菜单只列常用帧率（Claude，用户追加）
+
+- 用户要求帧率不要列那么多，默认只列常用帧率（30/50/60/120/144/240 等），注意 59.94 这类非整数，帧率特别多的卡加“显示全部可用帧率”勾选。分支 claude/field-20261015。
+- 常用帧率 24/25/30/50/60/100/120/144/165/240，±0.15% 内算同一帧率（含 59.94、60.00024、240.004）；默认短列表、同帧率一行、选中帧率保留、无常用帧率时全列，按帧率从高到低；有隐藏时出现开关（偏好 captureShowAllFrameRates，默认关）；换分辨率默认落到第一个常用帧率。
+- 验证：新增单元测试通过；T911 原样不变（1080p 7 个常用帧率、无开关）；模拟 1–160 fps 时 1080p 11 行、隐藏 153、全部 164；英文布局正常；回归 6 组 + qml_quick 68/0 通过（logs/claude-field-20261015/unit-rates-final-095820）。详见 docs/FIELD_FIXES_2026-10-15.md。

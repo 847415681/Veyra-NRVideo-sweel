@@ -356,6 +356,21 @@ Item {
                 }
             }
             VRow {
+                // Some cards list every rate from 1 to 120 fps (logs(18)). The frame-rate menu
+                // shows the common rates the card offers; this lists the rest too.
+                objectName: "capture-all-rates-row"
+                visible: veyra.captureHiddenFrameRates > 0
+                label: qsTr("显示全部可用帧率")
+                hint: qsTr("默认只列常用帧率：24、25、30、50、60、100、120、144、165、240（含 59.94 这类非整数帧率）。这张卡另外上报了 %1 个帧率").arg(veyra.captureHiddenFrameRates)
+                VSwitch {
+                    objectName: "capture-all-rates"
+                    enabled: !veyra.captureQueryBusy
+                    opacity: enabled ? 1 : 0.35
+                    checked: veyra.preferences.captureShowAllFrameRates === true
+                    onToggled: checked => veyra.setPreference("captureShowAllFrameRates", checked)
+                }
+            }
+            VRow {
                 label: qsTr("像素格式")
                 // Never search veyra.captureFormats here: a card can list 15000+ (logs(18)).
                 hint: veyra.captureFormatCostHint ? qsTr("该格式比低延迟格式多一道处理环节，高分辨率/高帧率下建议优先低延迟格式") : qsTr("只列出当前分辨率和帧率下的像素格式")

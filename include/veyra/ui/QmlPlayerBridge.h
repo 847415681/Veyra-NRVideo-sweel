@@ -133,6 +133,9 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QVariantList captureResolutionOptions READ captureResolutionOptions NOTIFY captureChanged)
     Q_PROPERTY(QString captureResolutionId READ captureResolutionId WRITE setCaptureResolutionId NOTIFY captureChanged)
     Q_PROPERTY(QVariantList captureFrameRateOptions READ captureFrameRateOptions NOTIFY captureChanged)
+    // Rates the frame-rate menu leaves out unless preferences.captureShowAllFrameRates is on
+    // (0: the card offers nothing beyond the common rates, so the switch is not shown).
+    Q_PROPERTY(int captureHiddenFrameRates READ captureHiddenFrameRates NOTIFY captureChanged)
     Q_PROPERTY(QString captureFrameRateId READ captureFrameRateId WRITE setCaptureFrameRateId NOTIFY captureChanged)
     Q_PROPERTY(QVariantList capturePixelOptions READ capturePixelOptions NOTIFY captureChanged)
     Q_PROPERTY(QString capturePixelId READ capturePixelId WRITE setCapturePixelId NOTIFY captureChanged)
@@ -591,6 +594,7 @@ public:
     QString captureResolutionId() const;
     void setCaptureResolutionId(const QString& id);
     QVariantList captureFrameRateOptions() const;
+    int captureHiddenFrameRates() const;
     QString captureFrameRateId() const;
     void setCaptureFrameRateId(const QString& id);
     QVariantList capturePixelOptions() const;

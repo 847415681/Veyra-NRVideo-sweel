@@ -358,6 +358,7 @@ struct QmlPlayerBridge::Impl {
     std::chrono::steady_clock::time_point gpuReconnectDue{}, gpuReconnectLast{};
     struct CaptureListCache { bool valid = false; uint64_t generation = 0; QString language; std::wstring a, b; QVariantList list; };
     CaptureListCache captureFormatsCache, captureResolutionCache, captureRateCache, capturePixelCache;
+    int captureHiddenRates = 0;   // set with captureRateCache
     template <class Build> const QVariantList& captureList(CaptureListCache& cache, const std::wstring& a, const std::wstring& b, Build&& build) {
         const QString language = i18n::current();
         if (!cache.valid || cache.generation != captureFormatGeneration || cache.language != language || cache.a != a || cache.b != b) {
@@ -2216,15 +2217,27 @@ void QmlPlayerBridge::setCaptureResolutionId(const QString& id) {
     const auto* sample=source::captureResolutionSample(impl_->captureFormatList,wide);
     if(!sample){emit notice(tr("此采集卡无此格式，请重新选择分辨率、帧率和像素格式。"),true);return;}
     impl_->captureResolutionChoice=wide;
-    if(!source::captureRateSample(impl_->captureFormatList,wide,impl_->captureRateChoice))impl_->captureRateChoice=source::captureFrameRateId(*sample);
+    // A rate the new resolution lacks becomes its first common rate, not the driver's first row.
+    if(!source::captureRateSample(impl_->captureFormatList,wide,impl_->captureRateChoice))
+        if(const auto* rate=source::captureDefaultFrameRate(impl_->captureFormatList,wide))impl_->captureRateChoice=source::captureFrameRateId(*rate);
     impl_->captureFormatKey.clear();
     if(!impl_->persistCaptureSelection(true))emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
     emit captureChanged();
 }
 QVariantList QmlPlayerBridge::captureFrameRateOptions() const {
-    return impl_->captureList(impl_->captureRateCache, impl_->captureResolutionChoice, {}, [this] {
-        return captureChoiceList(source::captureFrameRateOptions(impl_->captureFormatList, source::captureResolutionSample(impl_->captureFormatList, impl_->captureResolutionChoice)));
+    // Common rates only unless 显示全部可用帧率 is on (captureVisibleFrameRates).
+    const bool all = impl_->prefBool("captureShowAllFrameRates", false);
+    return impl_->captureList(impl_->captureRateCache, impl_->captureResolutionChoice, impl_->captureRateChoice + (all ? L"|all" : L""), [this, all] {
+        size_t hidden = 0;
+        const auto rates = source::captureVisibleFrameRates(source::captureFrameRateOptions(impl_->captureFormatList,
+            source::captureResolutionSample(impl_->captureFormatList, impl_->captureResolutionChoice)), impl_->captureRateChoice, all, &hidden);
+        impl_->captureHiddenRates = int(hidden);
+        return captureChoiceList(rates);
     });
+}
+int QmlPlayerBridge::captureHiddenFrameRates() const {
+    (void)captureFrameRateOptions();   // the count is built with the list
+    return impl_->captureHiddenRates;
 }
 QString QmlPlayerBridge::captureFrameRateId() const {
     return utf8Of(impl_->captureRateChoice);
@@ -5372,7 +5385,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"listInspectorWidth", {376, 4000}}};
     static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
-                                   "magewellLowLatency", "blackmagicNativeCapture", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility"};
+                                   "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -5466,6 +5479,7 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
                                 value==QLatin1String("high")?gfx::GpuPriority::High:gfx::GpuPriority::Realtime);
     }
     if(key==QLatin1String("fullscreenMemoryProtection")){impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));emit snapshotChanged();}
+    if(key==QLatin1String("captureShowAllFrameRates"))emit captureChanged();
     if (key == QLatin1String("audioDevice")) sink::setPreferredRenderEndpoint(impl_->prefString("audioDevice").toStdWString());
     else if (key == QLatin1String("audioForceStereo")) sink::setForceStereoDownmix(impl_->prefBool("audioForceStereo", false));
     else if (key == QLatin1String("magewellLowLatency")) source::magewell::setLowLatencyPreference(impl_->prefBool("magewellLowLatency", false));

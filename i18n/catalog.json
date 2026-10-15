@@ -15730,6 +15730,20 @@
    "zh-TW": "GPU 已重置，正在自動重新連接擷取卡",
    "en": "The GPU was reset; reconnecting the capture card automatically",
    "ja": "GPU がリセットされました。キャプチャーカードを自動で再接続しています"
+  },
+  {
+   "zh": "显示全部可用帧率",
+   "src": "qml/Veyra/DialogHost.qml",
+   "zh-TW": "顯示全部可用幀率",
+   "en": "Show all available frame rates",
+   "ja": "利用可能なフレームレートをすべて表示"
+  },
+  {
+   "zh": "默认只列常用帧率：24、25、30、50、60、100、120、144、165、240（含 59.94 这类非整数帧率）。这张卡另外上报了 %1 个帧率",
+   "src": "qml/Veyra/DialogHost.qml",
+   "zh-TW": "預設只列常用幀率：24、25、30、50、60、100、120、144、165、240（含 59.94 這類非整數幀率）。這張卡另外回報了 %1 個幀率",
+   "en": "Only common frame rates are listed by default: 24, 25, 30, 50, 60, 100, 120, 144, 165, 240 (including non-integer rates such as 59.94). This card reports %1 more",
+   "ja": "既定では一般的なフレームレートのみ表示します：24、25、30、50、60、100、120、144、165、240（59.94 などの非整数レートを含む）。このカードはほかに %1 個のフレームレートを報告しています"
   }
  ]
 }
