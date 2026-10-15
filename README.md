@@ -61,9 +61,9 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 ---
 
-**2.0.7 release, 2026-10-13:** VFG mixed tiers (Veyra's latest model-allocation research), rebuilt content cadence, optional XeSS Edge Aegis, and fixes for capture settings, subtitles, playlists, audio, rendering and interface layout. [Full update report](docs/RELEASE_NOTES_2.0.7.md).
+**2.0.8 release, 2026-10-15:** lower application latency, capture Game mode, variable refresh, capture-card video with controller forwarding, and combined Claude/Codex fixes. [Full update report](docs/RELEASE_NOTES_2.0.8.md).
 
-**Measured trade-off:** RTX5070, GTA4K30+one NR layer: new Medium4X→Medium+Low kept120 submitted FPS while FG group P95 changed11.45→6.92ms (−39.6%) and GPU utilisation58→45%. The mixed tier uses a lower-cost model for most subframes; this is not an equal-quality speedup or physical display-FPS claim. **NVIDIA long-run VRAM growth remains unresolved.** [Measurements and limits](docs/RELEASE_NOTES_2.0.7.md).
+**Measured examples:** RTX5070/T911/2K60/NR, optional DLSS6X performance-mode FG GPU P95 **8.1→3.3ms (−59%)**; six-effect UI parameter edits **65–80→about5ms**. These describe particular GPU/UI stages, not universal quality-equivalent gains or optical end-to-end latency. [Conditions and limits](docs/RELEASE_NOTES_2.0.8.md).
 
 **[Veyra knowledge base](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home)** — community guidance compiled from four group chats, covering software setup, common problems and capture cards.
 
@@ -77,21 +77,21 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 - **New export workflow:** editable ordered queue, trimming, MP4/MKV, multiple audio/embedded subtitle tracks, cancellation/retry and completion sound.
 - **Enhancement and compatibility:** four NR runtime choices (NVIDIA original for RTX 50, Lecram, SF-v2 and AMD lmxxf), DLSS/XeSS/FSR options, capture improvements and a persistent OBS Game Capture switch with restart confirmation. Full details are in the Release.
 
-## New in 2.0.7
+## New in 2.0.8
 
-- **VFG High+Medium / High+Low / Medium+Low:** spend the first model on one midpoint subframe and the second on the rest; inference remains per subframe. GPU shot detection runs once per input pair. Medium remains default.
-- **Content cadence rebuilt:** full-image comparison with a capture-noise tolerance, learned static cadence, and a separate fixed60→30 sampler; normal VSync/dedup/FPS limits explain their effective target.
-- **XeSS Edge Aegis:** optional motion-boundary/uncovered-background refinement for NVOF and FidelityFX flow. Limited, scene-dependent improvement with additional GPU cost; limbs/fences remain problematic.
-- **Capture:** driver-exposed mode enumeration, resolution-first selection, MJPEG warning, strict errors without fallback, complete autosave/resume/startup restoration and short-PTS reset fix. Opt-in Blackmagic native capture and Elgato colour compatibility.
-- **Playback and UI:** compressed PGS/SUP and more subtitle formats, folder playlists, bounded audio read-ahead, endpoint switching, DLSS SR K/M/L hints, compatible swap-chain reuse, inactive-effect editing and keyboard/layout/software-clipping fixes.
-- **Compatibility:** default-off HDR FG flash workaround, overlay/GamePP software-UI selection, hang diagnostics and bounded shutdown. Negative optimisation experiments remain withdrawn.
-- **Community:** group6 and the knowledge base; retain WeChat donation, Discord and Ko-fi.
+- **Lower application latency:** tighter input/GPU/presentation sequencing, aligned XeSS cycles, bounded display backlog and refresh-budget hints that keep your selected multiplier.
+- **Capture Game mode:** enhance a window or monitor fullscreen while input reaches the game; Home opens controls and Ctrl+Alt+Home exits passthrough. Capture borders and accidentally captured controls are handled where Windows permits.
+- **Variable refresh:** a saved Display switch with capability and active-state explanations, currently using NVIDIA driver detection for G-SYNC/Compatible displays.
+- **Capture picture + remote controllers:** PS5 controller forwarding beside HDMI capture; enhanced PC gaming can be relayed through separately configured third-party remote software with input forwarding.
+- **DLSS performance mode and compute-GPU selection:** optional RTX50 performance runtime, dual-GPU selection with compatible backend migration and restoration.
+- **Responsiveness and compatibility:** granular sliders, controlled switches, cached components, stable capture resizing, huge format-list fixes, common/all-rate menus, GC550 audio-clock compatibility, remembered BMD inputs, Douyin compatibility, GPU-reset recovery and native-size VSR cost reduction for uncompressed sources.
+- **Playback and maintenance:** portrait geometry, unobstructed node controls, fullscreen Home panels, aligned setting metrics, startup update banners and bounded logs.
 
-[Complete2.0.6→2.0.7 update, evidence and limitations](docs/RELEASE_NOTES_2.0.7.md). The approved test-r2 package is promoted unchanged, including its internal display label.
+[Complete2.0.7→2.0.8 update, instructions and measured limits](docs/RELEASE_NOTES_2.0.8.md). The user-approved packages are promoted unchanged; internal2.0.8-test labels remain.
 
 ## Install and upgrade
 
-Download **Veyra-2.0.7-NVIDIA-win64-portable.zip** or **Veyra-2.0.7-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
+Download **Veyra-2.0.8-NVIDIA-win64-portable.zip** or **Veyra-2.0.8-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
 
 Start with effects off, check picture/sound, then enable effects individually. High resolution, layered NR and frame generation increase GPU/VRAM requirements.
 
@@ -129,7 +129,7 @@ Select Nodes at the top of Professional. This is an executable chain editor:
 5. Optical flow is shared after input; SR is a single instance. RTX Video HDR stays before final FG; select one DLSS/XeSS/FSR backend. This is not an arbitrary branching/mixing graph.
 6. List and Node settings, presets and sessions are separate. Returning to List restores its settings and retains the node graph. Switching rebuilds processing and may briefly pause the picture.
 
-**2.0.7 Node mode does not support offline export or List mode's global NR protection region.** Switch to List and verify its effects before exporting; graphs are not silently converted.
+**2.0.8 Node mode does not support offline export or List mode's global NR protection region.** Switch to List and verify its effects before exporting; graphs are not silently converted.
 
 ### Capture and streaming
 
@@ -140,6 +140,8 @@ Select Nodes at the top of Professional. This is an executable chain editor:
 | PC | Install/configure Sunshine yourself; discover/add the host, PIN-pair, select app/desktop and connect. Sunshine is not bundled. |
 | Xbox | Follow device-code sign-in and select a console with remote features enabled. Unofficial/experimental; account, service and console restrictions apply. |
 | Screen | Select a window/display; avoid recursively capturing Veyra itself. |
+
+For **Screen Capture → Game mode**, choose a borderless game window or monitor. **Home** opens adjustments, Home/Esc closes them, **Ctrl+Alt+Home** exits passthrough. For **Capture card → PS5 controller control**, pair the console first; third-party streaming software can relay this PC's enhanced picture and forward remote input. Enable background controller forwarding and audio monitoring as needed. See the2.0.8 update for setup and hardware limits.
 
 Pausing capture/streaming freezes the preview while keeping the session, not the host game. Physical hardware, networks, HDR and controllers need individual validation.
 
@@ -156,6 +158,8 @@ For OBS Game Capture, enable **Settings → General & appearance → OBS Game Ca
 **Settings → General & appearance → Resume last source at startup** is opt-in. It restores the movie position or saved capture device, format, rate and audio selection. Startup page is configurable. Use the playback-speed button in Cinema or Professional for 1× / 1.5× / 2× / 3×; this does not speed up live capture/streams or offline exports.
 
 **Monitoring compatibility** defaults to Auto: when RTSS (MSI Afterburner OSD) is running at launch, the interface uses software rendering and its OSD appears on the video only. If RTSS starts later, restart Veyra when prompted. Using RTSS with OBS Game Capture requires RTSS’s “Use Microsoft Detours API hooking” option for Veyra, or use OBS Window Capture.
+
+**2.0.8 settings:** select a compute GPU, optionally enable RTX50 DLSS performance mode or variable refresh, and check update status. Startup checks show a temporary banner only for a newer release. Douyin Live Companion detection uses a software interface at launch and temporarily caps requested realtime GPU priority at High while it is running, restoring the requested value afterwards.
 
 Settings include language/scale, shortcuts, monitoring GPU, audio devices and component info. Report GPU/driver, media, effects, time and `logs/veyra-qml.log`; include a crash `.dmp` if available. Review private data before sharing.
 
@@ -184,7 +188,7 @@ QML renders UI; native D3D12 renders video. List/Nodes share the engine, disconn
 
 ## Source and build
 
-Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.0.7 build/source](docs/BUILD_2.0.7.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
+Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.0.8 build/source](docs/BUILD_2.0.8.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
 
 ## Support
 

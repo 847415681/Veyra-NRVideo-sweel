@@ -9555,3 +9555,12 @@ BMD日志53：5次进入原生协商的尝试均SDI连接0x1、locked0/noInput�
 最终ZIP独立解压，Windows-only PATH、私有配置，普通D3D12/OBS软件界面×NVIDIA/AMD四场GTA4K播放全部通过，原帧呈现提交397/403/401/404，无GPU/QML错误，sentinel配置保留。不是AMD实卡测试或屏幕实际FPS测量。DELIVERY.json/cold-start.json固定归档哈希/源码/日志；最终保护与增量源码bundle在reports/archives/test-2.0.8-handoff-20261015，原75非当前树、509脏文件、原会话保持。所有回归并非全绿：VFG合成22项间歇失败根因仍未定，独立2425项和真实播放通过，已明确写进包内报告/knownIssues，releaseReady=false；HDR桌面5个旧RGB阈值失败也如实保留。
 
 自动审批拦截递归删除本轮解压验证副本（blocked by policy、未给更具体原因），没有执行或换方式绕过；验证目录verify/claude-release-2.0.8-20261015/handoff-final保留3749文件、1947013415逻辑字节，预检receipt在reports/.../cleanup-preflight.json。初次stage半成品此前安全改名保留。私有QA当前构建保留供复查，恢复Main.qml原文，不含测试注入。未触碰其它任务产物、未远端push/发布/关闭issue/代发/关机。
+
+
+## 2026-10-15 发布2.0.8开工
+
+用户实测当前包良好，明确仅改外部文件名直接发布；基线main3107e00，复用E盘工作树切codex/release-2.0.8-20261015。保护77旧树/509脏文件/五原归档、旧v2.0.7和sources Release API快照，before.bundle verify通过。计划docs/RELEASE_2.0.8_PLAN_2026-10-15.md；本轮只文档/发行操作，不重编译重打包，不派Agent/代发/关机，不重试已拒绝的递归删除。
+
+整理双方v2.0.7以来全部非merge提交和最终产品路径，生成RELEASE_NOTES_2.0.8、CHANGE_INDEX、BUILD_2.0.8、ACCEPTANCE和中英README。重点延迟/游戏模式/VRR/采集卡手柄与第三方远程电脑游戏；公开说明不叙述用户要求省略的旧显示同步设定。测量区分CPU提交、GPU阶段和光学端到端，未用理论PBP或错误时间归属数据宣传；VRR当前依赖NVAPI、真实硬件未验边界保留。两二维码width220/Discord/Ko-fi/知识库原样保留，主Release拟仅两包、源归档只上传新应用源并链接既有FFmpeg/依赖。尚未推送/上传/发布，后续回执另记。
+
+原包发布审计实际通过：tmp/release-2.0.8-20261015/audit.py核验两个ZIP全部1654/2093payload、49/534运行组件、EXE/PE/CRC、应用源2011文件、679构建输入及原四冷启回执；正式命名文件硬链接复用，SHA相同，未重编译重封包。两旧源码源资产服务器digest正确；assets.json记录两用户包+一个新应用源+两固定旧源链接。文档gate通过，51非merge/72产品路径已覆盖，双方README支持footer逐字保持，Release/SOURCE两图width220及知识库保持。尚未上传或发布。
