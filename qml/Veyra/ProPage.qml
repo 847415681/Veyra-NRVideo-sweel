@@ -2587,6 +2587,7 @@ VPage {
                         VAccordion {
                             objectName: "list-hdr-metadata"
                             Layout.fillWidth: true
+                            Layout.topMargin: 12
                             glyph: "sun"
                             hue: "#7FB2F5"
                             title: qsTr("HDR 元数据")
