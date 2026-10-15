@@ -2265,7 +2265,7 @@ VPage {
                                         ghost: true
                                         // Light strictly on a real match: nothing lights when the curve
                                         // came from the whole-preset side (or was tuned by hand),
-            // 与整档预设显示"自定义"的行为一致。
+            // matching how that row reports its own "custom" state.
             primary: veyra.hdrPresetMode === "axes" && veyra.hdrAxesMatch.content === modelData.id
                                         onClicked: veyra.applyHdrAxesPreset(modelData.id, veyra.hdrAxes.environment !== "" ? veyra.hdrAxes.environment : "compensate")
                                     }
@@ -2296,8 +2296,8 @@ VPage {
                                     }
                                 }
                             }
-                            // 当前生效状态（自定义）：整档预设模式下说明当前是哪一档；手动微调过
-                            // （不匹配任何整档预设）时明确说"自定义"，免得看起来像没生效。
+                            // Current state (custom): in whole-preset mode it names the preset in force;
+                            // when none matches it says "custom", so a hand-tuned curve never looks like a no-op.
                             Text {
                                 Layout.fillWidth: true
                                 visible: veyra.hdrPresetMode !== "axes"
@@ -2315,8 +2315,8 @@ VPage {
                                 color: Theme.t3
                                 font.family: Theme.fontUi; font.pixelSize: 11
                             }
-                            // 当前组合（自定义）：自由组合模式下说清楚现在选的是哪两项 —— 手动微调
-                            // 过参数后没有匹配项，这一行仍然在，不会看起来像"没生效"。
+                            // Current pair (custom): in composed mode it names the two axes. It stays visible
+                            // after hand-tuning, when nothing matches, so the row never looks dead.
                             Text {
                                 Layout.fillWidth: true
                                 visible: veyra.hdrPresetMode === "axes"
@@ -2332,9 +2332,9 @@ VPage {
                                 color: Theme.t3
                                 font.family: Theme.fontUi; font.pixelSize: 11
                             }
-                            // 等价说明（自定义）：两套预设写的是同一条曲线，「不补偿」时两轴组合与
-                            // 整档预设数值完全相同，所以这里把等价关系直接说出来，省得看起来像两个模式
-                            // 同时生效。手动微调过的曲线不匹配任何整档预设，这句话自然消失。
+                            // Equivalence (custom): both systems write one curve; with no compensation the
+                            // composed pair is numerically identical to a whole preset, and saying so keeps that
+                            // from looking like two modes at once. A hand-tuned curve matches nothing and it goes.
                             Text {
                                 Layout.fillWidth: true
                                 visible: veyra.hdrPresetMode === "axes" && veyra.hdrTuningPreset !== ""
