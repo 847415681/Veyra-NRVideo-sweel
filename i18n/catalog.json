@@ -16150,6 +16150,503 @@
    "zh-TW": "；預設“即時”，同時執行遊戲或其他重負載程式變慢時可改為“高”或“普通”",
    "en": "; Realtime by default. If a game or other heavy program running alongside slows down, choose High or Normal",
    "ja": "；既定は「リアルタイム」。同時に動かすゲームや重い処理が遅くなる場合は「高」か「通常」に変更してください"
+  },
+  {
+   "zh": " · 输出上限 {:.3f} FPS",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": " · 輸出上限 {:.3f} FPS",
+   "en": " · output cap {:.3f} FPS",
+   "ja": " · 出力上限 {:.3f} FPS"
+  },
+  {
+   "zh": "AMD NR 导出只支持 1080p 以内的片源，本次导出关闭 NR",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "AMD NR 匯出只支援 1080p 以內的片源，本次匯出關閉 NR",
+   "en": "AMD NR export supports sources up to 1080p only; NR is off for this export",
+   "ja": "AMD NR の書き出しは 1080p 以下のソースのみ対応のため、今回の書き出しでは NR をオフにします"
+  },
+  {
+   "zh": "DLSS {}X 补帧初始化失败，未降低倍率；请查看任务诊断日志",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "DLSS {}X 補幀初始化失敗，未降低倍率；請查看任務診斷日誌",
+   "en": "DLSS {}X frame generation failed to initialize; the multiplier was not lowered. See the job's diagnostic log",
+   "ja": "DLSS {}X フレーム生成の初期化に失敗しました。倍率は下げていません。ジョブの診断ログを確認してください"
+  },
+  {
+   "zh": "DXGI 为显示器兼容方式，无鼠标指针",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "DXGI 為顯示器相容方式，無滑鼠指標",
+   "en": "DXGI is the display-compatible mode, without the mouse pointer",
+   "ja": "DXGI はディスプレイ互換モードで、マウスポインターは映りません"
+  },
+  {
+   "zh": "GitHub · Likely7/Veyra-NRVideo · 发布页",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "GitHub · Likely7/Veyra-NRVideo · 發佈頁",
+   "en": "GitHub · Likely7/Veyra-NRVideo · releases",
+   "ja": "GitHub · Likely7/Veyra-NRVideo · リリース"
+  },
+  {
+   "zh": "MaxCLL (nit)",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "MaxCLL (nit)",
+   "en": "MaxCLL (nit)",
+   "ja": "MaxCLL (nit)"
+  },
+  {
+   "zh": "MaxFALL (nit)",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "MaxFALL (nit)",
+   "en": "MaxFALL (nit)",
+   "ja": "MaxFALL (nit)"
+  },
+  {
+   "zh": "{} 补帧导出尚未验收；本次导出改用 DLSS 补帧 {}X",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "{} 補幀匯出尚未驗收；本次匯出改用 DLSS 補幀 {}X",
+   "en": "{} frame generation export is not validated yet; this export uses DLSS frame generation {}X",
+   "ja": "{} フレーム生成での書き出しは未検証です。今回の書き出しは DLSS フレーム生成 {}X を使用します"
+  },
+  {
+   "zh": "上次格式已不可用，请重新选择格式。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "上次格式已不可用，請重新選擇格式。",
+   "en": "The last format is no longer available; choose a format again.",
+   "ja": "前回のフォーマットは使用できません。もう一度選んでください。"
+  },
+  {
+   "zh": "与 OBS、监控软件（小飞机 / RTSS）同时使用时的设置；修改后需要重启。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "與 OBS、監控軟體（小飛機 / RTSS）同時使用時的設定；修改後需要重新啟動。",
+   "en": "Settings for running alongside OBS and monitoring tools (Afterburner / RTSS); changes need a restart.",
+   "ja": "OBS や監視ソフト（Afterburner / RTSS）と同時に使うときの設定です。変更後は再起動が必要です。"
+  },
+  {
+   "zh": "与帧率和像素格式一起决定采集媒体类型",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "與幀率和像素格式一起決定採集媒體類型",
+   "en": "Together with frame rate and pixel format, this selects the capture media type",
+   "ja": "フレームレートとピクセルフォーマットと合わせて、キャプチャのメディアタイプを決めます"
+  },
+  {
+   "zh": "仅向 HDR10 交换链提交提示；系统或显示器可能忽略。亮度曲线直接调整画面。",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "僅向 HDR10 交換鏈提交提示；系統或顯示器可能忽略。亮度曲線直接調整畫面。",
+   "en": "Submits an HDR10 swap-chain hint; Windows or the display may ignore it. The brightness curve directly adjusts the image.",
+   "ja": "HDR10 スワップチェーンへヒントを送ります。OS やディスプレイが無視する場合があります。輝度カーブは映像を直接調整します。"
+  },
+  {
+   "zh": "低延迟队列已关闭 · ",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "低延遲佇列已關閉 · ",
+   "en": "Low-latency queue off · ",
+   "ja": "低遅延キューはオフ · "
+  },
+  {
+   "zh": "低延迟队列恢复失败 · ",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "低延遲佇列恢復失敗 · ",
+   "en": "Could not restore the low-latency queue · ",
+   "ja": "低遅延キューを復元できませんでした · "
+  },
+  {
+   "zh": "低延迟队列：队列深度 1",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "低延遲佇列：佇列深度 1",
+   "en": "Low-latency queue: depth 1",
+   "ja": "低遅延キュー：深さ 1"
+  },
+  {
+   "zh": "低延迟队列：队列深度 1 + NVIDIA Reflex（实验）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "低延遲佇列：佇列深度 1 + NVIDIA Reflex（實驗）",
+   "en": "Low-latency queue: depth 1 + NVIDIA Reflex (experimental)",
+   "ja": "低遅延キュー：深さ 1 + NVIDIA Reflex（実験的）"
+  },
+  {
+   "zh": "保存的采集格式已不可用，请重新选择分辨率、帧率和像素格式。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "儲存的擷取格式已不可用，請重新選擇解析度、幀率和像素格式。",
+   "en": "The saved capture format is no longer available; choose the resolution, frame rate and pixel format again.",
+   "ja": "保存したキャプチャーフォーマットは使用できません。解像度、フレームレート、ピクセル形式を選び直してください。"
+  },
+  {
+   "zh": "信号正常",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "信號正常",
+   "en": "Signal OK",
+   "ja": "信号正常"
+  },
+  {
+   "zh": "决定输出分辨率",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "決定輸出解析度",
+   "en": "Sets the output resolution",
+   "ja": "出力解像度を決めます"
+  },
+  {
+   "zh": "减少排队；不宣称延迟下降",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "減少排隊；不宣稱延遲下降",
+   "en": "Less queuing; no claim of lower latency",
+   "ja": "キューを減らします。遅延が下がるとは限りません"
+  },
+  {
+   "zh": "减少软件排队；屏幕延迟需要实测",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "減少軟體排隊；螢幕延遲需要實測",
+   "en": "Less queuing in the app; screen latency needs to be measured",
+   "ja": "アプリ内のキューを減らします。画面の遅延は実測が必要です"
+  },
+  {
+   "zh": "原生 HDR 输入；「HDR 片源转换」未开启",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "原生 HDR 輸入；「HDR 片源轉換」未開啟",
+   "en": "Native HDR input; \"Convert HDR sources too\" is off",
+   "ja": "ネイティブ HDR 入力；「HDR ソースも変換」はオフです"
+  },
+  {
+   "zh": "只清空这个列表，不会删除文件。",
+   "src": "qml/HomePage.qml",
+   "zh-TW": "只清空這個列表，不會刪除檔案。",
+   "en": "Only clears this list; no file is deleted.",
+   "ja": "このリストだけを消去します。ファイルは削除されません。"
+  },
+  {
+   "zh": "固定亮度曲线：抬暗部、定中灰、压高光；不做逐场景曝光调整。",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "固定亮度曲線：抬暗部、定中灰、壓高光；不做逐場景曝光調整。",
+   "en": "A fixed brightness curve for shadows, midtones and highlights; no per-scene exposure adjustment.",
+   "ja": "暗部・中間調・ハイライトの固定輝度カーブ。シーンごとの露出調整は行いません。"
+  },
+  {
+   "zh": "垂直同步 · 队列深度 1 · ",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "垂直同步 · 佇列深度 1 · ",
+   "en": "VSync · queue depth 1 · ",
+   "ja": "垂直同期 · キュー深さ 1 · "
+  },
+  {
+   "zh": "外挂 · {}",
+   "src": "src/engine/Subtitles.cpp",
+   "zh-TW": "外掛 · {}",
+   "en": "External · {}",
+   "ja": "外部 · {}"
+  },
+  {
+   "zh": "字幕文件 (*.srt *.ass *.ssa *.vtt);;所有文件 (*.*)",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "字幕檔案 (*.srt *.ass *.ssa *.vtt);;所有檔案 (*.*)",
+   "en": "Subtitle files (*.srt *.ass *.ssa *.vtt);;All files (*.*)",
+   "ja": "字幕ファイル (*.srt *.ass *.ssa *.vtt);;すべてのファイル (*.*)"
+  },
+  {
+   "zh": "字幕文件无法读取或没有字幕内容：%1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "字幕檔案無法讀取或沒有字幕內容：%1",
+   "en": "The subtitle file cannot be read or has no subtitles: %1",
+   "ja": "字幕ファイルを読み込めないか、字幕がありません：%1"
+  },
+  {
+   "zh": "对比中",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "對比中",
+   "en": "Comparing",
+   "ja": "比較中"
+  },
+  {
+   "zh": "当前导出设备不能执行所请求的 DLSS 补帧，未降低倍率",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "當前匯出裝置不能執行所請求的 DLSS 補幀，未降低倍率",
+   "en": "The export device cannot run the requested DLSS frame generation; the multiplier was not lowered",
+   "ja": "書き出し用デバイスでは要求された DLSS フレーム生成を実行できません。倍率は下げていません"
+  },
+  {
+   "zh": "当前显卡不能使用 DLSS NR，本次导出自动关闭 NR",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "當前顯示卡不能使用 DLSS NR，本次匯出自動關閉 NR",
+   "en": "This GPU cannot use DLSS NR; NR is turned off for this export",
+   "ja": "この GPU では DLSS NR を使えないため、今回の書き出しでは NR をオフにします"
+  },
+  {
+   "zh": "快速调节只在专业模式的列表视图可用",
+   "src": "qml/Main.qml",
+   "zh-TW": "快速調節只在專業模式的列表視圖可用",
+   "en": "Quick settings are available only in Pro mode's list view",
+   "ja": "クイック設定はプロモードのリスト表示でのみ使えます"
+  },
+  {
+   "zh": "显示同步：自动 · 与屏幕同步防撕裂",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "顯示同步：自動 · 與螢幕同步防撕裂",
+   "en": "Display sync: auto · synchronize with the display to prevent tearing",
+   "ja": "表示の同期：自動 · 画面と同期してティアリングを防止"
+  },
+  {
+   "zh": "显示队列控制不可用 · ",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "顯示佇列控制不可用 · ",
+   "en": "Display queue control unavailable · ",
+   "ja": "表示キューの制御を使用できません · "
+  },
+  {
+   "zh": "显示队列等待失败；",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "顯示佇列等待失敗；",
+   "en": "Display queue wait failed; ",
+   "ja": "表示キューの待機に失敗しました。"
+  },
+  {
+   "zh": "未读到有效的 4K 以内采集格式，或设备正被其他应用占用。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "未讀到有效的 4K 以內擷取格式，或裝置正被其他應用占用。",
+   "en": "No valid capture format up to 4K was read, or the device is being used by another app.",
+   "ja": "4K 以下の有効なキャプチャーフォーマットを読み取れないか、デバイスが他のアプリで使用中です。"
+  },
+  {
+   "zh": "正在查询设备…",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "正在查詢裝置…",
+   "en": "Looking up devices…",
+   "ja": "デバイスを確認中…"
+  },
+  {
+   "zh": "清空最近播放记录？",
+   "src": "qml/HomePage.qml",
+   "zh-TW": "清空最近播放記錄？",
+   "en": "Clear the recent list?",
+   "ja": "最近再生した記録を消去しますか？"
+  },
+  {
+   "zh": "自动：与屏幕同步防撕裂 · 提交帧率受屏幕刷新率限制 · 想再降延迟可选“允许撕裂”（可能撕裂）或在显卡驱动开启 G-SYNC/FreeSync，最多少等一次刷新（60Hz 约 8 ms）",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "自動：與螢幕同步防撕裂 · 提交幀率受螢幕更新率限制 · 想再降延遲可選「允許撕裂」（可能撕裂）或在顯示卡驅動開啟 G-SYNC/FreeSync，最多少等一次更新（60Hz 約 8 ms）",
+   "en": "Auto: synchronize with the display to prevent tearing; submitted FPS is limited by the refresh rate. For lower latency choose \"Allow tearing\" (may tear) or enable G-SYNC/FreeSync in the GPU driver to wait up to one refresh less (about 8 ms at 60 Hz)",
+   "ja": "自動：画面と同期してティアリングを防止 · 送信 FPS はリフレッシュレートが上限 · さらに遅延を減らすには「ティアリングを許可」（ティアリングの可能性あり）を選ぶか、GPU ドライバーで G-SYNC/FreeSync を有効にすると、待ち時間が最大 1 リフレッシュ分短くなります（60Hz で約 8 ms）"
+  },
+  {
+   "zh": "设备查询还没有完成",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "裝置查詢還沒有完成",
+   "en": "The device query has not finished yet",
+   "ja": "デバイスの確認がまだ完了していません"
+  },
+  {
+   "zh": "采集卡拒绝 {:.3f} FPS（0x{:08X}）；请改用设备支持的帧率，或填 0 恢复默认。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取卡拒絕 {:.3f} FPS（0x{:08X}）；請改用裝置支援的幀率，或填 0 恢復預設。",
+   "en": "The capture card refused {:.3f} FPS (0x{:08X}); use a frame rate the device supports, or enter 0 for the default.",
+   "ja": "キャプチャーカードが {:.3f} FPS を拒否しました（0x{:08X}）。デバイスが対応するフレームレートにするか、0 を入力して既定に戻してください。"
+  },
+  {
+   "zh": "高质量需要更多处理时间",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "高品質需要更多處理時間",
+   "en": "High quality takes more processing time.",
+   "ja": "高品質にはより多くの処理時間が必要です。"
+  },
+  {
+   "zh": "原生采集跟随 Desktop Video Setup 的 HDMI/SDI 输入。支持自动检测的卡建议选择自动；信号未锁定时会明确提示。",
+   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "原生擷取沿用 Desktop Video Setup 的 HDMI/SDI 輸入。支援自動偵測的卡建議選擇自動；訊號未鎖定時會明確提示。",
+   "en": "Native capture follows the HDMI/SDI input selected in Desktop Video Setup. Choose automatic detection when supported. An unlocked signal is reported explicitly.",
+   "ja": "Desktop Video Setup で選んだ HDMI/SDI 入力を使用します。対応カードは自動検出を推奨します。信号がロックされていない場合は明示します。"
+  },
+  {
+   "zh": "原生采集先确认有效信号；支持自动检测的卡建议选择自动。HDMI/SDI 跟随 Desktop Video Setup。",
+   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "原生擷取先確認有效訊號；支援自動偵測的卡建議選擇自動。HDMI/SDI 沿用 Desktop Video Setup。",
+   "en": "Native capture first verifies a valid signal. Use automatic detection when supported. HDMI/SDI follows Desktop Video Setup.",
+   "ja": "有効な信号を確認してからキャプチャします。対応カードは自動検出を使用してください。HDMI/SDI は Desktop Video Setup に従います。"
+  },
+  {
+   "zh": "BMD 原生入口跟随 Desktop Video Setup 的 HDMI/SDI 输入设置；请在该程序选择输入口，再使用自动检测或手动制式。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "BMD 原生入口沿用 Desktop Video Setup 的 HDMI/SDI 輸入設定；請在該程式選擇輸入埠，再使用自動偵測或手動制式。",
+   "en": "Native BMD capture uses the HDMI/SDI input selected in Desktop Video Setup. Select the input there, then use automatic detection or a manual format.",
+   "ja": "BMD ネイティブ入力は Desktop Video Setup の HDMI/SDI 設定に従います。同アプリで入力を選び、自動検出または手動形式を使用してください。"
+  },
+  {
+   "zh": "BMD 未检测到有效输入。请关闭占用采集卡的应用，并在 Desktop Video Setup 核对 HDMI/SDI 和制式；也可选择手动制式",
+   "src": "src/source/DeckLinkCapture.cpp",
+   "zh-TW": "BMD 未偵測到有效輸入。請關閉占用擷取卡的應用程式，並在 Desktop Video Setup 核對 HDMI/SDI 與制式；也可選擇手動制式",
+   "en": "BMD found no valid input. Close other capture apps and check HDMI/SDI and format in Desktop Video Setup. A matching manual format can also be selected.",
+   "ja": "BMD の有効な入力が見つかりません。他のキャプチャアプリを終了し、Desktop Video Setup の HDMI/SDI と形式を確認してください。対応する手動形式も選択できます。"
+  },
+  {
+   "zh": "保存的 BMD 制式已不可用，请刷新并重新选择",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "儲存的 BMD 制式已無法使用，請重新整理並選擇",
+   "en": "Saved BMD format is no longer available. Refresh and select a format again.",
+   "ja": "保存された BMD 形式は利用できなくなりました。更新して選び直してください。"
+  },
+  {
+   "zh": "未找到该 BMD 原生设备，请安装 Desktop Video 驱动并刷新设备列表",
+   "src": "src/source/DeckLinkDriver.cpp",
+   "zh-TW": "找不到該 BMD 原生裝置，請安裝 Desktop Video 驅動並重新整理裝置清單",
+   "en": "Native BMD device not found. Install Desktop Video and refresh the device list.",
+   "ja": "BMD ネイティブデバイスが見つかりません。Desktop Video をインストールし、デバイス一覧を更新してください。"
+  },
+  {
+   "zh": "放大时重建细节；原尺寸时修复压缩伪影。效果取决于片源。",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "放大時重建細節；原尺寸時修復壓縮瑕疵。效果取決於片源。",
+   "en": "Reconstructs detail when upscaling and reduces compression artifacts at native size. Results depend on the source.",
+   "ja": "拡大時は細部を再構成し、元の解像度では圧縮ノイズを低減します。効果は映像により異なります。"
+  },
+  {
+   "zh": "当前播放器不支持",
+   "src": "include/veyra/source/CaptureFormatSelection.h",
+   "zh-TW": "目前播放器不支援",
+   "en": "Unsupported by this player",
+   "ja": "このプレイヤーでは非対応"
+  },
+  {
+   "zh": "设备实际支持的格式",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "裝置實際支援的格式",
+   "en": "Formats the device actually supports",
+   "ja": "デバイスが実際に対応するフォーマット"
+  },
+  {
+   "zh": "请选择格式",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "請選擇格式",
+   "en": "Choose a format",
+   "ja": "フォーマットを選んでください"
+  },
+  {
+   "zh": "0 = 跟随片源；报低通常整体变亮",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "0 = 跟隨片源；報低通常整體變亮",
+   "en": "0 = follow the source; a lower value usually brightens the picture",
+   "ja": "0 = ソースに追従。低く申告すると通常は全體が明るくなる"
+  },
+  {
+   "zh": "不做任何改动，交给显示器和片源本身。",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "不做任何改动，交给显示器和片源本身。",
+   "en": "Changes nothing; the display and the source decide.",
+   "ja": "Changes nothing; the display and the source decide."
+  },
+  {
+   "zh": "启动时检测到小飞机（RTSS）就改用软件绘制界面，OSD 只显示在视频上",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "啟動時偵測到小飛機（RTSS）就改用軟體繪製介面，OSD 只顯示在影片上",
+   "en": "When RivaTuner (RTSS) is running at start, the interface is drawn in software and the OSD shows on the video only",
+   "ja": "起動時に RivaTuner（RTSS）を検出するとインターフェースをソフトウェア描画にし、OSD は映像にだけ表示します"
+  },
+  {
+   "zh": "小飞机在 Veyra 之后启动。为避免画面卡住，它的 OSD 暂不在 Veyra 里显示。重启后界面改用兼容绘制，OSD 只显示在视频上。现在重启吗？当前播放或串流将停止。",
+   "src": "qml/Main.qml",
+   "zh-TW": "小飛機在 Veyra 之後啟動。為避免畫面卡住，它的 OSD 暫不在 Veyra 中顯示。重新啟動後介面改用相容繪製，OSD 只顯示在影片上。現在重新啟動嗎？目前的播放或串流將停止。",
+   "en": "RivaTuner started after Veyra. To keep the picture from freezing, its OSD is not shown in Veyra for now. After a restart the interface uses compatible drawing and the OSD shows on the video only. Restart now? Current playback or streaming will stop.",
+   "ja": "RivaTuner が Veyra の後に起動しました。映像が止まらないよう、今は Veyra に OSD を表示しません。再起動するとインターフェースが互換描画になり、OSD は映像にだけ表示されます。今すぐ再起動しますか？再生中の映像やストリーミングは停止します。"
+  },
+  {
+   "zh": "已发送给显示器",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "已傳送給顯示器",
+   "en": "Sent to the display",
+   "ja": "表示機器へ送信中"
+  },
+  {
+   "zh": "已检测到小飞机（RTSS）：界面软件绘制，OSD 只显示在视频上；部分阴影与模糊简化",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "已偵測到小飛機（RTSS）：介面軟體繪製，OSD 只顯示在影片上；部分陰影與模糊簡化",
+   "en": "RivaTuner (RTSS) detected: the interface is drawn in software and the OSD shows on the video only; some shadows and blur are simplified",
+   "ja": "RivaTuner（RTSS）を検出：インターフェースはソフトウェア描画、OSD は映像にだけ表示。一部の影とぼかしは簡略化されます"
+  },
+  {
+   "zh": "把内容峰值告诉显示器",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "把內容峰值告訴顯示器",
+   "en": "Tells the display the content peak",
+   "ja": "コンテンツのピークを表示機器に傳える"
+  },
+  {
+   "zh": "把内容峰值告诉显示器，让它的动态色调映射有依据。",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "把內容峰值告訴顯示器，讓它的動態色調映射有依據。",
+   "en": "Tells the display what the content peak is, so its dynamic tone mapping has something to work from.",
+   "ja": "コンテンツのピークを表示機器に傳え、動的トーンマッピングの判斷材料にする。"
+  },
+  {
+   "zh": "文件播放与字幕的默认行为。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "檔案播放與字幕的預設行為。",
+   "en": "Default behavior for file playback and subtitles.",
+   "ja": "ファイル再生と字幕の既定の動作。"
+  },
+  {
+   "zh": "暗调片、夜景多的剧集：只抬暗部，亮部不受影响。",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "暗调片、夜景多的剧集：只抬暗部，亮部不受影响。",
+   "en": "Dark films and night-heavy series: lifts the shadows only; the highlights are untouched.",
+   "ja": "Dark films and night-heavy series: lifts the shadows only; the highlights are untouched."
+  },
+  {
+   "zh": "检测到小飞机（RTSS）",
+   "src": "qml/Main.qml",
+   "zh-TW": "偵測到小飛機（RTSS）",
+   "en": "RivaTuner (RTSS) detected",
+   "ja": "RivaTuner（RTSS）を検出"
+  },
+  {
+   "zh": "游戏 30 帧、采集卡输出 60 帧时选“采集 60→30”",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "遊戲 30 幀、擷取卡輸出 60 幀時選“擷取 60→30”",
+   "en": "Choose \"Capture 60→30\" when the game runs at 30 fps and the capture card outputs 60",
+   "ja": "ゲームが 30 fps でキャプチャーカードが 60 fps を出力する場合は「キャプチャー 60→30」を選択"
+  },
+  {
+   "zh": "源 ",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "源 ",
+   "en": "Source ",
+   "ja": "ソース "
+  },
+  {
+   "zh": "界面始终用显卡绘制；为避免冲突，小飞机 OSD 不在 Veyra 里显示",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "介面始終用顯示卡繪製；為避免衝突，小飛機 OSD 不在 Veyra 中顯示",
+   "en": "The interface always draws on the GPU; to avoid a conflict the RTSS OSD is not shown in Veyra",
+   "ja": "インターフェースは常に GPU で描画します。競合を避けるため RTSS の OSD は Veyra に表示しません"
+  },
+  {
+   "zh": "等比例缩放这一档的效果；100% = 档位原值",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "等比例缩放这一档的效果；100% = 档位原值",
+   "en": "Scales the whole preset; 100% = the preset as written",
+   "ja": "Scales the whole preset; 100% = the preset as written"
+  },
+  {
+   "zh": "自动：与屏幕同步防撕裂 · 提交帧率受屏幕刷新率限制",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "自動：與螢幕同步防撕裂 · 提交幀率受螢幕更新率限制",
+   "en": "Auto: synchronize with the display to prevent tearing; submitted FPS is limited by the refresh rate",
+   "ja": "自動：画面と同期してティアリングを防止 · 送信 FPS はリフレッシュレートが上限"
+  },
+  {
+   "zh": "通用与外观",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "通用與外觀",
+   "en": "General and appearance",
+   "ja": "全般と外観"
+  },
+  {
+   "zh": "静态曲线：抬暗部、定中灰、压高光。不随场景变化，不会呼吸。",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "靜態曲線：抬暗部、定中灰、壓高光。不隨場景變化，不會呼吸。",
+   "en": "Static curve: lifts the shadows, sets the mid-gray, rolls off the highlights. It never follows the scene, so the picture cannot breathe.",
+   "ja": "靜的曲線：暗部を持ち上げ、中間調を決め、ハイライトを壓縮。シーンに追従しない。"
+  },
+  {
+   "zh": "；当前显卡不能使用 DLSS NR，本次导出自动关闭 NR",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "；當前顯示卡不能使用 DLSS NR，本次匯出自動關閉 NR",
+   "en": "; this GPU cannot use DLSS NR, NR is turned off for this export",
+   "ja": "；この GPU では DLSS NR を使えないため、今回の書き出しでは NR をオフにします"
   }
  ]
 }
