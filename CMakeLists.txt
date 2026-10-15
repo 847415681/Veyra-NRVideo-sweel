@@ -747,6 +747,8 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_features(veyra_realtime_preview_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_realtime_preview_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
   target_include_directories(veyra_realtime_preview_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  # Its headers carry UTF-8 Chinese literals (CaptureBuffer.h, EnhancementSettings.h).
+  target_compile_options(veyra_realtime_preview_tests PRIVATE /utf-8)
   add_executable(veyra_live_presentation_tests tests/integration/LivePresentationTests.cpp)
   # wmain holds many PlayerSnapshot locals; the default 1 MiB stack overflowed at entry.
   target_link_options(veyra_live_presentation_tests PRIVATE /STACK:8388608)

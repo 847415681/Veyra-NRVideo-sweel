@@ -44,6 +44,7 @@ def keep_common(name, flavor):
         return not name.startswith('runtime/amd-nr/')
     return not name.startswith(('runtime/experimental/nvngx', 'runtime/experimental/nr-',
                                 'runtime/experimental/fallback-dlssg', 'runtime/experimental/dlssg-kernels/',
+                                'runtime/experimental/dlssg-lite/',
                                 'runtime/nvidia-vfg/', 'runtime/config/', 'licenses/nvidia-vfg/',
                                 'licenses/vfg-samples/'))
 
@@ -56,7 +57,8 @@ def check_vendor(stage, flavor):
         assert {Path(n).name for n in names if n.startswith('runtime/nvidia-vfg/')} == VFG_KEEP
     else:
         assert not any(n.startswith(('runtime/nvidia-vfg/', 'runtime/experimental/nvngx', 'runtime/experimental/nr-',
-                                     'runtime/experimental/fallback-dlssg', 'runtime/experimental/dlssg-kernels/')) for n in names)
+                                     'runtime/experimental/fallback-dlssg', 'runtime/experimental/dlssg-kernels/',
+                                     'runtime/experimental/dlssg-lite/')) for n in names)
         assert 'runtime/amd-nr/LmxxfNrRuntime.dll' in names
         assert 'runtime_local/amd/fidelityfx/amd_fidelityfx_framegeneration_dx12.dll' in names
     assert not any(Path(n).name.lower() in {'nvcuda.dll', 'nvopticalflow64.dll', 'amdhip64.dll', 'amdhip64_6.dll', 'amdhip64_7.dll'} for n in names)
