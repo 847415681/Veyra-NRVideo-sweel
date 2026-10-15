@@ -2549,7 +2549,7 @@ void QmlPlayerBridge::tickCapture() {
     i.captureStatus = i.captureFormatList.empty() ? tr("未读到设备上报的采集格式，或设备正被其他应用占用。")
                     : i.captureFormatKey.empty() ? (!i.capturePrefs.formatKey.empty()?tr("此采集卡无此格式，请重新选择分辨率、帧率和像素格式。"):tr("先选择分辨率，再选择该分辨率支持的帧率和像素格式"))
                     : q.kind == 3 ? tr("驱动设置已关闭。请核对所选格式与设备帧率，再连接。")
-                    : source::decklink::isPath(i.captureDevice) ? tr("原生采集先确认有效信号；支持自动检测的卡建议选择自动。HDMI/SDI 跟随 Desktop Video Setup。")
+                    : source::decklink::isPath(i.captureDevice) ? tr("原生采集先确认有效信号；请在设备列表选择对应的 HDMI/SDI 输入，支持自动检测的卡建议选择自动。Driver 保留驱动当前输入。")
                     : captureBlackmagicDevice() ? tr("请选择与输入信号一致的格式。驱动默认格式不代表检测到的信号。")
                     : tr("连接后使用当前增强设置。格式与音频变更需要重新连接。");
     veyra::log::info("capture-ui", std::format("formats={} selected={}", i.captureFormatList.size(), !i.captureFormatKey.empty()));
@@ -4505,13 +4505,12 @@ double QmlPlayerBridge::sourceFps() const { return impl_->snapshot.nominalSource
 int QmlPlayerBridge::sourceRotation() const { return impl_->snapshot.sourceRotationDegrees; }
 double QmlPlayerBridge::sourceAspect() const {
     const auto& s = impl_->snapshot;
-    // The container's display aspect already accounts for sample aspect ratio and
-    // rotation, so prefer it. The pixel ratio is only a fallback for a source that
-    // reported none, and it is never presented as more than that.
-    if (s.sourceDisplayAspect > 0.01) return s.sourceDisplayAspect;
-    if (s.sourceWidth > 0 && s.sourceHeight > 0)
-        return double(s.sourceWidth) / double(s.sourceHeight);
-    return 0.0;
+    // A known DAR already includes SAR/rotation. With no DAR, rotate the coded
+    // extent as the presenter does; phone files can omit SAR yet carry a matrix.
+    engine::PreviewView view;
+    view.displayAspect=s.sourceDisplayAspect;
+    view.rotationDegrees=s.sourceRotationDegrees;
+    return view.aspect(float(s.sourceWidth),float(s.sourceHeight));
 }
 
 // --- live performance -------------------------------------------------------
@@ -7325,7 +7324,10 @@ double QmlPlayerBridge::previewAspect() const {
     const int mode=impl_->screenFillActive?2:impl_->aspectMode;
     if(mode==4)return 16.0/9;if(mode==5)return 4.0/3;if(mode==6)return 21.0/9;
     const auto e=impl_->snapshot.metrics.resolution.output;
-    if(mode==1&&e.height)return double(e.width)/e.height;
+    if(mode==1&&e.height){
+        engine::PreviewView view;view.mode=1;view.rotationDegrees=impl_->snapshot.sourceRotationDegrees;
+        return view.aspect(float(e.width),float(e.height));
+    }
     return sourceAspect();
 }
 void QmlPlayerBridge::setDisplaySync(int value) {

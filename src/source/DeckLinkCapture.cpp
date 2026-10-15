@@ -1,4 +1,5 @@
 #include "veyra/source/DeckLinkCapture.h"
+#include "veyra/source/DeckLinkInputConnection.h"
 #include "veyra/Log.h"
 #include <algorithm>
 #include <chrono>
@@ -133,7 +134,7 @@ bool Capture::configure(std::wstring_view path,std::wstring_view key,bool audio,
     {std::lock_guard lock(p.mutex);p.probing=false;if(p.reopen||p.pending)ok=false;}
     if(!ok){
         {std::lock_guard lock(p.mutex);if(why.empty())why=p.error;}
-        if(why.empty())why=L"BMD 未检测到有效输入。请关闭占用采集卡的应用，并在 Desktop Video Setup 核对 HDMI/SDI 和制式；也可选择手动制式";
+        if(why.empty())why=std::format(L"BMD 未在 {} 输入检测到有效信号。请在设备列表选择与 OBS 一致的 HDMI/SDI 输入口，并选择自动检测或匹配实际信号的手动制式。",inputConnectionName(inputConnectionSelection(path).connection));
         return failed(why);
     }
     if(!p.driver->flush(why))return failed(why);

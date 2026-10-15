@@ -9486,3 +9486,25 @@ GUI 发现并修复：断开后采集任务拆除期间（Stopping）轮询又�
 - 实测缺陷：拖动参数滑块时每次 chainChanged 占 UI 线程 65–80 ms（约 12–15 fps）；窗口捕获改尺寸每次整图重建（NR + 补帧约 0.6 秒冻结）；日志没有大小上限（现场 129–186 MB）；VSwitch 点击断开绑定（#29）；组件列表随快照每次读盘并解析 manifest。
 - 开着的 issue 18 个，7 个合入后可关；#33 本机 280+ 次缩放未复现；#38 的日志未下载。详见 docs/AUDIT_2.0.8_2026-10-15.md。
 - 收尾：私有程序副本（自有 68.5 MB，另有硬链接 974 MB）、独立配置和空运行目录已删除，脚本和日志保留。
+
+## 2026-10-13 issues36/37与BMD日志53开工及实现
+
+用户将延迟工作交Claude，要求检查issues37/36并继续修复BMD黑屏。隔离codex/issues36-37-bmd-20261013，从main7571919起；73旧树head/status、input log53 SHA和副本、两issue正文/评论、source-before.bundle固定在archives/issues36-37-bmd-20261013。计划docs/ISSUES_36_37_BMD_PLAN_2026-10-13.md；不改显示同步/队列/XeLL策略，避免干扰Claude。产物全E盘，不派Agent，不改驱动持久偏好/EDID/运行组件或用户真实配置，无合并/push/发布/交付包/关机。
+
+原r2实际GUI负对照：pro-video-geometry-test.py before --page node --task issues36-37-bmd-20261013 --baseline-ref7571919 --donor-app<原r2> --media<GTA4K>，9场完成，其中8场被视频HWND遮24–77DIP；全屏不遮。原因Main固定扣40但节点状态/紧凑条实际64–117。改NodePage响应式viewport并由Main绑定，不加Timer、不改33/250ms；同EXE只换QML后9场全部边界一致。原始日志/receipt在本轮before-d3d12-1-20261013-222518与after-d3d12-1-20261013-222847。
+
+旋转：PreviewView纳入容器顺时针方向、原生尺寸/SAR/选区逆映射；Engine读取SourceInfo的现成方向，UI重置保留元数据；PresentBlit和XeSS PresentMotion共享UV旋转，对照和运动也旋转。新增CPU坐标/GPU四象限与运动方向回归。图内NR/光流仍为原编码坐标，没有增加像素回读/额外旋转pass；离线导出合同不在本修复中改变。现有ExperimentalBackend的显示运动测试仍向新版shader传旧版zoom常量，已按当前16常量合同修正并增加独立present-motion入口，后续需真实GPU验证。
+
+BMD日志53：5次进入原生协商的尝试均SDI连接0x1、locked0/noInput，另外DirectShow亦黑；不据此断言用户线接错，具体物理口尚未确认。对照固定OBS e7f0b0d输入SetInt与SDK枚举1SDI/2HDMI，Veyra此前只有读取默认口。增加设备实际支持的各输入口稳定选择，旧Driver身份兼容；启用前设置/读回，按端口过滤SDK可用模式，关闭时仅在仍持有该设置时恢复原输入，不写持久偏好、不扫描端口。追加路径/租用控制失败及恢复回归；没有BMD实卡不宣称现场已恢复。8条新增提示三语追加、原2245条目（含重复键）保持；首轮保护校验因旧catalog存在重复键而误失败且未写文件，改按完整原列表比较后通过。构建/后续回归尚未完成。
+
+### issues36/37与BMD最终回归
+
+详细报告docs/ISSUES_36_37_BMD_REPORT_2026-10-13.md。首完整构建552步/29目标126.5s，最后d64d7af构建670输入/29目标29.0s通过，EXE7ce5f602b526c921a854bfbd3edce50443a8f8756713010af4dc9bbc2cb75258。构建入口scripts/acceptance/test-2.0.7-build.py --task issues36-37-bmd-20261013 --label 2.0.7-issues-fix --extra-target veyra_preview_geometry_tests --extra-target veyra_experimental_backend_tests；build-20261013-231312/receipt.json固定实际命令/SDK与patched FFmpeg路径。后续只有验收器/文档改动，全部产品输入与构建回执逐文件一致。
+
+用户确认关闭原2.0.6播放器后完成GPU/GUI。真实四象限H264 Display Matrix旧版三种非零方向都未旋转；修复后无SAR及SAR1两组0/90/180/270/0共10项像素和窗口比例通过。首次160x96无损profile244样本硬解花屏（软解正常），原样本/失败截图保留，未修该profile硬解回退；首实际修复测试还发现无SAR时QML窗口比例忽略rotation，d64d7af补同一PreviewView方向计算后才通过。GPU18呈现/8运动/颜色回归通过，旧着色器两负对照按预期失败。真实NR/FG竖屏画质与导出/图输出截图方向不冒充已验。
+
+最终节点D3D12/software×100/150%每组9场，共36/36 HWND与QML视频区吻合、遮挡0；专业模式两后端各4场共8/8。验收器软件标识初误写interface renderer=software（实际interface=software+OBS software提示），导致9场几何通过但总回执失败，修正实际双标识后重跑，保留原失败。没有增加生产Timer、UI频率或全窗口重绘。CPU11组最终EXE复测通过，DeckLink43断言含16新端口控制；失败/读回/恢复/外部改口及稳定ID持久化覆盖。按decklink-negotiate重新计数日志53为5次，纠正开工误记6次。现场实际端口未知，未判用户接线错。当前仅枚举WebcastMate/OBS两虚拟摄像头，BMD/USB实卡均无，未拿虚拟帧冒充硬件验收。
+
+本轮private QA stage在tests/issues36-37-bmd-20261013/product；窗口回归另用同根各用途目录issues36-37-bmd-20261013-ui与issues36-37-bmd-20261013-pro。logs含cpu-final-232222、gpu-232224、rotation-before-231023、rotation-after-231453/232040、usb-232352及所有失败；原包1641 payload SHA/size、670构建输入、29 EXE/各回执绑定、73旧树HEAD/status和原始日志保护均由tmp/issues36-37-bmd-20261013/audit.py核对。最终回执reports/.../final.json与archives/.../source-after.bundle；无合并main/push/交付包/Release/子Agent/关机。
+
+最终封存校验器首轮误把i18n/catalog根对象当数组，断言失败；实际根为entries封装，改为按entries完整前缀比较后确认原2245条目全部原序保持、仅增8条，未改数据或产品。失败说明外部reports/issues36-37-bmd-20261013/audit-validation-failure.json保留。

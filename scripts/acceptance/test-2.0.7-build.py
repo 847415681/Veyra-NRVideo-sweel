@@ -6,6 +6,7 @@ import argparse,hashlib,json,os,re,subprocess,time
 parser=argparse.ArgumentParser()
 parser.add_argument('--task',default='test-2.0.7-20261012')
 parser.add_argument('--label',default='2.0.7-test')
+parser.add_argument('--extra-target',action='append',default=[])
 args=parser.parse_args()
 assert re.fullmatch(r'[a-z0-9][a-z0-9.-]{0,79}',args.task)
 assert re.fullmatch(r'2\.0\.7-[A-Za-z0-9.-]+',args.label)
@@ -56,6 +57,8 @@ targets=['veyra_qml_ui','veyra_xess_motion_contract_tests','veyra_xess_motion_qu
     'veyra_present_sink_lifecycle_tests','veyra_decklink_tests','veyra_capture_format_selection_tests',
     'veyra_capture_color_tests','veyra_vfg_gpu_tests','veyra_fsr_dispatch_tests','veyra_qml_quick_tests',
     'veyra_playlist_tests','veyra_qml_data_tests','veyra_bitmap_subtitle_tests','veyra_subtitle_format_tests','veyra_capture_tests']
+assert all(re.fullmatch(r'veyra_[a-z0-9_]+',target) for target in args.extra_target)
+targets=list(dict.fromkeys(targets+args.extra_target))
 inputs={p.relative_to(ROOT).as_posix():sha(p) for folder in ('include','src','apps','shaders','qml','tests','cmake','i18n') for p in (ROOT/folder).rglob('*') if p.is_file()}
 inputs['CMakeLists.txt']=sha(ROOT/'CMakeLists.txt');commands=[];start=time.monotonic()
 configure=[cmake,'-S',str(ROOT),'-B',str(BUILD),'-G','Ninja','-DCMAKE_BUILD_TYPE=Release']+['-D'+k+'='+v for k,v in options.items()]

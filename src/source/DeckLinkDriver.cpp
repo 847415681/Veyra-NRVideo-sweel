@@ -3,6 +3,7 @@
 // Veyra uses owner-thread negotiation, stable IDs, explicit metadata and its
 // existing upload mailbox. SDK headers are generated externally, never vendored.
 #include "veyra/source/DeckLinkCapture.h"
+#include "veyra/source/DeckLinkInputConnection.h"
 #include "veyra/Log.h"
 #include <algorithm>
 #include <format>
@@ -26,7 +27,8 @@ bool checked(HRESULT hr,const char* operation,std::wstring* error=nullptr){
     return SUCCEEDED(hr);
 }
 std::wstring take(BSTR value){std::wstring s=value?std::wstring(value,SysStringLen(value)):L"";SysFreeString(value);return s;}
-struct Row {ComPtr<IDeckLink> device;ComPtr<IDeckLinkInput> input;Device details;};
+static_assert(bmdVideoConnectionSDI==1&&bmdVideoConnectionHDMI==2&&bmdVideoConnectionSVideo==32);
+struct Row {ComPtr<IDeckLink> device;ComPtr<IDeckLinkInput> input;Device details;std::wstring name;uint32_t supportedConnections=0,requestedConnection=0;};
 std::vector<Row> enumerate(){
     std::vector<Row> out;ComPtr<IDeckLinkIterator> iterator;
     const HRESULT hr=CoCreateInstance(__uuidof(CDeckLinkIterator),nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&iterator));
@@ -42,13 +44,16 @@ std::vector<Row> enumerate(){
         const auto subHr=attributes->GetInt(BMDDeckLinkSubDeviceIndex,&sub);
         BSTR name=nullptr;const auto nameHr=device->GetDisplayName(&name);
         row.details.name=take(name);if(FAILED(nameHr)||row.details.name.empty())row.details.name=L"Blackmagic DeckLink";
+        row.name=row.details.name;
         row.details.path=std::format(L"decklink-native:{}:{:016x}:{:x}",persistent?L"p":L"t",uint64_t(id),uint64_t(sub));
         BOOL automatic=FALSE;const auto detectHr=attributes->GetFlag(BMDDeckLinkSupportsInputFormatDetection,&automatic);
         row.details.autoDetection=SUCCEEDED(detectHr)&&automatic;
         ComPtr<IDeckLinkConfiguration> config;LONGLONG port=0;
         if(SUCCEEDED(device.As(&config)))checked(config->GetInt(bmdDeckLinkConfigVideoInputConnection,&port),"GetInputConnection");
-        row.details.name=std::format(L"[原生] {} · {}",row.details.name,port==bmdVideoConnectionHDMI?L"HDMI":port==bmdVideoConnectionSDI?L"SDI":L"跟随驱动输入");
-        log::info("decklink-device",std::format("stableKind={} id=0x{:016X} sub={} subHr=0x{:08X} autoDetect={} detectHr=0x{:08X} connection=0x{:X}",persistent?"persistent":"topological",uint64_t(id),sub,uint32_t(subHr),row.details.autoDetection,uint32_t(detectHr),uint64_t(port)));
+        LONGLONG supported=0;const auto portsHr=attributes->GetInt(BMDDeckLinkVideoInputConnections,&supported);
+        if(portsHr==S_OK&&supported>=0&&supported<=UINT32_MAX)row.supportedConnections=uint32_t(supported);
+        row.details.name=std::format(L"[原生] {} · Driver ({})",row.name,inputConnectionName(uint32_t(port)));
+        log::info("decklink-device",std::format("stableKind={} id=0x{:016X} sub={} subHr=0x{:08X} autoDetect={} detectHr=0x{:08X} connection=0x{:X} supportedConnections=0x{:X} portsHr=0x{:08X}",persistent?"persistent":"topological",uint64_t(id),sub,uint32_t(subHr),row.details.autoDetection,uint32_t(detectHr),uint64_t(port),row.supportedConnections,uint32_t(portsHr)));
         out.push_back(std::move(row));device.Reset();
     }
     // A driver without unique sub-device IDs must never make two physical
@@ -57,7 +62,17 @@ std::vector<Row> enumerate(){
     for(const auto& row:out)if(std::count_if(out.begin(),out.end(),[&](const Row& other){return other.details.path==row.details.path;})>1)ambiguous.push_back(row.details.path);
     if(!ambiguous.empty())log::warn("decklink-device","Duplicate stable input IDs; refusing ambiguous endpoints");
     std::erase_if(out,[&](const Row& row){return std::find(ambiguous.begin(),ambiguous.end(),row.details.path)!=ambiguous.end();});
-    return out;
+    std::vector<Row> choices;
+    for(const auto& row:out){
+        choices.push_back(row); // preserve saved legacy identities
+        for(auto connection:inputConnections)if(row.supportedConnections&connection){
+            auto choice=row;choice.requestedConnection=connection;
+            choice.details.path=inputConnectionPath(row.details.path,connection);
+            choice.details.name=std::format(L"[原生] {} · {}",row.name,inputConnectionName(connection));
+            choices.push_back(std::move(choice));
+        }
+    }
+    return choices;
 }
 Mode describe(IDeckLinkDisplayMode* mode){
     Mode out;out.id=mode->GetDisplayMode();out.width=mode->GetWidth();out.height=mode->GetHeight();
@@ -75,12 +90,22 @@ Mode describe(IDeckLinkDisplayMode* mode){
     else{c.matrix=out.height>576?YuvMatrix::BT709:YuvMatrix::BT601;c.primaries=out.height>576?ColorPrimaries::BT709:out.height==576?ColorPrimaries::BT601_625:ColorPrimaries::BT601_525;c.matrixAssumed=c.primariesAssumed=(flags&bmdDisplayModeColorspaceRec601)==0;}
     return out;
 }
-std::vector<Mode> readModes(IDeckLinkInput* input){
+std::vector<Mode> readModes(IDeckLinkInput* input,uint32_t connection=0){
     std::vector<Mode> out;ComPtr<IDeckLinkDisplayModeIterator> iterator;
     if(!checked(input->GetDisplayModeIterator(&iterator),"GetDisplayModeIterator"))return out;
     ComPtr<IDeckLinkDisplayMode> mode;
     while(iterator->Next(&mode)==S_OK){auto m=describe(mode.Get());
-        if(m.width>=2&&m.height&&m.duration>0&&m.scale>0)out.push_back(std::move(m));mode.Reset();}
+        if(m.width>=2&&m.height&&m.duration>0&&m.scale>0){
+            bool usable=false;
+            for(auto format:{bmdFormat10BitYUV,bmdFormat8BitYUV,bmdFormat10BitRGBXLE,bmdFormat8BitBGRA}){
+                BOOL supported=FALSE;BMDDisplayMode actual=bmdModeUnknown;
+                const HRESULT hr=input->DoesSupportVideoMode(BMDVideoConnection(connection),BMDDisplayMode(m.id),format,bmdNoVideoInputConversion,bmdSupportedVideoModeDefault,&actual,&supported);
+                if(FAILED(hr))checked(hr,"DoesSupportVideoMode(enumerate)");
+                if(hr==S_OK&&supported&&uint32_t(actual)==m.id){usable=true;break;}
+            }
+            if(usable)out.push_back(std::move(m));
+        }
+        mode.Reset();}
     // A conservative seed only. The format-change callback, not this order,
     // selects the real automatic mode before any frame can be published.
     std::stable_sort(out.begin(),out.end(),[](const Mode& a,const Mode& b){const auto seed=[](const Mode& m){return m.width==1920&&m.height==1080&&!m.interlaced&&m.scale==m.duration*60;};return seed(a)&&!seed(b);});
@@ -168,7 +193,23 @@ public:
 };
 class ComDriver final:public Driver {
     ComPtr<IDeckLink> device_;ComPtr<IDeckLinkInput> input_;ComPtr<Callback> callback_;
+    ComPtr<IDeckLinkConfiguration> configuration_;
+    InputConnectionLease connectionLease_;
+    uint32_t requestedConnection_=0,supportedConnections_=0;
+    bool connectionConfigured_=false;
     bool auto_=false,videoEnabled_=false,audioEnabled_=false;
+    bool readConnection(uint32_t& value){
+        if(!configuration_)return false;LONGLONG actual=0;
+        const auto hr=configuration_->GetInt(bmdDeckLinkConfigVideoInputConnection,&actual);
+        checked(hr,"ReadInputConnection");
+        if(hr!=S_OK||actual<0||actual>UINT32_MAX)return false;
+        value=uint32_t(actual);return true;
+    }
+    bool writeConnection(uint32_t value){
+        if(!configuration_)return false;
+        const auto hr=configuration_->SetInt(bmdDeckLinkConfigVideoInputConnection,value);
+        checked(hr,"SetInputConnection");return hr==S_OK;
+    }
     void logStatus(){ComPtr<IDeckLinkStatus> status;if(FAILED(device_.As(&status)))return;
         BOOL locked=FALSE;LONGLONG detected=0,flags=0,current=0;
         const auto a=status->GetFlag(bmdDeckLinkStatusVideoInputSignalLocked,&locked),b=status->GetInt(bmdDeckLinkStatusDetectedVideoInputMode,&detected),c=status->GetInt(bmdDeckLinkStatusDetectedVideoInputFormatFlags,&flags),d=status->GetInt(bmdDeckLinkStatusCurrentVideoInputMode,&current);
@@ -176,17 +217,31 @@ class ComDriver final:public Driver {
 public:
     ~ComDriver(){stop();}
     bool open(std::wstring_view path,DriverSink& sink,std::wstring& error)override{
-        stop();for(auto& row:enumerate())if(row.details.path==path){device_=row.device;input_=row.input;auto_=row.details.autoDetection;break;}
-        if(!input_){error=L"未找到该 BMD 原生设备，请安装 Desktop Video 驱动并刷新设备列表";return false;}
+        stop();const auto selection=inputConnectionSelection(path);
+        if(!selection.valid){error=L"保存的 BMD 输入口无效，请重新选择设备和 HDMI/SDI 输入";return false;}
+        bool physicalFound=false;
+        for(auto& row:enumerate()){
+            if(row.details.path==selection.device)physicalFound=true;
+            if(row.details.path==path){device_=row.device;input_=row.input;auto_=row.details.autoDetection;requestedConnection_=row.requestedConnection;supportedConnections_=row.supportedConnections;break;}
+        }
+        if(!input_){error=physicalFound?L"这张 BMD 卡当前不提供所选输入口，请刷新并重新选择设备输入":L"BMD 原生设备当前不可用，请确认设备连接和 Desktop Video 状态，然后刷新设备列表";return false;}
+        device_.As(&configuration_);
         callback_.Attach(new Callback(sink));
         if(!checked(input_->SetCallback(callback_.Get()),"SetCallback",&error)){stop();return false;}
         logStatus();return true;
     }
-    std::vector<Mode> modes()override{return input_?readModes(input_.Get()):std::vector<Mode>{};}
+    std::vector<Mode> modes()override{return input_?readModes(input_.Get(),requestedConnection_):std::vector<Mode>{};}
     bool autoDetection()const override{return auto_;}
     bool enable(const Mode& mode,Pixel p,bool automatic,bool audio,std::wstring& error)override{
         if(!input_)return false;BOOL supported=FALSE;BMDDisplayMode actual=bmdModeUnknown;
-        const auto hr=input_->DoesSupportVideoMode(bmdVideoConnectionUnspecified,BMDDisplayMode(mode.id),sdkPixel(p),bmdNoVideoInputConversion,bmdSupportedVideoModeDefault,&actual,&supported);
+        if(!connectionConfigured_){
+            const bool selected=connectionLease_.apply(requestedConnection_,supportedConnections_,[&](uint32_t& value){return readConnection(value);},[&](uint32_t value){return writeConnection(value);});
+            uint32_t actualConnection=0;const bool read=readConnection(actualConnection);
+            log::info("decklink-connection",std::format("requested=0x{:X} actual=0x{:X} verified={} read={} supported=0x{:X} persistentWrite=0",requestedConnection_,actualConnection,selected,read,supportedConnections_));
+            if(!selected){error=L"BMD 所选输入口不可用，或驱动未应用该输入口；请重新选择 HDMI/SDI 输入";return false;}
+            connectionConfigured_=true;
+        }
+        const auto hr=input_->DoesSupportVideoMode(BMDVideoConnection(requestedConnection_),BMDDisplayMode(mode.id),sdkPixel(p),bmdNoVideoInputConversion,bmdSupportedVideoModeDefault,&actual,&supported);
         checked(hr,"DoesSupportVideoMode",&error);
         log::info("decklink-negotiate",std::format("mode=0x{:08X} actual=0x{:08X} pixel=0x{:08X} supported={} automatic={}",mode.id,unsigned(actual),unsigned(sdkPixel(p)),supported,automatic));
         if(FAILED(hr)||!supported||uint32_t(actual)!=mode.id){if(error.empty())error=L"BMD 输入不支持所选制式/像素格式";return false;}
@@ -204,12 +259,14 @@ public:
         if(callback_)callback_->wait();
         if(input_&&audioEnabled_)checked(input_->DisableAudioInput(),"DisableAudioInput");
         if(input_&&videoEnabled_)checked(input_->DisableVideoInput(),"DisableVideoInput");
+        if(configuration_&&!connectionLease_.restore([&](uint32_t& value){return readConnection(value);},[&](uint32_t value){return writeConnection(value);}))log::warn("decklink-connection","Unable to restore the prior input connection; no persistent preferences were written");
+        connectionLease_={};configuration_.Reset();requestedConnection_=supportedConnections_=0;connectionConfigured_=false;
         callback_.Reset();input_.Reset();device_.Reset();videoEnabled_=audioEnabled_=false;
     }
 };
 }
 std::vector<Device> devices(){std::vector<Device> out;for(auto& row:enumerate())out.push_back(std::move(row.details));return out;}
-std::vector<Mode> modes(std::wstring_view path){for(auto& row:enumerate())if(row.details.path==path)return readModes(row.input.Get());return {};}
+std::vector<Mode> modes(std::wstring_view path){for(auto& row:enumerate())if(row.details.path==path)return readModes(row.input.Get(),row.requestedConnection);return {};}
 std::unique_ptr<Driver> makeDriver(){return std::make_unique<ComDriver>();}
 }
 #else

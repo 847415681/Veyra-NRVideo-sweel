@@ -252,7 +252,8 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     D3D12_VIEWPORT viewport{0,0,float(sink_.bufferWidth()),float(sink_.bufferHeight()),0,1};
     D3D12_RECT rect{0,0,LONG(sink_.bufferWidth()),LONG(sink_.bufferHeight())};list->RSSetViewports(1,&viewport);list->RSSetScissorRects(1,&rect);
     ID3D12DescriptorHeap* heaps[]={pass_.heap.Get()};list->SetDescriptorHeaps(1,heaps);list->SetGraphicsRootSignature(pass_.rootSig.Get());list->SetPipelineState(pass_.pso.Get());
-    const float samplingFlags=graph.highQualityPresentation()?2.0f:0.0f;
+    const float rotationFlags=float(view.quarterTurns()<<6);
+    const float samplingFlags=(graph.highQualityPresentation()?2.0f:0.0f)+rotationFlags;
     // PresentBlit uses a contain mapping. Cancel its fit so these dimensions
     // express the exact shared display transform, including stretch/SAR/fill.
     const float inverseFit=1.0f/std::min(float(rc.right)/renderW,float(rc.bottom)/renderH);
@@ -313,7 +314,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         // zero motion in this case. Keep the current color in XeSS history so
         // the next continuous frame can interpolate without another warmup.
         const bool enabled=regionVisible&&!generated&&!comparison&&graph.presentMotion(slot)&&graph.presentDepth()&&identity.sourceFrameId!=lastXessIdentity_.sourceFrameId&&!xessGenerationSuppressed_;
-        const bool reset=!graph.presentMotionValid(slot)||!xessWasEnabled_||identity.epoch!=lastXessIdentity_.epoch||identity.settingsRevision!=lastXessIdentity_.settingsRevision||graph.motionPreviousSource(slot)!=lastXessIdentity_.sourceFrameId;
+        const bool reset=!graph.presentMotionValid(slot)||!xessWasEnabled_||identity.epoch!=lastXessIdentity_.epoch||identity.settingsRevision!=lastXessIdentity_.settingsRevision||graph.motionPreviousSource(slot)!=lastXessIdentity_.sourceFrameId||view.quarterTurns()!=previousXessView_.quarterTurns();
         // frameRenderTime is the provider's only independent period estimate on
         // non-Intel GPUs. Feeding present-to-present time back would include the
         // provider's own wait and lengthen the next burst (measured 2026-09-21).
@@ -347,7 +348,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
             const auto [prevRenderW,prevRenderH]=previous.renderedSize(float(reset?rc.right:previousXessWidth_),float(reset?rc.bottom:previousXessHeight_),float(graph.workWidth()),float(graph.workHeight()));
             const float mapping[16]={float(graph.workWidth()),float(graph.workHeight()),float(rc.right),float(rc.bottom),
                 renderW,view.centerX,view.centerY,reset?1.0f:0.0f,
-                renderH,previous.centerX,previous.centerY,0,
+                renderH,previous.centerX,previous.centerY,float(view.quarterTurns()),
                 float(reset?rc.right:previousXessWidth_),float(reset?rc.bottom:previousXessHeight_),prevRenderW,prevRenderH};
             const auto heap=presentMotionPass_.heap->GetGPUDescriptorHandleForHeapStart().ptr;
             presentMotionPass_.bind(list,mapping,heap+size_t(slot*2)*presentMotionPass_.increment,heap+size_t(slot*2+1)*presentMotionPass_.increment);

@@ -1,4 +1,5 @@
 #include "veyra/source/DeckLinkCapture.h"
+#include "veyra/source/DeckLinkInputConnection.h"
 #include <windows.h>
 #include <atomic>
 #include <chrono>
@@ -46,6 +47,33 @@ int main(){
     int failures=0;auto check=[&](bool value,const char* name){printf("%s %s\n",value?"PASS":"FAIL",name);if(!value)++failures;};
     auto fixture=[](){auto driver=std::make_unique<FakeDriver>();auto* raw=driver.get();return std::pair{std::move(driver),raw};};
     constexpr auto path=L"decklink-native:p:0000000000000123:0";
+    {
+        const auto hdmi=inputConnectionPath(path,2),sdi=inputConnectionPath(path,1);
+        check(inputConnectionSelection(path).valid&&inputConnectionSelection(path).connection==0,"old device identity still follows driver");
+        check(hdmi!=sdi&&inputConnectionSelection(hdmi).device==path&&inputConnectionSelection(hdmi).connection==2,"HDMI and SDI have separate stable saved identities");
+        for(auto bad:{L"decklink-native:p:123:0:input=00000000",L"decklink-native:p:123:0:input=00000003",L"decklink-native:p:123:0:input=00000002extra",L"decklink-native:p:123:0:input=zzzzzzzz"})
+            check(!inputConnectionSelection(bad).valid,"malformed or combined port cannot silently select another input");
+        uint32_t port=1;unsigned writes=0;
+        auto read=[&](uint32_t& value){value=port;return true;};
+        auto write=[&](uint32_t value){port=value;++writes;return true;};
+        InputConnectionLease lease;
+        check(lease.apply(2,3,read,write)&&port==2&&writes==1,"explicit HDMI overrides driver SDI and verifies actual value");
+        check(lease.apply(2,3,read,write)&&writes==1,"repeated pixel negotiation does not rewrite selected port");
+        check(lease.restore(read,write)&&port==1&&writes==2,"close restores previous driver input without persistent preferences");
+        InputConnectionLease external;
+        check(external.apply(2,3,read,write),"second input lease applies");port=8;const auto before=writes;
+        check(external.restore(read,write)&&port==8&&writes==before,"close never overwrites another application's changed input");
+        InputConnectionLease unsupported;
+        check(!unsupported.apply(2,1,read,write)&&writes==before,"unsupported connector fails without changing driver");
+        InputConnectionLease ignored;port=1;
+        check(!ignored.apply(2,3,read,[&](uint32_t){return true;})&&port==1,"successful Set call with ignored port is rejected by readback");
+        InputConnectionLease readFailure;port=1;unsigned reads=0;
+        auto intermittent=[&](uint32_t& value){value=port;return ++reads!=2;};
+        check(!readFailure.apply(2,3,intermittent,write)&&port==2,"readback failure is not reported as successful input selection");
+        check(readFailure.apply(2,3,read,write)&&readFailure.restore(read,write)&&port==1,"retry preserves original SDI for rollback after failed readback");
+        InputConnectionLease follow;const auto unchanged=writes;
+        check(follow.apply(0,3,read,write)&&follow.restore(read,write)&&writes==unchanged,"legacy follow-driver selection never switches ports");
+    }
     {
         auto [driver,fake]=fixture();fake->oversizedFirst=true;Capture capture(std::move(driver));
         check(capture.configure(path,L"decklink:auto",false,50)&&capture.mode().id==1,"all driver modes retained without choosing an unsupported automatic seed");

@@ -39,6 +39,12 @@ VPage {
     // native video window in step).
     property real videoHeight: 330
     signal videoHeightEdited(real height)
+    // The status summary can wrap and the transport gains a row on narrow
+    // windows. The native video host must use this same responsive geometry.
+    readonly property real videoCardHeight: Math.max(statsBar.height + 1,
+        Math.min(root.videoHeight, Math.max(180, root.height - 28 - 10 - 200)))
+    readonly property rect videoViewport: Qt.rect(14, 14, Math.max(1, root.width - 28),
+        Math.max(1, root.videoCardHeight - statsBar.height))
     // Where a node picked from the add menu lands (world coordinates).
     property var addAt: null
     readonly property real cardWidth: 236
@@ -359,7 +365,9 @@ VPage {
             id: nvTop
             visible: !root.overlay
             Layout.fillWidth: true
-            Layout.preferredHeight: root.videoHeight
+            Layout.preferredHeight: root.videoCardHeight
+            Layout.minimumHeight: root.videoCardHeight
+            Layout.maximumHeight: root.videoCardHeight
             radius: Theme.rCard
             color: Theme.videoBlack
             border.width: 1

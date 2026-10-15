@@ -4,6 +4,7 @@
 // triangle sample instead of a compute write.
 
 #include "HdrColor.hlsli"
+#include "PresentationRotation.hlsli"
 Texture2D<float4> sourceTex : register(t0);
 
 cbuffer PresentBlitConstants : register(b0)
@@ -114,6 +115,7 @@ float4 psMain(VSOut input) : SV_Target
         if(any(uv<0)||any(uv>1))return float4(0,0,0,1);
     }
     uint flags=uint(srcDims.z+0.5);
+    uv=PresentationSourceUv(uv,(flags>>6)&3);
     float4 color=(flags&2)?FineSample(uv):sourceTex.SampleLevel(linearClamp,uv,0);
     if(flags&32)color.rgb=HdrDecodePq(color.rgb);
     if(flags&8)color.rgb*=203.0/80.0; // SDR comparison white in an HDR output.
