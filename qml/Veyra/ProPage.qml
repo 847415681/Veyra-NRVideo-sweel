@@ -123,12 +123,24 @@ VPage {
         spacing: 0
         VRow {
             label: qsTr("显示同步")
-            hint: qsTr("自动：与屏幕同步防撕裂 · 提交帧率受屏幕刷新率限制 · 想再降延迟可选“允许撕裂”（可能撕裂）或在显卡驱动开启 G-SYNC/FreeSync，最多少等一次刷新（60Hz 约 8 ms）")
+            hint: qsTr("自动（推荐）：不撕裂，也不等待垂直同步，每次刷新显示最新一帧，延迟最低 · 垂直同步：每帧都等到刷新才显示，比自动多等最多一个刷新 · 允许撕裂：可能出现撕裂线")
             VSeg {
                 objectName: "presentation-display-sync"
                 options: [{ id: "0", label: qsTr("允许撕裂") }, { id: "1", label: qsTr("垂直同步") }, { id: "2", label: qsTr("自动") }]
                 current: String(veyra.displaySync)
                 onPicked: id => veyra.displaySync = Number(id)
+            }
+        }
+        // 可变刷新 (G-SYNC / FreeSync): greyed when the monitor cannot do it.
+        VRow {
+            label: qsTr("可变刷新")
+            enabled: veyra.vrrState >= 2
+            opacity: enabled ? 1 : 0.5
+            hint: veyra.vrrHint
+            VSwitch {
+                objectName: "presentation-vrr"
+                checked: veyra.variableRefresh
+                onToggled: checked => veyra.variableRefresh = checked
             }
         }
         VRow {
@@ -1722,7 +1734,9 @@ VPage {
                             }
                             VRow {
                                 label: qsTr("倍率")
-                                hint: veyra.fgMaxMultiplier + qsTr("X 为上限")
+                                // Live output hint: a suggestion, the multiplier stays as chosen.
+                                hint: veyra.fgDisplayHint.length > 0 ? veyra.fgDisplayHint : veyra.fgMaxMultiplier + qsTr("X 为上限")
+                                hintColor: veyra.fgDisplayHint.length > 0 ? Theme.warn : Theme.t3
                                 VSeg {
                                     visible: veyra.fgBackendName !== "vfg"
                                     options: veyra.fgMultiplierChoices
@@ -1735,6 +1749,18 @@ VPage {
                                     options: veyra.fgMultiplierChoices
                                     value: String(veyra.fgMultiplier) + "X"
                                     onPicked: id => veyra.fgMultiplier = Number(id)
+                                }
+                            }
+                            VRow {
+                                label: qsTr("DLSS 性能模式")
+                                visible: veyra.fgBackendName === "dlss"
+                                enabled: veyra.dlssgLiteAvailable
+                                opacity: enabled ? 1 : 0.5
+                                hint: veyra.dlssgLiteHint
+                                VSwitch {
+                                    objectName: "list-dlssg-lite"
+                                    checked: veyra.dlssgLite
+                                    onToggled: checked => veyra.dlssgLite = checked
                                 }
                             }
                             VRow {
@@ -1815,7 +1841,7 @@ VPage {
                             }
                             VRow {
                                 label: qsTr("低延迟队列")
-                                hint: qsTr("减少软件排队；屏幕延迟需要实测")
+                                hint: qsTr("只保留一帧在处理，未补帧时加 NVIDIA Reflex；垂直同步本身已不排队")
                                 VSwitch {
                                     objectName: "list-low-queue"
                                     checked: veyra.fgLowQueue

@@ -151,6 +151,11 @@ class QmlPlayerBridge : public QObject {
     // method 0 WGC / 1 DXGI (monitor only), fps cap index into {follow,30,60,120,144,240},
     // pointer, crop margins in source pixels, and "fill the window".
     Q_PROPERTY(QVariantMap screenOptions READ screenOptions NOTIFY captureChanged)
+    // 游戏模式 (screen option "passthrough", ui/GamePassthrough.h): gameMode while the
+    // current source is such a capture (opening or live); passthroughActive while the
+    // fullscreen picture is click-through and the captured program has the input.
+    Q_PROPERTY(bool gameMode READ gameMode NOTIFY gameModeChanged)
+    Q_PROPERTY(bool passthroughActive READ passthroughActive NOTIFY gameModeChanged)
 
     // Subtitles (P4-c): the engine's SubtitleLoader reads the embedded tracks and
     // the same-name external file; the old shell's SubtitleOverlay draws them as a
@@ -176,6 +181,11 @@ class QmlPlayerBridge : public QObject {
     // forwarding and gyro calibration. `ps5` carries the form state.
     Q_PROPERTY(QVariantMap ps5 READ ps5 NOTIFY ps5Changed)
     Q_PROPERTY(QVariantList ps5Profiles READ ps5Profiles NOTIFY ps5Changed)
+    // PS5 手柄控制 (采集卡对话框): a controller-only Remote Play session beside the
+    // capture card, using the pairing selected in the PS5 dialog. {available,
+    // enabled, background, state: off|starting|connected|pin|recovering|failed|
+    // nopair, message, keepaliveFps (-1 = not yet), pad, gyro, touch}
+    Q_PROPERTY(QVariantMap ps5Control READ ps5Control NOTIFY ps5ControlChanged)
     // PC streaming (Moonlight / Sunshine): hosts, pairing, apps and stream settings live in
     // `moonlight` (null when the build has no Moonlight); capture state and the stats overlay here.
     Q_PROPERTY(QObject* moonlight READ moonlightModel CONSTANT)
@@ -213,6 +223,9 @@ class QmlPlayerBridge : public QObject {
     // 2026-10-02: the orb used to add the integrated and the discrete GPU together.
     Q_PROPERTY(QVariantList gpuMonitorChoices READ gpuMonitorChoices CONSTANT)
     Q_PROPERTY(QString gpuMonitorName READ gpuMonitorName NOTIFY preferencesChanged)
+    // 设置 -> "同时用这块显卡运算" (preference computeOnMonitorGpu): the GPU picked
+    // for monitoring also runs enhancement, frame generation and export.
+    Q_PROPERTY(QString computeGpuHint READ computeGpuHint NOTIFY preferencesChanged)
     Q_PROPERTY(QString audioOutputStatus READ audioOutputStatus NOTIFY audioDevicesChanged)
     Q_PROPERTY(bool audioOutputFallback READ audioOutputFallback NOTIFY audioDevicesChanged)
     Q_PROPERTY(QString logFile READ logFile CONSTANT)
@@ -320,6 +333,9 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString runStatus READ runStatus NOTIFY perfChanged)
     Q_PROPERTY(QString runStatusLevel READ runStatusLevel NOTIFY perfChanged)
     Q_PROPERTY(QString runStatusDetail READ runStatusDetail NOTIFY perfChanged)
+    // Live FG output hint ("当前帧率…超出屏幕刷新率，建议降至…"), empty when the
+    // output fits; a suggestion only, the multiplier is never changed.
+    Q_PROPERTY(QString fgDisplayHint READ fgDisplayHint NOTIFY perfChanged)
     Q_PROPERTY(QStringList runOptions READ runOptions NOTIFY perfChanged)
     Q_PROPERTY(double effectiveOutputFps READ effectiveOutputFps NOTIFY perfChanged)
     // Achieved output rate / effective policy target; -1 while unknown.
@@ -332,6 +348,11 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool amdFlowHalf READ amdFlowHalf WRITE setAmdFlowHalf NOTIFY settingsChanged)
     // 边缘神盾: refined optical-flow motion for XeSS (EnhancementSettings::fgMotionRefine).
     Q_PROPERTY(bool edgeAegis READ edgeAegis WRITE setEdgeAegis NOTIFY settingsChanged)
+    // DLSS 性能模式: NVIDIA's DLSS-G performance mode (EnhancementSettings::dlssgLite);
+    // available when the package carries its runtime (runtime/experimental/dlssg-lite).
+    Q_PROPERTY(bool dlssgLite READ dlssgLite WRITE setDlssgLite NOTIFY settingsChanged)
+    Q_PROPERTY(bool dlssgLiteAvailable READ dlssgLiteAvailable CONSTANT)
+    Q_PROPERTY(QString dlssgLiteHint READ dlssgLiteHint NOTIFY snapshotChanged)
     Q_PROPERTY(int contentRate READ contentRate WRITE setContentRate NOTIFY settingsChanged)
     Q_PROPERTY(int hdrOutputMode READ hdrOutputMode WRITE setHdrOutputMode NOTIFY settingsChanged)
     Q_PROPERTY(int fgMotionSource READ fgMotionSource WRITE setFgMotionSource NOTIFY settingsChanged)
@@ -340,6 +361,13 @@ class QmlPlayerBridge : public QObject {
     // Presentation: display sync 0 允许撕裂 1 垂直同步 2 自动; output cap 0 关闭
     // 1 跟随显示器 2 自定义 (+ fps). Owned by XeSS when presentationOwned.
     Q_PROPERTY(int displaySync READ displaySync WRITE setDisplaySync NOTIFY presentationChanged)
+    // 可变刷新 switch (persisted with the presentation settings) and the
+    // presenting monitor's VRR level: 0 unknown, 1 the monitor cannot do VRR
+    // (switch greyed), 2 it can but the driver setting is off, 3 possible,
+    // 4 active; vrrHint explains it beside the switch.
+    Q_PROPERTY(bool variableRefresh READ variableRefresh WRITE setVariableRefresh NOTIFY presentationChanged)
+    Q_PROPERTY(int vrrState READ vrrState NOTIFY perfChanged)
+    Q_PROPERTY(QString vrrHint READ vrrHint NOTIFY perfChanged)
     Q_PROPERTY(int outputRateMode READ outputRateMode WRITE setOutputRateMode NOTIFY presentationChanged)
     Q_PROPERTY(double outputCustomFps READ outputCustomFps WRITE setOutputCustomFps NOTIFY presentationChanged)
     Q_PROPERTY(bool presentationOwned READ presentationOwned NOTIFY snapshotChanged)
@@ -608,6 +636,14 @@ public:
     Q_INVOKABLE bool startCaptureSession();
     Q_INVOKABLE bool setScreenOption(const QString& key, const QVariant& value);
     Q_INVOKABLE bool startScreenCapture();
+    bool gameMode() const;
+    bool passthroughActive() const;
+    // The Home panel is open: the picture stays on top but takes the input back.
+    Q_INVOKABLE void setGamePanelOpen(bool open);
+    // Index into Qt.application.screens of the monitor 游戏模式 covers, or -1.
+    Q_INVOKABLE int gameModeScreenIndex() const;
+    // Test only (VEYRA_TEST_UI_BLOCK): blocks the GUI thread to exercise the hang release.
+    Q_INVOKABLE void testBlockUi(int ms);
 
     QVariantList screenTargets() const;
     QString screenTargetId() const;
@@ -635,6 +671,7 @@ public:
 
     QVariantMap ps5() const;
     QVariantList ps5Profiles() const;
+    QVariantMap ps5Control() const;
     QObject* moonlightModel() const;
     bool moonlightCaptured() const;
     bool moonlightStatsVisible() const;
@@ -659,6 +696,9 @@ public:
     Q_INVOKABLE void ps5SendLoginPin(const QString& pin);
     Q_INVOKABLE void ps5Cancel();
     Q_INVOKABLE void ps5Calibrate();
+    // key: enabled | background (saved preferences ps5CaptureControl / ps5ControlBackground).
+    Q_INVOKABLE void ps5ControlSet(const QString& key, const QVariant& value);
+    Q_INVOKABLE void ps5ControlRestart();
     QString remotePlayHost() const;
     void setRemotePlayHost(const QString& value);
     QString remotePlayPin() const;
@@ -697,6 +737,7 @@ public:
     Q_INVOKABLE void openReleasesPage();
     QVariantList audioDevices() const;
     QVariantList gpuMonitorChoices() const;
+    QString computeGpuHint() const;
     QString gpuMonitorName() const;
     QString audioOutputStatus() const;
     bool audioOutputFallback() const;
@@ -858,10 +899,19 @@ public:
     void setAmdFlowHalf(bool value);
     bool edgeAegis() const;
     void setEdgeAegis(bool value);
+    bool dlssgLite() const;
+    void setDlssgLite(bool value);
+    bool dlssgLiteAvailable() const;
+    QString dlssgLiteHint() const;
     int contentRate() const;
     void setContentRate(int value);
     int displaySync() const;
     void setDisplaySync(int value);
+    bool variableRefresh() const;
+    void setVariableRefresh(bool value);
+    int vrrState() const;
+    QString vrrHint() const;
+    QString fgDisplayHint() const;
     Q_INVOKABLE void setPresentationFullscreen(bool value);
     bool fullscreenMemorySafe() const;
     int outputRateMode() const;
@@ -1024,6 +1074,8 @@ public:
     // window of the QML window and hands it over; the bridge never draws QML
     // into it and Qt never touches its swapchain.
     void attachVideoWindow(qulonglong nativeHandle);
+    // The QML main window: 游戏模式 changes its styles and owns its hotkeys.
+    void attachMainWindow(qulonglong nativeHandle);
 
     // Run immediately before the engine opens a source. The presenter reads the
     // host window's client size once, when it initialises, and builds the
@@ -1120,6 +1172,7 @@ signals:
     void playlistRequested();
     void nodeAnchorsChanged();
     void ps5Changed();
+    void ps5ControlChanged();
     void moonlightUiChanged();
     void imageBatchChanged();
     void audioDevicesChanged();
@@ -1154,8 +1207,15 @@ signals:
     void overlayRestartSuggested(const QString& kind);
     // The UI moves to a page by name when a command implies it.
     void navigate(const QString& page);
+    void gameModeChanged();
+    // 游戏模式 hotkeys: 0 = Home (adjust panel), 1 = Ctrl+Alt+Home (leave).
+    void gameHotkey(int which);
+    // The game-mode capture ended or failed, or the GUI hung, while the picture was in
+    // front: the UI leaves fullscreen and shows the reason.
+    void gameModeStopped(const QString& reason);
 
 private:
+    void updateGameMode();
     // The settings the UI is showing: the facade's pending copy, which the
     // engine has been asked to apply. Every settings property reads this, so
     // they can never disagree with each other.
@@ -1187,6 +1247,11 @@ private:
     void tickImageBatch();
     void tickCapture();
     void tickPs5();
+    void tickPs5Control(bool force = false);
+    // restart: replace a running session (another pairing, or the user asked).
+    void startPs5Control(bool restart);
+    void stopPs5Control();
+    bool captureCardLive() const;
     void tickMoonlight();
     void tickXbox();
     void tickPlaylist();

@@ -31,7 +31,7 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
         veyra::log::warn("present","presentation creation cancelled: target window is no longer available");
         return false;
     }
-    viewWidth_=viewHeight_=0;bufferMonitor_=nullptr;monitorWidth_=monitorHeight_=0;
+    viewWidth_=viewHeight_=0;bufferMonitor_=nullptr;monitorWidth_=monitorHeight_=0;refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};vrr_={};refreshQueried_=false;vrrSync_=false;
     ++generation_;
     Status st=Status::Ok;
     // Keep one presentation queue for the native chain's lifetime. A later
@@ -391,10 +391,10 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         // display actually scanned out. This is still not a photon measurement.
         static const bool displayStats=GetEnvironmentVariableW(L"VEYRA_TEST_NO_DISPLAY_STATS",nullptr,0)==0;
         const auto stats=displayStats?sink_.sampleFrameStatistics():gfx::PresentSink::FrameStatisticsDelta{};
-        if(stats.supported)veyra::log::info("display-stats",std::format("refreshHz={:.3f} presentCalls={} dxgiPresentCount={} refreshes={} presentRefreshDelta={} backend={} (DXGI GetFrameStatistics delta over ~1s. These counters CANNOT tell how many frames the panel actually showed: with vsync off and tearing allowed, dxgiPresentCount tracks completed Present calls, and both refresh counters just advance with the monitor. Measuring scanout needs PresentMon. XeSS generated presents are provider-internal.)",sink_.displayRefreshHz(),stats.presents,stats.displayed,stats.refreshes,stats.displayedRefresh,sink_.xess()?"XeSS":"DXGI"));
+        if(stats.supported)veyra::log::info("display-stats",std::format("refreshHz={:.3f} presentCalls={} dxgiPresentCount={} refreshes={} presentRefreshDelta={} presentsAhead={} backend={} (DXGI GetFrameStatistics delta over ~1s. These counters CANNOT tell how many frames the panel actually showed: with vsync off and tearing allowed, dxgiPresentCount tracks completed Present calls, and both refresh counters just advance with the monitor. presentsAhead = submitted presents after the last shown one at the sample: the display queue under VSync; with Automatic Present(0,0) it includes frames a newer one replaces; -1 unavailable. Measuring scanout needs PresentMon. XeSS generated presents are provider-internal.)",sink_.displayRefreshHz(),stats.presents,stats.displayed,stats.refreshes,stats.displayedRefresh,stats.ahead,sink_.xess()?"XeSS":"DXGI"));
         else if(FAILED(stats.result))veyra::log::info("display-stats",std::format("unavailable hr=0x{:X} backend={}",unsigned(stats.result),sink_.xess()?"XeSS":"DXGI"));
         const auto scanout=displayStats?sink_.takeDisplayLatency():gfx::PresentSink::DisplayLatencySummary{};
-        if(scanout.samples||scanout.compositionMode>=0)veyra::log::info("display-latency",std::format("presentToScanoutP50Ms={:.3f} presentToScanoutP95Ms={:.3f} presentToScanoutMaxMs={:.3f} samples={} compositionMode={} refreshHz={:.3f} (DXGI frame statistics: Present call to the vblank that showed it, VSync DXGI presents only; compositionMode 0 composed 1 overlay 2 none 3 failure -1 unknown; not a photon measurement)",scanout.p50Ms,scanout.p95Ms,scanout.maxMs,scanout.samples,scanout.compositionMode,sink_.displayRefreshHz()));
+        if(scanout.samples||scanout.compositionMode>=0)veyra::log::info("display-latency",std::format("presentToScanoutP50Ms={:.3f} presentToScanoutP95Ms={:.3f} presentToScanoutMaxMs={:.3f} samples={} compositionMode={} refreshHz={:.3f} (DXGI frame statistics: Present call to the vblank that showed it, VSync and Automatic DXGI presents; Automatic dates only frames named as shown; compositionMode 0 composed 1 overlay 2 none 3 failure -1 unknown; not a photon measurement)",scanout.p50Ms,scanout.p95Ms,scanout.maxMs,scanout.samples,scanout.compositionMode,sink_.displayRefreshHz()));
         const auto& timing=sink_.lastPresentTiming();
         veyra::log::info("present-cost",std::format("generated={} totalMs={:.3f} recordSubmitMs={:.3f} slotWaitMs={:.3f} dxgiMs={:.3f} slow={} source={} epoch={} backend={} resized={} resizeMs={:.3f} beginMs={:.3f} commandsMs={:.3f} beforeMs={:.3f} presentCallMs={:.3f} bufferMs={:.3f} afterMs={:.3f} hr=0x{:X}",generated,
             std::chrono::duration<double,std::milli>(presentEnd-presentStart).count(),
@@ -413,6 +413,7 @@ bool VideoPresenter::readPresentedFrameForTest(gfx::D3D12DeviceContext& ctx,gfx:
 void VideoPresenter::close(){
     metadataSent_=false;metadataDirty_=false;lastMetadata_={};sourceMetadata_={};metadataAttempt_={};
     hdrPeakMonitor_=nullptr;hdrPeakInfo_={};hdrPeakQuery_={};
+    refreshMonitor_=nullptr;refreshHz_=0;refreshQuery_={};vrr_={};refreshQueried_=false;vrrSync_=false;
     retainedFrame_.reset();
     xessInputId_=0;xessWork_={};xessWorkPosition_=0;
     reflex_.close();reflexFrame_=0;
@@ -422,6 +423,20 @@ void VideoPresenter::close(){
     presentationRing_.shutdown();presentationFence_.Reset();presentationQueue_.Reset();
     if(presentationEvent_){CloseHandle(presentationEvent_);presentationEvent_=nullptr;}
     presentationDevice_=nullptr;presentationFormat_=DXGI_FORMAT_UNKNOWN;window_=nullptr;
+}
+double VideoPresenter::displayRefreshHz(){
+    if(!window_)return 0;
+    const auto now=std::chrono::steady_clock::now();
+    const auto monitor=MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST);
+    if(monitor!=refreshMonitor_||now-refreshQuery_>=std::chrono::seconds(2)){
+        const double hz=gfx::PresentSink::displayRefreshFps(window_);
+        if(refreshMonitor_&&std::abs(hz-refreshHz_)>0.5)veyra::log::info("display-refresh",std::format("monitor refresh={:.3f} Hz (was {:.3f}; window moved or display mode changed)",hz,refreshHz_));
+        refreshHz_=hz;refreshMonitor_=monitor;refreshQuery_=now;sink_.setDisplayRefreshHz(hz);
+        const auto vrr=gfx::queryVrr(window_);
+        if(!(vrr==vrr_)||!refreshQueried_)veyra::log::info("display-vrr",std::format("level={} known={} monitorSupportsVrr={} currentlyCapable={} trueGsync={} capsKnown={} possible={} requested={} active={} displayInVrrMode={} indicator={} simulated={} status={} refreshHz={:.3f} (NVIDIA G-SYNC / G-SYNC Compatible state of the window's monitor; enabled by the user in the NVIDIA Control Panel, never changed by Veyra)",gfx::vrrLevel(vrr),vrr.known,vrr.supportsVrr,vrr.currentlyCapable,vrr.trueGsync,vrr.capsKnown,vrr.possible,vrr.requested,vrr.enabled,vrr.inVrrMode,vrr.indicator,vrr.simulated,vrr.status,hz));
+        vrr_=vrr;refreshQueried_=true;
+    }
+    return refreshHz_;
 }
 PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceContext& ctx,PresentationSettings requested,bool fg,std::wstring& status){
     bool wanted=requested.hdrFgCompatibility&&copyEligible_;
@@ -462,9 +477,18 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
         effective.outputRate=OutputRateMode::Off;
         capNotice=L" · 此补帧提供方暂不支持独立输出限帧；已保留设置";
     }
+    // 可变刷新: with VRR possible on this monitor, Automatic presents like
+    // explicit Vsync - the G-SYNC/FreeSync + V-SYNC combination. Inside the
+    // VRR range the panel starts a refresh when the frame arrives, so the
+    // VSync wait is about zero and nothing tears; above the range the
+    // one-deep VSync queue below holds. Without VRR (switch off, another
+    // monitor, driver setting off) Automatic stays Present(0,0).
+    displayRefreshHz();
+    vrrSync_=vrrSyncWanted(requested,vrr_);
+    if(vrrSync_){requested.display=DisplaySync::Vsync;effective.display=DisplaySync::Vsync;}
     const bool vsync=presentationVsync(requested),tearing=presentationTearing(requested);
     providerOwnedPresentation_=xessActive();
-    const std::wstring sync=requested.display==DisplaySync::Automatic?L"显示同步：自动 · 与屏幕同步防撕裂":vsync?L"显示同步：垂直同步":L"显示同步：允许撕裂";
+    const std::wstring sync=vrrSync_?L"显示同步：自动 + 可变刷新 · 屏幕跟着画面刷新，不撕裂":requested.display==DisplaySync::Automatic?L"显示同步：自动 · 不撕裂，也不等待垂直同步（延迟最低）":vsync?L"显示同步：垂直同步":L"显示同步：允许撕裂";
     if(!reflexDisabled){effective.enabled=false;sink_.configurePacing(false,vsync,tearing);status=L"Reflex 驱动状态撤销失败；低延迟队列已停用 · "+sync;return effective;}
     if(xessActive()){
         // The provider owns Present for its generated frames, so neither the
@@ -477,26 +501,32 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
         return effective;
     }
     providerOwnedPresentation_=false;
-    if(!requested.enabled){
-        // Vertical sync with the default 3-frame queue lets presents pile up behind the
-        // refresh: on a 60 Hz panel that is up to ~50 ms, and a capture user measured
-        // "twice 1.4.4's latency" with 2.0 on vsync against 1.4.4 on tearing (field logs
-        // 2026-10-01). Under vsync the queue stays one deep even without 低延迟队列.
-        const bool shallow=vsync&&sink_.configurePacing(true,vsync,tearing);
-        const bool restored=shallow||sink_.configurePacing(false,vsync,tearing);
-        status=(shallow?L"垂直同步 · 队列深度 1 · ":restored?L"低延迟队列已关闭 · ":L"低延迟队列恢复失败 · ")+sync;if(effective.outputRate==OutputRateMode::Custom)status+=std::format(L" · 输出上限 {:.3f} FPS",effective.customFps);status+=capNotice;return effective;}
-    if(!sink_.configurePacing(true,vsync,tearing)){effective.enabled=false;status=L"显示队列控制不可用 · "+sync;return effective;}
-    // Low latency = queue depth 1, plus Reflex when frame generation is off
-    // (generated outputs would need separately validated out-of-band markers).
-    std::wstring latency=L"低延迟队列：队列深度 1";
-    if(fg)latency+=L"（补帧运行，Reflex 不启用）";
-    else if(reflex_.enable(ctx.device()))latency=L"低延迟队列：队列深度 1 + NVIDIA Reflex（实验）";
-    else latency+=L"（Reflex 初始化失败）";
+    // Only explicit VSync can queue presents behind the display, so only VSync
+    // keeps a one-deep display queue, and the engine really waits for it: it
+    // acquires the latency object before reading the next capture frame
+    // (without frame generation) and before every present, so no frame sits
+    // in DXGI's queue. Before latency-min B3 VSync set latency 1 without
+    // anyone waiting, which does not limit the queue (7 frames in the DXGI
+    // probe; DLSS 6X on 320 Hz 12.2/18.4 ms present->scanout, field: "twice
+    // 1.4.4's latency" on a 60 Hz panel, 2026-10-01). Automatic replaces an
+    // unshown frame and Tearing never waits: acquiring the latency object
+    // there would throttle presents to the refresh, the wait they avoid.
+    const bool paced=vsync&&sink_.configurePacing(true,vsync,tearing);
+    const bool restored=paced||sink_.configurePacing(false,vsync,tearing);
+    const std::wstring queue=paced?(vrrSync_?L"可变刷新：超过屏幕最高刷新时只排 1 帧 · ":L"垂直同步：屏幕队列 1 帧，读帧前等待刷新 · "):vsync?L"垂直同步：屏幕队列控制不可用 · ":restored?L"":L"显示队列恢复失败 · ";
     std::wstring cap;
     if(followDisplay)cap=std::format(L"输出上限：跟随显示器 {:.0f} Hz",requested.customFps);
     else if(requested.outputRate==OutputRateMode::Custom)cap=std::format(L"输出上限：{:.3f} FPS",requested.customFps);
     else cap=L"输出上限：关闭";
-    status=latency+L" · "+cap+L" · "+sync;
+    if(!requested.enabled){status=queue+sync;if(effective.outputRate==OutputRateMode::Custom)status+=L" · "+cap;status+=capNotice;return effective;}
+    // Low-latency queue: one source frame in flight (the next input is read
+    // after the previous one was presented), plus Reflex when frame generation
+    // is off (generated outputs would need separately validated markers).
+    std::wstring latency=L"低延迟队列：只保留一帧在处理";
+    if(fg)latency+=L"（补帧运行，Reflex 不启用）";
+    else if(reflex_.enable(ctx.device()))latency+=L" + NVIDIA Reflex（实验）";
+    else latency+=L"（Reflex 初始化失败）";
+    status=latency+L" · "+cap+L" · "+queue+sync;
     return effective;
 }
 Microsoft::WRL::ComPtr<ID3D12Resource> VideoPresenter::presentedResourceForTest() {

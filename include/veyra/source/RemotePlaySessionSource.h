@@ -1,6 +1,7 @@
 #pragma once
 #include "RemotePlaySource.h"
 #include "veyra/sink/CaptureAudioSession.h"
+#include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <mutex>
@@ -13,6 +14,9 @@ class RemotePlaySessionSource final : public IFrameSource {
 public:
     ~RemotePlaySessionSource() override { close(); }
     bool connect(RemotePlayConnectDesc desc);
+    // True while the owner loop, including its reconnect retries, still runs.
+    bool alive() const { return alive_.load(); }
+    bool failed() const { std::lock_guard lock(mutex_); return failed_; }
     bool open(const SourceOpenDesc&) override { return false; }
     const SourceInfo& info() const override { return info_; }
     SourceReadStatus read(pipeline::FramePacket&, const AVFrame**) override;
@@ -41,6 +45,7 @@ private:
     mutable std::mutex mutex_;
     std::condition_variable ready_;
     std::jthread owner_;
+    std::atomic<bool> alive_{false};
     bool initialized_=false, started_=false, failed_=false;
     std::optional<Frame> latest_;
     std::shared_ptr<AVFrame> view_;

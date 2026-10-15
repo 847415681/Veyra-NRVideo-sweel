@@ -110,6 +110,10 @@ public:
     struct FrameStatisticsDelta {
         bool supported=false;
         uint64_t presents=0,displayed=0,refreshes=0,displayedRefresh=0;
+        // GetLastPresentCount - last shown PresentCount at the sample, -1 if
+        // either query failed. Under Vsync this is the display queue depth;
+        // with Present(0,0) it also counts frames a newer one will replace.
+        int64_t ahead=-1;
         HRESULT result=S_OK;
     };
     FrameStatisticsDelta sampleFrameStatistics();
@@ -127,8 +131,14 @@ public:
     };
     DisplayLatencySummary takeDisplayLatency();
     double displayRefreshHz()const{return displayRefreshHz_;}
+    // The owner re-reads the monitor after a move or mode change.
+    void setDisplayRefreshHz(double hz){if(hz>=1.0)displayRefreshHz_=hz;}
     bool configurePacing(bool enabled,bool vsync,bool tearing);
-    bool presentationReady();
+    // Acquires one present of display-queue capacity (the frame latency
+    // object) while pacing; the next Present consumes it. Never blocks with
+    // ms=0. True when not pacing.
+    bool waitPresentationReady(unsigned ms);
+    bool presentationReady(){return waitPresentationReady(0);}
     bool pacingActive()const{return pacing_;}
 
     void resize(uint32_t width, uint32_t height);
@@ -202,7 +212,9 @@ private:
     uint64_t frameStatisticsBasePresents_=0;
     UINT frameStatisticsBasePresentRefresh_=0,frameStatisticsBaseSyncRefresh_=0,frameStatisticsBaseDisplayed_=0;
     void sampleDisplayLatency();
-    struct PendingPresent { UINT id=0; int64_t qpc=0; };
+    // replaceable: Present(0,0); only the frame a later sample names as shown
+    // is dated, a newer present may have replaced the ones in between.
+    struct PendingPresent { UINT id=0; int64_t qpc=0; bool replaceable=false; };
     std::array<PendingPresent,16> pendingPresents_{};
     unsigned pendingPresentNext_=0;
     UINT lastDisplayedPresent_=0,lastSyncRefresh_=0;

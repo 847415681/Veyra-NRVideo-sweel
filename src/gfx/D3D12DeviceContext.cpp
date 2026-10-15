@@ -1,4 +1,5 @@
 #include "veyra/gfx/D3D12DeviceContext.h"
+#include <cwchar>
 
 #include <windows.h>
 #include <winevt.h>
@@ -118,6 +119,19 @@ D3D12DeviceContext::~D3D12DeviceContext()
     shutdown();
 }
 
+void setPreferredAdapterLuid(uint64_t luid)
+{
+    if (!luid) { SetEnvironmentVariableW(L"VEYRA_COMPUTE_ADAPTER_LUID", nullptr); return; }
+    SetEnvironmentVariableW(L"VEYRA_COMPUTE_ADAPTER_LUID", std::format(L"{:016X}", luid).c_str());
+}
+
+uint64_t preferredAdapterLuid()
+{
+    wchar_t text[32]{};
+    const DWORD length = GetEnvironmentVariableW(L"VEYRA_COMPUTE_ADAPTER_LUID", text, 32);
+    return length && length < 32 ? std::wcstoull(text, nullptr, 16) : 0;
+}
+
 bool D3D12DeviceContext::initialize(const DeviceContextDesc& desc, Status& status)
 {
     if (initialized_) {
@@ -157,8 +171,12 @@ bool D3D12DeviceContext::initialize(const DeviceContextDesc& desc, Status& statu
     }
 
     // Keep every backend on one hardware adapter. Never silently use WARP.
+    // The user's compute adapter (preferredAdapterLuid) is tried first when
+    // the caller did not pin one; the default order remains the fallback.
     DXGI_ADAPTER_DESC1 chosenDesc{};
     bool chosen = false;
+    const uint64_t preferred = desc.requiredLuid ? 0 : preferredAdapterLuid();
+    for (int pass = preferred ? 0 : 1; pass < 2 && !chosen; ++pass)
     for (UINT index = 0;; ++index) {
         ComPtr<IDXGIAdapter1> candidate;
         const HRESULT enumResult = factory_->EnumAdapterByGpuPreference(
@@ -187,6 +205,7 @@ bool D3D12DeviceContext::initialize(const DeviceContextDesc& desc, Status& statu
             narrow(candidateDesc.Description)));
 
         const auto candidateLuid=(uint64_t(uint32_t(candidateDesc.AdapterLuid.HighPart))<<32)|candidateDesc.AdapterLuid.LowPart;
+        if (pass == 0 && candidateLuid != preferred) continue;
         if ((!desc.requiredVendorId||candidateDesc.VendorId==desc.requiredVendorId) &&
             (!desc.requiredLuid||candidateLuid==desc.requiredLuid) && !isSoftware &&
             SUCCEEDED(D3D12CreateDevice(candidate.Get(),D3D_FEATURE_LEVEL_12_0,__uuidof(ID3D12Device),nullptr))) {
@@ -201,6 +220,11 @@ bool D3D12DeviceContext::initialize(const DeviceContextDesc& desc, Status& statu
         status = Status::DeviceFailure;
         veyra::log::error("gfx", "no compatible requested D3D12 hardware adapter found");
         return false;
+    }
+    if (preferred) {
+        const auto luid = (uint64_t(uint32_t(chosenDesc.AdapterLuid.HighPart)) << 32) | chosenDesc.AdapterLuid.LowPart;
+        (luid == preferred ? veyra::log::info : veyra::log::warn)("gfx", std::format("compute adapter preference={:016X} used={} desc={}",
+            preferred, luid == preferred ? "yes" : "no (unavailable; default order)", narrow(chosenDesc.Description)));
     }
     fillAdapterInfo(chosenDesc, adapterInfo_);
 

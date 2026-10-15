@@ -21,6 +21,14 @@ VPage {
     signal requestInspector(int nodeIndex, string nodeType)
     signal requestFullscreen()
 
+    // Fullscreen quick-adjust (Home, Main.qml): only the canvas is shown, as a
+    // panel along the bottom of the picture, cut out of the native video window.
+    property bool overlay: false
+    function overlayContains(x, y) {
+        if (!overlay) return false
+        const p = canvasCard.mapToItem(root, 0, 0)
+        return x >= p.x && x <= p.x + canvasCard.width && y >= p.y && y <= p.y + canvasCard.height
+    }
     property real panX: 220
     property real panY: 0
     property real zoom: 1.0
@@ -332,13 +340,24 @@ VPage {
     onZoomChanged: { canvasGrid.requestPaint(); wires.requestPaint() }
 
     ColumnLayout {
-        anchors.fill: parent
+        id: nodeLayout
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
         anchors.margins: 14
         spacing: 0
+        states: State {
+            name: "overlay"
+            when: root.overlay
+            AnchorChanges { target: nodeLayout; anchors.top: undefined }
+            PropertyChanges { target: nodeLayout; height: Math.round(Math.max(260, root.height * 0.42)) }
+        }
 
         // --- video card (fixed 330px) --------------------------------------
         Rectangle {
             id: nvTop
+            visible: !root.overlay
             Layout.fillWidth: true
             Layout.preferredHeight: root.videoHeight
             radius: Theme.rCard
@@ -515,6 +534,7 @@ VPage {
         // --- split handle (10px) -------------------------------------------
         Item {
             objectName: "node-splitter"
+            visible: !root.overlay
             Layout.fillWidth: true
             Layout.preferredHeight: 10
             Rectangle {
@@ -543,6 +563,9 @@ VPage {
         // --- canvas --------------------------------------------------------
         Rectangle {
             id: canvasCard
+            // Over the fullscreen picture the canvas is a cover like any panel.
+            readonly property bool videoCover: root.overlay
+            property real coverRadius: radius
             Layout.fillWidth: true
             Layout.fillHeight: true
             radius: Theme.rCard
@@ -550,6 +573,19 @@ VPage {
             border.width: 1
             border.color: Theme.stroke
             clip: true
+
+            Text {
+                objectName: "node-quick-hint"
+                z: 100
+                visible: root.overlay
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 12
+                text: qsTr("Home 关闭")
+                color: Theme.t3
+                font.family: Theme.fontUi
+                font.pixelSize: 11
+            }
 
             // .canvas dot grid: 22px spacing, drawn over the viewport only, since
             // an "infinite" canvas is a feel and infinite dots would cost frames.
@@ -777,6 +813,19 @@ VPage {
                                 current: String(veyra.displaySync)
                                 onPicked: id => veyra.displaySync = Number(id)
                             }
+                            // 可变刷新 (G-SYNC / FreeSync): greyed when the monitor cannot do it.
+                            RowLayout {
+                                Layout.fillWidth: true
+                                enabled: veyra.vrrState >= 2
+                                opacity: enabled ? 1 : 0.5
+                                NodeLabel { Layout.fillWidth: true; text: qsTr("可变刷新"); wrapMode: Text.WordWrap }
+                                VSwitch {
+                                    objectName: "node-vrr"
+                                    checked: veyra.variableRefresh
+                                    onToggled: checked => veyra.variableRefresh = checked
+                                }
+                            }
+                            NodeLabel { Layout.fillWidth: true; text: veyra.vrrHint; wrapMode: Text.WordWrap; opacity: veyra.vrrState >= 2 ? 1 : 0.5 }
                             NodeLabel { text: qsTr("输出上限") }
                             VSeg {
                                 objectName: "node-output-rate"
@@ -1525,7 +1574,8 @@ VPage {
                 }
                 VRow {
                     label: qsTr("倍率")
-                    hint: veyra.fgMaxMultiplier + qsTr("X 为上限")
+                    hint: veyra.fgDisplayHint.length > 0 ? veyra.fgDisplayHint : veyra.fgMaxMultiplier + qsTr("X 为上限")
+                    hintColor: veyra.fgDisplayHint.length > 0 ? Theme.warn : Theme.t3
                     VSeg {
                         objectName: "node-fg-multiplier"
                         visible: veyra.fgBackendName !== "vfg"
@@ -1540,6 +1590,14 @@ VPage {
                         value: String(veyra.fgMultiplier) + "X"
                         onPicked: id => veyra.fgMultiplier = Number(id)
                     }
+                }
+                VRow {
+                    label: qsTr("DLSS 性能模式")
+                    visible: veyra.fgBackendName === "dlss"
+                    enabled: veyra.dlssgLiteAvailable
+                    opacity: enabled ? 1 : 0.5
+                    hint: veyra.dlssgLiteHint
+                    VSwitch { objectName: "node-dlssg-lite"; checked: veyra.dlssgLite; onToggled: checked => veyra.dlssgLite = checked }
                 }
                 VRow {
                     label: qsTr("VFG 质量")
@@ -1565,7 +1623,7 @@ VPage {
                 }
                 VRow {
                     label: qsTr("低延迟队列")
-                    hint: qsTr("减少排队；不宣称延迟下降")
+                    hint: qsTr("只保留一帧在处理，未补帧时加 Reflex")
                     VSwitch { checked: veyra.fgLowQueue; onToggled: checked => veyra.fgLowQueue = checked }
                 }
             }

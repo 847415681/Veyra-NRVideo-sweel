@@ -22,6 +22,7 @@
 #include "veyra/engine/RealtimePreviewScheduling.h"
 #include "veyra/engine/CaptureHalfRate.h"
 #include "veyra/engine/ContentDedup.h"
+#include "veyra/engine/DisplayFgBudget.h"
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/source/CaptureCardSource.h"
 #include "veyra/source/DeckLinkCapture.h"
@@ -80,6 +81,10 @@ EngineController::EngineController(){
     worker_=std::thread(&EngineController::dispatch,this);
 }
 EngineController::~EngineController(){
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    // The PS5 手柄控制 thread starts closing its session now; joined below.
+    controlThread_.request_stop();
+#endif
     {std::lock_guard lock(mutex_);shutdown_=true;pending_={};stop_=true;}wake_.notify_one();
     if(!worker_.joinable()){watchdog_.reset();return;}
     // Field logs(15): an owner thread blocked inside a driver call never returns,
@@ -96,6 +101,20 @@ EngineController::~EngineController(){
         }
     }
     worker_.join();
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    if(controlThread_.joinable()){
+        const auto closing=Clock::now();
+        {std::unique_lock lock(controlMutex_);
+            while(!controlIdle_.wait_for(lock,std::chrono::milliseconds(100),[&]{return controlExited_;})){
+                if(elapsedMs(closing)<8000.0)continue;
+                veyra::log::error("engine-hang","shutdown: PS5 controller-only session still closing after 8 s; ending the process instead of waiting");
+                Logger::instance().flush();
+                TerminateProcess(GetCurrentProcess(),0);
+            }
+        }
+        controlThread_.join();
+    }
+#endif
     // The watchdog callback reads snapshot_ and hangPreviousStatus_. Detach it
     // while all controller members are still alive, before reverse destruction
     // reaches hangPreviousStatus_ (declared after watchdog_).
@@ -161,6 +180,10 @@ void EngineController::open(HWND video,const std::wstring& path,PlayerOptions op
     // keep them across the snapshot round-trip below.
     const bool captureCpuUnpack=opts.captureCpuUnpack;
     const bool softwareDecode=opts.softwareDecode;const bool hardwareDecodeOnly=opts.hardwareDecodeOnly;
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    // PS5 手柄控制 belongs to a capture card source; any other source ends it.
+    if(!path.starts_with(L"capture:")&&!path.starts_with(L"capture2:"))stopRemoteControl();
+#endif
     {std::lock_guard lock(mutex_);snapshot_={};requestedPlaybackRate_=1;activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_);}
     opts.captureReplayForTest=captureReplay;
     opts.captureCpuUnpack=captureCpuUnpack;
@@ -169,13 +192,82 @@ void EngineController::open(HWND video,const std::wstring& path,PlayerOptions op
 }
 #ifdef VEYRA_ENABLE_REMOTEPLAY
 void EngineController::openRemotePlay(HWND window,source::RemotePlayConnectDesc desc,PlayerOptions opts){
+    stopRemoteControl();
     auto request=std::make_shared<source::RemotePlayConnectDesc>(std::move(desc));
     {std::lock_guard lock(mutex_);snapshot_={};requestedPlaybackRate_=1;activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;snapshot_.remotePlay=true;snapshot_.capture=true;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_);}
-    post([this,window,request,opts]{paused_=false;seekSeconds_=-1;run(window,L"remoteplay:",opts,request);});
+    post([this,window,request,opts]{paused_=false;seekSeconds_=-1;waitRemoteControlIdle();run(window,L"remoteplay:",opts,request);});
 }
-remoteplay::ControllerFeedback EngineController::remotePlayFeedback(){std::lock_guard lock(mutex_);return activeRemote_?activeRemote_->takeFeedback():remoteplay::ControllerFeedback{};}
-void EngineController::remotePlayController(const remoteplay::ControllerState& state){std::lock_guard lock(mutex_);if(activeRemote_)activeRemote_->controller(state);}
-void EngineController::remotePlayLoginPin(std::string pin){std::lock_guard lock(mutex_);if(activeRemote_)activeRemote_->loginPin(std::move(pin));}
+// A PS5 stream (activeRemote_) takes precedence; otherwise PS5 手柄控制.
+remoteplay::ControllerFeedback EngineController::remotePlayFeedback(){std::lock_guard lock(mutex_);if(activeRemote_)return activeRemote_->takeFeedback();return controlRemote_?controlRemote_->takeFeedback():remoteplay::ControllerFeedback{};}
+void EngineController::remotePlayController(const remoteplay::ControllerState& state){std::lock_guard lock(mutex_);if(activeRemote_)activeRemote_->controller(state);else if(controlRemote_)controlRemote_->controller(state);}
+void EngineController::remotePlayLoginPin(std::string pin){std::lock_guard lock(mutex_);if(activeRemote_)activeRemote_->loginPin(std::move(pin));else if(controlRemote_)controlRemote_->loginPin(std::move(pin));}
+void EngineController::startRemoteControl(source::RemotePlayConnectDesc desc){
+    desc.controlOnly=true;desc.request.viewOnly=false;
+    auto request=std::make_shared<source::RemotePlayConnectDesc>(std::move(desc));
+    {std::lock_guard lock(controlMutex_);controlPending_=std::move(request);
+        if(!controlThread_.joinable())controlThread_=std::jthread([this](std::stop_token stop){controlLoop(stop);});}
+    controlWake_.notify_all();
+}
+void EngineController::stopRemoteControl(){
+    {std::lock_guard lock(controlMutex_);if(!controlThread_.joinable())return;
+        controlPending_=std::shared_ptr<source::RemotePlayConnectDesc>{};}
+    controlWake_.notify_all();
+}
+void EngineController::controlLoop(std::stop_token stop){
+    for(;;){
+        std::shared_ptr<source::RemotePlayConnectDesc> request;
+        {std::unique_lock lock(controlMutex_);
+            if(!controlWake_.wait(lock,stop,[&]{return controlPending_.has_value();}))break;
+            request=std::move(*controlPending_);controlPending_.reset();controlBusy_=true;controlStarting_=bool(request);}
+        // One Remote Play slot per console: the old session ends before a new one starts.
+        std::shared_ptr<source::RemotePlaySessionSource> old;
+        {std::lock_guard lock(mutex_);old=std::move(controlRemote_);}
+        if(old){const auto closing=Clock::now();old->close();veyra::log::info("remoteplay-control",std::format("controller-only session closed in {:.0f} ms",elapsedMs(closing)));}
+        if(request&&!stop.stop_requested()){
+            auto session=std::make_shared<source::RemotePlaySessionSource>();
+            const bool ok=session->connect(std::move(*request));
+            veyra::log::info("remoteplay-control",std::format("controller-only session start ok={} alive={}",ok,session->alive()));
+            // Kept even when the start failed: its status carries the reason.
+            std::lock_guard lock(mutex_);controlRemote_=std::move(session);
+        }
+        {std::lock_guard lock(controlMutex_);controlBusy_=controlStarting_=false;}
+        controlIdle_.notify_all();
+    }
+    std::shared_ptr<source::RemotePlaySessionSource> last;
+    {std::lock_guard lock(mutex_);last=std::move(controlRemote_);}
+    if(last)last->close();
+    {std::lock_guard lock(controlMutex_);controlBusy_=controlStarting_=false;controlPending_.reset();controlExited_=true;}
+    controlIdle_.notify_all();
+}
+// A PS5 stream needs the console's only Remote Play slot: wait until the
+// controller-only session has closed (bounded, and cut short by Stop).
+void EngineController::waitRemoteControlIdle(){
+    const auto deadline=Clock::now()+std::chrono::seconds(10);
+    std::unique_lock lock(controlMutex_);
+    while((controlBusy_||controlPending_.has_value())&&!stop_.load()){
+        if(Clock::now()>=deadline){veyra::log::warn("remoteplay-control","controller-only session still closing after 10 s; starting the PS5 stream anyway");return;}
+        controlIdle_.wait_for(lock,std::chrono::milliseconds(100));
+    }
+}
+EngineController::RemoteControlStatus EngineController::remoteControlStatus()const{
+    RemoteControlStatus out;
+    std::shared_ptr<source::RemotePlaySessionSource> session;
+    {std::lock_guard lock(mutex_);session=controlRemote_;}
+    {std::lock_guard lock(controlMutex_);out.starting=controlStarting_||(controlPending_.has_value()&&*controlPending_);}
+    out.requested=out.starting||bool(session);
+    if(!session)return out;
+    out.alive=session->alive();out.failed=session->failed();
+    const auto s=session->sessionSnapshot();
+    out.connected=s.state==remoteplay::SessionState::WaitingFirstFrame||s.state==remoteplay::SessionState::Streaming;
+    out.pinRequired=s.state==remoteplay::SessionState::LoginPinRequired;
+    const auto recovery=session->recoveryStatus();out.recovering=recovery.active;out.message=recovery.message;
+    const auto rates=session->rates();out.keepaliveReady=rates.ready;out.keepaliveFps=rates.receivedFps;
+    return out;
+}
+bool EngineController::remoteControlRequested()const{
+    {std::lock_guard lock(mutex_);if(controlRemote_)return true;}
+    std::lock_guard lock(controlMutex_);return controlStarting_||(controlPending_.has_value()&&*controlPending_);
+}
 #endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
 // Input goes straight to the session: the shared pointer is copied under the lock, the send is not.
@@ -195,6 +287,9 @@ remoteplay::ControllerFeedback EngineController::xboxFeedback(){std::shared_ptr<
 #endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
 void EngineController::openMoonlight(HWND window,source::MoonlightConnectDesc desc,PlayerOptions opts){
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    stopRemoteControl();
+#endif
     auto request=std::make_shared<source::MoonlightConnectDesc>(std::move(desc));
     {std::lock_guard lock(mutex_);snapshot_={};requestedPlaybackRate_=1;activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;snapshot_.moonlightActive=true;snapshot_.capture=true;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_);}
     post([this,window,request,opts]{paused_=false;seekSeconds_=-1;run(window,L"moonlight:",opts,{},request);});
@@ -202,6 +297,9 @@ void EngineController::openMoonlight(HWND window,source::MoonlightConnectDesc de
 #endif
 #ifdef VEYRA_ENABLE_XBOX
 void EngineController::openXbox(HWND window,source::XboxConnectDesc desc,PlayerOptions opts){
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    stopRemoteControl();
+#endif
     auto request=std::make_shared<source::XboxConnectDesc>(std::move(desc));
     {std::lock_guard lock(mutex_);snapshot_={};requestedPlaybackRate_=1;activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;snapshot_.xboxActive=true;snapshot_.capture=true;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_);}
     post([this,window,request,opts]{paused_=false;seekSeconds_=-1;run(window,L"xbox:",opts,{},{},request);});
@@ -270,6 +368,9 @@ void EngineController::startExport(const std::wstring& input,const std::wstring&
         veyra::log::warn("node-order","export has no runtime node-order transport; request rejected before posting");
         status(L"节点链尚未接入导出执行器，请切换列表模式后导出",false);return;
     }
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    stopRemoteControl(); // the export replaces the capture run it belonged to
+#endif
     const auto frozen=opts.snapshot();const int audioStream=opts.audioStreamIndex;
     post([this,input,output,frozen,audioStream,hevc]{prewarmed_.reset();CoInitializeEx(nullptr,COINIT_MULTITHREADED);auto options=PlayerOptions::from(frozen);options.audioStreamIndex=audioStream;bool ok=exportVideo(input,output,options,hevc,stop_,[this](double p,const std::wstring& s){std::lock_guard lock(mutex_);snapshot_.status=s;snapshot_.position=p;snapshot_.duration=1;snapshot_.running=true;});{std::lock_guard lock(mutex_);snapshot_.running=false;snapshot_.failed=!ok&&!stop_;}CoUninitialize();});
 }
@@ -363,6 +464,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
         !path.starts_with(L"capture:")&&!path.starts_with(L"capture2:")&&!path.starts_with(L"screen:")&&
         extension!=L".png"&&extension!=L".jpg"&&extension!=L".jpeg";
     if(!prewarmEnabled_||!ordinaryFile)prewarmed_.reset();
+    // A prewarmed session belongs to the adapter that was preferred when it
+    // started; a different compute GPU choice opens a new one.
+    if(prewarmed_&&prewarmed_->context.initialized()&&gfx::preferredAdapterLuid()&&prewarmed_->context.adapter().luid!=gfx::preferredAdapterLuid())prewarmed_.reset();
     auto gpu=prewarmed_?std::move(prewarmed_):std::make_unique<PreviewGpuSession>();
     auto& ctx=gpu->context;auto& ring=gpu->ring;source::MediaFileSource source;
     sink::AudioPipeline audioPipe;sink::AudioRenderer audio;VideoPresenter presenter;
@@ -746,6 +850,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 fgMultiFrameMaxCap_=graph->fgMultiFrameCountMax();
                 snapshot_.fgMultiFrameMax=fgMultiFrameMaxCap_;
                 snapshot_.fgCapabilityKnown=fgMultiFrameMaxCap_>0;
+                snapshot_.dlssgLiteState=graph->dlssgLiteState();
                 const auto xessState=gfx::XessMfgUnlock::snapshot();
                 // Unknown until the XeSS provider actually ran: a DLSS-only
                 // session must not restrict the XeSS choices in the UI.
@@ -966,6 +1071,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             const bool vfgRetainOverload=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_NO_OVERLOAD_ESTIMATE",nullptr,0)==0;
             int64_t nextVfgOverloadLog=0;
             unsigned previewFgMultiplier=options.fgMultiplier;
+            // Live output hint (DisplayFgBudget.h): a status-line suggestion only.
+            // VEYRA_TEST_DISPLAY_HZ=<hz> replaces the measured refresh for it.
+            DisplayFgBudgetGate displayFgGate;
+            static const double displayFgTestHz=[]{wchar_t v[16]{};return GetEnvironmentVariableW(L"VEYRA_TEST_DISPLAY_HZ",v,16)?std::clamp(_wtof(v),0.0,1000.0):0.0;}();
             LivePairLatency pairLatency;
             const bool adaptiveCapturePhase=physicalCapture&&GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_CAPTURE_PHASE",nullptr,0)==0;
             int64_t nextFgAdmissionLog=0,nextFgRejectionLog=0;
@@ -983,6 +1092,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 int64_t predictedGpuStart100ns=0;
                 std::optional<double> gpuExecutionMs,fgExecutionMs,firstFgExecutionMs;
                 bool real=false;
+                // B1: presented before the GPU finished; the completion poll
+                // records the GPU-ready time (from jobStart) instead of the job.
+                bool presentedBeforeReady=false;
+                Clock::time_point jobStart{};
                 std::atomic<bool> ready=false;
                 Clock::time_point readyObserved{};
                 std::array<int64_t,pipeline::FrameBatch::Capacity> frameReadyObserved{};
@@ -1115,38 +1228,63 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         pairLatency.observe(observed,requiredDelay);
                     }
                     completeReset(batch.batch.identity);
-                    watch.readyObserved=Clock::now();watch.ready=true;it=pendingCompletions.erase(it);
+                    watch.readyObserved=Clock::now();
+                    if(watch.presentedBeforeReady&&watch.flow==frameFlow&&liveScheduler){
+                        const double readyMs=std::max(0.0,std::chrono::duration<double,std::milli>(watch.readyObserved-watch.jobStart).count());
+                        watch.flow->cpu(diagnostics::CpuStage::ReadyWait,readyMs,host100ns());
+                        liveReady.add(readyMs);liveStats.readyMs=readyMs;liveStats.readyP95=liveReady.p95();
+                    }
+                    watch.ready=true;it=pendingCompletions.erase(it);
                 }
                 collectTimings();
             };
             if(!isImage){liveScheduler=std::make_unique<LiveGpuScheduler>();veyra::log::info("scheduler",std::format("single GPU owner thread={} capacity=2 source={} (bounded enhanced lookahead)",GetCurrentThreadId(),isCapture?"live":"file"));}
             PresentationCadence cadence;
             PresentationSettings presentationEffective;
+            // presentationPaced: VSync keeps a one-deep display queue (latency
+            // object). A failed wait turns pacing off for this configuration.
+            // VEYRA_TEST_LEGACY_VSYNC_QUEUE=1 restores the unwaited VSync queue
+            // (no read gate, waits only with the toggle/cap) for A/B runs.
+            bool presentationPaced=false;
+            static const bool legacyVsyncQueue=GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_VSYNC_QUEUE",nullptr,0)>0;
+            // XeSS live presentation (latency-min B1): the presenter records on the
+            // graph's own queue, so a real frame can be tagged and presented right
+            // after its graph submission; GPU order keeps it after the enhancement.
+            // One loop is then one XeLL cycle: sleep -> read -> submit -> present.
+            // Waiting for the CPU fence first let the next source enter the same
+            // cycle, so the following present opened the next cycle and slept
+            // inside Present. VEYRA_TEST_XESS_PRESENT_AFTER_READY=1 restores the
+            // fence wait; VEYRA_TEST_XESS_STACKED_READS=1 lets XeSS read the next
+            // source while the previous one is still on the GPU, as before.
+            static const bool xessPresentAfterReady=GetEnvironmentVariableW(L"VEYRA_TEST_XESS_PRESENT_AFTER_READY",nullptr,0)>0;
+            static const bool xessStackedReads=GetEnvironmentVariableW(L"VEYRA_TEST_XESS_STACKED_READS",nullptr,0)>0;
             uint64_t pacingRevision=0,presenterGeneration=0;
             auto applyPresentation=[&]{
                 PresentationSettings requested;uint64_t revision;
                 {std::lock_guard lock(mutex_);requested=presentation_;revision=presentationRevision_;}
-                if(revision==pacingRevision&&presenterGeneration==presenter.generation()){
+                // 可变刷新: the monitor's VRR availability is re-read every 2 s
+                // (window moved, driver setting changed); a change re-applies.
+                const bool vrrChanged=presenter.vrrSync()!=VideoPresenter::vrrSyncWanted(requested,presenter.displayVrr());
+                if(revision==pacingRevision&&presenterGeneration==presenter.generation()&&!vrrChanged){
                     // Reflex dropped out at runtime: the queue-depth part of the
                     // low-latency setting stays, so only the status line changes.
                     if(presentationEffective.enabled&&!presenter.reflexActive()&&presenter.reflexDisablePending()){
                         std::lock_guard lock(mutex_);snapshot_.presentationEffective=presentationEffective;snapshot_.presentationStatus=presenter.reflexDisablePending()?L"Reflex 调用及驱动撤销失败；请关闭视频后重试":L"Reflex 调用失败，当前使用低排队；详见日志";
                     }
-                    if(presentationEffective.enabled&&!presenter.pacingActive()){
-                        presentationEffective.enabled=false;
-                        std::wstring message;
-                        presentationEffective=presenter.configurePresentation(ctx,presentationEffective,options.fg,message);
-                        cadence.reset();
-                        std::lock_guard lock(mutex_);snapshot_.presentationEffective=presentationEffective;snapshot_.presentationStatus=L"显示队列等待失败；"+message;
+                    if(presentationPaced&&!presenter.pacingActive()){
+                        // The sink already stopped waiting; reconfiguring would arm it again.
+                        presentationPaced=false;cadence.reset();
+                        std::lock_guard lock(mutex_);snapshot_.presentationStatus=L"显示队列等待失败，垂直同步屏幕队列不再限制；详见日志";
                     }
                     return;
                 }
                 if(isImage)requested.enabled=false;
                 std::wstring message;
                 presentationEffective=presenter.configurePresentation(ctx,requested,options.fg,message);
+                presentationPaced=presenter.pacingActive()&&!legacyVsyncQueue;
                 pacingRevision=revision;presenterGeneration=presenter.generation();cadence.reset();
                 {std::lock_guard lock(mutex_);snapshot_.presentationEffective=presentationEffective;snapshot_.presentationRevision=revision;snapshot_.presentationStatus=message;snapshot_.presentationProviderOwned=presenter.providerOwnedPresentation();}
-                veyra::log::info("pacing",std::format("revision={} requested={}/{}/{} effective={}/{}/{}",revision,requested.enabled,unsigned(requested.mode),unsigned(requested.display),presentationEffective.enabled,unsigned(presentationEffective.mode),unsigned(presentationEffective.display)));
+                veyra::log::info("pacing",std::format("revision={} requested={}/{}/{} effective={}/{}/{} displayQueuePaced={} variableRefresh={} vrrLevel={} vrrSync={}",revision,requested.enabled,unsigned(requested.mode),unsigned(requested.display),presentationEffective.enabled,unsigned(presentationEffective.mode),unsigned(presentationEffective.display),presentationPaced,requested.variableRefresh,gfx::vrrLevel(presenter.displayVrr()),presenter.vrrSync()));
             };
             auto drainLivePresentation=[&]{cadence.reset();if(liveScheduler){++presentationDrains;liveScheduler->cancel();pollCompletions();pendingCompletions.clear();}pairLatency.reset();};
             auto advanceLive=[&]{applyPresentation();if(liveScheduler){pollCompletions();if(stop_||(paused_&&!seekPreviewPending)||seekSeconds_>=0){liveScheduler->cancel();cadence.reset();}else liveScheduler->advance(host100ns());}};
@@ -1532,20 +1670,31 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // when a lease frees we consume the newest available sample.
                 if(liveScheduler&&!transaction){
                     const auto enhancementPending=[&]{
-                        if(presentationEffective.enabled&&!options.fg&&(isCapture||!fileAwaitingVideo)&&liveScheduler->occupancy()>=1)return true;
+                        const bool fgRunning=options.fg;
+                        if(presentationEffective.enabled&&!fgRunning&&(isCapture||!fileAwaitingVideo)&&liveScheduler->occupancy()>=1)return true;
+                        // Explicit VSync, live, no generation: throttle only before the
+                        // read. A frame read while the display queue is full would wait
+                        // there a refresh; waiting first lets the mailbox hand over a
+                        // newer frame instead (latency-min B3).
+                        if(isCapture&&presentationPaced&&!fgRunning&&(liveScheduler->occupancy()>=1||!presenter.presentationReady()))return true;
                         // Live sources: never stack a second frame behind one the GPU
                         // is still enhancing. When NR/SR cost more than one source
                         // interval, a second queued frame doubled capture-to-present
                         // latency (3 NR layers at 1440p60: 49 ms for 20 ms of GPU
                         // work); waiting and then taking the newest mailbox sample
                         // keeps it at one GPU pass. No effect while the GPU keeps up.
-                        return isCapture&&!(options.fg&&presentSinkFrameGeneration(options.settings.frameGenerationBackend))&&!pendingCompletions.empty();
+                        return isCapture&&!(fgRunning&&presentSinkFrameGeneration(options.settings.frameGenerationBackend)&&(xessStackedReads||xessPresentAfterReady))&&!pendingCompletions.empty();
                     };
                     const auto leaseWaitStart=Clock::now();
                     while((liveScheduler->occupancy()>=2||!graph->nextFrameSlotAvailable()||enhancementPending())&&!stop_&&(!paused_||seekPreviewPending)&&!liveScheduler->failed()){
                         advanceLive();if(seekSeconds_>=0)break;
                         if(liveScheduler->occupancy()==0&&!graph->nextFrameSlotAvailable()&&elapsedMs(leaseWaitStart)>2000){status(L"等待输出纹理释放超时",true);stop_=true;break;}
-                        if(liveScheduler->occupancy()>=2||!graph->nextFrameSlotAvailable()||enhancementPending())waitLive();
+                        if(liveScheduler->occupancy()>=2||!graph->nextFrameSlotAvailable()||enhancementPending()){
+                            // Only the display queue is outstanding: wake on its latency object
+                            // (acquiring it) instead of a 1 ms poll.
+                            if(isCapture&&presentationPaced&&liveScheduler->occupancy()==0&&pendingCompletions.empty()&&graph->nextFrameSlotAvailable())presenter.waitPresentationReady(1);
+                            else waitLive();
+                        }
                         std::lock_guard lock(mutex_);if(desired_.revision!=options.settings.revision)break;
                     }
                     if(stop_||seekSeconds_>=0||(paused_&&!seekPreviewPending)||liveScheduler->failed()||liveScheduler->occupancy()>=2||!graph->nextFrameSlotAvailable()||enhancementPending())continue;
@@ -1864,7 +2013,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     nextFgAdmissionLog=now+10000000;if(!admitted)nextFgRejectionLog=now+10000000;
                     veyra::log::info("live-fg-admission",std::format("timeline={} revision={} source={} multiplier={} requestedMultiplier={} admitted={} admittedPairs={} rejectedPairs={} remainingDeadlineMs={:.3f} firstDeadlineMs={:.3f} queuedGpuMs={:.3f} predictedMs={:.3f} elapsedMs={:.3f} blitGpuP95Ms={:.3f} presentCpuP95Ms={:.3f} warmingHistory={} (CPU Present is backpressure, not added GPU cost; firstDeadlineMs=-1 when unused)",timeline,batch.identity.settingsRevision,batch.identity.sourceFrameId,previewFgMultiplier,options.fgMultiplier,admitted,fgAdmittedPairs,fgRejectedPairs,double(deadline-now)/10000,firstDeadline?double(firstDeadline-now)/10000:-1,queuedMs,fgBudget.predicted(now,warmingHistory).value_or(-1),elapsed,blit,livePresent.p95(),warmingHistory));
                 };
-                if(fgBudgetRevision!=options.settings.revision){fgBudget.reset();vfgOverload.reset();pairLatency.reset();fgBudgetRevision=options.settings.revision;}
+                if(fgBudgetRevision!=options.settings.revision){fgBudget.reset();vfgOverload.reset();pairLatency.reset();fgBudgetRevision=options.settings.revision;displayFgGate.reset();}
                 previewFgMultiplier=options.fgMultiplier;
                 // An output cap used to only drop candidates at present time, so
                 // the GPU still generated frames that were thrown away: at 6X on
@@ -1882,6 +2031,29 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         const auto needed=unsigned(std::ceil(cap/sourceFps-1e-6));
                         previewFgMultiplier=std::clamp(needed,2u,options.fgMultiplier);
                     }
+                }
+                // Live output hint: the panel cannot show more than one new picture
+                // per refresh, so suggest a multiplier that fits (DisplayFgBudget.h).
+                // The multiplier stays the user's choice (2026-10-14: hint, never
+                // an automatic reduction). Tearing shows partial frames by choice.
+                {
+                    const bool hinted=isCapture&&!isImage&&options.fg&&options.fgMultiplier>1&&
+                        presentationEffective.display!=DisplaySync::Tearing;
+                    double contentFps=0,refreshHz=0;
+                    if(hinted){
+                        // Content rate: 60->30 halves the transport; dedup uses its
+                        // measured cadence and suggests nothing until it has one.
+                        contentFps=dedupActive?contentDedup.contentFps():activeSource->info().averageFps*(halfRate?.5:1.0);
+                        refreshHz=displayFgTestHz>0?displayFgTestHz:presenter.displayRefreshHz();
+                        if(contentFps>0&&refreshHz>0&&displayFgGate.update(displayFgSuggestion(options.settings.frameGenerationBackend,options.fgMultiplier,contentFps,refreshHz,presentationVsync(presentationEffective)),host100ns())){
+                            const auto hint=displayFgGate.applied();
+                            veyra::log::info("display-fg-hint",std::format("revision={} backend={} requested={}X suggestion={} outputFps={:.3f} contentFps={:.3f} refreshHz={:.3f}{} dedup={} halfRate={} display={} (hint only: the multiplier is never changed automatically)",
+                                options.settings.revision,frameGenerationBackendName(options.settings.frameGenerationBackend),options.fgMultiplier,hint==0?std::string("none"):hint==1?std::string("off"):std::format("{}X",hint),contentFps*options.fgMultiplier,contentFps,refreshHz,displayFgTestHz>0?" (test override)":"",dedupActive,halfRate,unsigned(presentationEffective.display)));
+                        }
+                    }else displayFgGate.reset();
+                    std::lock_guard lock(mutex_);
+                    snapshot_.displayFgSuggestion=hinted&&displayFgGate.valid()?displayFgGate.applied():0u;
+                    snapshot_.displayFgRefreshHz=refreshHz;snapshot_.displayFgContentFps=contentFps;
                 }
                 {std::lock_guard lock(mutex_);snapshot_.previewFgMultiplier=previewFgMultiplier;}
                 const auto liveInterval=physicalCapture?
@@ -2153,11 +2325,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     }
                     struct LiveStepState {
                         unsigned next=0,handled=0,remaining=0;bool readyReported=false;
-                        Clock::time_point readyStart=Clock::now();std::optional<Clock::time_point> deadlineStart;
+                        Clock::time_point readyStart=Clock::now();std::optional<Clock::time_point> deadlineStart,capacityStart;
                         double readyMs=0,waitMs=0,presentMs=0,ageMs=0;uint64_t count=0,dropped=0;
                         diagnostics::GpuSample blit;
                     };
                     auto step=std::make_shared<LiveStepState>();
+                    watch->jobStart=step->readyStart;
+                    const bool submitThenPresent=isCapture&&presenter.xessActive()&&!xessPresentAfterReady;
                     for(unsigned i=0;i<out.batch.count;++i)if(out.batch.frames[i].kind!=pipeline::FrameKind::Generated||out.batch.frames[i].validity==pipeline::GenerationValidity::Valid)++step->remaining;
                     const double sourceIntervalMs=double(isCapture?liveInterval:liveSourceInterval100ns(pkt.duration,activeSource->info().averageFps))/10000;
                     const auto baselineReady=pkt.decodedHost100ns>0?pkt.decodedHost100ns:captureArrival;
@@ -2179,7 +2353,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #ifdef VEYRA_ENABLE_XBOX
                         &xb,
 #endif
-                        &seekDecoded,&seekStarted,&audio,&audioPipe,&audioStarted,&cadence,&ctx,&fileAudioAlignPending,&fileAwaitingVideo,&fileInputEnded,&playbackRate,&frameFlow,&graph,&host100ns,&isCapture,&isImage,&livePresent,&liveScheduler,&nextFgDeadlineLog,&nowMs,&options,&pendingCompletions,&physicalCapture,&presentEntryDeviation,&presentReturnDeviation,&presentationEffective,&presentationGeneration,&presentationSkippedGenerated,&presenter,&ring,&runSessionId,&seekPreviewPending,&traceFrame,&traceSubframes,watch,step,timeline,captureArrival,baselineReady,delayEnhanced,activeSeekId,lineage,jobGeneration,rereadCached,sourceIntervalMs,flow=frameFlow](int64_t now)->LiveGpuScheduler::Step{
+                        &seekDecoded,&seekStarted,&audio,&audioPipe,&audioStarted,&cadence,&ctx,&fileAudioAlignPending,&fileAwaitingVideo,&fileInputEnded,&playbackRate,&frameFlow,&graph,&host100ns,&isCapture,&isImage,&livePresent,&liveScheduler,&nextFgDeadlineLog,&nowMs,&options,&pendingCompletions,&physicalCapture,&presentEntryDeviation,&presentReturnDeviation,&presentationEffective,&presentationGeneration,&presentationSkippedGenerated,&presenter,&ring,&runSessionId,&seekPreviewPending,&traceFrame,&traceSubframes,watch,step,timeline,captureArrival,baselineReady,delayEnhanced,activeSeekId,lineage,jobGeneration,rereadCached,sourceIntervalMs,submitThenPresent,flow=frameFlow](int64_t now)->LiveGpuScheduler::Step{
                         using State=LiveGpuScheduler::State;auto& batch=watch->output;auto& s=*step;
                         auto updatePending=[&](LiveStepState*){
                             unsigned left=0;for(unsigned i=s.next;i<batch.batch.count;++i)if(batch.batch.frames[i].kind!=pipeline::FrameKind::Generated||batch.batch.frames[i].validity==pipeline::GenerationValidity::Valid)++left;
@@ -2199,7 +2373,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             const double itemPtsMs=double(item.pts100ns)/10000;
                             const auto decisionTime=host100ns();
                             const bool generationExpired=generated&&(isCapture?timeline.expired(item.pts100ns,decisionTime,100000):!fileAwaitingVideo&&previewGeneratedExpired(nowMs(),itemPtsMs));
-                            const auto readiness=previewFrameReadiness(item,comparisonMode_!=0||!generatedPresentationCurrent(jobGeneration,presentationGeneration.load()),generationExpired,[&]{return graph->resolveFrame(batch,s.next);});
+                            // B1: an XeSS real frame needs no CPU fence; the queue orders it.
+                            const bool early=submitThenPresent&&!generated&&!watch->ready;
+                            const auto readiness=previewFrameReadiness(item,comparisonMode_!=0||!generatedPresentationCurrent(jobGeneration,presentationGeneration.load()),generationExpired,[&]{return early||graph->resolveFrame(batch,s.next);});
+                            if(early&&readiness==PreviewFrameReadiness::Ready&&!s.readyReported){watch->presentedBeforeReady=true;s.readyReported=true;}
                             if(traceSubframes&&generated&&(readiness==PreviewFrameReadiness::Expired||readiness==PreviewFrameReadiness::Suppressed))
                                 traceFrame(diagnostics::TraceKind::Discarded,item.identity,batch.batch.batchId,item.lease->readyFence,item.pts100ns,item.subframe,unsigned(readiness),isCapture?double(decisionTime-timeline.deadline(item.pts100ns))/10000:nowMs()-itemPtsMs);
                             if(readiness==PreviewFrameReadiness::Pending){
@@ -2251,8 +2428,21 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                                 // instead of accumulating latency.
                                 if(capInterval>0&&cadence.rateSkipsCandidate(optionalNow,mediaDeadline,interval,capInterval)){++s.dropped;++s.handled;++s.next;s.deadlineStart.reset();continue;}
                                 if(optionalNow<due)return {State::Pending,due};
-                                if(!presenter.presentationReady())return {State::Pending,optionalNow+2000};
                             }
+                            // Explicit VSync: one present of display capacity per present, so a
+                            // frame never waits in DXGI's queue (true when not paced). A generated
+                            // frame waits at most half its interval (<= 2 ms) and is otherwise
+                            // replaced by the next one: waiting longer only moved the queue into
+                            // this scheduler and held the real frame behind it (DLSS 6X replay
+                            // on 320 Hz: callback->present P95 18.4 -> 34.2 ms). The real frame waits.
+                            if((!legacyVsyncQueue||presentationEffective.enabled||presentationEffective.outputRate==OutputRateMode::Custom)&&!presenter.presentationReady()){
+                                if(generated&&!legacyVsyncQueue){
+                                    if(!s.capacityStart)s.capacityStart=Clock::now();
+                                    if(elapsedMs(*s.capacityStart)>std::min(2.0,sourceIntervalMs/std::max(1u,batch.batch.count)/2)){++s.dropped;++s.handled;++s.next;s.deadlineStart.reset();s.capacityStart.reset();continue;}
+                                }
+                                return {State::Pending,optionalNow+2000};
+                            }
+                            s.capacityStart.reset();
                             const auto waited=elapsedMs(*s.deadlineStart);s.deadlineStart.reset();s.waitMs+=waited;flow->cpu(diagnostics::CpuStage::DeadlineWait,waited,host100ns());
                             const bool deviationValid=!isCapture&&!isImage&&!fileAwaitingVideo&&!paused_;
                             const double entryDeviation=deviationValid?nowMs()-itemPtsMs:0;
@@ -2352,8 +2542,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         flow->update([&](auto& m){m.counters.cancelledBeforePresent+=batch.batch.count-s.handled;m.gpuReadyWaitMs=s.readyMs;m.deadlineWaitMs=s.waitMs;if(s.count)m.captureArrivalToPresentReturnMs=s.ageMs;m.counters.generatedExpiredAfterEval+=s.dropped;});
                         if(flow!=frameFlow)return;
                         liveStats.submitted+=s.count;liveStats.expired+=s.dropped;
-                        if(s.count){liveStats.waitMs=s.waitMs;liveStats.presentMs=s.presentMs;liveStats.readyMs=s.readyMs;liveStats.ageMs=s.ageMs;liveStats.blit=s.blit;
-                            liveAges.add(s.ageMs);liveWaits.add(s.waitMs);liveReady.add(s.readyMs);liveStats.ageP95=liveAges.p95();liveStats.waitP95=liveWaits.p95();liveStats.presentP95=livePresent.p95();liveStats.readyP95=liveReady.p95();}
+                        if(s.count){liveStats.waitMs=s.waitMs;liveStats.presentMs=s.presentMs;liveStats.ageMs=s.ageMs;liveStats.blit=s.blit;
+                            liveAges.add(s.ageMs);liveWaits.add(s.waitMs);liveStats.ageP95=liveAges.p95();liveStats.waitP95=liveWaits.p95();liveStats.presentP95=livePresent.p95();
+                            // An early (B1) present learns its GPU-ready time in the completion poll.
+                            if(!watch->presentedBeforeReady){liveStats.readyMs=s.readyMs;liveReady.add(s.readyMs);liveStats.readyP95=liveReady.p95();}}
                         liveStats.fps=liveSubmissions.size()>1?double(liveSubmissions.size()-1)*1e7/(liveSubmissions.back()-liveSubmissions.front()):0;
                     })){status(L"视频呈现队列失败",true);break;}
                     frameFlow->update([&](auto& m){m.pendingOutputFrames+=step->remaining;});
@@ -2435,6 +2627,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 loopTrace.mark("flowSnapshot");
                 measured.sourceFrames=measured.flow.counters.sourceAccepted;measured.validGenerated=measured.flow.counters.fgReadyValid;measured.submitted=measured.flow.counters.realPresented+measured.flow.counters.generatedPresented;measured.expired=measured.flow.counters.generatedExpiredAfterEval;
                 const double ageP95=liveScheduler?completed.ageP95:captureAges.p95(),waitP95=liveScheduler?completed.waitP95:scheduleWaits.p95(),presentP95=liveScheduler?completed.presentP95:presentTimes.p95();
+                // Refresh and VRR state (NVAPI, every 2 s) are read outside the
+                // snapshot lock.
+                presenter.displayRefreshHz();
                 ++frames;{std::lock_guard lock(mutex_);snapshot_.metrics=measured;snapshot_.colorStatus=graph->videoHdrActive()?L"SDR → RTX Video HDR":options.settings.videoHdr.enabled&&!gd.hdrInput?L"SDR → SDR（HDR显示未启用）":gd.hdrOutput?(graph->hdr10Output()?L"HDR → HDR10 / PQ":L"HDR → scRGB / 浮点"):gd.hdrInput?L"HDR → SDR色调映射":L"SDR → SDR";snapshot_.position=(isCapture||isImage?pts:lastFilePresentedMs)/1000;snapshot_.frames=sourceFrames;snapshot_.generated=graphStats.fgGeneratedFrames;snapshot_.lateMs=lateness;snapshot_.lateP95Ms=presentReturnDeviation.p95();
                     snapshot_.videoHdrActive=graph->videoHdrActive();
                     snapshot_.videoHdrStatus=graph->videoHdrActive()?L"预览：SDR 转 HDR 已运行":
@@ -2457,6 +2652,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     snapshot_.previewSkipped=measured.flow.counters.previewSkippedBeforeGraph;
                     snapshot_.fgBudgetLimited=measured.flow.lastFgRejected100ns>0&&host100ns()-measured.flow.lastFgRejected100ns<10000000;
                     snapshot_.xessGenerationSuppressed=graph->xessEnabled()&&presenter.xessGenerationSuppressed();
+                    snapshot_.displayVrr=gfx::vrrLevel(presenter.displayVrr());snapshot_.presentationVrrSync=presenter.vrrSync();
                     snapshot_.nrActive=graph->nrEnabled()&&graphStats.nrEvaluateCount>0;
                     snapshot_.nrAutoActive=graph->autoNrPoolReady();
                     snapshot_.nrAutoPercent=graph->autoNrPoolReady()?AutoNrController::percent(graph->autoNrLevel()):0;

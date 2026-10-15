@@ -17,6 +17,7 @@ bool RemotePlaySessionSource::connect(RemotePlayConnectDesc desc) {
     return started_;
 }
 void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc desc) {
+    alive_.store(true);
     RemotePlaySource source;
     remoteplay::StreamRecovery recovery;
     bool repeatedTestDisconnect=false;
@@ -37,9 +38,66 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
         const bool ok=source.connect(desc);
         if(!ok){retryWasRpInUse=source.nativeSnapshot().startupRetryAllowed;retry=recovery.poll(milliseconds(),false,true)==remoteplay::StreamRecovery::Action::Reconnect;}
         {std::lock_guard lock(mutex_);publishedInfo_=source.info();if(!initialized_)started_=ok;failed_=!ok&&!retry;initialized_=true;telemetryInbox_=source.telemetryInbox();
-            if(failed_)recovery_.message=L"PS5 串流连接失败，请检查主机及网络；已保存的配对无需重输。";}
+            if(failed_)recovery_.message=desc.controlOnly?L"PS5 手柄控制连接失败，请检查主机及网络；已保存的配对无需重输。":L"PS5 串流连接失败，请检查主机及网络；已保存的配对无需重输。";}
         ready_.notify_all();
-        if(ok) {
+        if(ok&&desc.controlOnly) {
+            // PS5 手柄控制: the capture card is the picture. No decoder, no WASAPI,
+            // no mailbox: the backend counts and drops the console's keepalive
+            // video, and that count is the progress StreamRecovery watches.
+            log::info("remoteplay-control",std::format("controller-only session attempt={} keepalive={}x{}@{} {} kbps (dropped on receipt; the console still sends it)",recovery.reconnects(),desc.request.video.width,desc.request.video.height,desc.request.video.fps,desc.request.video.bitrateKbps));
+            // Sleep(1) without a raised timer resolution can take 15.6 ms; the
+            // controller is sent every 4 ms, so wait on a high-resolution timer.
+            const auto timer=std::unique_ptr<void,decltype(&CloseHandle)>(CreateWaitableTimerExW(nullptr,nullptr,CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,TIMER_ALL_ACCESS),&CloseHandle);
+            auto nextController=std::chrono::steady_clock::now();
+            auto nextLog=nextController,rateStart=nextController;
+            uint64_t previousReceived=receivedBase,lastVideo=0;
+            bool connectedLogged=false;
+            while(!stop.stop_requested()) {
+                std::string pin;
+                {std::lock_guard lock(mutex_);pin.swap(pin_);}
+                if(!pin.empty()) {
+                    const auto r=source.submitLoginPin(pin);SecureZeroMemory(pin.data(),pin.size());
+                    if(!r.ok)log::warn("remoteplay",std::format("{} code={}",r.operation,r.code));
+                }
+                auto now=std::chrono::steady_clock::now();
+                if(now>=nextController) {
+                    remoteplay::ControllerState controller;
+                    {std::lock_guard lock(mutex_);controller=takeControllerLocked(remoteplay::monotonic100ns());}
+                    const auto r=source.submitController(controller);
+                    if(!r.ok)log::warn("remoteplay",std::format("{} code={}",r.operation,r.code));
+                    nextController=now+std::chrono::milliseconds(4);
+                }
+                const auto native=source.nativeSnapshot();
+                const auto snapshot=source.sessionSnapshot();
+                if(now>=nextLog){nextLog=now+std::chrono::seconds(1);
+                    log::info("remoteplay-transport",std::format("attempt={} connected={} videoCallbacks={} audioCallbacks={} packetWindowReceived={} packetWindowLost={} upstreamWarnings={} upstreamErrors={} transportErrors={} quitReason={} apiError={} (controller-only; media dropped on receipt)",recovery.reconnects(),native.connected,native.videoCallbacks,native.audioCallbacks,native.packetReceived,native.packetLost,native.warnings,native.errors,native.transportErrors,native.lastQuitReason,native.lastApiError));}
+                if(native.connected&&!connectedLogged){connectedLogged=true;log::info("remoteplay-control","console connected; controller channel open");}
+                {std::lock_guard lock(mutex_);snapshot_=snapshot;feedback_.merge(source.takeFeedback());
+                    rates_.received=receivedBase+native.videoCallbacks;
+                    const double elapsed=std::chrono::duration<double>(now-rateStart).count();
+                    if(elapsed>=1){rates_.receivedFps=double(rates_.received-previousReceived)/elapsed;rates_.ready=true;previousReceived=rates_.received;rateStart=now;}
+                }
+                if(native.videoCallbacks>lastVideo) {
+                    lastVideo=native.videoCallbacks;
+                    if(recovery.frame(milliseconds()))log::info("remoteplay-recovery",std::format("retry allowance renewed after 30s continuous keepalive; lifetimeAttempts={}",recovery.reconnects()));
+                    std::lock_guard lock(mutex_);recovery_.active=false;recovery_.message.clear();
+                } else {
+                    // Keyframe actions are ignored: there is no decoder to repair.
+                    const auto action=recovery.poll(milliseconds(),snapshot.state==remoteplay::SessionState::LoginPinRequired,snapshot.state==remoteplay::SessionState::Failed,native.automaticRetryAllowed,native.startupRetryAllowed);
+                    if(action==remoteplay::StreamRecovery::Action::Reconnect){retryWasRpInUse=native.startupRetryAllowed;retry=true;break;}
+                    if(action==remoteplay::StreamRecovery::Action::Fail){
+                        log::error("remoteplay-recovery",std::format("controller-only recovery stopped attempts={} quitReason={} error={}",recovery.reconnects(),native.lastQuitReason,snapshot.errorCode));
+                        std::lock_guard lock(mutex_);failed_=true;recovery_.active=false;
+                        recovery_.message=snapshot.state==remoteplay::SessionState::LoginPinRequired?L"等待 PS5 登录 PIN 超时，请重新连接。":native.startupRetryAllowed?L"PS5 仍被串流会话占用，请结束其他串流或稍后重试；无需重新配对。":!native.automaticRetryAllowed?L"PS5 已结束或拒绝串流，请检查主机状态后重新连接。":L"PS5 手柄控制没有恢复，请检查主机及网络后重新打开；无需重新配对。";
+                        recovery_.message+=std::format(L"（终止码 {} / 错误 {}）",native.lastQuitReason,snapshot.errorCode);break;
+                    }
+                }
+                now=std::chrono::steady_clock::now();
+                const auto wait=std::clamp<int64_t>(std::chrono::duration_cast<std::chrono::microseconds>(nextController-now).count(),100,4000);
+                if(timer){LARGE_INTEGER due;due.QuadPart=-wait*10;if(SetWaitableTimer(timer.get(),&due,0,nullptr,nullptr,FALSE))WaitForSingleObject(timer.get(),20);else Sleep(1);}
+                else Sleep(1);
+            }
+        } else if(ok) {
             monitor=std::jthread([inbox=source.telemetryInbox()](std::stop_token cancel){
                 while(!cancel.stop_requested()){
                     const auto s=inbox->snapshot();const auto now=remoteplay::monotonic100ns();
@@ -151,6 +209,7 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
         std::lock_guard lock(mutex_);
         recovery_={true,recovery.episodeRetries(),retryWasRpInUse
             ?std::format(L"PS5 正在释放上一个串流会话，等待后自动重试（{}/3）…",recovery.episodeRetries())
+            :desc.controlOnly?std::format(L"PS5 手柄控制中断，正在重新连接（{}/3）…",recovery.episodeRetries())
             :std::format(L"串流中断，正在重新连接（{}/3）…",recovery.episodeRetries())};
         latest_.reset();pendingControllers_.clear();controller_={};feedback_={};
     }
@@ -173,6 +232,8 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
     if(stop.stop_requested())break;
     }
     {std::lock_guard lock(mutex_);recovery_.active=false;}
+    // run() has no early return: the owner loop and its retries are over.
+    alive_.store(false);
 }
 void RemotePlaySessionSource::publishDecoded(const AVFrame* frame,pipeline::FramePacket packet,const SourceInfo& info){
     auto* cloned=av_frame_clone(frame);if(!cloned)throw std::bad_alloc();

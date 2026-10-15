@@ -235,10 +235,37 @@ Item {
         }
         Connections {
             target: host
-            function onDialogChanged() { if (host.dialog === "capture") veyra.refreshCaptureDevices() }
+            function onDialogChanged() {
+                if (host.dialog !== "capture") return
+                veyra.refreshCaptureDevices()
+                // The PS5 手柄控制 host list is the PS5 dialog's saved pairings.
+                if (veyra.ps5Control.available === true) veyra.ps5Load()
+            }
         }
         function labelOf(list, id, fallback) { const f = list.find(x => String(x.id) === String(id)); return f ? f.label : fallback }
         readonly property bool live: veyra.captureSignalLevel !== "idle"
+        readonly property var pc: veyra.ps5Control
+        readonly property bool pcOn: pc.available === true && pc.enabled === true
+        readonly property string pcTag: {
+            switch (pc.state) {
+            case "starting": return qsTr("连接中")
+            case "connected": return qsTr("已连接")
+            case "recovering": return qsTr("重连中")
+            case "pin": return qsTr("需要 PIN")
+            case "failed": return qsTr("已停止")
+            case "nopair": return qsTr("未配对")
+            default: return qsTr("未连接")
+            }
+        }
+        readonly property string pcStatus: {
+            switch (pc.state) {
+            case "starting": return qsTr("正在连接 PS5…")
+            case "connected": return pc.keepaliveFps >= 0 ? qsTr("PS5 手柄控制已连接 · 保活画面 %1 fps（收到即丢弃）").arg(pc.keepaliveFps) : qsTr("PS5 手柄控制已连接")
+            case "pin": return qsTr("PS5 要求输入登录 PIN")
+            case "recovering": case "failed": case "nopair": return pc.message || ""
+            default: return qsTr("采集卡连上后自动连接 PS5")
+            }
+        }
 
         // dialogs.js .cap-prev: the picture and a signal line under it. The
         // picture is the session's own poster still when the engine made one;
@@ -463,6 +490,98 @@ Item {
                 }
             }
         }
+        // PS5 手柄控制: the capture card stays the picture and the sound; PS5 Remote
+        // Play only carries the pad (also from a handheld this picture is re-streamed to).
+        DSection { visible: captureDialog.pc.available === true; text: qsTr("PS5 手柄控制") }
+        DGroup {
+            visible: captureDialog.pc.available === true
+            VRow {
+                label: qsTr("用远程游玩控制 PS5")
+                hint: qsTr("画面和声音来自采集卡，手柄经 PS5 远程游玩发给主机。把处理后的画面再串流给掌机或别的电脑时，用那边的手柄玩 PS5")
+                VSwitch {
+                    objectName: "capture-ps5-control"
+                    checked: captureDialog.pcOn
+                    onToggled: checked => veyra.ps5ControlSet("enabled", checked)
+                }
+            }
+            VRow {
+                visible: captureDialog.pcOn
+                label: qsTr("PS5 主机")
+                hint: veyra.ps5Profiles.length === 0 ? qsTr("还没有配对的 PS5，先在「PS5 串流」里配对一次") : qsTr("和「PS5 串流」共用配对")
+                RowLayout {
+                    spacing: 6
+                    VSelect {
+                        objectName: "capture-ps5-host"
+                        visible: veyra.ps5Profiles.length > 0
+                        implicitWidth: 170
+                        value: { const p = veyra.ps5Profiles.find(x => x.id === veyra.ps5.profile); return p ? p.label : qsTr("请选择") }
+                        options: veyra.ps5Profiles
+                        onPicked: id => veyra.ps5SelectProfile(id)
+                    }
+                    VTag {
+                        objectName: "capture-ps5-state"
+                        Layout.alignment: Qt.AlignVCenter
+                        text: captureDialog.pcTag
+                        kind: captureDialog.pc.state === "connected" ? "ok"
+                            : captureDialog.pc.state === "failed" || captureDialog.pc.state === "nopair" || captureDialog.pc.state === "pin" ? "warn" : ""
+                    }
+                    VButton {
+                        objectName: "capture-ps5-restart"
+                        visible: captureDialog.pc.state === "failed"
+                        text: qsTr("重连"); ghost: true
+                        onClicked: veyra.ps5ControlRestart()
+                    }
+                    VButton {
+                        objectName: "capture-ps5-pair"
+                        text: veyra.ps5Profiles.length === 0 ? qsTr("去配对") : qsTr("配对…")
+                        ghost: true
+                        onClicked: host.open("ps5")
+                    }
+                }
+            }
+            VRow {
+                visible: captureDialog.pcOn && captureDialog.pc.state === "pin"
+                label: qsTr("登录 PIN")
+                hint: qsTr("PS5 提示时填写，不是 8 位配对码")
+                RowLayout {
+                    spacing: 6
+                    VTextField { id: controlPin; objectName: "capture-ps5-pin"; implicitWidth: 120 }
+                    VButton { text: qsTr("提交"); ghost: true; onClicked: { veyra.ps5SendLoginPin(controlPin.text); controlPin.text = "" } }
+                }
+            }
+            VRow {
+                visible: captureDialog.pcOn
+                label: qsTr("后台也转发手柄")
+                hint: qsTr("再串流时建议打开：Veyra 不在前台也继续转发。打开后在这台电脑上用别的程序时，手柄也会操作 PS5")
+                VSwitch {
+                    objectName: "capture-ps5-background"
+                    checked: captureDialog.pc.background === true
+                    onToggled: checked => veyra.ps5ControlSet("background", checked)
+                }
+            }
+            VRow {
+                visible: captureDialog.pcOn
+                label: qsTr("手柄")
+                hint: qsTr("谁按键就用谁：本机手柄、串流软件建的虚拟手柄都可以")
+                Text {
+                    objectName: "capture-ps5-pad"
+                    text: (captureDialog.pc.pad || "").length > 0
+                          ? captureDialog.pc.pad + " · " + (captureDialog.pc.gyro === true ? qsTr("有陀螺仪") : qsTr("无陀螺仪"))
+                          : captureDialog.pc.state === "off" || captureDialog.pc.state === "nopair" ? "—" : qsTr("未检测到手柄")
+                    color: Theme.t1
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsSmall
+                    elide: Text.ElideRight
+                    width: Math.min(implicitWidth, 260)
+                }
+            }
+        }
+        DNote {
+            objectName: "capture-ps5-note"
+            visible: captureDialog.pcOn
+            text: (captureDialog.pcStatus.length > 0 ? captureDialog.pcStatus + "\n" : "")
+                  + qsTr("PS5 仍会发一路 720p 30fps、约 5 Mbps 的保活画面，本机收到即丢弃；PS5 同一时间只允许一个远程游玩连接。再串流时记得打开上面的「音频监听」。")
+        }
         DSection { text: qsTr("格式与画面") }
         DGroup {
             VRow {
@@ -645,6 +764,15 @@ Item {
                 label: qsTr("仅观看")
                 hint: qsTr("不向 PS5 转发电脑手柄输入")
                 VSwitch { checked: veyra.ps5.viewOnly === true; onToggled: checked => veyra.ps5Set("viewOnly", checked) }
+            }
+            // The mirror of 仅观看: only the pad, the picture from a capture card.
+            VRow {
+                visible: veyra.ps5Control.available === true
+                label: qsTr("画面用采集卡")
+                hint: veyra.ps5Control.enabled === true
+                      ? qsTr("已在「采集卡」里打开 PS5 手柄控制：连接采集卡时只用远程游玩传手柄")
+                      : qsTr("PS5 的 HDMI 接了采集卡时，可以只用远程游玩传手柄、画面用采集卡原画（可 4K/HDR），也方便再串流给掌机")
+                VButton { objectName: "ps5-open-capture"; text: qsTr("采集卡设置"); ghost: true; onClicked: host.open("capture") }
             }
             VRow {
                 label: qsTr("陀螺仪")
@@ -1185,11 +1313,25 @@ Item {
                 }
             }
         }
+        DSection { text: qsTr("游戏") }
+        DGroup {
+            VRow {
+                label: qsTr("游戏模式")
+                hint: screenDialog.o.kind === 1
+                      ? qsTr("开始后 Veyra 在这块屏幕上全屏，键鼠和手柄直接操作屏幕上的任何程序，就像直接用电脑；Home 调整画面，Ctrl+Alt+Home 退出")
+                      : qsTr("开始后 Veyra 在游戏所在的屏幕上全屏盖住游戏，键鼠和手柄照常操作游戏；Home 调整画面，Ctrl+Alt+Home 退出。游戏请设为无边框全屏")
+                VSwitch {
+                    objectName: "screen-game-mode"
+                    checked: screenDialog.o.passthrough === true
+                    onToggled: checked => veyra.setScreenOption("passthrough", checked)
+                }
+            }
+        }
         DSection { text: qsTr("采集") }
         DGroup {
             VRow {
                 label: qsTr("采集方式")
-                hint: screenDialog.o.kind === 1 ? qsTr("DXGI 为显示器兼容方式，无鼠标指针") : qsTr("窗口只能用 Windows Graphics Capture")
+                hint: screenDialog.o.kind === 1 ? qsTr("DXGI 为显示器兼容方式，无鼠标指针；捕获显示器时不显示黄色边框，Veyra 自己也不会出现在截图和录屏里") : qsTr("窗口只能用 Windows Graphics Capture")
                 VSeg {
                     enabled: screenDialog.o.kind === 1
                     opacity: enabled ? 1 : 0.5
@@ -1200,6 +1342,9 @@ Item {
             }
             VRow {
                 label: qsTr("帧率上限")
+                hint: qsTr("如果要开启 DLSS5（NR），建议帧率设置 60，减少 DLSS5 需要处理的画面量，减轻负担")
+                hintColor: Theme.err
+                hintBelow: true
                 VSeg {
                     options: [{ id: "0", label: qsTr("跟随") }, { id: "1", label: "30" }, { id: "2", label: "60" }, { id: "3", label: "120" }, { id: "4", label: "144" }, { id: "5", label: "240" }]
                     current: String(screenDialog.o.fps)
@@ -1208,17 +1353,21 @@ Item {
             }
             VRow {
                 label: qsTr("显示鼠标指针")
+                hint: screenDialog.o.passthrough === true ? qsTr("游戏模式用真实指针，画面里不再画一个") : ""
                 VSwitch {
-                    enabled: screenDialog.o.method === 0
-                    checked: screenDialog.o.cursor === true
+                    enabled: screenDialog.o.method === 0 && screenDialog.o.passthrough !== true
+                    opacity: enabled ? 1 : 0.5
+                    checked: screenDialog.o.cursor === true && screenDialog.o.passthrough !== true
                     onToggled: checked => veyra.setScreenOption("cursor", checked)
                 }
             }
             VRow {
                 label: qsTr("裁剪（像素）")
-                hint: qsTr("左 / 上 / 右 / 下，按源像素")
+                hint: screenDialog.o.passthrough === true ? qsTr("游戏模式不裁剪，画面和屏幕一一对应，点到哪里就是哪里") : qsTr("左 / 上 / 右 / 下，按源像素")
                 RowLayout {
                     spacing: 4
+                    enabled: screenDialog.o.passthrough !== true
+                    opacity: enabled ? 1 : 0.5
                     Repeater {
                         model: ["left", "top", "right", "bottom"]
                         delegate: VTextField {

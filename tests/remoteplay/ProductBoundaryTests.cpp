@@ -46,6 +46,27 @@ static void mailbox(){
     s.publishDecoded(raw,packet,info);packet.sequence=2;packet.flags=0;s.publishDecoded(raw,packet,info);av_frame_free(&raw);
     if(s.read(out,&frame)!=SourceReadStatus::Frame||out.sequence!=4||out.sourceEpoch!=(uint64_t(1)<<32)||!pipeline::hasFrameFlag(out.flags,pipeline::FrameFlagBits::Discontinuity))throw std::runtime_error("reconnect keeps application sequence and pending clock reset across mailbox overwrite");
 }
+// PS5 手柄控制 (from PR #7): the same local validation boundary as a stream, an
+// owner loop that is over once the connect failed, and the shared pad queue.
+// No console is contacted.
+static void controlOnlyBoundary(){
+    for(int i=0;i<3;++i){
+        RemotePlaySessionSource s;RemotePlayConnectDesc request;
+        request.controlOnly=true;request.request.host="invalid://host";
+        if(s.connect(std::move(request)))throw std::runtime_error("controller-only connect must reject an invalid host");
+        if(s.info().opened)throw std::runtime_error("failed controller-only connect must not report opened");
+        if(!s.failed())throw std::runtime_error("failed controller-only connect must report failed");
+        s.close();
+        if(s.alive())throw std::runtime_error("closed controller-only session must not be alive");
+    }
+    RemotePlaySessionSource s;s.started_=true;
+    const auto now=remoteplay::monotonic100ns();
+    remoteplay::ControllerState down;down.inputActive=true;down.buttons=remoteplay::ControllerState::Cross;
+    s.controller(down);
+    if(s.takeControllerLocked(now)!=down)throw std::runtime_error("controller-only pad state must pass through the shared queue");
+    s.controller({});
+    if(s.takeControllerLocked(now)!=remoteplay::ControllerState{})throw std::runtime_error("focus loss must neutralize the controller-only queue");
+}
 };
 }
 
@@ -90,8 +111,62 @@ int virtualInput(){
     input.stop();SDL_CloseJoystick(joystick);SDL_DetachVirtualJoystick(id);SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
     std::cout<<"VIRTUAL_INPUT motion_touch_lifecycle_focus_feedback_bounded="<<ok<<" REAL_PS5_NOT_TESTED=1\n";return ok?0:23;
 }
+// 谁按键就用谁 (PS5 手柄控制): two virtual pads; the one whose button went down last
+// is read. Real pads on the test machine may also be open, so only names of the
+// virtual pads are asserted.
+int followInput(){
+    using namespace veyra::remoteplay;
+    if(!SDL_InitSubSystem(SDL_INIT_GAMEPAD))return 30;
+    // Distinct unknown product ids: pads with the same vendor/product share one
+    // SDL mapping and so one reported name.
+    auto attach=[](const char* name,Uint16 product){
+        SDL_VirtualJoystickDesc desc;SDL_INIT_INTERFACE(&desc);desc.type=SDL_JOYSTICK_TYPE_GAMEPAD;
+        desc.vendor_id=0x1209;desc.product_id=product;desc.name=name;
+        desc.naxes=6;desc.nbuttons=15;desc.button_mask=(1u<<15)-1;desc.axis_mask=63;
+        return SDL_AttachVirtualJoystick(&desc);
+    };
+    const auto a=attach("Veyra follow pad A",0x5641),b=attach("Veyra follow pad B",0x5642);if(!a||!b)return 31;
+    auto* ja=SDL_OpenJoystick(a);auto* jb=SDL_OpenJoystick(b);if(!ja||!jb)return 32;
+    const auto press=[&](SDL_Joystick* j,bool down){SDL_SetJoystickVirtualButton(j,SDL_GAMEPAD_BUTTON_SOUTH,down);};
+    ControllerInput input;if(!input.start())return 33;
+    input.setFollowLastPressed(true);
+    bool ok=true;
+    const auto check=[&](bool pass,const char* step){if(!pass)std::cout<<"FOLLOW_STEP_FAILED "<<step<<" active="<<input.capabilities().name<<'\n';ok&=pass;};
+    input.poll(true); // opens every pad
+    press(jb,true);auto state=input.poll(true);
+    check(input.capabilities().name=="Veyra follow pad B"&&(state.buttons&ControllerState::Cross),"press B");
+    press(jb,false);input.poll(true);
+    press(ja,true);state=input.poll(true);
+    check(input.capabilities().name=="Veyra follow pad A"&&(state.buttons&ControllerState::Cross),"press A");
+    press(ja,false);input.poll(true);
+    // Without focus (and no background permission) a press does not take over.
+    press(jb,true);input.poll(false);press(jb,false);input.poll(false);
+    check(input.capabilities().name=="Veyra follow pad A","unfocused press B");
+    // The read pad leaves: another open pad is read instead.
+    SDL_CloseJoystick(ja);SDL_DetachVirtualJoystick(a);input.poll(true);
+    check(input.capabilities().connected&&input.capabilities().name!="Veyra follow pad A","detach A");
+    // Follow off: a press on another pad no longer switches.
+    input.setFollowLastPressed(false);
+    const auto before=input.capabilities().name;
+    press(jb,true);input.poll(true);press(jb,false);input.poll(true);
+    check(input.capabilities().name==before,"follow off");
+    input.stop();
+    SDL_CloseJoystick(jb);SDL_DetachVirtualJoystick(b);SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
+    std::cout<<"FOLLOW_INPUT last_pressed_switch_focus_detach_off="<<ok<<" REAL_PS5_NOT_TESTED=1\n";return ok?0:34;
+}
 int main(int argc,char** argv){
     if(argc==2&&std::string_view(argv[1])=="--virtual")return virtualInput();
+    if(argc==2&&std::string_view(argv[1])=="--follow")return followInput();
+    if(argc==2&&std::string_view(argv[1])=="--control-stress"){
+        for(int i=0;i<200;++i){
+            veyra::source::RemotePlaySessionSource s;veyra::source::RemotePlayConnectDesc request;
+            request.controlOnly=true;request.request.host="invalid://host";
+            if(s.connect(std::move(request)))return 11;
+            s.close();if(s.alive())return 12;
+        }
+        std::cout<<"CONTROL_STRESS_PASS iterations=200 PS5_NOT_TESTED=1\n";
+        return 0;
+    }
     if(argc==2&&std::string_view(argv[1])=="--discover"){
         const auto report=veyra::remoteplay::discoverLocalPs5({});
         for(const auto& line:report.diagnostics)std::cout<<line<<'\n';
@@ -102,6 +177,7 @@ int main(int argc,char** argv){
     std::stop_source cancelled;cancelled.request_stop();
     if(!veyra::remoteplay::discoverLocalPs5(cancelled.get_token()).hosts.empty())return 6;
     veyra::source::RemotePlaySessionSourceTestAccess::mailbox();
+    veyra::source::RemotePlaySessionSourceTestAccess::controlOnlyBoundary();
     veyra::source::RemotePlaySessionSource source;
     for(int i=0;i<3;++i){
         veyra::source::RemotePlayConnectDesc request;request.request.host="invalid://host";
@@ -112,6 +188,6 @@ int main(int argc,char** argv){
     if(!input.start()){std::cerr<<"SDL_GAMEPAD_INITIALIZATION_FAILED\n";return 3;}
     for(int i=0;i<3;++i)if(input.poll(false)!=veyra::remoteplay::ControllerState{})return 4;
     input.stop();input.stop();
-    std::cout<<"REMOTEPLAY_BOUNDARY_PASS invalid_connect_reopen=3 decoded_latest_mailbox=1 SDL_initialized=1 unfocused_neutral=1 PS5_NOT_TESTED=1\n";
+    std::cout<<"REMOTEPLAY_BOUNDARY_PASS invalid_connect_reopen=3 decoded_latest_mailbox=1 control_only_boundary=1 SDL_initialized=1 unfocused_neutral=1 PS5_NOT_TESTED=1\n";
     return 0;
 }

@@ -633,6 +633,15 @@ VPage {
                             }
                         }
                         VRow {
+                            label: qsTr("同时用这块显卡运算")
+                            hint: veyra.computeGpuHint
+                            VSwitch {
+                                objectName: "set-compute-gpu"
+                                checked: veyra.preferences.computeOnMonitorGpu === true
+                                onToggled: v => veyra.setPreference("computeOnMonitorGpu", v)
+                            }
+                        }
+                        VRow {
                             label: qsTr("全屏显存增长保护")
                             hint: qsTr("检测异常增长时自动退出全屏；默认关闭")
                             VSwitch {
@@ -859,7 +868,8 @@ VPage {
                                 { a: qsTr("音量"), k: "↑ / ↓" },
                                 { a: qsTr("打开文件 / 导出页"), k: "Ctrl+O / Ctrl+E" },
                                 { a: qsTr("字幕开关 / 主轨 / 副轨"), k: "B / T / Y" },
-                                { a: qsTr("字幕延时 50 ms（Shift = 1 s）"), k: "Z / X" }
+                                { a: qsTr("字幕延时 50 ms（Shift = 1 s）"), k: "Z / X" },
+                                { a: qsTr("游戏模式：调整画面 / 退出"), k: "Home / Ctrl+Alt+Home" }
                             ]
                             delegate: VRow {
                                 required property var modelData

@@ -134,6 +134,8 @@ struct EnhanceGraphDesc {
     // XeSS motion refinement with the optical-flow source (UI "边缘神盾"): FlowRefine/
     // FlowFill plus NVOF forward-backward or FidelityFX FlowClaim. Off: validated flow.
     bool fgMotionRefine=true;
+    // DLSS-G performance mode (ngx/DlssgLite.h): DLSS frame generation only.
+    bool dlssgLite=false;
     engine::ContentRate contentRate=engine::ContentRate::Transport;
     engine::NrSettings model;
     engine::ResidualSettings residual;
@@ -624,6 +626,10 @@ public:
     uint64_t nrCreateResult() const { return nrResult_; }
     uint64_t failedNgxResult() const;
     const std::wstring& driverRequirementNotice() const {return driverRequirementNotice_;}
+    // DLSS-G performance mode: 0 not requested (or not DLSS FG), 1 active,
+    // 2 its runtime is missing, 3 this GPU keeps the default runtime (RTX
+    // 40/30 multi-frame patches are audited for 310.9.1 only).
+    uint32_t dlssgLiteState() const {return dlssgLiteState_;}
     bool fgCapabilityAvailable() const { return fgCapsAvailable_; }
     int fgMultiFrameCountMax() const { return fgMultiFrameMax_; }
     // Scenario toggles (probe/UI): gates only; the feature handles stay alive.
@@ -830,6 +836,8 @@ private:
     uint64_t nrResult_ = 0;
     uint64_t fgInitResult_ = 0;
     std::wstring driverRequirementNotice_;
+    uint32_t dlssgLiteState_ = 0;
+    std::wstring dlssgDirectory_;
     uint32_t nrSeh_ = 0;
     bool fgCapsAvailable_ = false;
     int fgMultiFrameMax_ = 0;

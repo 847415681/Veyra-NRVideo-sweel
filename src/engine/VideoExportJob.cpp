@@ -107,6 +107,8 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         StageRequest stages;stages.nr=options.nr;stages.sr=options.sr;stages.fg=options.fg;stages.fgMultiplier=options.fgMultiplier;
         stages.width=info.width;stages.height=info.height;stages.exportJob=true;stages.nvidiaAdapter=nvidiaAdapter;stages.amdNr=amdNrExport;
         const auto plan=describeStages(stages,options.snapshot(),gd);
+        // Export keeps the standard DLSS-G model: quality first, no latency to save.
+        gd.dlssgLite=false;
         if(!nvidiaFeatures&&gd.opticalFlowBackend==OpticalFlowBackend::Nvidia)gd.opticalFlowBackend=OpticalFlowBackend::AmdFidelityFx;
         const auto resolution=plan;
         // Availability comes from the shared stage contract: native-size RTX

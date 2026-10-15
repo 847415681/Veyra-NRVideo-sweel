@@ -31,6 +31,9 @@ struct XessPresenter::Impl {
     const uint64_t traceInstance=++nextTraceInstance;
     pipeline::FrameIdentity traceIdentity{};
     uint32_t preparationCycle=0;
+    // Presents whose source was prepared in another XeLL cycle (the next
+    // cycle's sleep then ran inside Present). latency-min B1 keeps it 0.
+    uint64_t cycleMismatches=0;
     int64_t presentBegin=0;
     uint64_t generated=0,presented=0;
     uint32_t requestedGenerated=0;   // generated frames requested by the user (0 = 2X stock)
@@ -250,6 +253,7 @@ bool XessPresenter::beginFrame(uint32_t preparedFrameId,pipeline::FrameIdentity 
     auto& p=*p_;
     p.id=beginInput();
     p.traceIdentity=identity;p.preparationCycle=preparedFrameId;
+    p.cycleMismatches+=preparedFrameId&&preparedFrameId!=p.id;
     if(p.traceEnabled){const auto now=traceHost();p.record(diagnostics::TraceKind::XessBind,p.id,now,now);}
     if(log::verboseFrameLogs()&&preparedFrameId!=p.id)
         log::info("xess-fg",std::format("presentation cycle id={} preparationCycle={}; cycle timing is not source-frame latency",p.id,preparedFrameId));
@@ -303,7 +307,7 @@ bool XessPresenter::afterPresent(){
     if(!p.check(p.xefgSwapChainGetLastPresentStatusFn(p.fg,&status),"PresentStatus"))return false;
     if(status.isFrameGenEnabled&&status.frameGenResult==XEFG_SWAPCHAIN_RESULT_SUCCESS&&status.framesPresented>1)p.generated+=status.framesPresented-1;
     if(status.frameGenResult>=0)p.presented+=status.framesPresented;
-    if(log::verboseFrameLogs()||p.id%60==0||status.frameGenResult<0)log::info("xess-fg",std::format("presentId={} enabled={} result={} framesPresented={} generatedTotal={} (SDK submissions, not measured scanout)",p.id,status.isFrameGenEnabled,int(status.frameGenResult),status.framesPresented,p.generated));
+    if(log::verboseFrameLogs()||p.id%60==0||status.frameGenResult<0)log::info("xess-fg",std::format("presentId={} enabled={} result={} framesPresented={} generatedTotal={} cycleMismatches={} (SDK submissions, not measured scanout; cycleMismatches = presents of a source prepared in another XeLL cycle)",p.id,status.isFrameGenEnabled,int(status.frameGenResult),status.framesPresented,p.generated,p.cycleMismatches));
     return status.frameGenResult>=0;
 #else
     return false;

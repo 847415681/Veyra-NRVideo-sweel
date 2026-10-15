@@ -638,11 +638,11 @@
    "ja": "DLSS フレーム生成"
   },
   {
-   "zh": "DXGI 为显示器兼容方式，无鼠标指针",
+   "zh": "DXGI 为显示器兼容方式，无鼠标指针；捕获显示器时不显示黄色边框，Veyra 自己也不会出现在截图和录屏里",
    "src": "qml/DialogHost.qml",
-   "zh-TW": "DXGI 為顯示器相容方式，無滑鼠指標",
-   "en": "DXGI is the display-compatible mode, without the mouse pointer",
-   "ja": "DXGI はディスプレイ互換モードで、マウスポインターは映りません"
+   "zh-TW": "DXGI 為顯示器相容方式，無滑鼠指標；擷取顯示器時不顯示黃色邊框，Veyra 自己也不會出現在截圖和錄影裡",
+   "en": "DXGI is the display-compatible mode, without the mouse pointer. A display capture shows no yellow border, and Veyra itself stays out of screenshots and recordings",
+   "ja": "DXGI はディスプレイ互換モードで、マウスポインターは映りません。ディスプレイのキャプチャでは黄色い枠を表示せず、Veyra 自身もスクリーンショットや録画に映りません"
   },
   {
    "zh": "Dolby / DTS 位流",
@@ -6566,13 +6566,6 @@
    "zh-TW": "快速鍵儲存失敗",
    "en": "Could not save the shortcut",
    "ja": "ショートカットを保存できませんでした"
-  },
-  {
-   "zh": "快速调节只在专业模式的列表视图可用",
-   "src": "qml/Main.qml",
-   "zh-TW": "快速調節只在專業模式的列表視圖可用",
-   "en": "Quick settings are available only in Pro mode's list view",
-   "ja": "クイック設定はプロモードのリスト表示でのみ使えます"
   },
   {
    "zh": "性能",
@@ -15716,6 +15709,720 @@
    "zh-TW": "{} {}X 補幀初始化失敗，未替換後端或降低倍率；請查看工作診斷日誌",
    "en": "{} {}X frame generation could not initialize. The backend and multiplier were retained; see the task diagnostic log.",
    "ja": "{} {}X フレーム生成を初期化できませんでした。バックエンドと倍率は維持されています。タスク診断ログを確認してください。"
+  },
+  {
+   "zh": "显示同步：自动 · 不撕裂，也不等待垂直同步（延迟最低）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "顯示同步：自動 · 不撕裂，也不等待垂直同步（延遲最低）",
+   "en": "Display sync: auto · no tearing and no VSync wait (lowest latency)",
+   "ja": "表示の同期：自動 · ティアリングなし、垂直同期を待たない（最小遅延）"
+  },
+  {
+   "zh": "只保留一帧在处理，未补帧时加 NVIDIA Reflex；垂直同步本身已不排队",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "只保留一幀在處理，未補幀時加 NVIDIA Reflex；垂直同步本身已不排隊",
+   "en": "Keeps one frame in flight and adds NVIDIA Reflex without frame generation; VSync itself no longer queues",
+   "ja": "処理中のフレームを 1 枚に保ち、フレーム生成なしでは NVIDIA Reflex を追加；垂直同期自体はもうキューを溜めない"
+  },
+  {
+   "zh": "只保留一帧在处理，未补帧时加 Reflex",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "只保留一幀在處理，未補幀時加 Reflex",
+   "en": "One frame in flight; adds Reflex without frame generation",
+   "ja": "処理中は 1 フレームのみ、フレーム生成なしでは Reflex を追加"
+  },
+  {
+   "zh": "垂直同步：屏幕队列 1 帧，读帧前等待刷新",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "垂直同步：螢幕佇列 1 幀，讀幀前等待更新",
+   "en": "VSync: one-frame display queue, waits for the refresh before reading a frame",
+   "ja": "垂直同期：画面キュー 1 フレーム、フレーム読み込み前にリフレッシュを待機"
+  },
+  {
+   "zh": "垂直同步：屏幕队列控制不可用",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "垂直同步：螢幕佇列控制不可用",
+   "en": "VSync: display queue control unavailable",
+   "ja": "垂直同期：画面キューの制御は使用不可"
+  },
+  {
+   "zh": "显示队列恢复失败",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "顯示佇列恢復失敗",
+   "en": "Display queue restore failed",
+   "ja": "表示キューの復元に失敗"
+  },
+  {
+   "zh": "低延迟队列：只保留一帧在处理",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "低延遲佇列：只保留一幀在處理",
+   "en": "Low-latency queue: one frame in flight",
+   "ja": "低遅延キュー：処理中は 1 フレームのみ"
+  },
+  {
+   "zh": "显示队列等待失败，垂直同步屏幕队列不再限制；详见日志",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "顯示佇列等待失敗，垂直同步螢幕佇列不再限制；詳見日誌",
+   "en": "Display queue wait failed; the VSync display queue is no longer limited; see the log",
+   "ja": "表示キューの待機に失敗。垂直同期の画面キューは制限されなくなりました。ログを参照"
+  },
+  {
+   "zh": "不撕裂，也不等待垂直同步（延迟最低）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "不撕裂，也不等待垂直同步（延遲最低）",
+   "en": "no tearing and no VSync wait (lowest latency)",
+   "ja": "ティアリングなし、垂直同期を待たない（最小遅延）"
+  },
+  {
+   "zh": "低延迟队列：只保留一帧在处理（补帧运行，Reflex 不启用）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "低延遲佇列：只保留一幀在處理（補幀運行，Reflex 不啟用）",
+   "en": "Low-latency queue: one frame in flight (frame generation running, Reflex off)",
+   "ja": "低遅延キュー：処理中は 1 フレームのみ（フレーム生成中のため Reflex は無効）"
+  },
+  {
+   "zh": "低延迟队列：只保留一帧在处理 + NVIDIA Reflex（实验）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "低延遲佇列：只保留一幀在處理 + NVIDIA Reflex（實驗）",
+   "en": "Low-latency queue: one frame in flight + NVIDIA Reflex (experimental)",
+   "ja": "低遅延キュー：処理中は 1 フレームのみ + NVIDIA Reflex（実験的）"
+  },
+  {
+   "zh": "低延迟队列：只保留一帧在处理（Reflex 初始化失败）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "低延遲佇列：只保留一幀在處理（Reflex 初始化失敗）",
+   "en": "Low-latency queue: one frame in flight (Reflex initialization failed)",
+   "ja": "低遅延キュー：処理中は 1 フレームのみ（Reflex の初期化に失敗）"
+  },
+  {
+   "zh": "显示同步：自动",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "顯示同步：自動",
+   "en": "Display sync: auto",
+   "ja": "表示の同期：自動"
+  },
+  {
+   "zh": "无法检测屏幕是否支持（目前只支持 NVIDIA 显卡）",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "無法偵測螢幕是否支援（目前只支援 NVIDIA 顯示卡）",
+   "en": "Cannot detect whether the display supports it (NVIDIA GPUs only for now)",
+   "ja": "ディスプレイの対応を検出できません（現在は NVIDIA GPU のみ）"
+  },
+  {
+   "zh": "当前屏幕不支持可变刷新",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "目前螢幕不支援可變更新",
+   "en": "This display does not support variable refresh",
+   "ja": "このディスプレイは可変リフレッシュに対応していません"
+  },
+  {
+   "zh": "屏幕支持，但驱动未开启：NVIDIA 控制面板 → 设置 G-SYNC",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "螢幕支援，但驅動程式未開啟：NVIDIA 控制面板 → 設定 G-SYNC",
+   "en": "The display supports it, but the driver has it off: NVIDIA Control Panel → Set up G-SYNC",
+   "ja": "ディスプレイは対応していますが、ドライバーで無効です：NVIDIA コントロールパネル → G-SYNC の設定"
+  },
+  {
+   "zh": "屏幕跟着画面刷新：不撕裂，也几乎不用等刷新",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "螢幕跟著畫面更新：不撕裂，也幾乎不用等更新",
+   "en": "The display refreshes when each frame arrives: no tearing and almost no waiting",
+   "ja": "フレームが届いた時点で画面を更新：ティアリングなし、待ち時間もほぼなし"
+  },
+  {
+   "zh": "已开启，屏幕还没进入可变刷新：全屏并隐藏控制栏，或在 NVIDIA 控制面板为窗口模式开启 G-SYNC",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已開啟，螢幕還沒進入可變更新：全螢幕並隱藏控制列，或在 NVIDIA 控制面板為視窗模式開啟 G-SYNC",
+   "en": "On, but the display is not in variable refresh yet: go fullscreen with the controls hidden, or enable G-SYNC for windowed mode in the NVIDIA Control Panel",
+   "ja": "オンですが、まだ可変リフレッシュになっていません：全画面でコントロールバーを隠すか、NVIDIA コントロールパネルでウィンドウモードの G-SYNC を有効にしてください"
+  },
+  {
+   "zh": "已开启，播放时生效",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已開啟，播放時生效",
+   "en": "On; applies during playback",
+   "ja": "オン（再生中に有効）"
+  },
+  {
+   "zh": "生效中：屏幕跟着画面刷新",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "生效中：螢幕跟著畫面更新",
+   "en": "Active: the display refreshes with each frame",
+   "ja": "動作中：画面がフレームに合わせて更新"
+  },
+  {
+   "zh": "屏幕正处于可变刷新（驱动已开启）",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "螢幕正處於可變更新（驅動程式已開啟）",
+   "en": "The display is in variable refresh (enabled by the driver)",
+   "ja": "ディスプレイは可変リフレッシュ中（ドライバーで有効）"
+  },
+  {
+   "zh": "可变刷新 · 生效中",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "可變更新 · 生效中",
+   "en": "Variable refresh · active",
+   "ja": "可変リフレッシュ · 動作中"
+  },
+  {
+   "zh": "可变刷新 · 未生效",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "可變更新 · 未生效",
+   "en": "Variable refresh · not active",
+   "ja": "可変リフレッシュ · 未動作"
+  },
+  {
+   "zh": "可变刷新 · 当前屏幕不可用",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "可變更新 · 目前螢幕不可用",
+   "en": "Variable refresh · unavailable on this display",
+   "ja": "可変リフレッシュ · このディスプレイでは使用不可"
+  },
+  {
+   "zh": "屏幕可变刷新生效中",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "螢幕可變更新生效中",
+   "en": "Display variable refresh active",
+   "ja": "ディスプレイの可変リフレッシュ動作中"
+  },
+  {
+   "zh": "当前帧率 %1 fps 超出屏幕刷新率 %2 Hz，建议关闭补帧来获得更好的延迟体验",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "目前幀率 %1 fps 超出螢幕更新率 %2 Hz，建議關閉補幀來獲得更好的延遲體驗",
+   "en": "Current frame rate %1 fps exceeds the %2 Hz refresh rate; turn frame generation off for lower latency",
+   "ja": "現在のフレームレート %1 fps が画面のリフレッシュレート %2 Hz を超えています。遅延を抑えるにはフレーム生成をオフにしてください"
+  },
+  {
+   "zh": "当前帧率 %1 fps 超出屏幕刷新率 %2 Hz，建议降至 %3X 来获得更好的延迟体验",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "目前幀率 %1 fps 超出螢幕更新率 %2 Hz，建議降至 %3X 來獲得更好的延遲體驗",
+   "en": "Current frame rate %1 fps exceeds the %2 Hz refresh rate; lower it to %3X for lower latency",
+   "ja": "現在のフレームレート %1 fps が画面のリフレッシュレート %2 Hz を超えています。遅延を抑えるには %3X に下げてください"
+  },
+  {
+   "zh": "可变刷新",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "可變更新",
+   "en": "Variable refresh",
+   "ja": "可変リフレッシュ"
+  },
+  {
+   "zh": "自动（推荐）：不撕裂，也不等待垂直同步，每次刷新显示最新一帧，延迟最低 · 垂直同步：每帧都等到刷新才显示，比自动多等最多一个刷新 · 允许撕裂：可能出现撕裂线",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "自動（推薦）：不撕裂，也不等待垂直同步，每次更新顯示最新一幀，延遲最低 · 垂直同步：每幀都等到更新才顯示，比自動多等最多一次更新 · 允許撕裂：可能出現撕裂線",
+   "en": "Auto (recommended): no tearing and no VSync wait; each refresh shows the newest frame for the lowest latency · VSync: every frame waits for a refresh, at most one refresh longer than Auto · Allow tearing: tear lines may appear",
+   "ja": "自動（推奨）：ティアリングなし、垂直同期を待たず、毎回のリフレッシュで最新フレームを表示し遅延が最小 · 垂直同期：全フレームがリフレッシュを待って表示され、自動より最大 1 リフレッシュ分長く待つ · ティアリングを許可：ティアリングが発生する場合あり"
+  },
+  {
+   "zh": "显示同步：自动 + 可变刷新",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "顯示同步：自動 + 可變更新",
+   "en": "Display sync: auto + variable refresh",
+   "ja": "表示の同期：自動 + 可変リフレッシュ"
+  },
+  {
+   "zh": "屏幕跟着画面刷新，不撕裂",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "螢幕跟著畫面更新，不撕裂",
+   "en": "the display refreshes with each frame, no tearing",
+   "ja": "画面がフレームに合わせて更新、ティアリングなし"
+  },
+  {
+   "zh": "显示同步：自动 + 可变刷新 · 屏幕跟着画面刷新，不撕裂",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "顯示同步：自動 + 可變更新 · 螢幕跟著畫面更新，不撕裂",
+   "en": "Display sync: auto + variable refresh · the display refreshes with each frame, no tearing",
+   "ja": "表示の同期：自動 + 可変リフレッシュ · 画面がフレームに合わせて更新、ティアリングなし"
+  },
+  {
+   "zh": "可变刷新：超过屏幕最高刷新时只排 1 帧",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "可變更新：超過螢幕最高更新時只排 1 幀",
+   "en": "Variable refresh: at most 1 frame queued above the maximum refresh",
+   "ja": "可変リフレッシュ：最大リフレッシュを超える時だけ 1 フレーム待機"
+  },
+  {
+   "zh": "DLSS 性能模式",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "DLSS 效能模式",
+   "en": "DLSS performance mode",
+   "ja": "DLSS パフォーマンスモード"
+  },
+  {
+   "zh": "引擎未接受 DLSS 性能模式，原设置保留",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "引擎未接受 DLSS 效能模式，原設定保留",
+   "en": "The engine did not accept the DLSS performance mode; the previous setting is kept",
+   "ja": "エンジンが DLSS パフォーマンスモードを受け付けませんでした。元の設定を維持します"
+  },
+  {
+   "zh": "此软件包没有附带性能模式所需的 DLSS 帧生成 310.9.16 运行库",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "此軟體包沒有附帶效能模式所需的 DLSS 幀生成 310.9.16 執行庫",
+   "en": "This package does not include the DLSS Frame Generation 310.9.16 runtime the performance mode needs",
+   "ja": "このパッケージにはパフォーマンスモードに必要な DLSS フレーム生成 310.9.16 ランタイムが含まれていません"
+  },
+  {
+   "zh": "目前只支持 RTX 50 系列：40/30 系的多帧解锁只适用于原版运行库",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "目前只支援 RTX 50 系列：40/30 系的多幀解鎖只適用於原版執行庫",
+   "en": "RTX 50 series only for now: the RTX 40/30 multi-frame unlock works with the standard runtime only",
+   "ja": "現在は RTX 50 シリーズのみ対応：RTX 40/30 のマルチフレーム解除は標準ランタイムでのみ動作します"
+  },
+  {
+   "zh": "生效中：NVIDIA DLSS 帧生成性能模式（测试版）",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "生效中：NVIDIA DLSS 幀生成效能模式（測試版）",
+   "en": "Active: NVIDIA DLSS Frame Generation performance mode (beta)",
+   "ja": "動作中：NVIDIA DLSS フレーム生成パフォーマンスモード（ベータ）"
+  },
+  {
+   "zh": "NVIDIA 新增的性能模式（测试版）：补帧更省 GPU，高倍率更稳，画质可能略降；导出仍用标准模式",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "NVIDIA 新增的效能模式（測試版）：補幀更省 GPU，高倍率更穩，畫質可能略降；匯出仍用標準模式",
+   "en": "NVIDIA's new performance mode (beta): frame generation uses less GPU and holds high multipliers better, possibly at slightly lower quality; export keeps the standard mode",
+   "ja": "NVIDIA の新しいパフォーマンスモード（ベータ）：フレーム生成の GPU 負荷が減り高倍率でも安定、画質はやや落ちる場合あり。書き出しは標準モードのまま"
+  },
+  {
+   "zh": "同时用这块显卡运算",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "同時用這塊顯示卡運算",
+   "en": "Also compute on this GPU",
+   "ja": "このGPUで処理も行う"
+  },
+  {
+   "zh": "关闭时增强、补帧和导出用性能最强的显卡",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "關閉時增強、補幀和匯出用效能最強的顯示卡",
+   "en": "When off, enhancement, frame generation and export use the most powerful GPU",
+   "ja": "オフのときは補正・フレーム生成・書き出しに最も高性能な GPU を使います"
+  },
+  {
+   "zh": "增强、补帧和导出都在「%1」上运行；切换后重新打开视频生效",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "增強、補幀和匯出都在「%1」上執行；切換後重新開啟影片生效",
+   "en": "Enhancement, frame generation and export run on \"%1\"; reopen the video after switching",
+   "ja": "補正・フレーム生成・書き出しは「%1」で実行します。切り替え後は動画を開き直してください"
+  },
+  {
+   "zh": "上面选“自动”时仍用性能最强的显卡；选一块显卡后它也负责运算",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "上面選「自動」時仍用效能最強的顯示卡；選一塊顯示卡後它也負責運算",
+   "en": "With \"Auto\" above, the most powerful GPU is still used; pick a GPU above to compute on it too",
+   "ja": "上で「自動」の場合は最も高性能な GPU を使用。GPU を選ぶとその GPU で処理も行います"
+  },
+  {
+   "zh": "运算显卡已切换为「%1」，重新打开视频后生效",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "運算顯示卡已切換為「%1」，重新開啟影片後生效",
+   "en": "Compute GPU switched to \"%1\"; it applies after reopening the video",
+   "ja": "処理用 GPU を「%1」に切り替えました。動画を開き直すと反映されます"
+  },
+  {
+   "zh": "运算显卡已恢复默认（性能最强的显卡），重新打开视频后生效",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "運算顯示卡已恢復預設（效能最強的顯示卡），重新開啟影片後生效",
+   "en": "Compute GPU back to the default (the most powerful GPU); it applies after reopening the video",
+   "ja": "処理用 GPU を既定（最も高性能な GPU）に戻しました。動画を開き直すと反映されます"
+  },
+  {
+   "zh": "Home 已被其它软件占用：游戏模式里不能用 Home 呼出调整面板，按 Ctrl+Alt+Home 退出后再调整",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "Home 已被其他軟體佔用：遊戲模式裡不能用 Home 叫出調整面板，按 Ctrl+Alt+Home 退出後再調整",
+   "en": "Another program has taken Home: in game mode Home cannot open the adjust panel; press Ctrl+Alt+Home to leave, then adjust",
+   "ja": "Home が他のソフトに使われています。ゲームモード中は Home で調整パネルを開けません。Ctrl+Alt+Home で終了してから調整してください"
+  },
+  {
+   "zh": "Ctrl+Alt+Home 已被其它软件占用，游戏模式不能穿透操作；关闭占用它的软件后重新全屏",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "Ctrl+Alt+Home 已被其他軟體佔用，遊戲模式不能穿透操作；關閉佔用它的軟體後重新全螢幕",
+   "en": "Another program has taken Ctrl+Alt+Home, so game mode cannot pass input through; close that program and go fullscreen again",
+   "ja": "Ctrl+Alt+Home が他のソフトに使われているため、ゲームモードで操作を通せません。そのソフトを閉じてから全画面にし直してください"
+  },
+  {
+   "zh": "界面卡住超过 3 秒，已退出游戏模式",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "介面卡住超過 3 秒，已退出遊戲模式",
+   "en": "The interface stopped responding for more than 3 s; game mode was left",
+   "ja": "画面が 3 秒以上応答しなかったため、ゲームモードを終了しました"
+  },
+  {
+   "zh": "捕获已结束，已退出游戏模式",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "擷取已結束，已退出遊戲模式",
+   "en": "The capture ended; game mode was left",
+   "ja": "キャプチャが終了したため、ゲームモードを終了しました"
+  },
+  {
+   "zh": "游戏模式用真实指针，画面里不再画一个",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "遊戲模式使用真實指標，畫面裡不再畫一個",
+   "en": "Game mode uses the real pointer, so the picture does not draw a second one",
+   "ja": "ゲームモードでは実際のポインターを使い、映像には描きません"
+  },
+  {
+   "zh": "游戏模式不裁剪，画面和屏幕一一对应，点到哪里就是哪里",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "遊戲模式不裁切，畫面和螢幕一一對應，點到哪裡就是哪裡",
+   "en": "Game mode does not crop: the picture matches the screen, so clicks land where you see them",
+   "ja": "ゲームモードでは切り抜きません。映像と画面が一致し、見た位置をそのままクリックできます"
+  },
+  {
+   "zh": "游戏",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "遊戲",
+   "en": "Game",
+   "ja": "ゲーム"
+  },
+  {
+   "zh": "游戏模式",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "遊戲模式",
+   "en": "Game mode",
+   "ja": "ゲームモード"
+  },
+  {
+   "zh": "开始后 Veyra 在这块屏幕上全屏，键鼠和手柄直接操作屏幕上的任何程序，就像直接用电脑；Home 调整画面，Ctrl+Alt+Home 退出",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "開始後 Veyra 在這塊螢幕上全螢幕，鍵鼠和手把直接操作螢幕上的任何程式，就像直接用電腦；Home 調整畫面，Ctrl+Alt+Home 退出",
+   "en": "Veyra goes fullscreen on this screen; keyboard, mouse and gamepad work every program on it as if you used the computer directly. Home adjusts the picture, Ctrl+Alt+Home leaves",
+   "ja": "開始すると Veyra がこの画面で全画面になり、キーボード・マウス・ゲームパッドで画面上のどのソフトもそのまま操作できます。Home で映像を調整、Ctrl+Alt+Home で終了"
+  },
+  {
+   "zh": "开始后 Veyra 在游戏所在的屏幕上全屏盖住游戏，键鼠和手柄照常操作游戏；Home 调整画面，Ctrl+Alt+Home 退出。游戏请设为无边框全屏",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "開始後 Veyra 在遊戲所在的螢幕上全螢幕蓋住遊戲，鍵鼠和手把照常操作遊戲；Home 調整畫面，Ctrl+Alt+Home 退出。遊戲請設為無邊框全螢幕",
+   "en": "Veyra goes fullscreen over the game on its screen; keyboard, mouse and gamepad still play the game. Home adjusts the picture, Ctrl+Alt+Home leaves. Set the game to borderless fullscreen",
+   "ja": "開始すると Veyra がゲームのある画面で全画面になってゲームを覆い、キーボード・マウス・ゲームパッドはそのままゲームを操作します。Home で映像を調整、Ctrl+Alt+Home で終了。ゲームはボーダーレス全画面にしてください"
+  },
+  {
+   "zh": "游戏模式：调整画面 / 退出",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "遊戲模式：調整畫面 / 退出",
+   "en": "Game mode: adjust picture / leave",
+   "ja": "ゲームモード：映像を調整 / 終了"
+  },
+  {
+   "zh": "检测到独占全屏的游戏：Windows 不允许其它窗口盖在它上面，请把游戏改成无边框窗口或窗口化",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "偵測到獨佔全螢幕的遊戲：Windows 不允許其他視窗蓋在它上面，請把遊戲改成無邊框視窗或視窗化",
+   "en": "An exclusive-fullscreen game is running: Windows lets no other window cover it. Switch the game to borderless or windowed mode",
+   "ja": "排他的フルスクリーンのゲームを検出しました。Windows は他のウィンドウを重ねられません。ゲームをボーダーレスまたはウィンドウモードにしてください"
+  },
+  {
+   "zh": "游戏窗口没有铺满屏幕：画面会放大显示，鼠标点到的位置可能和看到的不一致；建议把游戏设为无边框全屏",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "遊戲視窗沒有鋪滿螢幕：畫面會放大顯示，滑鼠點到的位置可能和看到的不一致；建議把遊戲設為無邊框全螢幕",
+   "en": "The game window does not fill the screen: the picture is enlarged, so clicks may not land where you see them. Set the game to borderless fullscreen",
+   "ja": "ゲームのウィンドウが画面全体を覆っていません。映像が拡大されるため、クリック位置が見た位置とずれることがあります。ゲームをボーダーレス全画面にしてください"
+  },
+  {
+   "zh": "如果要开启 DLSS5（NR），建议帧率设置 60，减少 DLSS5 需要处理的画面量，减轻负担",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "如果要開啟 DLSS5（NR），建議幀率設定 60，減少 DLSS5 需要處理的畫面量，減輕負擔",
+   "en": "If you turn on DLSS5 (NR), set the frame rate limit to 60: DLSS5 then has fewer frames to process and less load",
+   "ja": "DLSS5（NR）を使う場合はフレームレート上限を 60 にしてください。DLSS5 が処理するフレームが減り、負荷が軽くなります"
+  },
+  {
+   "zh": "PS5 主机",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "PS5 主機",
+   "en": "PS5 console",
+   "ja": "PS5 本体"
+  },
+  {
+   "zh": "PS5 仍会发一路 720p 30fps、约 5 Mbps 的保活画面，本机收到即丢弃；PS5 同一时间只允许一个远程游玩连接。再串流时记得打开上面的「音频监听」。",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "PS5 仍會發一路 720p 30fps、約 5 Mbps 的保活畫面，本機收到即丟棄；PS5 同一時間只允許一個遠程遊玩連線。再串流時記得打開上面的「音訊監聽」。",
+   "en": "The PS5 still sends a 720p 30 fps keepalive picture of about 5 Mbps, which this PC drops on arrival. A PS5 allows one Remote Play connection at a time. When re-streaming, turn on Audio monitoring above.",
+   "ja": "PS5 は 720p 30fps・約 5 Mbps の維持用映像を送り続けますが、この PC は受け取ってすぐ破棄します。PS5 のリモートプレイ接続は同時に 1 つだけです。再ストリーミングするときは上の「音声モニター」をオンにしてください。"
+  },
+  {
+   "zh": "PS5 手柄",
+   "src": "qml/HomePage.qml",
+   "zh-TW": "PS5 手把",
+   "en": "PS5 pad",
+   "ja": "PS5 コントローラー"
+  },
+  {
+   "zh": "PS5 手柄控制",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "PS5 手把控制",
+   "en": "PS5 controller control",
+   "ja": "PS5 コントローラー操作"
+  },
+  {
+   "zh": "PS5 手柄控制中断，正在重新连接（{}/3）…",
+   "src": "src/source/RemotePlaySessionSource.cpp",
+   "zh-TW": "PS5 手把控制中斷，正在重新連接（{}/3）…",
+   "en": "PS5 controller control interrupted, reconnecting ({}/3)…",
+   "ja": "PS5 コントローラー操作が中断されました。再接続中（{}/3）…"
+  },
+  {
+   "zh": "PS5 手柄控制已停止",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "PS5 手把控制已停止",
+   "en": "PS5 controller control stopped",
+   "ja": "PS5 コントローラー操作を停止しました"
+  },
+  {
+   "zh": "PS5 手柄控制已连接",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "PS5 手把控制已連接",
+   "en": "PS5 controller control connected",
+   "ja": "PS5 コントローラー操作に接続しました"
+  },
+  {
+   "zh": "PS5 手柄控制已连接 · 保活画面 %1 fps（收到即丢弃）",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "PS5 手把控制已連接 · 保活畫面 %1 fps（收到即丟棄）",
+   "en": "PS5 controller control connected · keepalive picture %1 fps (dropped on arrival)",
+   "ja": "PS5 コントローラー操作に接続しました · 維持用映像 %1 fps（受信後すぐ破棄）"
+  },
+  {
+   "zh": "PS5 手柄控制没有恢复，请检查主机及网络后重新打开；无需重新配对。",
+   "src": "src/source/RemotePlaySessionSource.cpp",
+   "zh-TW": "PS5 手把控制沒有恢復，請檢查主機及網路後重新打開；無需重新配對。",
+   "en": "PS5 controller control did not recover; check the console and network, then turn it on again. No need to pair again.",
+   "ja": "PS5 コントローラー操作が復帰しませんでした。本体とネットワークを確認してからオンにし直してください。再ペアリングは不要です。"
+  },
+  {
+   "zh": "PS5 手柄控制设置保存失败",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "PS5 手把控制設定儲存失敗",
+   "en": "PS5 controller control setting could not be saved",
+   "ja": "PS5 コントローラー操作の設定を保存できませんでした"
+  },
+  {
+   "zh": "PS5 手柄控制连接失败，请检查主机及网络；已保存的配对无需重输。",
+   "src": "src/source/RemotePlaySessionSource.cpp",
+   "zh-TW": "PS5 手把控制連接失敗，請檢查主機及網路；已儲存的配對無需重輸。",
+   "en": "PS5 controller control could not connect; check the console and network. Saved pairing does not need to be re-entered.",
+   "ja": "PS5 コントローラー操作の接続に失敗しました。本体とネットワークを確認してください。保存済みのペアリングは再入力不要です。"
+  },
+  {
+   "zh": "PS5 手柄控制：还没有配对的 PS5，先在「PS5 串流」里配对一次",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "PS5 手把控制：還沒有配對的 PS5，先在「PS5 串流」裡配對一次",
+   "en": "PS5 controller control: no PS5 is paired yet. Pair one once under PS5 streaming",
+   "ja": "PS5 コントローラー操作：ペアリング済みの PS5 がありません。先に「PS5 ストリーミング」で一度ペアリングしてください"
+  },
+  {
+   "zh": "PS5 提示时填写，不是 8 位配对码",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "PS5 提示時填寫，不是 8 位配對碼",
+   "en": "Enter it when the PS5 asks; not the 8-digit pairing code",
+   "ja": "PS5 に求められたら入力します。8 桁のペアリングコードではありません"
+  },
+  {
+   "zh": "PS5 的 HDMI 接了采集卡时，可以只用远程游玩传手柄、画面用采集卡原画（可 4K/HDR），也方便再串流给掌机",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "PS5 的 HDMI 接了擷取卡時，可以只用遠程遊玩傳手把、畫面用擷取卡原畫（可 4K/HDR），也方便再串流給掌機",
+   "en": "With the PS5 HDMI on a capture card, Remote Play can carry only the controller while the picture comes from the capture card (4K/HDR possible), which also suits re-streaming to a handheld",
+   "ja": "PS5 の HDMI をキャプチャーカードにつないでいる場合、リモートプレイはコントローラーだけを送り、映像はキャプチャーカードの元映像（4K/HDR 可）を使えます。携帯機への再ストリーミングにも便利です"
+  },
+  {
+   "zh": "PS5 要求输入登录 PIN",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "PS5 要求輸入登入 PIN",
+   "en": "The PS5 asks for the sign-in PIN",
+   "ja": "PS5 がサインイン PIN を求めています"
+  },
+  {
+   "zh": "PS5 要求输入登录 PIN：在采集卡面板「PS5 手柄控制」里填写",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "PS5 要求輸入登入 PIN：在擷取卡面板「PS5 手把控制」裡填寫",
+   "en": "The PS5 asks for the sign-in PIN: enter it under PS5 controller control in the capture card panel",
+   "ja": "PS5 がサインイン PIN を求めています：キャプチャーカードパネルの「PS5 コントローラー操作」で入力してください"
+  },
+  {
+   "zh": "再串流时建议打开：Veyra 不在前台也继续转发。打开后在这台电脑上用别的程序时，手柄也会操作 PS5",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "再串流時建議打開：Veyra 不在前景也繼續轉發。打開後在這台電腦上用別的程式時，手把也會操作 PS5",
+   "en": "Recommended when re-streaming: input keeps going while Veyra is not in front. While on, the controller also drives the PS5 when you use other programs on this PC",
+   "ja": "再ストリーミングするときはオン推奨：Veyra が前面になくても転送を続けます。オンの間は、この PC で他のソフトを使っていてもコントローラーが PS5 を操作します"
+  },
+  {
+   "zh": "去配对",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "去配對",
+   "en": "Pair",
+   "ja": "ペアリングへ"
+  },
+  {
+   "zh": "后台也转发手柄",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "背景也轉發手把",
+   "en": "Forward the controller in the background",
+   "ja": "バックグラウンドでもコントローラーを転送"
+  },
+  {
+   "zh": "和「PS5 串流」共用配对",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "和「PS5 串流」共用配對",
+   "en": "Shares pairings with PS5 streaming",
+   "ja": "「PS5 ストリーミング」とペアリングを共有"
+  },
+  {
+   "zh": "已在「采集卡」里打开 PS5 手柄控制：连接采集卡时只用远程游玩传手柄",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "已在「擷取卡」裡打開 PS5 手把控制：連接擷取卡時只用遠程遊玩傳手把",
+   "en": "PS5 controller control is on under Capture card: with the capture card connected, Remote Play carries only the controller",
+   "ja": "「キャプチャーカード」で PS5 コントローラー操作がオンです：キャプチャーカード接続中はリモートプレイでコントローラーだけを送ります"
+  },
+  {
+   "zh": "已结束 PS5 手柄控制：PS5 同一时间只允许一个远程游玩连接",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已結束 PS5 手把控制：PS5 同一時間只允許一個遠程遊玩連線",
+   "en": "PS5 controller control ended: a PS5 allows one Remote Play connection at a time",
+   "ja": "PS5 コントローラー操作を終了しました：PS5 のリモートプレイ接続は同時に 1 つだけです"
+  },
+  {
+   "zh": "已连接",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "已連接",
+   "en": "Connected",
+   "ja": "接続済み"
+  },
+  {
+   "zh": "无陀螺仪",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "無陀螺儀",
+   "en": "no gyro",
+   "ja": "ジャイロなし"
+  },
+  {
+   "zh": "有陀螺仪",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "有陀螺儀",
+   "en": "gyro",
+   "ja": "ジャイロあり"
+  },
+  {
+   "zh": "未检测到手柄",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "未偵測到手把",
+   "en": "No controller detected",
+   "ja": "コントローラーが見つかりません"
+  },
+  {
+   "zh": "用远程游玩控制 PS5",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "用遠程遊玩控制 PS5",
+   "en": "Control the PS5 through Remote Play",
+   "ja": "リモートプレイで PS5 を操作"
+  },
+  {
+   "zh": "画面和声音来自采集卡，手柄经 PS5 远程游玩发给主机。把处理后的画面再串流给掌机或别的电脑时，用那边的手柄玩 PS5",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "畫面和聲音來自擷取卡，手把經 PS5 遠程遊玩發給主機。把處理後的畫面再串流給掌機或別的電腦時，用那邊的手把玩 PS5",
+   "en": "Picture and sound come from the capture card; the controller goes to the console through PS5 Remote Play. When this picture is re-streamed to a handheld or another PC, play the PS5 with the controller there",
+   "ja": "映像と音声はキャプチャーカードから、コントローラーは PS5 リモートプレイで本体へ送ります。処理した映像を携帯機や別の PC に再ストリーミングするとき、そちらのコントローラーで PS5 を遊べます"
+  },
+  {
+   "zh": "画面用采集卡",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "畫面用擷取卡",
+   "en": "Picture from a capture card",
+   "ja": "映像はキャプチャーカード"
+  },
+  {
+   "zh": "谁按键就用谁：本机手柄、串流软件建的虚拟手柄都可以",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "誰按鍵就用誰：本機手把、串流軟體建的虛擬手把都可以",
+   "en": "Whichever controller pressed a button last is used: a controller on this PC or a virtual one made by streaming software",
+   "ja": "最後にボタンを押したコントローラーを使います：この PC のコントローラーでも、ストリーミングソフトが作る仮想コントローラーでも可"
+  },
+  {
+   "zh": "还没有配对的 PS5，先在「PS5 串流」里配对一次",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "還沒有配對的 PS5，先在「PS5 串流」裡配對一次",
+   "en": "No PS5 is paired yet. Pair one once under PS5 streaming",
+   "ja": "ペアリング済みの PS5 がありません。先に「PS5 ストリーミング」で一度ペアリングしてください"
+  },
+  {
+   "zh": "连接中",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "連接中",
+   "en": "Connecting",
+   "ja": "接続中"
+  },
+  {
+   "zh": "配对…",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "配對…",
+   "en": "Pair…",
+   "ja": "ペアリング…"
+  },
+  {
+   "zh": "采集卡设置",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "擷取卡設定",
+   "en": "Capture card settings",
+   "ja": "キャプチャーカード設定"
+  },
+  {
+   "zh": "采集卡连上后自动连接 PS5",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "擷取卡連上後自動連接 PS5",
+   "en": "Connects to the PS5 once the capture card is connected",
+   "ja": "キャプチャーカードの接続後に PS5 へ自動接続します"
+  },
+  {
+   "zh": "重连",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "重連",
+   "en": "Reconnect",
+   "ja": "再接続"
+  },
+  {
+   "zh": "重连中",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "重連中",
+   "en": "Reconnecting",
+   "ja": "再接続中"
+  },
+  {
+   "zh": "需要 PIN",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "需要 PIN",
+   "en": "PIN needed",
+   "ja": "PIN が必要"
+  },
+  {
+   "zh": " + NVIDIA Reflex（实验）",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": " + NVIDIA Reflex（實驗）",
+   "en": " + NVIDIA Reflex (experimental)",
+   "ja": " + NVIDIA Reflex（実験的）"
+  },
+  {
+   "zh": "可变刷新：超过屏幕最高刷新时只排 1 帧 · ",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "可變刷新：超過螢幕最高刷新時只排 1 幀 · ",
+   "en": "Variable refresh: only 1 frame queued above the display maximum · ",
+   "ja": "可変リフレッシュ：画面の最大リフレッシュを超えると 1 フレームだけキュー · "
+  },
+  {
+   "zh": "垂直同步：屏幕队列 1 帧，读帧前等待刷新 · ",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "垂直同步：螢幕佇列 1 幀，讀幀前等待刷新 · ",
+   "en": "VSync: 1-frame display queue, waits for refresh before reading a frame · ",
+   "ja": "垂直同期：画面キュー 1 フレーム、フレーム読み込み前にリフレッシュを待機 · "
+  },
+  {
+   "zh": "垂直同步：屏幕队列控制不可用 · ",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "垂直同步：螢幕佇列控制不可用 · ",
+   "en": "VSync: display queue control unavailable · ",
+   "ja": "垂直同期：画面キュー制御は使用できません · "
+  },
+  {
+   "zh": "显示队列恢复失败 · ",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "顯示佇列恢復失敗 · ",
+   "en": "Display queue could not be restored · ",
+   "ja": "表示キューを復元できませんでした · "
   }
  ]
 }

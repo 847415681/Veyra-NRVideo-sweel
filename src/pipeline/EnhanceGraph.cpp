@@ -39,6 +39,7 @@
 #include "veyra/ngx/VideoSrBackend.h"
 #include "veyra/ngx/TrueHdrBackend.h"
 #include "veyra/ngx/NgxCoreHost.h"
+#include "veyra/ngx/DlssgLite.h"
 #include "veyra/ngx/NgxCoreCache.h"
 #include "veyra/ngx/NgxParameters.h"
 #include "veyra/ngx/NvOfSession.h"
@@ -1097,9 +1098,20 @@ bool EnhanceGraph::initNgxFeatures()
 {
     Status st = Status::Ok;
     failedBackend_=engine::FailedBackend::NgxCore;
+    // DLSS-G performance mode: its runtime directory is searched before the
+    // default one, so the NGX core (and its cache key) depends on it.
+    dlssgLiteState_=0;dlssgDirectory_.clear();
+    if(desc_.enableFg&&desc_.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&desc_.dlssgLite){
+        if(ngx::FgCompatibilitySession::requested(context_.adapter().vendorId,context_.adapter().deviceId))dlssgLiteState_=3;
+        else if(!ngx::dlssgLiteRuntimePresent(desc_.runtimeAbsPath))dlssgLiteState_=2;
+        else{dlssgLiteState_=1;dlssgDirectory_=std::filesystem::absolute(ngx::dlssgLiteDirectory(desc_.runtimeAbsPath)).lexically_normal().wstring();}
+        veyra::log::info("dlssg-lite",std::format("requested=1 state={} ({}) directory={}",dlssgLiteState_,
+            dlssgLiteState_==1?"active":dlssgLiteState_==2?"runtime missing":"GPU keeps the default runtime",
+            utf8Of(dlssgDirectory_)));
+    }
     if(coreCache_){
         ngx::NgxCoreCache::Key key;
-        key.device=context_.device();
+        key.device=context_.device();key.dlssgDirectory=dlssgDirectory_;
         key.runtimeDirectory=std::filesystem::absolute(desc_.runtimeAbsPath).lexically_normal().wstring();
         key.nrRuntime=int(engine::currentNrRuntime(desc_.nrRuntime));
         key.frameGeneration=desc_.enableFg;
@@ -1178,7 +1190,7 @@ bool EnhanceGraph::initNgxFeatures()
     coreHost_ = std::make_shared<ngx::NgxCoreHost>();
     if(fgCompatibility_&&!fgCompatibility_->beginInitialization())return false;
     const bool initialized=coreHost_->initialize(context_.device(), desc_.runtimeAbsPath.c_str(),
-            projectId.c_str(), engineVersion.c_str(), st);
+            projectId.c_str(), engineVersion.c_str(), st, dlssgDirectory_);
     const bool initRestored=!fgCompatibility_||fgCompatibility_->endInitialization(initialized);
     if (!initialized || !initRestored) {
         return false;
@@ -1358,6 +1370,7 @@ bool EnhanceGraph::initNgxFeatures()
         fd.width = workW_; fd.height = workH_;
         fd.renderWidth = workW_; fd.renderHeight = workH_;
         fd.backbufferFormat = outputFormat();
+        fd.lite = dlssgLiteState_==1;
         ID3D12GraphicsCommandList* list = ring_.acquire(0, st);
         if (list == nullptr) { failedBackend_=engine::FailedBackend::Infrastructure; return false; }
         failedBackend_=engine::FailedBackend::Fg;
@@ -3219,6 +3232,8 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if(usesSharedFlow&&(requestedFlow!=desc_.opticalFlowBackend||s.amdFlowHalfResolution!=desc_.amdFlowHalfResolution))return false;
     // The XeSS motion refinement owns textures, passes and NVOF's direction.
     if(presentSinkFg()&&desc_.fgUsesFlow()&&s.fgMotionRefine!=desc_.fgMotionRefine)return false;
+    // The DLSS-G performance mode selects the runtime and a create-time parameter.
+    if(desc_.enableFg&&desc_.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&s.dlssgLite!=desc_.dlssgLite)return false;
     // DLSS allocates multiplier-specific feature/output resources.
     // XeSS has a fixed 2X proxy swapchain contract. Settings callers must
     // rebuild instead of accepting a change that cannot take effect in place.

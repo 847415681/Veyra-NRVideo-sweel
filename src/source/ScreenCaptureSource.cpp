@@ -34,26 +34,41 @@ int64_t host100ns(){return std::chrono::duration_cast<std::chrono::nanoseconds>(
 int64_t qpc100ns(){LARGE_INTEGER q{},f{};QueryPerformanceCounter(&q);QueryPerformanceFrequency(&f);return int64_t(static_cast<long double>(q.QuadPart)*10000000/f.QuadPart);}
 void check(HRESULT hr,const char* op){if(FAILED(hr)){log::error("screen",std::format("{} hr=0x{:08X}",op,uint32_t(hr)));winrt::check_hresult(hr);}}
 struct NativeHandle {HANDLE value=nullptr;~NativeHandle(){if(value)CloseHandle(value);}};
+// The list is shared with the GUI thread, which excludes windows shown during a
+// capture. This thread never calls a window function while holding the lock, so it
+// can never wait on a GUI thread that waits on the lock.
 std::mutex exclusionMutex;
 unsigned exclusionUsers=0;
 std::vector<std::pair<HWND,DWORD>> excludedWindows;
+bool qtWindow(HWND w){wchar_t name[8]{};return GetClassNameW(w,name,8)>=2&&name[0]==L'Q'&&name[1]==L't';}
+bool listed(HWND w){for(const auto& entry:excludedWindows)if(entry.first==w)return true;return false;}
+bool exclude(HWND w,DWORD& previous){
+    if(GetWindowDisplayAffinity(w,&previous)&&SetWindowDisplayAffinity(w,WDA_EXCLUDEFROMCAPTURE))return true;
+    log::warn("screen",std::format("window exclusion failed hwnd={} error={}",uint64_t(w),GetLastError()));return false;
+}
 void excludeOwnWindows(){
-    std::lock_guard lock(exclusionMutex);
-    if(exclusionUsers++!=0)return;
-    EnumWindows([](HWND w,LPARAM)->BOOL{
+    {std::lock_guard lock(exclusionMutex);if(exclusionUsers++!=0)return;}
+    // Every visible window, and every Qt window even while hidden: the control
+    // pill is shown just after the capture opens and was captured into the
+    // picture. A window created later is excluded when it is shown.
+    std::vector<HWND> own;
+    EnumWindows([](HWND w,LPARAM list)->BOOL{
         DWORD pid=0;GetWindowThreadProcessId(w,&pid);
-        if(pid!=GetCurrentProcessId()||!IsWindowVisible(w))return TRUE;
-        DWORD previous=0;
-        if(GetWindowDisplayAffinity(w,&previous)&&SetWindowDisplayAffinity(w,WDA_EXCLUDEFROMCAPTURE))excludedWindows.emplace_back(w,previous);
-        else log::warn("screen",std::format("window exclusion failed hwnd={} error={}",uint64_t(w),GetLastError()));
+        if(pid==GetCurrentProcessId()&&(IsWindowVisible(w)||qtWindow(w)))reinterpret_cast<std::vector<HWND>*>(list)->push_back(w);
         return TRUE;
-    },0);
+    },reinterpret_cast<LPARAM>(&own));
+    size_t count=0;
+    for(HWND w:own){
+        DWORD previous=0;if(!exclude(w,previous))continue;
+        std::lock_guard lock(exclusionMutex);
+        if(!listed(w)){excludedWindows.emplace_back(w,previous);++count;}
+    }
+    log::info("screen",std::format("own windows excluded from capture: {} of {}",count,own.size()));
 }
 void restoreOwnWindows(){
-    std::lock_guard lock(exclusionMutex);
-    if(!exclusionUsers||--exclusionUsers)return;
-    for(auto [window,affinity]:excludedWindows)if(IsWindow(window)&&!SetWindowDisplayAffinity(window,affinity))log::warn("screen","window exclusion restore failed");
-    excludedWindows.clear();
+    std::vector<std::pair<HWND,DWORD>> restore;
+    {std::lock_guard lock(exclusionMutex);if(!exclusionUsers||--exclusionUsers)return;restore.swap(excludedWindows);}
+    for(auto [window,affinity]:restore)if(IsWindow(window)&&!SetWindowDisplayAffinity(window,affinity))log::warn("screen","window exclusion restore failed");
 }
 struct Surface {
     ComPtr<ID3D11Texture2D> producer;
@@ -99,17 +114,26 @@ bool hdrMonitor(HMONITOR monitor){
     }return false;
 }
 }
+void excludeWindowFromScreenCapture(void* handle){
+    const auto window=static_cast<HWND>(handle);
+    if(!window||(GetWindowLongPtrW(window,GWL_STYLE)&WS_CHILD))return;
+    // GUI thread, on its own window: holding the lock across the call is safe here.
+    std::lock_guard lock(exclusionMutex);
+    if(!exclusionUsers||listed(window))return;
+    DWORD previous=0;
+    if(exclude(window,previous)){excludedWindows.emplace_back(window,previous);log::info("screen",std::format("late window excluded from capture hwnd={}",uint64_t(window)));}
+}
 std::wstring ScreenCaptureOptions::uri()const{
-    return std::format(L"screen:{}:{}:{}:{}:{}:{}:{}:{}:{}",unsigned(kind),target,unsigned(method),fps,unsigned(cursor),left,top,right,bottom);
+    return std::format(L"screen:{}:{}:{}:{}:{}:{}:{}:{}:{}",unsigned(kind),target,unsigned(method),fps,unsigned(cursor)|(borderless?2u:0u),left,top,right,bottom);
 }
 bool ScreenCaptureOptions::parse(const std::wstring& uri,ScreenCaptureOptions& out){
     if(!uri.starts_with(L"screen:"))return false;
     auto body=uri.substr(7);std::replace(body.begin(),body.end(),L':',L' ');
     std::wistringstream in(body);unsigned kind=0,method=0,cursor=0;ScreenCaptureOptions v;
     if(!(in>>kind>>v.target>>method>>v.fps>>cursor>>v.left>>v.top>>v.right>>v.bottom))return false;
-    in>>std::ws;if(!in.eof()||kind>1||method>1||cursor>1||!v.target||v.fps>240||
+    in>>std::ws;if(!in.eof()||kind>1||method>1||cursor>3||!v.target||v.fps>240||
         v.left>16384||v.top>16384||v.right>16384||v.bottom>16384||(!kind&&method))return false;
-    v.kind=ScreenTargetKind(kind);v.method=ScreenCaptureMethod(method);v.cursor=cursor!=0;out=v;return true;
+    v.kind=ScreenTargetKind(kind);v.method=ScreenCaptureMethod(method);v.cursor=(cursor&1)!=0;v.borderless=(cursor&2)!=0;out=v;return true;
 }
 std::vector<ScreenCaptureTarget> ScreenCaptureSource::targets(ScreenTargetKind kind){
     std::vector<ScreenCaptureTarget> result;
@@ -177,6 +201,21 @@ struct ScreenCaptureSource::Impl {
             }return slot;
         }return {};
     }
+    // Windows 11 lets a desktop app turn the yellow capture border off after asking
+    // for borderless access (granted without a prompt outside the app store). Older
+    // systems keep the border; the capture itself is unaffected either way.
+    void dropBorder(){
+        try{
+            if(!winrt::Windows::Foundation::Metadata::ApiInformation::IsPropertyPresent(L"Windows.Graphics.Capture.GraphicsCaptureSession",L"IsBorderRequired")){
+                log::info("screen","capture border: kept (this Windows has no IsBorderRequired)");return;
+            }
+            const auto access=GraphicsCaptureAccess::RequestAccessAsync(GraphicsCaptureAccessKind::Borderless).get();
+            session.IsBorderRequired(false);
+            log::info("screen",std::format("capture border: off access={} required={}",int(access),session.IsBorderRequired()));
+        }catch(const winrt::hresult_error& e){
+            log::warn("screen",std::format("capture border kept hr=0x{:08X} {}",uint32_t(e.code()),winrt::to_string(e.message())));
+        }
+    }
     void startDuplication(){
         ComPtr<IDXGIDevice> dxgi;check(device.As(&dxgi),"DXGI device");ComPtr<IDXGIAdapter> adapter;check(dxgi->GetAdapter(&adapter),"adapter");
         for(UINT i=0;;++i){ComPtr<IDXGIOutput> output;const auto hr=adapter->EnumOutputs(i,&output);if(hr==DXGI_ERROR_NOT_FOUND)break;check(hr,"EnumOutputs");
@@ -218,7 +257,9 @@ bool ScreenCaptureSource::open(const SourceOpenDesc& desc){
             ComPtr<IDXGIDevice> dxgi;check(device.As(&dxgi),"DXGI device");winrt::com_ptr<IInspectable> inspectable;
             check(CreateDirect3D11DeviceFromDXGIDevice(dxgi.Get(),inspectable.put()),"WinRT device");p.wrapped=inspectable.as<winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice>();
             p.poolSize=p.item.Size();p.pool=Direct3D11CaptureFramePool::CreateFreeThreaded(p.wrapped,DirectXPixelFormat(p.format),2,p.poolSize);
-            p.session=p.pool.CreateCaptureSession(p.item);p.session.IsCursorCaptureEnabled(o.cursor);p.session.StartCapture();
+            p.session=p.pool.CreateCaptureSession(p.item);p.session.IsCursorCaptureEnabled(o.cursor);
+            if(o.borderless||o.kind==ScreenTargetKind::Monitor)p.dropBorder();
+            p.session.StartCapture();
         }
         if(p.poolSize.Width<=int(o.left+o.right)||p.poolSize.Height<=int(o.top+o.bottom))throw winrt::hresult_error(E_INVALIDARG,L"裁剪范围超出画面");
         p.info.opened=true;p.info.kind=pipeline::SourceKind::ScreenCapture;p.info.width=p.poolSize.Width-o.left-o.right;p.info.height=p.poolSize.Height-o.top-o.bottom;p.info.displayAspect=(p.poolSize.Height-o.top-o.bottom)>0?double(p.poolSize.Width-o.left-o.right)/(p.poolSize.Height-o.top-o.bottom):0.0;
@@ -226,7 +267,7 @@ bool ScreenCaptureSource::open(const SourceOpenDesc& desc){
         p.info.videoDecodePath=o.method==ScreenCaptureMethod::Wgc?"WGC shared GPU":"DXGI duplication shared GPU";
         p.info.containerName="screen";p.info.videoCodecName="GPU RGB";p.info.videoPixelFormatName=p.hdr?"scRGB FP16":"BGRA8 sRGB";p.color();
         p.clockOffset=host100ns()-qpc100ns();p.frame=av_frame_alloc();if(!p.frame)throw std::bad_alloc();
-        log::info("screen",std::format("opened method={} target={} size={}x{} hdr={} fpsLimit={:.3f} followDisplay={} cursor={} pool=6 cpuReadback=0 audioCapture=0",unsigned(o.method),o.target,p.info.width,p.info.height,p.hdr,p.info.averageFps,o.fps==0,o.cursor));
+        log::info("screen",std::format("opened method={} target={} size={}x{} hdr={} fpsLimit={:.3f} followDisplay={} cursor={} borderless={} pool=6 cpuReadback=0 audioCapture=0",unsigned(o.method),o.target,p.info.width,p.info.height,p.hdr,p.info.averageFps,o.fps==0,o.cursor,o.borderless||o.kind==ScreenTargetKind::Monitor));
         return true;
     }catch(const winrt::hresult_error& e){p.message=std::format(L"屏幕采集失败 0x{:08X}：{}",uint32_t(e.code()),e.message().c_str());log::error("screen",winrt::to_string(p.message));}
     catch(const std::exception& e){p.message=L"屏幕采集资源分配失败";log::error("screen",e.what());}

@@ -9345,3 +9345,113 @@ ZIP/EXE原字节晋级，仅外部下载名去test-r2；包内显示原标识在
 v2.0.7 ID 410800361，published_at 2026-10-12T16:24:59Z，latest/非草稿/非预发布通过；两个运行资产服务器SHA/size等于原test-r2。v2.0.7-sources ID 410800322，两源资产、非latest，未变依赖源保留v2.0.6。main/tag6ede5a7普通atomic推送成功，产品与67ab696相同，后续只补回执文档。remote.py draft/upload/verify-draft/publish/verify-public均通过；public-check.py final全部公开文档/双QR/Ko-fi/Release/下载200，六群原图SHA吻合，飞书带Cookie匿名GET200。最初无Cookie404/循环证据保留，不把它写成知识库本身失效。
 
 旧v2.0.6Release完整稳定字段不变，68其它树/509脏文件/全部原包保护通过。详细docs/RELEASE_2.0.7_REPORT_2026-10-13.md；外部reports/logs回执固定远端正文/资产digest。只读发布辅助检查曾因utf8-sig别名和依赖回执尚未完成失败，原错误说明保留，改编码/顺序后原检查通过，未重发或改资产。原扩展NR+DLSS热切换失败和NV显存/BMD/HDR/AMD实卡限制保留，没有新性能或全硬件通过声明。群公告632字符仅保存给用户，无代发/关机。
+
+## 2026-10-13 极限低延迟 A1/A2（Claude）
+
+用户要求把显示同步“自动”恢复成 2.0.4 前的游戏同款（不撕裂、不等垂直同步），延迟压到极限。排查依据见 E:/项目/Veyra/reports/claude-latency-20261013（112ms 根因、DXGI 小程序、320Hz 实卡）。方案 docs/LATENCY_MIN_PLAN_2026-10-13.md。
+
+改动：`presentationVsync()` 只对 Vsync 返回 true，“自动”= `Present(0,0)`；VideoPresenter 状态文字、ProPage 提示与 catalog 追加条目；PresentSink 每秒记录 presentsAhead，自动模式送显→上屏只按确认上屏的帧统计；RepairContract/UiContract 测试期望按新语义更新。
+
+构建：`py -3.11 -I E:/项目/Veyra/tmp/claude-latency-min-20261013/build.py`（只读复用 build/test-2.0.7-refresh-20261012，main 7571919 与 r2 产品源码一致；重编 19 个对象，未重编的包含者只属于本次不构建的测试程序），回执 logs/claude-latency-min-20261013/build-20261013-205844/receipt.json。
+
+测试（私有程序副本 tests/claude-latency-min-20261013/app）：veyra_repair_contract_tests 259 项 0 失败；veyra_ui_contract_tests 通过；新验收 `scripts/acceptance/latency-min-tests.py` display-sync 12/12（窗口/全屏×低延迟队列×三种模式，实际 Present 参数：自动 sync=0 flags=0，垂直同步 sync=1，允许撕裂 0x200；像素校验通过，D3D12 错误 0），lifecycle 通过。历史 2.0.6 验收脚本仍写死“自动=sync1”，按规则不改旧脚本。
+
+实卡（T911 2K60 NV12 → NR，320Hz，内容不去重）：DLSS 6X（360fps 超刷新率）送显→上屏 P50/P95 由垂直同步语义的 11.8/18.3ms 降到 6.2/8.0ms，插帧过期 44→0.6/s，邮箱等待 11.2→0.3ms；同一 EXE 显式垂直同步仍为 12.2/18.4ms（B3 待做）；DLSS 4X 5.4/7.0ms 与改前一致；XeSS 2X 自动 sync=0 flags=0，补帧正常 120fps，回调→送显 P95 10.0ms；仅 NR 8.9ms、送显→上屏 4.5ms。60Hz PBP 下 XeSS 超刷新率场景本机无法复现，需用户光学复测。日志 logs/claude-latency-min-20261013/<场景>/。
+
+## 2026-10-13 极限低延迟 B2 补帧输出预算（Claude）
+
+用户“全部做掉！”授权 B1–C3。B2：直播来源（采集/串流/屏幕）按 内容帧率×倍数 与屏幕刷新率决定实际倍数（`include/veyra/engine/DisplayFgBudget.h`）：输出放得下不变；放不下降到放得下的最大合法倍数（DLSS 2/3/4/6、VFG 2–8、FSR 2）；连 2X 都放不下但源比屏幕慢（60fps@100Hz）保留 2X；源已占满屏幕（≥0.97×刷新，60fps@60Hz）旁路补帧。XeSS 只做旁路（SetNumInterpolatedFrames 按 Intel 文档会换模型/编译着色器，不做运行中降倍数）。新决定须持续 1.5 秒才生效，设置变更立即重算；“允许撕裂”不做预算；文件播放不受影响。旁路时图不跑补帧、不跑只供补帧的光流/XeSS 运动精修与拷贝，恢复时补帧与光流历史重置；真帧不再等插帧间隔（配对延迟 0），读帧门按“未补帧”处理。刷新率改为换屏或每 2 秒重读。状态栏显示“屏幕 X Hz 只显示得下 NX：已从 MX 降到 NX”或“补帧已旁路，真帧直接显示（延迟最低）”，输出评估不再误报“输出未达标”。测试开关：`VEYRA_TEST_NO_DISPLAY_FG_BUDGET=1` 恢复旧行为，`VEYRA_TEST_DISPLAY_HZ=<hz>` 只替换预算使用的刷新率。
+
+计划修正：原方案“连 2X 都放不下就旁路”在 60fps@75–119Hz 会丢掉补帧带来的额外画面，改为“源已占满屏幕才旁路”。
+
+构建：build.py 新增目标 veyra_realtime_preview_tests，并对包含改动头文件的 Qt moc 生成源重编（快照结构变化，不能混用旧布局）；回执 logs/claude-latency-min-20261013/build-20261013-213309，check_rebuilt 所有链接对象已重编。测试：veyra_realtime_preview_tests 0 失败（新增预算 19 项、防抖 7 项）、veyra_repair_contract_tests、veyra_ui_contract_tests 通过。
+
+实卡（T911 2K60 NV12 → NR，320Hz，logs/claude-latency-min-20261013/b2-*）：DLSS 6X 自动→4X：送显 360→240/s，补帧 GPU P95 7.4→5.7ms，送显→上屏 P50/P95 6.2/8.0→5.0/6.9ms（等于原生 4X）；同 EXE 关预算对照 6X 为 5.6/9.5ms、回调→送显 P95 28.6 vs 26.5ms。显式垂直同步 6X：12.2/18.4→5.7/8.5ms，插帧过期 46→0/s，邮箱等待 10.7→0.3ms。模拟 60Hz（测试开关）DLSS 2X 旁路：回调→送显 P95 8.8ms，与仅 NR 8.9ms 相同（补帧时约 26ms）；XeSS 2X 旁路：SDK 提交 120→60/s、enabled=0、Present 调用 0.64→0.20ms；60→30（30fps 内容）+2X@60Hz 保持 2X（60/s）。仅 NR 不变（8.9ms）。真实 60Hz 屏幕的光学复测仍需用户。
+
+## 2026-10-14 极限低延迟 B3 垂直同步也不排队（Claude）
+
+问题：垂直同步时设了最大延迟 1，但只有“低延迟队列”或输出上限开着才等可等待对象，所以队列不受限；“自动/撕裂”配“低延迟队列”时反而也在送显前等这个对象，等于把送显卡到刷新率上。新探针 `tmp/claude-latency-min-20261013/dxgi_semaphore_probe.cpp` 还证明：没人等待时这个对象会积累计数，之后切到垂直同步再“每帧等一次”也完全不拦（排 7 帧、等待 0ms），必须先清掉旧计数。
+
+改动：只有显式“垂直同步”启用 DXGI 节流（最大延迟 1），启用时先让已排的帧显示完（≤100ms）、清掉积累的计数、再放行一帧（空队列不会卡死）；直播且未补帧时在读采集帧之前取得屏幕容量（读帧门，无事可等时直接等这个对象而不是 1ms 轮询）；每次送显前都取得容量，插帧最多等半个子帧间隔（≤2ms）否则让给下一帧，真帧继续等。“自动/撕裂”永不等待这个对象；“低延迟队列”改为“只保留一帧在处理 + 未补帧时 Reflex”，提示文字与状态栏改写并追加翻译。B2 在垂直同步下放不下时直接旁路（多出的帧会排队而不是被替换），XeSS 放不下也旁路。XeSS 代理不设最大延迟：Intel 文档写明 XeLL 以外的延迟手段不受支持、可能异常。运行中等待失败只停节流并提示，不再反复重配。测试开关 `VEYRA_TEST_LEGACY_VSYNC_QUEUE=1` 恢复旧的不等待队列。
+
+验证：veyra_realtime_preview_tests（新增垂直同步规则 5 项）、repair/ui contract 通过；latency-min-tests display-sync 12/12、lifecycle 通过（日志 staleLatencyCounts=3）。采集卡本时段离线（PnP 状态 Unknown，几小时前可用），改用同一条直播链路的回放与探针：回放垂直同步 DLSS 6X（关预算强制超刷新）送显→上屏 18.4→5.8ms、排队 7→2、Present 阻塞 3.3→0.4ms；开预算的常规配置 B3 与旧行为完全一致（无回退）；自动+低延迟队列 6X 不再被卡到刷新率（361 次/s）；Reflex 与生命周期场景 13/13 通过。读帧门探针（采集式邮箱，320Hz）：源比刷新快 5% 时旧行为显示帧年龄 22.9ms（7.3 个刷新）→ B3 7.7ms（2.5 个刷新），自动模式 4.8ms；源比刷新慢时三者相同。60Hz 下对应约 122→41ms。回放的连续时间线本身让真帧等一个源间隔，故回放的读→送显不代表采集卡延迟；采集卡实测待设备重新上线。
+
+## 2026-10-14 极限低延迟 B1 XeSS 提交即送显（Claude）
+
+问题：XeSS 直播时调度器要等 GPU 做完才送显；这期间主循环已经读入并提交了下一帧，它与上一帧共用同一个 XeLL 周期，于是下一次送显时才开启新周期、在 Present 里执行 XeLL 睡眠，周期整体错位。XeSS 还被排除在“GPU 未完成不读下一帧”的门之外。
+
+改动：XeSS 呈现器与图共用同一个直接队列，真帧提交后立刻打标签并 Present（GPU 顺序保证在增强之后执行），每次循环就是一个完整 XeLL 周期：睡眠→读帧→提交→送显；XeSS 也遵守“GPU 未完成不读下一帧”（等完再从邮箱取最新帧）。GPU 就绪耗时改由完成轮询记录（从任务创建到观察到完成），统计口径不再是“作业等待”。XessPresenter 日志新增 cycleMismatches（送显的源帧不在本周期准备的次数）。测试开关：`VEYRA_TEST_XESS_PRESENT_AFTER_READY=1` 恢复等 GPU 后送显，`VEYRA_TEST_XESS_STACKED_READS=1` 恢复叠读。
+
+验证（采集卡离线，用屏幕采集直播链路 screen-xess，30fps 源，XeSS 2X，320Hz，测量窗口内）：cycleMismatches 旧 922/960 → 新 0/960；回调→送显 P95 3.8→3.0ms；SDK 提交 56→58/s，补帧照常；测试断言 10/10 通过。屏幕采集负载很轻（无 NR），带 NR 的采集卡实测收益待设备上线。
+
+## 2026-10-14 极限低延迟 C1 可变刷新（VRR）检测（Claude）
+
+新增 `include/veyra/gfx/NvidiaVrr.h`：按 ReflexSession 同样的规则只从 System32 加载并常驻 nvapi64.dll，用公开 nvapi（MIT，本地 deps/nvapi-pacing 头文件核对函数 ID 与 NV_GET_VRR_INFO_V1 布局）查询窗口所在显示器的 G-SYNC / G-SYNC Compatible 状态；随刷新率每 2 秒或换屏时重读，变化时写 `display-vrr` 日志；快照 `displayVrr`（0 未知/非 NVIDIA、1 不支持、2 支持未开启、3 已开启、4 生效中），状态栏追加“可变刷新生效中/已开启/屏幕支持可变刷新（未开启）”并补翻译。Veyra 不修改驱动设置。
+
+本机结果：320Hz 显示器 known=true status=0 possible=false（当前连接/设置下不能开 VRR），因此本机无法实测 VRR 对“自动”的效果。用户指引：显示器支持 G-SYNC / FreeSync 时，在 NVIDIA 控制面板“设置 G-SYNC”中开启并选择“为窗口和全屏模式启用”，Veyra 显示同步保持“自动”；VRR 生效后屏幕按帧到达刷新（不超过最高刷新），省掉 0–1 个刷新的等待。多数显示器在 PBP/画中画模式下会关闭 VRR。
+
+## 2026-10-14 极限低延迟 C2 窗口/全屏送显模式实测 + C3 采集拷贝研究（Claude）
+
+C2（无需管理员）：DXGI 的 GetFrameStatisticsMedia 在这些交换链上不可用（产品日志 compositionMode=-1），改用“送显→上屏”直接判断。探针 `tmp/claude-latency-min-20261013/dxgi_mode_probe.cpp`（320Hz，源略低于刷新）：小弹窗与 1280×720 普通窗口都是约 1.5 个刷新（4.8ms，DWM 合成），无边框全屏约 0.6 个刷新（1.9ms，独立翻转；此时 DXGI 不给刷新计数）。真实程序 `run_app_mode.py`（60fps 文件、无效果、自动）：窗口 P50/P95 4.79/5.98ms，全屏且控制条隐藏 1.94/3.24ms，全屏但控制条显示 5.17/6.26ms（控制窗口盖在画面上，回到合成）。结论：全屏且控制条自动隐藏（鼠标静止约 1.6 秒）时少一个刷新，320Hz 约 3ms，60Hz 约 17ms。
+
+C3：采集回调的拷贝已经是唯一一次 CPU 拷贝（邮箱帧就是 D3D12 上传缓冲）。实卡 2K NV12（5.5MB）每帧 0.26–0.31ms；用户 4K 测试日志 4K NV12（12.4MB）1.2–2.1ms、24.9MB 样本 3.8–5.6ms。探针 `upload_copy_probe.cpp`：单线程写入上传缓冲已达 19–20GB/s（4K NV12 冷数据 0.64ms），2–4 线程无改善（内存/写合并带宽受限），因此不做多线程拷贝。彻底去掉这次拷贝需要自建 DirectShow 分配器，把 GPU 可见的缓冲（可用 OpenExistingHeapFromAddress 打开的带缓存系统内存，避免去重比较读写合并内存过慢）交给驱动、样本持有到 GPU 拷贝完成；属于各驱动行为不同的大改动，采集卡离线无法验证，本轮不实施，作为后续选项记录。
+
+## 2026-10-14 极限低延迟：补帧改为提示、可变刷新开关、垂直同步测量修正（Claude）
+
+用户决定：“不要自动降档，做一个提示好了，当前帧率超出屏幕刷新率，建议降至xxx来获得更好的延迟体验”；“可变刷新率做成开关，在显示里面可以开启，如果屏幕不支持显示灰色”。
+
+补帧提示：B2 的自动降倍数与旁路全部撤回（EnhanceGraph 回到 main 版本；读帧门、配对延迟、准入、节奏回到按用户倍数）。`DisplayFgBudget.h` 只算建议 `displayFgSuggestion`：输出放得下不提示；源已占满屏幕（≥0.97×刷新，如 60Hz 屏 + 60fps 源）建议关闭补帧；否则建议放得下的最大可选倍数（DLSS 2/3/4/6、XeSS 2–4、VFG 2–8、FSR 只有 2X）；都放不下且源比屏幕慢时，自动模式只在请求高于 2X 时建议 2X，垂直同步建议关闭。新建议持续 1.5 秒才显示，只对直播、非撕裂。状态栏与补帧“倍率”下方（专业页、节点页，黄色）显示“当前帧率 N fps 超出屏幕刷新率 M Hz，建议降至 KX 来获得更好的延迟体验”或“……建议关闭补帧……”。日志 `display-fg-hint`。去掉 `VEYRA_TEST_NO_DISPLAY_FG_BUDGET`（已无行为可对比），保留 `VEYRA_TEST_DISPLAY_HZ`。
+
+可变刷新开关：`NvidiaVrr.h` 增加 NvAPI_DISP_GetMonitorCapabilities（supportVRR / currentlyCapableOfVRR / isTrueGsync），统一等级 `gfx::vrrLevel`：0 无法检测（非 NVIDIA）、1 屏幕不支持（开关变灰）、2 支持但当前不可用（驱动未开等）、3 可用、4 生效中。`PresentationSettings.variableRefresh` 随显示设置保存（prefs `presentation.vrr`）。开关开、等级≥3 且显示同步为“自动”时，呈现按显式垂直同步走：G-SYNC/FreeSync + V-SYNC，沿用 B3 一帧队列；可变刷新范围内屏幕随帧刷新，等待约为 0，不撕裂；Microsoft 文档的撕裂标志方案只留给“允许撕裂”。显示器与驱动状态每 2 秒重读，变化即重配（NVAPI 调用移到快照锁外）。专业页“显示”和节点页输出框加开关与说明（按等级给出原因与操作）。本机 320Hz 屏驱动报告 supportVRR=0，开关为灰；`VEYRA_TEST_VRR_LEVEL=0..4` 可模拟。真实 VRR 是否生效需在支持的屏幕上由用户验证。
+
+测量修正：垂直同步时 `PresentSink::sampleDisplayLatency` 用“每帧至少占一个刷新”的上界给统计落后的旧帧定时。60fps@320Hz 统计晚一帧时，5ms 上屏的帧被算成约 19ms（晚两帧约 31ms）。现在只对连发（相邻送显不超过 1.25 个刷新）的旧帧使用该上界，否则跳过。补帧超刷新时的连发仍计入。
+
+实卡（T911 恢复在线，2K60 NV12 → NR，320Hz）：DLSS 6X 不再自动降：289 次/秒送显，提示“建议降至 4X”，送显→上屏 4.9/8.9ms（降到 4X 时为 5.0/6.9ms）。仅 NR：显式垂直同步 4.98/6.42ms（修正后），自动 4.87/6.18ms，回调→送显 P95 9.1 / 9.3ms，即 B3 在 60fps 源下不增加延迟。修正前同一垂直同步 P95 19.3ms，旧队列（`VEYRA_TEST_LEGACY_VSYNC_QUEUE=1`）同样有 19ms 尖刺，确认是测量问题。XeSS 2X+NR（B1 实卡）：XeLL 周期错位 0，回调→送显返回 P95 10.0→3.0ms（现在送显先于 GPU 完成，上屏时间仍受 GPU 约 8ms 约束）；模拟 60Hz 提示“建议关闭补帧”，XeSS 仍 120/s。可变刷新模拟等级 3：pacing 日志 effective=Vsync、displayQueuePaced=true、vrrSync=true，状态“可变刷新 · 未生效”。截图：显示页开关在真实屏上为灰、模拟可用时可开；补帧页黄色提示正确。
+
+测试：veyra_realtime_preview_tests 0 失败（提示 27 项、防抖 7 项）；repair 259/0；ui contract 通过；latency-min-tests display-sync、lifecycle 通过；回放 6X 垂直同步 4/0（送显→上屏 5.69/6.05ms）、屏幕 XeSS 10/0、生命周期 13/0。build.py 现在对改动的 QObject 头重跑 moc（新属性需要新的元对象，只重编旧生成文件不够）。
+
+## 2026-10-14 DLSS 性能模式、双卡运算、全屏 Home 面板（Claude）
+
+用户：“零缓冲先不做吧，现在做”。三件事：适配 NVIDIA 新的 DLSS 帧生成性能模式；双卡用户指定运算显卡；极简全屏 Home 呼出专业模式调整菜单、节点模式呼出节点画布。透传“先出方案给我，先不动”。运行库来源经 AskUserQuestion 由用户选“打包进运行库”。记录 docs/FG_GPU_HOME_2026-10-14.md，透传方案 docs/PC_GAME_PASSTHROUGH_PLAN_2026-10-14.md。
+
+性能模式：NVIDIA App 11.0.9 把 DLSS-G 310.9.16（nvapp_override）放进 `%ProgramData%\NVIDIA\NGX\models\dlssg\versions\20318480`。模式由创建时参数 `DLSSG.LiteCandidateBlendingEnabled` 打开，逐帧设置无效；字符串检索只有 310.9.16 含该参数名（310.9.1、310.7、驱动自带版本没有）。`EnhancementSettings::dlssgLite` → GraphDescription → `DlssFgBackend::CreateDesc::lite`；`NgxCoreHost::initialize` 增加优先目录（feature path = dlssg-lite, runtime/experimental），`NgxCoreCache` 键加目录；`EffectChain` 与图的 live-accept 在开关变化时重建；导出强制标准模式。状态 1 生效、2 包里没有运行库、3 RTX 40/30（FgCompatibilitySession，解锁补丁只认 310.9.1）不启用。UI：补帧方式为 DLSS 时列表/节点页出现“DLSS 性能模式”（偏好 `dlssgPerformance`），提示随状态变化。实测 T911 2K60 NV12 + NR：6X 补帧 GPU P95 8.1→3.3ms、过期帧 7.7→1.0/s、送显→上屏 P95 9.59→7.45ms、回调→送显 P95 31.5→26.8ms；4X 5.6→2.8ms（`logs/claude-fg-gpu-home-20261014/lite-{off,on}-6x-*`、`fg-ota-4x-*`）。
+
+双卡：设置 → 性能，“GPU 占用监控”下新增“同时用这块显卡运算”（偏好 `computeOnMonitorGpu`）。`gfx::setPreferredAdapterLuid` → 环境变量 `VEYRA_COMPUTE_ADAPTER_LUID`（导出子进程继承）；D3D12DeviceContext 先找该 LUID、找不到按默认顺序并记录；预热设备不在该卡时重建；`effectGpu`/VFG 判定用同一块卡。修正：桥接构造时运算卡要在能力采样和链路恢复之前确定（原顺序下 AMD 运算卡仍显示 DLSS/NVOF）；运行中切换按重启规则迁移（DLSS→可用方式、NVOF→FidelityFX、不支持的效果关闭保留参数、保存）。实测 AMD 核显：`compute adapter preference=0000000000014A59 used=yes`，60 次/秒送显，补帧自动 FSR 3.1 2X + FidelityFX 光流；运行中 DLSS 4X → AMD 当场改 FSR 2X，120 次/秒，无错误（`gpu-amd-133803`、`pro-amd-fg2-134748`、`switch-live-134832`、截图 `set-gpu-amd2-134129`）。
+
+全屏 Home：`Main.qml` 的 `toggleQuickPanel`：极简全屏按 Home 时专业页（节点模式时节点页）在画面下面瞬间切换为当前页（`instantPage` 跳过下沉动画），面板关闭或退出全屏时回到原页；`NodePage.overlay` 只显示画布，作为画面底部面板（max(260, 42%)，`videoCover` 挖洞，“Home 关闭”）。实测（PostMessage Home/Esc + PrintWindow）：极简→列表面板→回极简；节点→底部画布→Esc 退出全屏回极简；`leaving=` 为空（`home-min-134319`、`home-node-134358`）。面板开着时用户自己换页（如切换极简/专业）就在那一页结束面板，关闭后不再跳回原页，下次 Home 一次打开（`home-min2-141025`、`home-switch-141039`）。
+
+透传调研：粉丝 VeyraOverlay 只解出文本与源码到 `downloads/fan-overlay-mod-20261014`（未运行）。显示器捕获实测：控制条窗口在捕获打开后约 0.1 秒才显示，affinity 0x0（主窗口 0x11），会被捕获进画面；PrintWindow 截 Veyra 全黑（`mon-aff-135651`）。
+
+测试：build.py 全目标；repair 259/0，ui contract 通过，realtime preview 0 失败；节奏 r4-replay-6x-vsync、r4-lifecycle、r4-screen-xess、r4-screen-dlss（4X）全部通过（`logs/claude-fg-gpu-home-20261014/r4-*`、`tests-135843`；日志修正后重建再跑 `tests-141200` 通过）。性能模式目录日志改用 UTF-8（`path::string()` 在系统代码页表示不了的路径上会抛异常），核心初始化只记目录长度；复测 `lite-recheck-141131`：state=1、参数=1、Create 成功。打包：`package-portable.ps1` 2.0.8 起加入 dlssg-lite 条目（身份不符即拒绝）；THIRD_PARTY_NOTICES 增加 310.9.16 一节。
+
+## 2026-10-14 游戏模式（穿透）实施、显示器捕获修正、双卡切回、VFG 调研（Claude）
+
+用户：“在捕获内加一个开关，热键就用你这个吧，不要倒计时，并且如果是捕获显示器，直接去掉黄色的指示框，全屏Veyra后相当于也能直接操作整个电脑一样，然后把你没注意到的内容处理好，顺便看看VFG有没有更新性能优化，现在VFG高档位还是太吃性能了，耗时太长了”。
+
+游戏模式：屏幕捕获对话框“游戏”分区开关（`passthrough`），开始后不倒计时，移到目标显示器全屏，出画即穿透；Home 面板收回操作，再按 Home / Esc / 点画面还给程序；Ctrl+Alt+Home 退出；捕获结束自动退出全屏。`include/veyra/ui/GamePassthrough.h`：RegisterHotKey（Ctrl+Alt+Home 注册失败拒绝进入）、置顶、前台移交（AttachThreadInput 兜底）、窗口捕获时同屏他程序到前台画面退后、GUI 3 秒无心跳由看门狗线程 DWM cloak。主窗口穿透改用 Qt 标志（Main.qml 绑定 `passthroughActive`）+ 补 WS_EX_NOACTIVATE：软件界面主窗口不是分层窗口，外加的 WS_EX_LAYERED 被 Qt 去掉（`game-softui2`），交给 Qt 后两种渲染器都稳定（`game-softui4`、`game-gpuui4`）。游戏模式捕获不带指针、裁剪归零、窗口捕获也去黄框；独占全屏与窗口未铺满给提示；穿透期间隐藏控制条/播放列表。
+
+显示器捕获修正（全部显示器捕获）：IsBorderRequired(false)（access=4 Allowed）；控制条窗口晚于捕获打开约 0.1 秒显示、未被排除（affinity 0x0）→ 打开时连隐藏 Qt 窗口一起排除，之后显示的窗口在 GUI 线程显示前排除；引擎线程不持锁调用窗口函数（`mon-aff2` 控制条 0x11）。borderless 放 URI cursor 字段 bit1，旧 URI 兼容并有测试。
+
+双卡：切回运算卡时恢复上次被迁移的列表补帧设置（`computeFgMemory`，DLSS 4X→FSR 2X→DLSS 4X，`switch-back-151042`）。审查：VFG 按 LUID 选 CUDA 设备，其余都在同一 D3D12 设备。310.9.16 核对后放 `releases/runtime-staging/dlssg-lite-310.9.16`（附锁行）。
+
+VFG：nvidia-vfx 仍 0.2.0.0、Samples v1.3.0.1、无 OTA；官方只支持 batch 1、三档模型。实测每张：4K Low 1.10 / Medium 3.2 / High 17.3–17.5 ms，1080p Medium 2.9 / High 15.1–15.4 ms（`vfg-4k-*`、`vfg-1080-*`），High 开销与分辨率基本无关，无法在 Veyra 侧加速。
+
+测试：build.py 全目标（新增 `only <target>` 用于原版对照）；repair 259/0、UI 合同、realtime preview 0 失败；r6 节奏 4 项通过；`veyra_screen_capture_tests` borderless 两项通过，5 项 RGB 颜色检查在原版代码同样失败（HDR 桌面，`tests-183824/veyra_screen_capture_tests_baseline.txt`）。GUI：`game-monitor`、`game-window2/3`、`game-escclick`、`game-hang2`、`game-softui4`、`game-gpuui4`、`dialog-game`。
+
+## 2026-10-14 屏幕捕获 DLSS5 帧率提示；PR #7 适配方案（Claude）
+
+用户：“你要在屏幕捕获的地方加一行红字，如果要开启DLSS5，建议帧率设置60，减少dlss5需要处理的画面量，减轻负担，然后你看一下…pr7…但是这个设置ui不知道怎么设计比较好，你给想想然后看看怎么适配”。
+
+红字：屏幕捕获对话框“帧率上限”行下方（`Theme.err`，提示放在控件下面），文案写成“DLSS5（NR）”以对应软件里的 NR 名称，带繁中/英/日。截图 `dialog-dlss5-214718`（中文）、`dialog-dlss5-en-215209`（英文）；UI 合同（384 个布局用例）与 repair 259/0 通过（`tests-dlss5`）。
+
+PR #7：OPEN、CONFLICTING，基线 05998da 落后 525 个提交；界面部分改的是旧 Win32 界面，2.0.x 用不上；后端文件除 EngineController 外基本未变。读 Chiaki 源码发现 PR 用“视频回调返回 false”丢弃保活画面，会让 `frame_index_prev_complete` 停住，Chiaki 每帧调用 `stream_connection_send_corrupt_frame` 向 PS5 报坏帧并写两条警告；移植应改为收下即丢、不挂音频接收。另有界面线程同步 close、采集等 PS5、按路径字符串保留会话三处要改；再串流用途还需要“后台也转发”和“谁按键就用谁”。方案见 docs/PS5_CAPTURE_CONTROL_QML_PLAN_2026-10-14.md（推荐 A：采集卡对话框加“PS5 手柄控制”分区），等用户拍板。
+
+## 2026-10-14/15 PS5 手柄控制（PR #7 方案 A）实施（Claude）
+
+用户：“方案A吧，开工！”（后台转发默认、分支两项未回复，按推荐：默认关、继续本分支）。记录 docs/PS5_CAPTURE_CONTROL_2026-10-14.md。
+
+实施：采集卡对话框“PS5 手柄控制”分区（开关、共用 PS5 配对的主机选择与状态、PIN、后台转发、手柄名、说明）；PS5 串流对话框“画面用采集卡”指引；主页采集卡“PS5 手柄”标签。后端从 PR #7 移植：controlOnly → discardMedia，视频回调计数后返回 true（PR 返回 false 会让 Chiaki 每帧报坏帧），音频挂空回调（不挂会在 audioreceiver.c 泄漏每帧，方案原写法已更正），控制专用循环（无解码/WASAPI，保活计数驱动 StreamRecovery，高精度 4 ms）。引擎专用控制线程（界面不等主机；非采集卡来源/PS5 串流/PC/Xbox/导出停止它，PS5 串流等它关完≤10 s；有界析构）。手柄“谁按键就用谁”；共享手柄改为引用计数（原来来源切换时旧定时器可能关掉新来源的手柄）。38 条新文案 + 补齐 5 条显示同步翻译，extract --check 缺失 0。
+
+GUI 发现并修复：断开后采集任务拆除期间（Stopping）轮询又把控制连上。
+
+测试：全部构建通过（新代码无警告）；remoteplay 边界默认/200 次压力/双虚拟手柄跟随/原虚拟手柄全过；repair 259/0、UI 合同、realtime preview 0 失败；节奏 4 项通过；screen capture 仍是 HDR 桌面 5 项基线失败。GUI（全部只连 192.0.2.1）：开关、播放中开→5 s 失败→重连→断开、PIN/已连接布局、PS5 对话框行、主页标签、英文、正在连接时退出（0.26 s、cancelled=true）。测试包 r6（a7d8598，EXE eeec127d…）冒烟通过。LivePresentationTests 的 PS5 用例会连真实配对，未跑；真 PS5、真 ViGEm、HDMI 是否降级未测。

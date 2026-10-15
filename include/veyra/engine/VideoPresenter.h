@@ -7,6 +7,7 @@
 #include "veyra/engine/HdrOutputTuning.h"
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/gfx/ReflexSession.h"
+#include "veyra/gfx/NvidiaVrr.h"
 #include "veyra/engine/PresentationSettings.h"
 #include <chrono>
 #include <array>
@@ -39,6 +40,7 @@ public:
     void sourceProcessed(pipeline::FrameIdentity);
     PresentationSettings configurePresentation(gfx::D3D12DeviceContext&,PresentationSettings,bool fg,std::wstring& status);
     bool presentationReady(){return sink_.presentationReady();}
+    bool waitPresentationReady(unsigned ms){return sink_.waitPresentationReady(ms);}
     uint64_t beginReflex(){return reflex_.begin();}
     void reflexFrame(uint64_t id){reflexFrame_=id;}
     // True while XeSS owns Present: the low-latency queue and the output
@@ -66,6 +68,19 @@ public:
     // per-frame history reset, never a per-frame toggle.
     void setXessGenerationSuppressed(bool v){xessGenerationSuppressed_=v;}
     bool xessGenerationSuppressed() const {return xessGenerationSuppressed_;}
+    // Monitor refresh for the live output budget. The swap chain samples it
+    // only at creation; the window may move to another monitor or the mode
+    // may change, so it is re-read on a monitor change and every 2 s.
+    double displayRefreshHz();
+    // Variable refresh state of that monitor (NVIDIA only), re-read with it.
+    gfx::VrrState displayVrr()const{return vrr_;}
+    // The 可变刷新 rule: the switch is on, Automatic is selected and VRR is
+    // possible on the monitor, so Automatic presents like explicit Vsync.
+    // vrrSync() is what the last configurePresentation applied.
+    static bool vrrSyncWanted(const PresentationSettings& requested,const gfx::VrrState& vrr){
+        return requested.variableRefresh&&requested.display==DisplaySync::Automatic&&gfx::vrrLevel(vrr)>=3;
+    }
+    bool vrrSync()const{return vrrSync_;}
     diagnostics::GpuSample blitTiming(ID3D12Fence* f,uint64_t revision=0,uint64_t epoch=0){gpuTimer_.collect(presentationFence_?presentationFence_.Get():f);if((revision&&gpuTimer_.last().identity.settingsRevision!=revision)||(epoch&&gpuTimer_.last().identity.epoch!=epoch)){diagnostics::GpuSample pending;pending.state=diagnostics::SampleState::Pending;return pending;}return gpuTimer_.last().gpu[size_t(diagnostics::GpuStage::Blit)];}
     // Application-side frame-generation timing for present-sink backends
     // (XeSS): the copies, barriers and provider prepare work recorded on
@@ -135,6 +150,8 @@ private:
     bool xessWasEnabled_=false;
     bool xessFailed_=false;
     bool xessGenerationSuppressed_=false;
+    HMONITOR refreshMonitor_=nullptr;double refreshHz_=0;gfx::VrrState vrr_{};bool refreshQueried_=false,vrrSync_=false;
+    std::chrono::steady_clock::time_point refreshQuery_{};
     uint32_t xessInputId_=0;
     struct XessWork {pipeline::FrameIdentity identity{};uint32_t id=0;};
     std::array<XessWork,4> xessWork_{};

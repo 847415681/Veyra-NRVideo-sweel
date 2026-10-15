@@ -1,5 +1,13 @@
 #include "veyra/ui/QmlPlayerBridge.h"
 #include "veyra/gfx/PresentSink.h"
+#include "veyra/gfx/NvidiaVrr.h"
+#include "veyra/ngx/DlssgLite.h"
+#include "veyra/RuntimePaths.h"
+#include "veyra/ui/GamePassthrough.h"
+#include <QGuiApplication>
+#include <QScreen>
+#include <QtGui/qscreen_platform.h>
+#include <shellapi.h>
 #include <QElapsedTimer>
 #include "veyra/ui/EffectAvailability.h"
 #include "veyra/engine/FrameGenerationSelection.h"
@@ -365,8 +373,31 @@ struct QmlPlayerBridge::Impl {
     std::atomic<bool> ps5Done{false};
     bool ps5Busy = false;
     QTimer* controllerTimer = nullptr;
+    // PS5 手柄控制 (capture card dialog).
+    QTimer* ps5ControlTimer = nullptr;
+    QVariantMap ps5ControlState;
+    std::wstring ps5ControlProfile;          // pairing (or test host) the session was started with
+    QString ps5ControlNoticed;               // state the last notice was shown for
+    int ps5ControlTicks = 0;
+    bool ps5ControlNoPair = false;           // switched on without a pairing; cleared once pairings exist
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     remoteplay::ControllerInput controller;
+    // One SDL pad reader shared by PS5 stream, PS5 手柄控制, PC and Xbox streaming.
+    // Each user acquires it and only the last release stops it, so the timer of a
+    // source that just ended never cuts off the pad the next source started using.
+    enum PadUser : unsigned { PadPs5 = 1, PadPs5Control = 2, PadMoonlight = 4, PadXbox = 8 };
+    unsigned padUsers = 0;
+    bool acquirePad(unsigned user) {
+        const bool ok = controller.start(); // no-op once initialized
+        padUsers |= user;
+        controller.setFollowLastPressed((padUsers & PadPs5Control) != 0);
+        return ok;
+    }
+    void releasePad(unsigned user) {
+        padUsers &= ~user;
+        if (!padUsers) controller.stop();
+        else controller.setFollowLastPressed((padUsers & PadPs5Control) != 0);
+    }
 #endif
     std::jthread ps5Worker;                  // last: joined before what it touches
     // --- screen capture ---
@@ -390,6 +421,12 @@ struct QmlPlayerBridge::Impl {
     QString runStatus, runLevel, runDetail;
     QStringList runOptions;
     double effectiveOutputFps=-1;
+    // FG output hint for the 倍率 row; 可变刷新 level (gfx::vrrLevel) of the
+    // presenting monitor, or of the main window's monitor while idle.
+    QString fgDisplayHint;
+    int vrrState=0;
+    gfx::VrrState idleVrr{};
+    std::chrono::steady_clock::time_point idleVrrQuery{};
     std::atomic<double> gpuUtil{-1.0};
     // Hardware adapters in Windows' high-performance order (discrete first). The
     // sampler only counts engines of the adapter whose LUID is in gpuMonitorLuid
@@ -440,6 +477,28 @@ struct QmlPlayerBridge::Impl {
             veyra::log::info("perf", std::format("gpu adapter {} id={} luid={:08X}:{:08X} dedicatedMiB={}", gpuAdapters.size() - 1,
                 id.toStdString(), uint32_t(d.AdapterLuid.HighPart), d.AdapterLuid.LowPart, d.DedicatedVideoMemory >> 20));
         }
+    }
+    // 游戏模式: the native side, the capture it belongs to and what the UI reported.
+    ui::GamePassthrough game;
+    std::wstring gameModeUri;          // the screen URI startScreenCapture opened in game mode
+    uint64_t gameModeSessionId = 0;    // its engine session once the open ran
+    bool gameModeLive = false, gamePanelOpen = false, gameRefused = false;
+    bool gameModeShown = false, passthroughShown = false;
+    HMONITOR gameMonitor = nullptr;
+    // The monitored GPU also computes when 设置 -> "同时用这块显卡运算" is on
+    // and a specific GPU (not 自动) is chosen; otherwise the default order.
+    QString computeGpuName;
+    uint64_t computeLuid = 0;
+    void applyComputeGpu() {
+        const QString wanted = prefString("monitorGpu");
+        const GpuAdapter* chosen = nullptr;
+        for (const auto& a : gpuAdapters) if (!wanted.isEmpty() && a.id == wanted) chosen = &a;
+        const bool follow = prefBool("computeOnMonitorGpu", false) && chosen;
+        computeLuid = follow ? (uint64_t(chosen->luidHigh) << 32 | chosen->luidLow) : 0;
+        computeGpuName = follow ? chosen->name : QString();
+        gfx::setPreferredAdapterLuid(computeLuid);
+        veyra::log::info("perf", std::format("compute gpu follow={} wanted={} using={}", follow, wanted.isEmpty() ? "auto" : wanted.toStdString(),
+            follow ? chosen->name.toStdString() : "default order (highest-performance adapter)"));
     }
     void resolveGpuMonitor() {
         const QString wanted = prefString("monitorGpu");
@@ -861,21 +920,37 @@ static uint32_t primaryGpuVendor() {
 // FSR 4 ML frame generation needs an AMD RX 9000; on other GPUs the provider crashed the
 // whole program (field report 2026-10-01). Known non-AMD adapters are refused up front.
 static bool fsr4Possible() { return currentEffectCapabilities().value("fsr4").toMap().value("available").toBool(); }
-// The menu checks the same default DXGI preference as the engine. The native
-// backend then verifies CUDA compute capability and the exact adapter LUID.
-static bool vfgHardwarePossible(){
-    static const bool supported=[] {
-        Microsoft::WRL::ComPtr<IDXGIFactory6> factory;
-        if(FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))))return false;
+// The adapter the engine opens: the user's compute GPU when one is chosen
+// (gfx::preferredAdapterLuid) and usable, else the first D3D12 hardware
+// adapter in DXGI's high-performance order, as D3D12DeviceContext picks it.
+// UI thread only; cached per preference.
+static const DXGI_ADAPTER_DESC1* engineAdapterDesc(){
+    static uint64_t cachedFor=~0ull;static DXGI_ADAPTER_DESC1 cached{};static bool found=false;
+    const uint64_t preferred=gfx::preferredAdapterLuid();
+    if(cachedFor==preferred)return found?&cached:nullptr;
+    cachedFor=preferred;found=false;
+    Microsoft::WRL::ComPtr<IDXGIFactory6> factory;
+    if(FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))))return nullptr;
+    for(int pass=preferred?0:1;pass<2&&!found;++pass)
         for(UINT i=0;;++i){Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
-            if(factory->EnumAdapterByGpuPreference(i,DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,IID_PPV_ARGS(&adapter))==DXGI_ERROR_NOT_FOUND)break;
-            if(!adapter)break;DXGI_ADAPTER_DESC1 d{};
-            if(FAILED(adapter->GetDesc1(&d))||(d.Flags&DXGI_ADAPTER_FLAG_SOFTWARE)||FAILED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_12_0,__uuidof(ID3D12Device),nullptr)))continue;
-            const auto name=QString::fromWCharArray(d.Description);
-            return d.VendorId==0x10DE&&(name.contains(QStringLiteral("GeForce RTX 40"),Qt::CaseInsensitive)||
-                name.contains(QStringLiteral("GeForce RTX 50"),Qt::CaseInsensitive)||name.contains(QStringLiteral("Ada"),Qt::CaseInsensitive)||name.contains(QStringLiteral("Blackwell"),Qt::CaseInsensitive));
-        }return false;
-    }();return supported;
+            if(FAILED(factory->EnumAdapterByGpuPreference(i,DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,IID_PPV_ARGS(&adapter)))||!adapter)break;
+            DXGI_ADAPTER_DESC1 d{};
+            if(FAILED(adapter->GetDesc1(&d))||(d.Flags&DXGI_ADAPTER_FLAG_SOFTWARE))continue;
+            const uint64_t luid=uint64_t(uint32_t(d.AdapterLuid.HighPart))<<32|d.AdapterLuid.LowPart;
+            if(pass==0&&luid!=preferred)continue;
+            if(FAILED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_12_0,__uuidof(ID3D12Device),nullptr)))continue;
+            cached=d;found=true;break;
+        }
+    return found?&cached:nullptr;
+}
+// The menu checks the same adapter as the engine. The native backend then
+// verifies CUDA compute capability and the exact adapter LUID.
+static bool vfgHardwarePossible(){
+    const auto* d=engineAdapterDesc();
+    if(!d)return false;
+    const auto name=QString::fromWCharArray(d->Description);
+    return d->VendorId==0x10DE&&(name.contains(QStringLiteral("GeForce RTX 40"),Qt::CaseInsensitive)||
+        name.contains(QStringLiteral("GeForce RTX 50"),Qt::CaseInsensitive)||name.contains(QStringLiteral("Ada"),Qt::CaseInsensitive)||name.contains(QStringLiteral("Blackwell"),Qt::CaseInsensitive));
 }
 static unsigned normalizeFgMultiplier(unsigned value,engine::FrameGenerationBackend backend,unsigned cap){
     value=std::clamp(value,2u,cap);
@@ -884,28 +959,17 @@ static unsigned normalizeFgMultiplier(unsigned value,engine::FrameGenerationBack
 bool QmlPlayerBridge::amdNrGpu() const { return primaryGpuVendor()==0x1002; }
 
 static ui::EffectGpu effectGpu() {
-    static const auto gpu = [] {
-        ui::EffectGpu result;
-        Microsoft::WRL::ComPtr<IDXGIFactory6> factory;
-        if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) return result;
-        for (UINT i = 0;; ++i) {
-            Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
-            if (FAILED(factory->EnumAdapterByGpuPreference(i, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&adapter)))) break;
-            DXGI_ADAPTER_DESC1 d{};
-            if (FAILED(adapter->GetDesc1(&d)) || (d.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) ||
-                FAILED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_0, __uuidof(ID3D12Device), nullptr))) continue;
-            const auto name = QString::fromWCharArray(d.Description);
-            result.vendor = d.VendorId;
-            result.deviceId = d.DeviceId;
-            result.rtx = name.contains("RTX", Qt::CaseInsensitive);
-            result.blackwell = name.contains("RTX 50", Qt::CaseInsensitive) || name.contains("Blackwell", Qt::CaseInsensitive);
-            result.ada = name.contains("RTX 40", Qt::CaseInsensitive) || name.contains("Ada", Qt::CaseInsensitive);
-            result.rx9000 = name.contains("RX 90", Qt::CaseInsensitive);
-            break;
-        }
-        return result;
-    }();
-    return gpu;
+    ui::EffectGpu result;
+    const auto* d = engineAdapterDesc();
+    if (!d) return result;
+    const auto name = QString::fromWCharArray(d->Description);
+    result.vendor = d->VendorId;
+    result.deviceId = d->DeviceId;
+    result.rtx = name.contains("RTX", Qt::CaseInsensitive);
+    result.blackwell = name.contains("RTX 50", Qt::CaseInsensitive) || name.contains("Blackwell", Qt::CaseInsensitive);
+    result.ada = name.contains("RTX 40", Qt::CaseInsensitive) || name.contains("Ada", Qt::CaseInsensitive);
+    result.rx9000 = name.contains("RX 90", Qt::CaseInsensitive);
+    return result;
 }
 
 static QVariantMap scanEffectCapabilities() {
@@ -1074,6 +1138,12 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     connect(impl_->playlist, &PlaylistModel::error, this, [this](const QString& text) {
         veyra::log::warn("playlist", text.toStdString()); emit notice(text, true);
     });
+    // The compute GPU decides which effects exist, so it is settled before
+    // anything below samples the capabilities or restores the saved chain.
+    impl_->loadPrefs();
+    impl_->enumerateGpuAdapters();
+    impl_->resolveGpuMonitor();
+    impl_->applyComputeGpu();
     connect(this,&QmlPlayerBridge::snapshotChanged,this,
         [this,ceiling=fgMaxMultiplier(),text=fgProviderText()]() mutable {
             const auto nextCeiling=fgMaxMultiplier();const auto nextText=fgProviderText();
@@ -1093,14 +1163,35 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         reported=next;emit effectCapabilitiesChanged();emit fgChoicesChanged();
     });
     capabilityTimer->start(2000);
-    impl_->loadPrefs();
     applyPreference(QStringLiteral("gpuPriority"));
     applyPreference(QStringLiteral("prewarmEnhancement"));
     impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));
-    impl_->enumerateGpuAdapters();
-    impl_->resolveGpuMonitor();
     connect(&impl_->exportQueue,&QmlExportQueueModel::changed,this,&QmlPlayerBridge::exportChanged);
     if (qApp) qApp->installEventFilter(this);
+    // 游戏模式. The native filter also keeps windows shown during a monitor capture
+    // out of that capture, so it is installed for every run.
+    if (qApp) qApp->installNativeEventFilter(&impl_->game);
+    impl_->game.onEvent = [this](ui::GamePassthrough::Event event) {
+        using E = ui::GamePassthrough::Event;
+        switch (event) {
+        case E::PanelHotkey: emit gameHotkey(0); break;
+        case E::ExitHotkey: emit gameHotkey(1); break;
+        case E::HomeUnavailable:
+            emit notice(tr("Home 已被其它软件占用：游戏模式里不能用 Home 呼出调整面板，按 Ctrl+Alt+Home 退出后再调整"), true); break;
+        case E::ExitUnavailable:
+            emit notice(tr("Ctrl+Alt+Home 已被其它软件占用，游戏模式不能穿透操作；关闭占用它的软件后重新全屏"), true); break;
+        case E::HangReleased:
+            // Publish Off before the foreground goes back to Veyra; stay out of
+            // click-through until fullscreen is left.
+            impl_->gameRefused = true;
+            if (impl_->passthroughShown) { impl_->passthroughShown = false; emit gameModeChanged(); }
+            impl_->game.apply(ui::GamePassthrough::Mode::Off);
+            emit gameModeStopped(tr("界面卡住超过 3 秒，已退出游戏模式")); break;
+        }
+    };
+    auto* gameBeat = new QTimer(this);
+    connect(gameBeat, &QTimer::timeout, this, [this] { impl_->game.heartbeat(); });
+    gameBeat->start(250);
 #ifdef VEYRA_ENABLE_MOONLIGHT
     setupMoonlight();
 #endif
@@ -1218,6 +1309,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             const bool on = p.value(QStringLiteral("edgeAegis")).toBool();
             if (s.fgMotionRefine != on) { s.fgMotionRefine = on; changed = true; }
         }
+        if (p.contains(QStringLiteral("dlssgPerformance"))) {
+            const bool on = p.value(QStringLiteral("dlssgPerformance")).toBool();
+            if (s.dlssgLite != on) { s.dlssgLite = on; changed = true; }
+        }
         if (!defaultFlowApplied && p.contains(QStringLiteral("contentRate"))) {
             const int rate = p.value(QStringLiteral("contentRate")).toInt();
             if (rate >= 0 && rate <= int(engine::ContentRate::Capture60To30) && int(s.content) != rate) { s.content = static_cast<engine::ContentRate>(rate); changed = true; }
@@ -1248,6 +1343,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             pr.display = static_cast<engine::DisplaySync>(std::clamp(saved.value(QStringLiteral("display")).toInt(), 0, 2));
             pr.outputRate = static_cast<engine::OutputRateMode>(std::clamp(saved.value(QStringLiteral("outputRate")).toInt(), 0, 2));
             pr.customFps = std::clamp(saved.value(QStringLiteral("customFps"), 60.0).toDouble(), 1.0, 1000.0);
+            pr.variableRefresh = saved.value(QStringLiteral("vrr")).toBool();
         }
         if (pr.valid()) impl_->engine.requestPresentation(pr);
         impl_->aspectMode = std::clamp(impl_->prefs.value(QStringLiteral("aspect")).toInt(), 0, 6);
@@ -1378,6 +1474,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         // snapshot is not part of the player snapshot.
         if (impl_->exportQueue.queue().needsTick()) pollExport();
         tickPlaylist();
+        updateGameMode();
     });
     impl_->timer->start(16);
     startGpuSampler();
@@ -2401,6 +2498,10 @@ bool QmlPlayerBridge::startCaptureSession() {
     rememberSource(QStringLiteral("capture"), utf8Of(i.captureVideo[size_t(device)].name));
     i.prefs["captureFormatLabel"] = utf8Of(format->label);
     i.savePrefs();
+    // Started beside the capture open, not after it. A running PS5 stream still
+    // holds the console's slot until the capture replaces it; the tick starts
+    // PS5 手柄控制 once the capture card is live instead.
+    if (i.prefBool("ps5CaptureControl", false) && !i.snapshot.remotePlay) startPs5Control(false);
     openSourceUri(path, i.captureVideo[size_t(device)].name);
     emit snapshotChanged();
     return true;
@@ -2419,6 +2520,10 @@ void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring&
         impl_->engine.previewView({});
         impl_->engine.open(impl_->videoWindow, uri, impl_->options);
         impl_->openingSessionId = impl_->engine.snapshot().sessionId;
+        // Only the exact capture startScreenCapture opened in 游戏模式 is one.
+        impl_->gameModeSessionId = !impl_->gameModeUri.empty() && uri == impl_->gameModeUri ? impl_->openingSessionId : 0;
+        impl_->gameModeLive = false;
+        impl_->gameModeUri.clear();
         refreshSubtitles({});
     });
 }
@@ -2485,7 +2590,7 @@ QVariantList QmlPlayerBridge::screenTargets() const {
 }
 QVariantMap QmlPlayerBridge::screenOptions() const {
     QVariantMap d{{"kind", 0}, {"method", 0}, {"fps", 0}, {"cursor", true}, {"fill", false},
-                  {"left", 0}, {"top", 0}, {"right", 0}, {"bottom", 0}};
+                  {"left", 0}, {"top", 0}, {"right", 0}, {"bottom", 0}, {"passthrough", false}};
     const auto saved = impl_->prefs.value("screen").toMap();
     for (auto it = saved.begin(); it != saved.end(); ++it) if (d.contains(it.key())) d[it.key()] = it.value();
     if (d.value("kind").toInt() == 0) d["method"] = 0;           // DXGI is monitors only
@@ -2501,7 +2606,7 @@ bool QmlPlayerBridge::setScreenOption(const QString& key, const QVariant& value)
         const auto [low, high] = ranges.value(key);
         if (!ok || n < low || n > high) { emit notice(tr("数值超出范围"), true); return false; }
         saved[key] = n;
-    } else if (key == QLatin1String("cursor") || key == QLatin1String("fill")) {
+    } else if (key == QLatin1String("cursor") || key == QLatin1String("fill") || key == QLatin1String("passthrough")) {
         saved[key] = value.toBool();
     } else return false;
     impl_->prefs["screen"] = saved;
@@ -2523,13 +2628,97 @@ bool QmlPlayerBridge::startScreenCapture() {
     value.cursor = o.value("cursor").toBool();
     value.left = o.value("left").toUInt(); value.top = o.value("top").toUInt();
     value.right = o.value("right").toUInt(); value.bottom = o.value("bottom").toUInt();
-    veyra::log::info("screen-ui", std::format("start kind={} method={} fps={} cursor={} crop={},{},{},{} fill={}", int(value.kind), int(value.method),
-        value.fps, value.cursor, value.left, value.top, value.right, value.bottom, o.value("fill").toBool()));
+    // 游戏模式: the real pointer is drawn on top, so the picture carries none (a
+    // second, late pointer otherwise), the picture must match the screen 1:1 for
+    // clicks to land where they are seen (no crop), and the yellow border goes.
+    const bool game = o.value("passthrough").toBool();
+    if (game) {
+        value.cursor = false; value.borderless = true;
+        value.left = value.top = value.right = value.bottom = 0;
+        const HWND window = value.kind == source::ScreenTargetKind::Window ? reinterpret_cast<HWND>(value.target) : nullptr;
+        impl_->gameMonitor = window ? MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST) : reinterpret_cast<HMONITOR>(value.target);
+        impl_->game.setTarget(window, impl_->gameMonitor, !window);
+        impl_->gameModeUri = value.uri();
+        // Two cases the picture cannot cover well, said up front.
+        QUERY_USER_NOTIFICATION_STATE state{};
+        if (SUCCEEDED(SHQueryUserNotificationState(&state)) && state == QUNS_RUNNING_D3D_FULL_SCREEN)
+            emit notice(tr("检测到独占全屏的游戏：Windows 不允许其它窗口盖在它上面，请把游戏改成无边框窗口或窗口化"), true);
+        MONITORINFO monitor{}; monitor.cbSize = sizeof(monitor);
+        RECT client{}; POINT origin{};
+        if (window && GetMonitorInfoW(impl_->gameMonitor, &monitor) && GetClientRect(window, &client) && ClientToScreen(window, &origin) &&
+            (origin.x != monitor.rcMonitor.left || origin.y != monitor.rcMonitor.top ||
+             client.right != monitor.rcMonitor.right - monitor.rcMonitor.left || client.bottom != monitor.rcMonitor.bottom - monitor.rcMonitor.top)) {
+            veyra::log::info("game-mode", std::format("captured window does not fill its monitor: client={}x{} at {},{}", client.right, client.bottom, origin.x, origin.y));
+            emit notice(tr("游戏窗口没有铺满屏幕：画面会放大显示，鼠标点到的位置可能和看到的不一致；建议把游戏设为无边框全屏"), false);
+        }
+    } else impl_->gameModeUri.clear();
+    veyra::log::info("screen-ui", std::format("start kind={} method={} fps={} cursor={} crop={},{},{},{} fill={} gameMode={}", int(value.kind), int(value.method),
+        value.fps, value.cursor, value.left, value.top, value.right, value.bottom, o.value("fill").toBool(), game));
     openSourceUri(value.uri(), wideOf(screenTargetLabel()));
     impl_->screenFillActive = o.value("fill").toBool();
     impl_->screenFitClient = impl_->screenFitImage = QSize();
     rememberSource(QStringLiteral("screen"), screenTargetLabel());
     return true;
+}
+bool QmlPlayerBridge::gameMode() const { return impl_->gameModeSessionId != 0; }
+bool QmlPlayerBridge::passthroughActive() const { return impl_->passthroughShown; }
+void QmlPlayerBridge::attachMainWindow(qulonglong nativeHandle) { impl_->game.attach(reinterpret_cast<HWND>(nativeHandle)); }
+void QmlPlayerBridge::setGamePanelOpen(bool open) {
+    if (impl_->gamePanelOpen == open) return;
+    impl_->gamePanelOpen = open;
+    updateGameMode();
+}
+int QmlPlayerBridge::gameModeScreenIndex() const {
+    if (!impl_->gameMonitor) return -1;
+    const auto screens = QGuiApplication::screens();
+    for (int i = 0; i < screens.size(); ++i) {
+        const auto* native = screens[i]->nativeInterface<QNativeInterface::QWindowsScreen>();
+        if (native && native->handle() == impl_->gameMonitor) return i;
+    }
+    return -1;
+}
+void QmlPlayerBridge::testBlockUi(int ms) {
+    if (GetEnvironmentVariableW(L"VEYRA_TEST_UI_BLOCK", nullptr, 0) == 0) return;
+    veyra::log::warn("game-mode", std::format("test: GUI thread blocked for {} ms", ms));
+    Sleep(DWORD(std::clamp(ms, 0, 20000)));
+}
+// 游戏模式 state: click-through while the game-mode capture is live and the picture
+// is fullscreen, the panel while the Home panel is open, otherwise a normal window.
+void QmlPlayerBridge::updateGameMode() {
+    using Mode = ui::GamePassthrough::Mode;
+    auto& i = *impl_;
+    const auto& s = i.snapshot;
+    if (i.gameModeSessionId) {
+        const bool same = s.sessionId == i.gameModeSessionId;
+        if (same && s.running && !s.failed) i.gameModeLive = true;
+        const bool ended = (same && (s.failed || (i.gameModeLive && !s.running))) || s.sessionId > i.gameModeSessionId;
+        if (ended) {
+            const bool shown = i.game.mode() != Mode::Off;
+            veyra::log::info("game-mode", std::format("capture session {} ended failed={} pictureInFront={}", i.gameModeSessionId, s.failed, shown));
+            i.gameModeSessionId = 0; i.gameModeLive = false;
+            if (shown) {
+                if (i.passthroughShown) { i.passthroughShown = false; emit gameModeChanged(); }
+                i.game.apply(Mode::Off);
+                const QString why = s.failed ? uiText(s.status) : QString();
+                emit gameModeStopped(why.isEmpty() ? tr("捕获已结束，已退出游戏模式") : why);
+            }
+        }
+    }
+    if (!i.presentation.fullscreen) i.gameRefused = false;
+    Mode want = Mode::Off;
+    if (i.gameModeSessionId && i.gameModeLive && i.presentation.fullscreen && !i.gameRefused)
+        want = i.gamePanelOpen ? Mode::Panel : Mode::Through;
+    // A refusal (the exit hotkey is taken) holds until fullscreen is left.
+    if (want != Mode::Off && i.game.mode() == Mode::Off && !i.game.arm()) { i.gameRefused = true; want = Mode::Off; }
+    if (want != i.game.mode()) {
+        // QML binds the window's click-through flags to passthroughActive: publish
+        // first, so Qt has changed the window before the foreground moves.
+        const bool through = want == Mode::Through;
+        if (through != i.passthroughShown) { i.passthroughShown = through; emit gameModeChanged(); }
+        i.game.apply(want);
+    }
+    const bool mode = i.gameModeSessionId != 0;
+    if (mode != i.gameModeShown) { i.gameModeShown = mode; emit gameModeChanged(); }
 }
 QString QmlPlayerBridge::screenTargetId() const { return impl_->screenTarget; }
 void QmlPlayerBridge::setScreenTargetId(const QString& value) {
@@ -2657,13 +2846,13 @@ void QmlPlayerBridge::setupXbox() {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
             // The pad is polled on the UI thread at 250 Hz; the session sends changes and a 33 ms heartbeat.
             if (pad) {
-                if (!k.controller.start()) veyra::log::warn("xbox-input", "SDL gamepad initialization failed");
+                if (!k.acquirePad(Impl::PadXbox)) veyra::log::warn("xbox-input", "SDL gamepad initialization failed");
                 if (!k.xboxTimer) {
                     k.xboxTimer = new QTimer(this);
                     k.xboxTimer->setTimerType(Qt::PreciseTimer);
                     connect(k.xboxTimer, &QTimer::timeout, this, [this] {
                         auto& m = *impl_;
-                        if (!m.snapshot.xboxActive) { m.controller.stop(); m.xboxTimer->stop(); return; }
+                        if (!m.snapshot.xboxActive) { m.releasePad(Impl::PadXbox); m.xboxTimer->stop(); return; }
                         const bool focused = QGuiApplication::focusWindow() != nullptr;
                         m.engine.xboxController(m.controller.poll(focused));
                         m.controller.feedback(m.engine.xboxFeedback(), focused);
@@ -2672,7 +2861,7 @@ void QmlPlayerBridge::setupXbox() {
                 k.xboxTimer->start(4);
             } else {
                 if (k.xboxTimer) k.xboxTimer->stop();
-                k.controller.stop();
+                k.releasePad(Impl::PadXbox);
             }
 #else
             (void)pad;
@@ -2761,13 +2950,13 @@ void QmlPlayerBridge::setupMoonlight() {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
             // The pad is polled on the UI thread at 250 Hz and sent only when it changes.
             if (pad) {
-                if (!k.controller.start()) veyra::log::warn("moonlight-input", "SDL gamepad initialization failed");
+                if (!k.acquirePad(Impl::PadMoonlight)) veyra::log::warn("moonlight-input", "SDL gamepad initialization failed");
                 if (!k.moonlightTimer) {
                     k.moonlightTimer = new QTimer(this);
                     k.moonlightTimer->setTimerType(Qt::PreciseTimer);
                     connect(k.moonlightTimer, &QTimer::timeout, this, [this] {
                         auto& m = *impl_;
-                        if (!m.snapshot.moonlightActive) { m.controller.stop(); m.moonlightTimer->stop(); return; }
+                        if (!m.snapshot.moonlightActive) { m.releasePad(Impl::PadMoonlight); m.moonlightTimer->stop(); return; }
                         const bool focused = QGuiApplication::focusWindow() != nullptr;
                         m.engine.moonlightController(m.controller.poll(focused));
                         m.controller.feedback(m.engine.moonlightFeedback(), focused);
@@ -2776,7 +2965,7 @@ void QmlPlayerBridge::setupMoonlight() {
                 k.moonlightTimer->start(4);
             } else {
                 if (k.moonlightTimer) k.moonlightTimer->stop();
-                k.controller.stop();
+                k.releasePad(Impl::PadMoonlight);
             }
 #else
             (void)pad;
@@ -2837,6 +3026,8 @@ void QmlPlayerBridge::ps5Load() {
                 std::all_of(id.begin(), id.end(), [](wchar_t c) { return (c >= L'0' && c <= L'9') || (c >= L'a' && c <= L'f'); }))
                 add(it->path());
         }
+        // A pairing made or found in the PS5 dialog lets a waiting PS5 手柄控制 start.
+        if (!i.ps5ProfileList.isEmpty()) i.ps5ControlNoPair = false;
         bool known = false;
         for (const auto& p : i.ps5ProfileList) known = known || p.toMap().value("id").toString() == QString::fromStdWString(i.ps5Profile);
         if (!known) i.ps5Profile = i.ps5ProfileList.isEmpty() ? std::wstring{} : i.ps5ProfileList.front().toMap().value("id").toString().toStdWString();
@@ -2886,6 +3077,7 @@ void QmlPlayerBridge::ps5SelectProfile(const QString& id) {
     WritePrivateProfileStringW(L"RemotePlay", L"LastProfile", impl_->ps5Profile.c_str(), ps5Settings().c_str());
     impl_->ps5Status.clear();
     ps5Load();
+    if (impl_->engine.remoteControlRequested()) startPs5Control(true);
 #else
     Q_UNUSED(id);
 #endif
@@ -2986,6 +3178,8 @@ bool QmlPlayerBridge::ps5Connect() {
     WritePrivateProfileStringW(L"RemotePlay", L"DecodeMode", std::to_wstring(decode).c_str(), ps5Settings().c_str());
     WritePrivateProfileStringW(L"RemotePlay", L"FineSampling", desc.highQualitySampling ? L"1" : L"0", ps5Settings().c_str());
     const bool viewOnly = desc.request.viewOnly;
+    // The console has one Remote Play slot; the engine ends PS5 手柄控制 first.
+    if (i.engine.remoteControlRequested()) emit notice(tr("已结束 PS5 手柄控制：PS5 同一时间只允许一个远程游玩连接"), false);
     rememberPosition(true);
     // The session id is cleared with the flag: the previous session's id left over here
     // ended "opening" on the next snapshot while the old source still ran.
@@ -3001,7 +3195,7 @@ bool QmlPlayerBridge::ps5Connect() {
         // Controller forwarding at 8 ms, as 1.4.4; view-only leaves the pad to the PS5.
         // Started with the session: the poll stops the pad when no session runs.
         if (!viewOnly) {
-            if (!i.controller.start()) veyra::log::warn("remoteplay-input", "SDL gamepad initialization failed");
+            if (!i.acquirePad(Impl::PadPs5)) veyra::log::warn("remoteplay-input", "SDL gamepad initialization failed");
             if (!i.controllerTimer) {
                 i.controllerTimer = new QTimer(this);
                 connect(i.controllerTimer, &QTimer::timeout, this, [this] {
@@ -3012,14 +3206,14 @@ bool QmlPlayerBridge::ps5Connect() {
                         j.engine.remotePlayController(j.controller.poll(focused));
                         j.controller.feedback(j.engine.remotePlayFeedback(), focused);
                     } else {
-                        j.engine.remotePlayController({}); j.controller.stop(); j.controllerTimer->stop();
+                        j.engine.remotePlayController({}); j.releasePad(Impl::PadPs5); j.controllerTimer->stop();
                     }
                 });
             }
             i.controllerTimer->start(8);
         } else {
             if (i.controllerTimer) i.controllerTimer->stop();
-            i.controller.stop();
+            i.releasePad(Impl::PadPs5);
         }
     });
     i.ps5Watching = true;
@@ -3173,6 +3367,169 @@ void QmlPlayerBridge::tickPs5() {
     }
 #endif
     if (changed) emit ps5Changed();
+    tickPs5Control();
+}
+
+// --- PS5 手柄控制 (capture card dialog) ----------------------------------------
+QVariantMap QmlPlayerBridge::ps5Control() const {
+    QVariantMap out = impl_->ps5ControlState;
+    if (!out.contains(QStringLiteral("state"))) out[QStringLiteral("state")] = QStringLiteral("off");
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    out[QStringLiteral("available")] = true;
+#else
+    out[QStringLiteral("available")] = false;
+#endif
+    out[QStringLiteral("enabled")] = impl_->prefBool("ps5CaptureControl", false);
+    out[QStringLiteral("background")] = impl_->prefBool("ps5ControlBackground", false);
+    return out;
+}
+// liveKind is "ps5", "screen", "moonlight" or "xbox" for those sources; a file
+// leaves it alone but does not set snapshot.capture.
+bool QmlPlayerBridge::captureCardLive() const {
+    const auto& s = impl_->snapshot;
+    // Not while Stopping: after 断开 the run keeps `running` until it has torn
+    // down, and the tick would start PS5 手柄控制 again in that window.
+    const bool playing = s.running && !s.image && !s.remotePlay &&
+                         (s.transport == engine::TransportState::Playing || s.transport == engine::TransportState::Paused);
+    // Tests only: any playing source stands in for the capture card (no card needed).
+    if (playing && qEnvironmentVariableIsSet("VEYRA_TEST_PS5_CONTROL_ANY_SOURCE")) return true;
+    return playing && s.capture && impl_->liveKind == QLatin1String("capture");
+}
+void QmlPlayerBridge::ps5ControlSet(const QString& key, const QVariant& value) {
+    static const QHash<QString, QString> keys{{QStringLiteral("enabled"), QStringLiteral("ps5CaptureControl")},
+                                              {QStringLiteral("background"), QStringLiteral("ps5ControlBackground")}};
+    if (!keys.contains(key)) return;
+    const bool on = value.toBool();
+    const auto previous = impl_->prefs;
+    impl_->prefs[keys.value(key)] = on;
+    if (!impl_->savePrefs()) { impl_->prefs = previous; emit notice(tr("PS5 手柄控制设置保存失败"), true); emit ps5ControlChanged(); return; }
+    veyra::log::info("remoteplay-control", std::format("ui {}={}", key.toStdString(), on));
+    if (key == QLatin1String("enabled")) {
+        impl_->ps5ControlNoPair = false;
+        if (!on) stopPs5Control();
+        else if (captureCardLive()) startPs5Control(false);
+        tickPs5Control(true);
+    }
+    emit ps5ControlChanged();
+}
+void QmlPlayerBridge::ps5ControlRestart() {
+    if (impl_->prefBool("ps5CaptureControl", false) && captureCardLive()) startPs5Control(true);
+}
+void QmlPlayerBridge::startPs5Control(bool restart) {
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    auto& i = *impl_;
+    source::RemotePlayConnectDesc desc;
+    std::wstring profile;
+    // Tests only: a dummy pairing to this host (an unroutable test address); the
+    // saved pairings are not read, so no real console is ever contacted.
+    const QString testHost = qEnvironmentVariable("VEYRA_TEST_PS5_CONTROL_HOST");
+    if (!testHost.isEmpty()) {
+        desc.request.host = testHost.toStdString();
+        profile = L"test:" + testHost.toStdWString();
+    } else {
+        if (i.ps5Profile.empty()) ps5Load();
+        auto saved = i.ps5Profile.empty() ? std::nullopt : remoteplay::loadProfile(remoteplay::profileDirectory() / i.ps5Profile);
+        if (!saved) {
+            i.engine.stopRemoteControl();
+            if (!i.ps5ControlNoPair) emit notice(tr("PS5 手柄控制：还没有配对的 PS5，先在「PS5 串流」里配对一次"), true);
+            i.ps5ControlNoPair = true;
+            tickPs5Control(true);
+            return;
+        }
+        desc.request = std::move(*saved);
+        profile = i.ps5Profile;
+    }
+    const auto running = i.engine.remoteControlStatus();
+    if (!restart && running.requested && (running.alive || running.starting) && profile == i.ps5ControlProfile) {
+        if (!(i.padUsers & Impl::PadPs5Control)) i.acquirePad(Impl::PadPs5Control);
+        if (i.ps5ControlTimer && !i.ps5ControlTimer->isActive()) i.ps5ControlTimer->start(8);
+        return;
+    }
+    // Keepalive profile, the lightest the console accepts. Never written back to the pairing.
+    remoteplay::VideoProfile keepalive;
+    keepalive.width = 1280; keepalive.height = 720; keepalive.fps = 30; keepalive.bitrateKbps = 5000; keepalive.codec = remoteplay::Codec::H264;
+    desc.request.video = keepalive;
+    veyra::log::info("remoteplay-control", std::format("start host={} restart={} background={}", desc.request.host, restart, i.prefBool("ps5ControlBackground", false)));
+    i.ps5ControlProfile = profile;
+    i.ps5ControlNoticed.clear();
+    i.ps5ControlNoPair = false;
+    i.engine.startRemoteControl(std::move(desc));
+    // The pad is read on the UI thread every 8 ms, as for the PS5 stream (the
+    // session sends one state per 4 ms and queues the rest).
+    if (!i.acquirePad(Impl::PadPs5Control)) veyra::log::warn("remoteplay-input", "SDL gamepad initialization failed");
+    if (!i.ps5ControlTimer) {
+        i.ps5ControlTimer = new QTimer(this);
+        connect(i.ps5ControlTimer, &QTimer::timeout, this, [this] {
+            auto& j = *impl_;
+            // A PS5 stream polls the pad with its own timer and takes the slot.
+            if (j.snapshot.remotePlay || !j.engine.remoteControlRequested()) {
+                j.ps5ControlTimer->stop(); j.releasePad(Impl::PadPs5Control); return;
+            }
+            const bool focused = QGuiApplication::focusWindow() != nullptr || j.prefBool("ps5ControlBackground", false);
+            j.engine.remotePlayController(j.controller.poll(focused));
+            j.controller.feedback(j.engine.remotePlayFeedback(), focused);
+        });
+    }
+    i.ps5ControlTimer->start(8);
+    tickPs5Control(true);
+#else
+    (void)restart;
+#endif
+}
+void QmlPlayerBridge::stopPs5Control() {
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    auto& i = *impl_;
+    if (!i.engine.remoteControlRequested()) return;
+    veyra::log::info("remoteplay-control", "stop");
+    i.engine.stopRemoteControl();
+    i.ps5ControlProfile.clear();
+    tickPs5Control(true);
+#endif
+}
+void QmlPlayerBridge::tickPs5Control(bool force) {
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    auto& i = *impl_;
+    if (!force && ++i.ps5ControlTicks % 15) return; // ~4 Hz from the 60 Hz poll
+    // Switched on while the capture card was still opening, or the capture came
+    // back by itself: start once it is live. A failed session stays requested
+    // until the user restarts it, so this never loops.
+    if (!force && !i.ps5ControlNoPair && i.prefBool("ps5CaptureControl", false) && captureCardLive() && !i.engine.remoteControlRequested())
+        startPs5Control(false);
+    const auto st = i.engine.remoteControlStatus();
+    QString state = QStringLiteral("off");
+    if (i.ps5ControlNoPair && !st.requested) state = QStringLiteral("nopair");
+    else if (st.requested) {
+        state = st.pinRequired ? QStringLiteral("pin")
+              : st.recovering ? QStringLiteral("recovering")
+              : st.alive && st.connected ? QStringLiteral("connected")
+              : !st.alive && !st.starting ? QStringLiteral("failed")
+              : QStringLiteral("starting");
+    }
+    // Tests only: show a state no console is available to produce here.
+    if (const QString forced = qEnvironmentVariable("VEYRA_TEST_PS5_CONTROL_STATE"); !forced.isEmpty() && st.requested) state = forced;
+    QVariantMap next;
+    next[QStringLiteral("state")] = state;
+    next[QStringLiteral("message")] = state == QLatin1String("nopair") ? tr("还没有配对的 PS5，先在「PS5 串流」里配对一次") : uiText(st.message);
+    next[QStringLiteral("keepaliveFps")] = st.keepaliveReady ? std::round(st.keepaliveFps) : -1.0;
+    const auto c = i.controller.capabilities();
+    next[QStringLiteral("pad")] = (i.padUsers & Impl::PadPs5Control) && c.connected ? QString::fromStdString(c.name) : QString();
+    next[QStringLiteral("gyro")] = c.gyro && c.accel;
+    next[QStringLiteral("touch")] = c.touch;
+    if (next == i.ps5ControlState) return;
+    i.ps5ControlState = next;
+    if (state != i.ps5ControlNoticed) {
+        if (state == QLatin1String("connected")) emit notice(tr("PS5 手柄控制已连接"), false);
+        else if (state == QLatin1String("pin")) emit notice(tr("PS5 要求输入登录 PIN：在采集卡面板「PS5 手柄控制」里填写"), false);
+        else if (state == QLatin1String("failed")) {
+            const QString reason = next.value(QStringLiteral("message")).toString();
+            emit notice(reason.isEmpty() ? tr("PS5 手柄控制已停止") : reason, true);
+        }
+        if (state == QLatin1String("connected") || state == QLatin1String("pin") || state == QLatin1String("failed")) i.ps5ControlNoticed = state;
+    }
+    emit ps5ControlChanged();
+#else
+    (void)force;
+#endif
 }
 
 // --- ps5 dialog --------------------------------------------------------------
@@ -5191,6 +5548,7 @@ void QmlPlayerBridge::stopPlayback() {
     impl_->openingSource = false;
     impl_->openingSessionId = 0;
     impl_->engine.stop();
+    stopPs5Control();
 }
 void QmlPlayerBridge::seekTo(double seconds) { impl_->engine.seek(seconds); }
 void QmlPlayerBridge::seekBy(double seconds) {
@@ -5297,7 +5655,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"listInspectorWidth", {376, 4000}}};
     static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
-                                   "magewellLowLatency", "blackmagicNativeCapture", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility"};
+                                   "magewellLowLatency", "blackmagicNativeCapture", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -5415,7 +5773,73 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
             impl_->exportQueue.refresh();
         }
     }
-    else if (key == QLatin1String("monitorGpu")) { impl_->resolveGpuMonitor(); impl_->gpuUtil = -1.0; emit perfChanged(); }
+    else if (key == QLatin1String("monitorGpu") || key == QLatin1String("computeOnMonitorGpu")) {
+        if (key == QLatin1String("monitorGpu")) { impl_->resolveGpuMonitor(); impl_->gpuUtil = -1.0; emit perfChanged(); }
+        const auto before = impl_->computeLuid;
+        impl_->applyComputeGpu();
+        if (impl_->computeLuid != before) {
+            // Effect availability follows the compute GPU (NVIDIA-only effects on another card).
+            (void)currentEffectCapabilities(true);
+            // The chain is checked against the new card the way a restart checks it:
+            // DLSS moves to an available backend, NVOF to FidelityFX flow, and stages
+            // the card cannot run are switched off with their parameters kept.
+            auto candidate = impl_->currentSession();
+            const auto previous = candidate;
+            // Switching back gives the list mode its frame generation again (DLSS 4X
+            // moved to FSR 2X by the last switch returns as DLSS 4X) once the card runs it.
+            const auto caps = currentEffectCapabilities();
+            const auto runs = [&](const QString& id) { return caps.value(id).toMap().value("available").toBool(); };
+            auto& active = candidate.configurations[size_t(candidate.active)];
+            const bool listMode = !active.editor;
+            const auto memory = impl_->prefs.value(QStringLiteral("computeFgMemory")).toMap();
+            bool restored = false;
+            if (listMode && !memory.isEmpty()) {
+                const auto backend = engine::FrameGenerationBackend(memory.value(QStringLiteral("backend")).toInt());
+                const auto flow = engine::OpticalFlowBackend(memory.value(QStringLiteral("flow")).toInt());
+                if (runs(fgEffectId(backend))) {
+                    active.fgBackend = backend;
+                    active.chain.fgMultiplier = memory.value(QStringLiteral("multiplier")).toUInt();
+                    if (flow != engine::OpticalFlowBackend::Nvidia || runs(QStringLiteral("flow0"))) active.opticalFlowBackend = flow;
+                    impl_->prefs.remove(QStringLiteral("computeFgMemory"));
+                    restored = true;
+                    veyra::log::info("effect-availability", std::format("compute gpu switch restored backend={} multiplier={}",
+                        engine::frameGenerationBackendName(backend), active.chain.fgMultiplier));
+                }
+            }
+            QStringList disabled;
+            for (auto& configuration : candidate.configurations) {
+                const auto reason = disableUnavailableEffects(configuration);
+                if (!reason.isEmpty()) disabled << reason;
+            }
+            const auto& before = previous.configurations[size_t(previous.active)];
+            if (listMode && !restored && (before.fgBackend != active.fgBackend || before.opticalFlowBackend != active.opticalFlowBackend))
+                impl_->prefs[QStringLiteral("computeFgMemory")] = QVariantMap{{QStringLiteral("backend"), int(before.fgBackend)},
+                    {QStringLiteral("multiplier"), int(before.chain.fgMultiplier)}, {QStringLiteral("flow"), int(before.opticalFlowBackend)}};
+            if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "compute gpu frame generation memory not saved");
+            if (candidate != previous) {
+                auto next = impl_->facade.pendingSettings();
+                const auto& configuration = candidate.configurations[size_t(candidate.active)];
+                configuration.apply(next);
+                if (next.validate().empty() && impl_->facade.applySettings(next, engine::runtimeOrder(configuration.chain))) {
+                    impl_->session = candidate;
+                    impl_->restoreConfiguration(configuration);
+                    impl_->revalidate();
+                    impl_->options = engine::PlayerOptions::from(next, engine::runtimeOrder(impl_->activeRuntime()));
+                    if (!impl_->persistSession()) veyra::log::warn("effect-availability", "compute gpu refit not saved");
+                    emit chainChanged(); emit settingsChanged();
+                } else veyra::log::warn("effect-availability", "compute gpu refit not accepted; chain unchanged");
+                if (!disabled.isEmpty()) {
+                    const auto message = tr("已关闭当前硬件或包不支持的效果，参数仍保留：") + disabled.join("; ");
+                    veyra::log::warn("effect-availability", message.toStdString());
+                    emit notice(message, false);
+                }
+            }
+            emit effectCapabilitiesChanged(); emit fgChoicesChanged();
+            if (impl_->snapshot.running)
+                emit notice(impl_->computeLuid ? tr("运算显卡已切换为「%1」，重新打开视频后生效").arg(impl_->computeGpuName)
+                                               : tr("运算显卡已恢复默认（性能最强的显卡），重新打开视频后生效"), false);
+        }
+    }
 }
 QVariantList QmlPlayerBridge::gpuMonitorChoices() const {
     QVariantList out;
@@ -5424,6 +5848,11 @@ QVariantList QmlPlayerBridge::gpuMonitorChoices() const {
     return out;
 }
 QString QmlPlayerBridge::gpuMonitorName() const { return impl_->gpuMonitorName; }
+QString QmlPlayerBridge::computeGpuHint() const {
+    if (!impl_->prefBool("computeOnMonitorGpu", false)) return tr("关闭时增强、补帧和导出用性能最强的显卡");
+    if (impl_->computeLuid) return tr("增强、补帧和导出都在「%1」上运行；切换后重新打开视频生效").arg(impl_->computeGpuName);
+    return tr("上面选“自动”时仍用性能最强的显卡；选一块显卡后它也负责运算");
+}
 QString QmlPlayerBridge::uiLanguage() const { return i18n::current(); }
 void QmlPlayerBridge::setQmlEngine(QQmlEngine* engine) {
     impl_->qmlEngine = engine;
@@ -6471,6 +6900,25 @@ void QmlPlayerBridge::updateRunStatus() {
         const auto sync=i.presentation.display==engine::DisplaySync::Vsync?tr("垂直同步"):tr("自动显示同步");
         options<<((refresh>0)?tr("%1 · 屏幕 %2 Hz").arg(sync).arg(refresh,0,'f',1):sync);
     }
+    // Variable refresh (NVIDIA G-SYNC / G-SYNC Compatible): the presenting
+    // monitor while playing, otherwise the main window's monitor (NVAPI,
+    // at most every 2 s). The driver setting is the user's; the 可变刷新
+    // switch decides how Veyra presents when it is possible.
+    int vrrLevel=int(s.displayVrr);
+    if(!s.running){
+        const auto now=std::chrono::steady_clock::now();
+        if(i.idleVrrQuery==std::chrono::steady_clock::time_point{}||now-i.idleVrrQuery>=std::chrono::seconds(2)){
+            HWND host=owner;
+            if(!host)if(auto* window=QGuiApplication::focusWindow())host=reinterpret_cast<HWND>(window->winId());
+            if(host){i.idleVrr=gfx::queryVrr(host);i.idleVrrQuery=now;}
+        }
+        vrrLevel=int(gfx::vrrLevel(i.idleVrr));
+    }
+    if(i.presentation.variableRefresh){
+        if(vrrLevel>=4)options<<tr("可变刷新 · 生效中");
+        else if(vrrLevel==3)options<<tr("可变刷新 · 未生效");
+        else options<<tr("可变刷新 · 当前屏幕不可用");
+    }else if(s.running&&vrrLevel>=4)options<<tr("屏幕可变刷新生效中");
     if(i.presentation.outputRate!=engine::OutputRateMode::Off){
         if(s.running&&s.presentationEffective.outputRate==engine::OutputRateMode::Off)
             options<<tr("输出限帧 · 当前未生效");
@@ -6482,6 +6930,17 @@ void QmlPlayerBridge::updateRunStatus() {
     if(!s.capture&&std::abs(s.playbackRate-1.0)>.001)options<<tr("播放速度 %1×").arg(s.playbackRate,0,'f',2);
     if(i.compareMode!=0)options<<tr("画面对比 · 补帧暂停");
     QStringList detail;
+    // Live output hint: also shown under the 倍率 control (fgDisplayHint).
+    QString fgHint;
+    if (s.running && !s.image && s.applied.multiplier > 1 && i.compareMode == 0 && s.displayFgSuggestion > 0 &&
+        s.displayFgContentFps > 0 && s.displayFgRefreshHz > 0) {
+        const double output = s.displayFgContentFps * s.applied.multiplier;
+        fgHint = s.displayFgSuggestion == 1
+            ? tr("当前帧率 %1 fps 超出屏幕刷新率 %2 Hz，建议关闭补帧来获得更好的延迟体验")
+                  .arg(output, 0, 'f', 0).arg(s.displayFgRefreshHz, 0, 'f', 0)
+            : tr("当前帧率 %1 fps 超出屏幕刷新率 %2 Hz，建议降至 %3X 来获得更好的延迟体验")
+                  .arg(output, 0, 'f', 0).arg(s.displayFgRefreshHz, 0, 'f', 0).arg(s.displayFgSuggestion);
+    }
     if (s.running && !s.image) {
         if (s.applied.multiplier > 1) {
             QString backend;
@@ -6497,6 +6956,9 @@ void QmlPlayerBridge::updateRunStatus() {
         }
         else detail << tr("未补帧");
         if (s.applied.multiplier > 1 && impl_->compareMode != 0) detail << tr("补帧暂停");
+        // Live output hint (DisplayFgBudget.h): a suggestion only, the
+        // multiplier stays the user's choice.
+        else if (!fgHint.isEmpty()) detail << fgHint;
         else if (s.applied.multiplier > 1 && (s.fgBudgetLimited || s.xessGenerationSuppressed) &&
                  (!rate.policyLimited()||i.history.overloaded)) detail << tr("调度降档");
         // Why VFG cannot hold the requested multiplier. One VFG interpolation
@@ -6524,7 +6986,7 @@ void QmlPlayerBridge::updateRunStatus() {
                     else detail << tr("VFG 每张约 %1 ms，当前负载约可稳定 %2X").arg(*perRun, 0, 'f', 1).arg(fits);
                 }
             }
-            if (refresh > 1 && source > 1 && source * s.applied.multiplier > refresh * 1.02)
+            if (fgHint.isEmpty() && refresh > 1 && source > 1 && source * s.applied.multiplier > refresh * 1.02)
                 detail << tr("屏幕 %1 Hz 最多显示约 %2X").arg(refresh, 0, 'f', 0).arg(std::max(1, int(refresh / source)));
         }
         if (s.nominalSourceFps > 0.01) detail << tr("源 %1 fps").arg(s.nominalSourceFps, 0, 'f', 2);
@@ -6544,9 +7006,10 @@ void QmlPlayerBridge::updateRunStatus() {
     const QString text = detail.join(QStringLiteral(" · "));
     const double gpu = i.gpuUtil.load();
     const double target=active&&f.rateWindowReady&&rate.targetFps>0?rate.targetFps:-1;
-    const bool changed = ratioChanged || active || status != i.runStatus || level != i.runLevel || text != i.runDetail || options!=i.runOptions || std::abs(target-i.effectiveOutputFps)>.05 || std::abs(gpu - i.gpuPublished) > 0.05;
+    const bool changed = ratioChanged || active || status != i.runStatus || level != i.runLevel || text != i.runDetail || options!=i.runOptions || std::abs(target-i.effectiveOutputFps)>.05 || std::abs(gpu - i.gpuPublished) > 0.05 ||
+                         fgHint != i.fgDisplayHint || vrrLevel != i.vrrState;
     i.runStatus = status; i.runLevel = level; i.runDetail = text; i.gpuPublished = gpu;
-    i.runOptions=options;i.effectiveOutputFps=target;
+    i.runOptions=options;i.effectiveOutputFps=target;i.fgDisplayHint=fgHint;i.vrrState=vrrLevel;
     if (changed) emit perfChanged();
 }
 
@@ -6726,6 +7189,27 @@ void QmlPlayerBridge::setEdgeAegis(bool value) {
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "edge aegis not saved");
     emit settingsChanged();
 }
+bool QmlPlayerBridge::dlssgLite() const { return settings().dlssgLite; }
+void QmlPlayerBridge::setDlssgLite(bool value) {
+    auto s = settings();
+    if (s.dlssgLite == value) return;
+    s.dlssgLite = value;
+    if (!impl_->commit(std::move(s))) { emit notice(tr("引擎未接受 DLSS 性能模式，原设置保留"), true); return; }
+    impl_->prefs[QStringLiteral("dlssgPerformance")] = value;
+    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "DLSS performance mode not saved");
+    emit settingsChanged();
+}
+bool QmlPlayerBridge::dlssgLiteAvailable() const {
+    static const bool present = ngx::dlssgLiteRuntimePresent(runtime::localRuntimeDirectory());
+    return present;
+}
+QString QmlPlayerBridge::dlssgLiteHint() const {
+    if (!dlssgLiteAvailable()) return tr("此软件包没有附带性能模式所需的 DLSS 帧生成 310.9.16 运行库");
+    const auto& s = impl_->snapshot;
+    if (s.running && s.dlssgLiteState == 3) return tr("目前只支持 RTX 50 系列：40/30 系的多帧解锁只适用于原版运行库");
+    if (s.running && s.dlssgLiteState == 1) return tr("生效中：NVIDIA DLSS 帧生成性能模式（测试版）");
+    return tr("NVIDIA 新增的性能模式（测试版）：补帧更省 GPU，高倍率更稳，画质可能略降；导出仍用标准模式");
+}
 int QmlPlayerBridge::contentRate() const { return int(settings().content); }
 void QmlPlayerBridge::setContentRate(int value) {
     if (value < 0 || value > int(engine::ContentRate::Capture60To30)) return;
@@ -6746,6 +7230,7 @@ void QmlPlayerBridge::setPresentationFullscreen(bool value) {
     impl_->presentation.fullscreen=value;
     impl_->engine.requestPresentation(impl_->presentation);
     emit presentationChanged();
+    updateGameMode();
 }
 double QmlPlayerBridge::previewAspect() const {
     const int mode=impl_->screenFillActive?2:impl_->aspectMode;
@@ -6759,6 +7244,29 @@ void QmlPlayerBridge::setDisplaySync(int value) {
     impl_->presentation.display = static_cast<engine::DisplaySync>(value);
     applyPresentation();
 }
+bool QmlPlayerBridge::variableRefresh() const { return impl_->presentation.variableRefresh; }
+void QmlPlayerBridge::setVariableRefresh(bool value) {
+    if (impl_->presentation.variableRefresh == value) return;
+    impl_->presentation.variableRefresh = value;
+    applyPresentation();
+}
+int QmlPlayerBridge::vrrState() const { return impl_->vrrState; }
+QString QmlPlayerBridge::vrrHint() const {
+    // The 可变刷新 switch is available (not grey) from level 2: the monitor
+    // can do VRR even if the driver setting is still off.
+    const bool on = impl_->presentation.variableRefresh, running = impl_->snapshot.running;
+    switch (impl_->vrrState) {
+    case 0: return tr("无法检测屏幕是否支持（目前只支持 NVIDIA 显卡）");
+    case 1: return tr("当前屏幕不支持可变刷新");
+    case 2: return tr("屏幕支持，但驱动未开启：NVIDIA 控制面板 → 设置 G-SYNC");
+    case 3:
+        if (!on) return tr("屏幕跟着画面刷新：不撕裂，也几乎不用等刷新");
+        return running ? tr("已开启，屏幕还没进入可变刷新：全屏并隐藏控制栏，或在 NVIDIA 控制面板为窗口模式开启 G-SYNC")
+                       : tr("已开启，播放时生效");
+    default: return on ? tr("生效中：屏幕跟着画面刷新") : tr("屏幕正处于可变刷新（驱动已开启）");
+    }
+}
+QString QmlPlayerBridge::fgDisplayHint() const { return impl_->fgDisplayHint; }
 int QmlPlayerBridge::outputRateMode() const { return int(impl_->presentation.outputRate); }
 void QmlPlayerBridge::setOutputRateMode(int value) {
     if (value < 0 || value > 2 || int(impl_->presentation.outputRate) == value) return;
@@ -6779,12 +7287,13 @@ void QmlPlayerBridge::applyPresentation() {
     if (!p.valid()) return;
     impl_->engine.requestPresentation(p);
     impl_->prefs[QStringLiteral("presentation")] = QVariantMap{
-        {"lowQueue", p.enabled}, {"display", int(p.display)}, {"outputRate", int(p.outputRate)}, {"customFps", p.customFps}};
+        {"lowQueue", p.enabled}, {"display", int(p.display)}, {"outputRate", int(p.outputRate)}, {"customFps", p.customFps}, {"vrr", p.variableRefresh}};
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "presentation settings not saved");
-    veyra::log::info("ui-presentation", std::format("lowQueue={} display={} outputRate={} customFps={:.3f}",
-        p.enabled, int(p.display), int(p.outputRate), p.customFps));
+    veyra::log::info("ui-presentation", std::format("lowQueue={} display={} outputRate={} customFps={:.3f} variableRefresh={}",
+        p.enabled, int(p.display), int(p.outputRate), p.customFps, p.variableRefresh));
     emit presentationChanged();
     emit settingsChanged();
+    emit perfChanged();
 }
 
 // --- design gap B8-B11: compare and aspect ------------------------------------

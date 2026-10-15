@@ -18,6 +18,7 @@ public:
         bool frameGeneration = false;
         int fgBackend = 0;
         unsigned fgMultiplier = 1;
+        std::wstring dlssgDirectory; // DLSS-G performance-mode runtime, searched first
         bool operator==(const Key&) const = default;
     };
     ~NgxCoreCache();

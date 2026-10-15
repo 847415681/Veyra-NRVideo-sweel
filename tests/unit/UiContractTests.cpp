@@ -58,7 +58,7 @@ void outputRateContracts(){
     require(h.overloaded&&std::wstring(h.rateStatus(s))!=L"正常","VSync cannot hide output below its effective target");
     h={};s=live();s.applied.multiplier=4;s.presentationEffective.display=engine::DisplaySync::Automatic;
     s.metrics.flow.presentSubmitFps=60;settle(h,s,0,{60});
-    require(!h.overloaded&&h.output.displayLimited,"Automatic display sync also uses the refresh limit");
+    require(h.overloaded&&h.output.targetFps==240&&!h.output.displayLimited,"Automatic replaces unshown frames instead of waiting, so the refresh rate is not its submission target");
     s.presentationEffective.display=engine::DisplaySync::Tearing;++s.presentationRevision;settle(h,s,0,{60});
     require(h.overloaded&&h.output.targetFps==240&&!h.output.displayLimited,"Tearing does not inherit a display cap");
     h={};s=live();s.applied.multiplier=4;s.presentationEffective.display=engine::DisplaySync::Vsync;

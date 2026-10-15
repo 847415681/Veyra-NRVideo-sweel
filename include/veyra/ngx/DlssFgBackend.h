@@ -58,6 +58,7 @@ public:
         uint32_t renderHeight;
         uint32_t backbufferFormat;   // DXGI_FORMAT of backbuffer (e.g. R8G8B8A8_UNORM)
         bool dynamicResolution;
+        bool lite = false;           // DLSS-G performance mode (ngx/DlssgLite.h), create-time only
     };
 
     struct EvalDesc {

@@ -7,6 +7,7 @@
 #include <condition_variable>
 #include <functional>
 #include <memory>
+#include <optional>
 #include "veyra/engine/EnhancementSettings.h"
 #include "veyra/engine/EffectChain.h"
 #include "veyra/engine/PresentationSettings.h"
@@ -118,11 +119,26 @@ struct PlayerSnapshot {
     double playbackRate=1; // requested file-preview transport rate; separate from measurement
     bool fgBudgetLimited=false,xessGenerationSuppressed=false;
     unsigned previewFgMultiplier=0;
+    // Live FG output hint (DisplayFgBudget.h), never applied automatically:
+    // 0 = the output fits the panel, 1 = suggest turning generation off,
+    // otherwise the suggested lower multiplier. Refresh and content rate are
+    // the inputs of that suggestion.
+    unsigned displayFgSuggestion=0;
+    double displayFgRefreshHz=0,displayFgContentFps=0;
+    // Variable refresh of the presenting monitor (NVIDIA only, gfx::vrrLevel):
+    // 0 unknown, 1 the monitor cannot do VRR, 2 it can but VRR is not possible
+    // now, 3 possible, 4 active. presentationVrrSync: the 可变刷新 switch made
+    // Automatic present like Vsync for it.
+    unsigned displayVrr=0;
+    bool presentationVrrSync=false;
     // Runtime-reported DLSSG MultiFrameCountMax: 1 = 2X only, 5 = 6X.
     // 0 = not queried yet (no session). The UI uses this to offer only the
     // multipliers the active GPU can actually honour.
     int fgMultiFrameMax=0;
     bool fgCapabilityKnown=false;
+    // DLSS-G performance mode of the active graph (EnhanceGraph::dlssgLiteState):
+    // 0 not requested, 1 active, 2 runtime missing, 3 GPU keeps the default runtime.
+    uint32_t dlssgLiteState=0;
     // XeSS frame-generation ceiling (generated frames; 1 = stock 2X, 3 = 4X).
     // 0 = no XeSS session has reported yet; the settings UI then falls back to
     // the audited-provider probe.
@@ -158,6 +174,23 @@ public:
     remoteplay::ControllerFeedback remotePlayFeedback();
     void remotePlayController(const remoteplay::ControllerState&);
     void remotePlayLoginPin(std::string);
+    // PS5 手柄控制 beside a capture card: a controller-only Remote Play session
+    // (the console's keepalive video and audio are dropped on receipt). Start and
+    // stop are queued to a dedicated thread, so callers never wait for the
+    // console, and a newer request replaces a queued one. The session survives
+    // capture re-opens; opening any other source, or a PS5 stream (the console has
+    // one Remote Play slot), stops it. Pad, rumble and login PIN go through the
+    // remotePlay* calls above when no PS5 stream runs.
+    void startRemoteControl(source::RemotePlayConnectDesc);
+    void stopRemoteControl();
+    struct RemoteControlStatus{
+        bool requested=false; // a start is queued or a session exists
+        bool starting=false,alive=false,connected=false,pinRequired=false,recovering=false,failed=false;
+        bool keepaliveReady=false;double keepaliveFps=0; // console video samples dropped per second
+        std::wstring message;
+    };
+    RemoteControlStatus remoteControlStatus()const;
+    bool remoteControlRequested()const; // cheap: a start is queued or a session exists
 #endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
     void openMoonlight(HWND, source::MoonlightConnectDesc, PlayerOptions);
@@ -196,12 +229,27 @@ private:
     void dispatch();
     void status(const std::wstring&,bool failed=false);
     void noteEngineHang(uint64_t stalledMs);
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    void controlLoop(std::stop_token);
+    void waitRemoteControlIdle();
+#endif
     mutable std::mutex mutex_;
     PlayerSnapshot snapshot_;
     PresentationSettings presentation_;
     uint64_t presentationRevision_=1;
     std::shared_ptr<FrameFlowWindow> activeFlow_;
     std::shared_ptr<source::RemotePlaySessionSource> activeRemote_;
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    std::shared_ptr<source::RemotePlaySessionSource> controlRemote_; // mutex_; PS5 手柄控制
+    // controlMutex_ guards the queue below; the session thread never holds it
+    // (nor mutex_) while it talks to the console.
+    mutable std::mutex controlMutex_;
+    std::condition_variable_any controlWake_;
+    std::condition_variable controlIdle_;
+    std::optional<std::shared_ptr<source::RemotePlayConnectDesc>> controlPending_; // empty pointer = stop
+    bool controlBusy_=false,controlStarting_=false,controlExited_=false;
+    std::jthread controlThread_; // started on first use; joined (bounded) in the destructor
+#endif
     std::shared_ptr<source::MoonlightSessionSource> activeMoonlight_;
     std::shared_ptr<source::XboxSessionSource> activeXbox_;
     PreviewView previewView_;

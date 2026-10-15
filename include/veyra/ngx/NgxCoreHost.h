@@ -25,11 +25,14 @@ public:
     // `runtimeDir` is the absolute staged runtime directory used both as the
     // feature search path (PathListInfo) and application data path. The
     // project identity strings come from runtime_local/config/ngx-local.json.
+    // priorityDirectory, when set, is searched before runtimeDir for every
+    // feature DLL (the DLSS-G performance-mode runtime, ngx/DlssgLite.h).
     bool initialize(ID3D12Device* device,
                     const std::wstring& runtimeDir,
                     const char* projectId,
                     const char* engineVersion,
-                    Status& status);
+                    Status& status,
+                    const std::wstring& priorityDirectory = {});
     void shutdown();
 
     bool initialized() const { return initialized_; }

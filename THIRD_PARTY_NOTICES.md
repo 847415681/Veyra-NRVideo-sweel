@@ -360,6 +360,28 @@ before its dispatch), so that validation mode is skipped for the FSR SR
 configuration with an explicit log line. See
 [AMD FSR frame generation integration record](docs/FSR_FRAMEGEN_INTEGRATION_2026-09-16.md).
 
+## DLSS-G 310.9.16 performance-mode runtime (2026-10-14)
+
+`runtime/experimental/dlssg-lite/nvngx_dlssg.dll` is NVIDIA's DLSS Frame
+Generation 310.9.16.0 (7,506,544 bytes, SHA-256
+`CADEE1AA6DB3907BABDC3285DA2AEBC4553D92B89C38BA3EAE8ABD8BBA1BEA72`, Authenticode
+valid, signer NVIDIA Corporation), unmodified. NVIDIA App 11.0.9 delivers it over
+the air as an `nvapp_override` model for the "DLSS Frame Generation performance
+mode (beta)" setting; it was taken from that model store
+(`%ProgramData%\NVIDIA\NGX\models\dlssg\versions\20318480\files\160_E658700.bin`)
+with the user's explicit approval on 2026-10-14, as a named exception to the
+project's rule against driver-cache binaries. It ships only as a Release runtime
+asset (never in Git), listed in `release-runtime-manifest.json` by
+`scripts/package-portable.ps1` from 2.0.8.
+
+Veyra's "DLSS 性能模式" switch adds this directory ahead of
+`runtime/experimental` in the NGX feature path and creates DLSS-G with NVIDIA's
+create-time parameter `DLSSG.LiteCandidateBlendingEnabled = 1`. The switch is
+off by default, export keeps the standard model, and RTX 40/30 (whose
+multi-frame unlock patches are keyed to 310.9.1) are refused. This is not an
+NVIDIA partnership, certification or support; the runtime remains NVIDIA
+proprietary software under NVIDIA's terms.
+
 ## DLSS-G 310.9.1 provider patches: DLSSG-Transfusion (2026-09-30)
 
 SilyNoMeta/DLSSG-Transfusion, tag `v1.4.5.3-rtx20-30-40`, commit
@@ -617,6 +639,15 @@ explicit disable. No complete SDK header or NVIDIA runtime is committed or bundl
 The driver is supplied by Windows/NVIDIA. Frame markers delimit Veyra enhancement
 and presentation, not game input or physical display latency. Generated-frame
 Reflex integration is not enabled; DLSS retains its selected multiplier.
+
+`include/veyra/gfx/NvidiaVrr.h` (2026-10-14) adds, from the same interface
+files, the QueryInterface IDs of NvAPI_DISP_GetDisplayIdByDisplayName,
+NvAPI_Disp_GetVRRInfo and NvAPI_DISP_GetMonitorCapabilities and renamed
+NV_GET_VRR_INFO_V1 and NV_MONITOR_CAPABILITIES_V1 (generic capability bits)
+layouts (checked against the commit above). It only reads the monitor's
+variable-refresh support and state, for diagnostics and to enable the 可变刷新
+switch; the driver setting is never changed. Same loading rules and the same
+license as above.
 
 Copyright (c) 2019-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 
