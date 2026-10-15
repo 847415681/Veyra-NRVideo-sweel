@@ -16514,6 +16514,48 @@
    "zh-TW": "原生擷取會先確認有效訊號；請在裝置清單選擇對應的 HDMI/SDI 輸入，支援自動偵測的卡建議選擇自動。Driver 保留驅動程式目前輸入。",
    "en": "Native capture first verifies a valid signal. Select the matching HDMI/SDI connector and use Auto when supported. Driver keeps the current driver input.",
    "ja": "ネイティブキャプチャは最初に有効な信号を確認します。該当する HDMI/SDI 入力を選択し、対応カードでは自動検出を使用してください。Driver は現在のドライバー入力を維持します。"
+  },
+  {
+   "zh": "发现新版本 %1",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "發現新版本 %1",
+   "en": "New version %1 available",
+   "ja": "新しいバージョン %1 があります"
+  },
+  {
+   "zh": "发现新版本 %1，点击查看更新",
+   "src": "qml/Veyra/UpdateBanner.qml",
+   "zh-TW": "發現新版本 %1，點擊查看更新",
+   "en": "Version %1 available. Click to view the update.",
+   "ja": "バージョン %1 があります。クリックして更新を確認。"
+  },
+  {
+   "zh": "启动时自动检查，有更新时提示",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "啟動時自動檢查，有更新時提示",
+   "en": "Checks on startup; notifies when an update is available",
+   "ja": "起動時に確認し、更新がある場合に通知します"
+  },
+  {
+   "zh": "当前已是最新版本",
+   "src": "src/ui/UpdateChecker.cpp",
+   "zh-TW": "目前已是最新版本",
+   "en": "You are up to date",
+   "ja": "最新バージョンです"
+  },
+  {
+   "zh": "查看更新",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "查看更新",
+   "en": "View update",
+   "ja": "更新を見る"
+  },
+  {
+   "zh": "检查更新失败，请检查网络后重试",
+   "src": "src/ui/UpdateChecker.cpp",
+   "zh-TW": "檢查更新失敗，請檢查網路後重試",
+   "en": "Could not check for updates. Check your connection and try again.",
+   "ja": "更新を確認できませんでした。接続を確認して再試行してください。"
   }
  ]
 }

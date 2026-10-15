@@ -9508,3 +9508,14 @@ BMD日志53：5次进入原生协商的尝试均SDI连接0x1、locked0/noInput�
 本轮private QA stage在tests/issues36-37-bmd-20261013/product；窗口回归另用同根各用途目录issues36-37-bmd-20261013-ui与issues36-37-bmd-20261013-pro。logs含cpu-final-232222、gpu-232224、rotation-before-231023、rotation-after-231453/232040、usb-232352及所有失败；原包1641 payload SHA/size、670构建输入、29 EXE/各回执绑定、73旧树HEAD/status和原始日志保护均由tmp/issues36-37-bmd-20261013/audit.py核对。最终回执reports/.../final.json与archives/.../source-after.bundle；无合并main/push/交付包/Release/子Agent/关机。
 
 最终封存校验器首轮误把i18n/catalog根对象当数组，断言失败；实际根为entries封装，改为按entries完整前缀比较后确认原2245条目全部原序保持、仅增8条，未改数据或产品。失败说明外部reports/issues36-37-bmd-20261013/audit-validation-failure.json保留。
+
+
+## 2026-10-13 更新检查开工
+
+用户要求启动自动查新版并短暂顶部提示，无更新静默。起点main7571919，隔离codex/update-check-20261013；70旧树/脏文件与增量bundle存档verify通过。实施独立Qt Network异步服务/bridge/顶部8秒可点击提示/设置手动检查/四语。保持33ms/250ms、引擎和真实配置，产物全E盘。当前待构建、HTTP异常及真实GitHub/GUI验证，尚不称完成。详情UPDATE_CHECK_PLAN_2026-10-13.md。
+
+### 更新检查完成
+
+实测产品9d5a42e，空目录5目标504步骤125秒构建，最终日志追加后增量17.7秒，EXE3e98899bb5ebb5bdd8843d9043e561727717f7dc46d356141a4dfc4cc99f97ea。外部build.py复用已批准依赖路径，没下载或换模型。29项HTTP/版本/超时/合并/启动及销毁回归、真实GitHub匿名HTTPS、i18n/UI合同、D3D12和software顶部提示6项各通过。系统PATH独立配置下产品两模式各一次自动查询、current静默及正常退出。完整命令/边界见UPDATE_CHECK_PLAN_2026-10-13.md；reports/update-check-20261013固定回执，logs对应原始结果。
+
+失败如实保留：首轮HTTP夹具错要求头大小写一致，修夹具复测通过；首轮整软件计数拼接重复日志且旧记录无法区分手动/自动，追加请求来源日志后双模式确认为1次automatic，不称修复未知重复原因；GPU夹具最初未强制D3D12，最终显式RHI+实际日志复验；收尾software断言匹配错产品日志字段，修断言复核既有日志。取消reply无用read警告做isOpen保护。四语缺失0/占位符0，70旧树/脏文件/main、原包39根DLL保持，引擎/着色器无diff，无33ms/250ms/运行库/用户设置变化。本地分支完成，未main合并/push/更新已发布2.0.7资产/关机，不把启动验证包装成播放性能或全硬件验收。

@@ -967,8 +967,19 @@ VPage {
                     VGroup {
                         VRow {
                             label: qsTr("检查更新")
-                            hint: qsTr("GitHub · Likely7/Veyra-NRVideo · 发布页")
-                            VButton { text: qsTr("检查"); onClicked: veyra.openReleasesPage() }
+                            hint: veyra.updates.latestVersion.length > 0
+                                  ? qsTr("发现新版本 %1").arg(veyra.updates.latestVersion)
+                                  : qsTr("启动时自动检查，有更新时提示")
+                            VButton {
+                                text: veyra.updates.checking ? qsTr("检查中…") : qsTr("检查")
+                                enabled: !veyra.updates.checking
+                                onClicked: veyra.updates.check(true)
+                            }
+                            VButton {
+                                visible: veyra.updates.latestVersion.length > 0
+                                text: qsTr("查看更新")
+                                onClicked: veyra.updates.openRelease()
+                            }
                         }
                         VRow {
                             label: qsTr("反馈问题")

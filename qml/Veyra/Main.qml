@@ -712,6 +712,19 @@ Window {
     Shortcut { sequence: "Y"; onActivated: veyra.cycleSubtitle(true) }
 
     // Toasts: a refused edit, a finished export, a failed open.
+    UpdateBanner {
+        id: updateBanner
+        z: 35
+        anchors.top: parent.top
+        anchors.topMargin: 12
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: Math.min(500, root.width - 32)
+        onOpenRequested: veyra.updates.openRelease()
+    }
+    Connections {
+        target: veyra.updates
+        function onUpdateAvailable(version) { updateBanner.show(version) }
+    }
     // pages.css .canvas-toast: top 12px, padding 7px 12px, from translate -8px and
     // opacity 0; .on: opacity .2s, translate .45s --spring; hidden after 2600 ms.
     Rectangle {
@@ -871,6 +884,7 @@ Window {
     }
     onClosing: if (!root.fullscreen && !root.maximized && !root.cinema) veyra.rememberWindowSize(root.width, root.height)
     Component.onCompleted: {
+        veyra.updates.startAutomaticCheck()
         applyStartupSize()
         // Open on the configured page: the user's saved preference, or the
         // override a test passes on the command line.
