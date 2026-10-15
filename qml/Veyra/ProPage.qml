@@ -2223,8 +2223,8 @@ VPage {
                                         // once (with no compensation the composed pair equals a whole
                                         // preset). Light only the active mode's row, so it never looks
                                         // like two modes are in force.
-                                        primary: veyra.hdrPresetMode !== "axes" && veyra.hdrTuningPreset === modelData.id
-                                        onClicked: veyra.applyHdrTuningPreset(modelData.id)
+                                        primary: veyra.hdrAppliedFrom !== "axes" && veyra.hdrTuningPreset === modelData.id
+                                        onClicked: { veyra.hdrPresetMode = "legacy"; veyra.applyHdrTuningPreset(modelData.id) }
                                     }
                                 }
                             }
@@ -2266,8 +2266,8 @@ VPage {
                                         // Light strictly on a real match: nothing lights when the curve
                                         // came from the whole-preset side (or was tuned by hand),
             // matching how that row reports its own "custom" state.
-            primary: veyra.hdrPresetMode === "axes" && veyra.hdrAxesMatch.content === modelData.id
-                                        onClicked: veyra.applyHdrAxesPreset(modelData.id, veyra.hdrAxes.environment !== "" ? veyra.hdrAxes.environment : "compensate")
+            primary: veyra.hdrAppliedFrom === "axes" && veyra.hdrAxesMatch.content === modelData.id
+                                        onClicked: { veyra.hdrPresetMode = "axes"; veyra.applyHdrAxesPreset(modelData.id, veyra.hdrAxes.environment !== "" ? veyra.hdrAxes.environment : "compensate"); }
                                     }
                                 }
                             }
@@ -2291,8 +2291,8 @@ VPage {
                                         required property var modelData
                                         text: modelData.label
                                         ghost: true
-                                        primary: veyra.hdrPresetMode === "axes" && veyra.hdrAxesMatch.environment === modelData.id
-                                        onClicked: veyra.applyHdrAxesPreset(veyra.hdrAxesMatch.content !== "" ? veyra.hdrAxesMatch.content : (veyra.hdrAxes.content !== "" ? veyra.hdrAxes.content : "standard"), modelData.id)
+                                        primary: veyra.hdrAppliedFrom === "axes" && veyra.hdrAxesMatch.environment === modelData.id
+                                        onClicked: { veyra.hdrPresetMode = "axes"; veyra.applyHdrAxesPreset(veyra.hdrAxesMatch.content !== "" ? veyra.hdrAxesMatch.content : (veyra.hdrAxes.content !== "" ? veyra.hdrAxes.content : "standard"), modelData.id); }
                                     }
                                 }
                             }

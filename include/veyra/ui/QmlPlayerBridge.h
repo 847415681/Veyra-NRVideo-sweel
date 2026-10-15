@@ -335,7 +335,11 @@ class QmlPlayerBridge : public QObject {
     // Custom: which preset system the panel shows. "legacy" is the original seven
     // presets, "axes" is content x environment. A UI choice kept in preferences:
     // both modes write the very same curve, so the saved session is unaffected.
-    Q_PROPERTY(QString hdrPresetMode READ hdrPresetMode WRITE setHdrPresetMode NOTIFY preferencesChanged)
+    Q_PROPERTY(QString hdrPresetMode READ hdrPresetMode WRITE setHdrPresetMode NOTIFY preferencesChanged)
+    // Which preset system established the curve in force. Kept apart from hdrPresetMode
+    // on purpose: switching the panel view must not let the other system claim the curve,
+    // so only an actual apply moves this.
+    Q_PROPERTY(QString hdrAppliedFrom READ hdrAppliedFrom WRITE setHdrAppliedFrom NOTIFY preferencesChanged)
     Q_PROPERTY(QVariantMap hdrAxes READ hdrAxes NOTIFY preferencesChanged)
     Q_PROPERTY(QVariantMap hdrAxesMatch READ hdrAxesMatch NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap hdrDials READ hdrDials NOTIFY settingsChanged)
@@ -906,6 +910,8 @@ public:
     QVariantMap hdrPeakWarning() const;
     int hdrDisplayProfileCount() const;
     QString hdrPresetMode() const;
+    QString hdrAppliedFrom() const;
+    void setHdrAppliedFrom(const QString& from);
     void setHdrPresetMode(const QString& mode);
     QVariantMap hdrAxes() const;
     QVariantMap hdrAxesMatch() const;

@@ -4756,6 +4756,19 @@ QString QmlPlayerBridge::hdrTuningPreset() const {
         if(engine::hdrPresetMatches(s.hdrCurve,s.hdrMetadata,p))return QString::fromLatin1(p.id);
     return QStringLiteral("custom");
 }
+QString QmlPlayerBridge::hdrAppliedFrom() const {
+  return impl_->prefString("hdrAppliedFrom")==QLatin1String("axes")?QStringLiteral("axes")
+      :QStringLiteral("legacy");
+}
+
+void QmlPlayerBridge::setHdrAppliedFrom(const QString& from){
+  const QString wanted=from==QLatin1String("axes")?QStringLiteral("axes"):QStringLiteral("legacy");
+  if(impl_->prefString("hdrAppliedFrom")==wanted)return;
+  impl_->prefs[QStringLiteral("hdrAppliedFrom")]=wanted;
+  impl_->savePrefs();
+  emit preferencesChanged();
+}
+
 QString QmlPlayerBridge::hdrPresetMode() const {
   return impl_->prefString("hdrPresetMode")==QLatin1String("axes")?QStringLiteral("axes")
                                                                 :QStringLiteral("legacy");
@@ -4831,6 +4844,7 @@ bool QmlPlayerBridge::setHdrDial(const QString& key,int level){
 }
 
 bool QmlPlayerBridge::applyHdrAxesPreset(const QString& content,const QString& environment){
+  setHdrAppliedFrom(QStringLiteral("axes"));
   const QByteArray contentId=content.toUtf8();
   const QByteArray environmentId=environment.toUtf8();
   const auto curve=engine::hdrAxesCurve(contentId.constData(),environmentId.constData());
@@ -5079,6 +5093,8 @@ QVariantMap QmlPlayerBridge::hdrPeakWarning() const {
 }
 
 bool QmlPlayerBridge::applyRecommendedHdrTuning(){
+  // The recommendation applies within the view the user is in, so that view owns it.
+  setHdrAppliedFrom(hdrPresetMode());
   const auto& snap=impl_->snapshot;
   const auto rec=engine::recommendHdrTuning(snap.sourceMasteringPeakNits,snap.sourceMaxCllNits,
       snap.sourceMaxFallNits,effectiveHdrDisplayPeakNits());
@@ -5120,6 +5136,7 @@ bool QmlPlayerBridge::applyRecommendedHdrTuning(){
 }
 
 bool QmlPlayerBridge::applyHdrTuningPreset(const QString& id){
+  setHdrAppliedFrom(QStringLiteral("legacy"));
     for(const auto& p:engine::kHdrTuningPresets){
         if(id!=QLatin1String(p.id))continue;
         auto s=settings();
