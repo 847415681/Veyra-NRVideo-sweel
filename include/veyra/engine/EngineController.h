@@ -89,6 +89,18 @@ struct PlayerSnapshot {
     // ratio (0 = use coded size). Known at open time, before the first frame.
     uint32_t sourceWidth=0,sourceHeight=0;
     bool sourceHdr=false;
+    // The source's own HDR numbers, straight from the container. They survive the
+    // hardware-decode path, where there is no CPU luma to measure a histogram from.
+    unsigned sourceMasteringPeakNits=0;
+    unsigned sourceMaxCllNits=0;
+    unsigned sourceMaxFallNits=0;
+    // Custom: the live coverage the presenter measured with its 64x36 probe (see
+    // HdrOutputTuning.h). Percentages of the last probed frame; invalid until the
+    // first probe completes, so the panel can say "not measured" instead of 0%.
+    bool hdrCoverageValid=false;
+    double hdrAboveCeilingPercent=0.0;
+    double hdrInRollOffPercent=0.0;
+    double hdrInLiftPercent=0.0;
     double sourceDisplayAspect=0.0;
     int sourceRotationDegrees=0;
     // Poster frame for the minimal-mode bar, as a small RGBA8 image. Empty when
