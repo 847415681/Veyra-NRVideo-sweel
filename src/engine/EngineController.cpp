@@ -598,6 +598,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             auto stageRequest=[&](const PlayerOptions& o){
                 StageRequest r;r.nr=o.nr;r.sr=o.sr;r.fg=o.fg;r.fgMultiplier=o.fgMultiplier;
                 r.width=width;r.height=height;r.stillImage=isImage;r.nvidiaAdapter=nvidiaAdapter;r.amdNr=amdNrAdapter;
+                r.uncompressedSource=isScreen||(physicalCapture&&!captureSource.compressedVideo());
                 r.nodeOrder=o.nodeOrder?&*o.nodeOrder:nullptr;return r;
             };
             describeStages(stageRequest(options),options.snapshot(),gd);

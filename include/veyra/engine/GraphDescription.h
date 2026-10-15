@@ -45,6 +45,8 @@ struct StageRequest {
     bool exportJob=false;    // native NVIDIA NR, bounded AMD NR, no present-sink FG/NR-first order
     bool nvidiaAdapter=true;
     bool amdNr=false;        // AMD adapter: NR runs on the lmxxf runtime (no NGX)
+    // Raw capture-card or screen frames: nothing compressed for native-size RTX Video SR to repair.
+    bool uncompressedSource=false;
     const ChainRuntimeOrder* nodeOrder=nullptr; // paired with this settings transaction
 };
 
@@ -94,8 +96,10 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     desc.nrWidth=plan.nr.width;desc.nrHeight=plan.nr.height;
     desc.flowWidth=plan.flow.width;desc.flowHeight=plan.flow.height;
     // RTX Video SR can restore compressed video at its original resolution.
-    // ResolutionPlan::srApplied describes enlargement, not SDK execution.
-    const bool nativeVideoRestore=request.sr&&!request.stillImage&&request.nvidiaAdapter&&
+    // ResolutionPlan::srApplied describes enlargement, not SDK execution. Raw capture has
+    // no compression artifacts: there a source already at the target skips SR as in 2.0.6
+    // (5090 field log 57: 4K->4K VSR cost ~8.7 ms a frame and pushed 60 fps over budget).
+    const bool nativeVideoRestore=request.sr&&!request.stillImage&&!request.uncompressedSource&&request.nvidiaAdapter&&
         settings.videoSrQuality>=1&&settings.videoSrQuality<=4;
     desc.enableSr=(plan.srApplied||nativeVideoRestore)&&(request.nvidiaAdapter||settings.videoSrQuality==kVideoSrFsr);
     desc.enableNr=request.nr&&(request.nvidiaAdapter||request.amdNr)&&(!settings.nrLayerCount||settings.activeNrLayerCount()>0);

@@ -70,6 +70,15 @@
 - 代码：`CaptureFormatSelection.h`（`captureCommonFrameRate`、`captureVisibleFrameRates`、`captureDefaultFrameRate`）、桥接 `captureHiddenFrameRates`、`DialogHost.qml` 开关行、四语翻译。
 - 验证：单元测试新增 1–120 fps + 59.94 的卡（短列表 8 行 120/100/60/59.94/50/30/25/24、隐藏 113、显示全部 121）、选中的非常用帧率保留、同一 60 fps 两个间隔只列一行、无常用帧率的分辨率全列且不出开关、换分辨率落到 24 而不是 1 fps，全部通过。T911 原样：1080p 7 个帧率（240.004、120、60、59.94、50、30、29.97）全是常用，不出开关，行为不变（`logs/claude-field-20261015/rates-t911-095201`）。模拟每项多报 1–160 fps：1080p 短列表 11 行（240.004 到 24），开关显示隐藏 153 个，打开后 164 行（`rates-160-sorted-095436`、`rates-menu-095540`）；英文界面开关行不溢出（`rates-en-095732`）。回归：`logs/claude-field-20261015/unit-rates-final-095820` 全部通过（qml_quick 68/0）。
 
+## 追加（用户 2026-10-15）：5090 用户 2.0.7 开销变大——原尺寸 RTX Video SR 只给压缩视频
+
+用户提交 veyra-qml(44).log（10-08，2.0.6）与 veyra-qml(57).log（10-14/15，2.0.7），反馈“相同参数功耗、负载变高”，并自己指出：“之前2.0.6 4K画面开启4K超分 这个超分是不会启用的，而2.0.7 4k画面开启超分也会启动”。
+
+- 证据（RTX 5090，美乐威 4K59.94 P010，同样 NR + 补帧）：2.0.6 4K→4K 时超分不运行（graph sr=0）；2.0.7 运行 RTX Video SR 4K→4K 质量 4，超分每帧 p95 约 8.7 ms，NR p95 也从约 4.5 ms 升到约 8.5 ms，合计超出 16.7 ms 帧预算。
+- 来源：108cbaa（10-10 “native video SR”）让 RTX Video SR 1–4 档在原尺寸也执行“压缩伪影修复”，修的是“4K 片源选 4K 超分开关无区别”；对无压缩采集没有伪影可修，只增加开销。
+- 用户选择“只给压缩视频”：`StageRequest::uncompressedSource`（屏幕捕获，或采集卡所选格式不是压缩格式）时不做原尺寸修复，回到 2.0.6；视频文件、PS5/PC/Xbox 串流、MJPEG/H.264 采集照旧。放大（1080p→4K 等）、DLSS/FSR 规则不变。`CaptureCardSource::compressedVideo()` 提供所选格式是否压缩。专业/节点页超分说明改为“原尺寸时修复视频文件和串流的压缩伪影，无压缩的采集卡格式在原尺寸不运行”，四语翻译。
+- 验证：effect_chain 新增四项（压缩 4K 仍修复、无压缩 4K→4K 跳过、无压缩 1080p 仍放大到 4K、DLSS 原尺寸仍跳过）通过；回归全部通过（`logs/claude-field-20261015/unit-nativesr-102817`，qml_quick 68/0）。T911 实卡 4K60：NV12 开超分（4K、质量 4）graph sr=0、超分耗时 0（`nativesr-nv12-102948`）；MJPEG 开超分 sr=1、原尺寸修复照旧（本机 5070 约 30 ms/帧，`nativesr-mjpg-103019`）。
+
 ## 测试包（基于 2.0.7 r2，只替换 veyra_qml_ui.exe、DialogHost.qml、VIcon.qml，不含任何用户设置）
 - 目录 `E:/项目/Veyra/test-packages/claude-field-20261015/`（DELIVERY.json，打包脚本 `tmp/claude-field-20261015/package.py`，源码 d2239c6）。
 - 覆盖补丁 `Veyra-2.0.7-test-field-patch.zip`（8120432 字节，SHA256 `fa715aad4a4da09247798ef021c74e6227a4091714b7af3df19ef02def3367c1`）：解压到原 2.0.7 文件夹覆盖，NVIDIA/AMD 包通用（两包的 2.0.7 exe 相同），原设置保留。

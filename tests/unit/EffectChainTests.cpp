@@ -1039,6 +1039,22 @@ __declspec(noinline) void testInactiveEffectEdits(){
     resolveHdrTuning(next.hdrCurve,next.hdrMetadata,curve,resolved);
     check(resolved.maxCllNits==600&&!metadata.sameActiveVideoParameters(next),"display peak remains active for enabled metadata even with the pixel curve off");
 }
+// 2.0.7 runs RTX Video SR at native size to repair compression artifacts. Raw capture has
+// none, so a raw source already at the target skips SR as 2.0.6 did (5090 field log 57).
+static void testNativeVideoSrPolicy(){
+    EnhancementSettings s;s.nr=false;s.sr=true;s.multiplier=1;s.videoSrQuality=4;s.srTarget=veyra::pipeline::SrTarget::Uhd4K;
+    StageRequest request;request.sr=true;request.width=3840;request.height=2160;
+    veyra::pipeline::EnhanceGraphDesc d;
+    describeStages(request,s,d);
+    check(d.enableSr,"native-size RTX Video SR still repairs a compressed 4K source");
+    request.uncompressedSource=true;describeStages(request,s,d);
+    check(!d.enableSr,"raw 4K capture at a 4K target skips SR as in 2.0.6");
+    request.width=1920;request.height=1080;describeStages(request,s,d);
+    check(d.enableSr,"raw 1080p capture still upscales to the 4K target");
+    request.uncompressedSource=false;request.width=3840;request.height=2160;s.videoSrQuality=0;describeStages(request,s,d);
+    check(!d.enableSr,"DLSS SR keeps skipping a source already at the target");
+}
+
 int main() {
     {
         using namespace veyra;using namespace veyra::engine;
@@ -1107,6 +1123,7 @@ int main() {
     testNodeSplitNrDescription();
     testNodePreSrProtectionDescription();
     testNodeInterNrProtectionDescription();
+    testNativeVideoSrPolicy();
     std::printf(failures ? "effect chain: %d FAILURES\n" : "effect chain: all checks passed\n", failures);
     return failures ? 1 : 0;
 }

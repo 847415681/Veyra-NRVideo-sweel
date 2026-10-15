@@ -69,6 +69,8 @@ public:
     sink::CaptureAudioState audioState()const;
     const SourceInfo& info()const override;
     const std::wstring& errorMessage()const{return error_;}
+    // The selected media type is compressed (MJPEG, H.264, ...) and decoded by Veyra.
+    bool compressedVideo()const;
     SourceReadStatus read(pipeline::FramePacket&,const AVFrame**)override;
     SourceReadStatus tryRead(pipeline::FramePacket&,const AVFrame**);
     // Auto-reset event signalled after each delivered sample; lets the graph

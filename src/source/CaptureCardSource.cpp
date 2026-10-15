@@ -905,6 +905,7 @@ void CaptureCardSource::videoReset(bool resetAudio){if(p_->wasapi)p_->wasapi->vi
 void CaptureCardSource::setAudioSync(unsigned mode,int offset){if(p_->wasapi)p_->wasapi->setSync(mode,offset);else if(p_->audioSession)p_->audioSession->setSync(mode,offset);}
 sink::CaptureAudioState CaptureCardSource::audioState()const{auto state=p_->wasapi?p_->wasapi->snapshot():p_->audioSession?p_->audioSession->snapshot():sink::CaptureAudioState{};if(!p_->audioError.empty())state.error=p_->audioError;return state;}
 bool CaptureCardSource::open(const SourceOpenDesc& desc){return configure(desc)&&start();}
+bool CaptureCardSource::compressedVideo()const{return p_->compressedPath;}
 bool CaptureCardSource::configureDeckLink(const SourceOpenDesc& desc){
     auto& p=*p_;CaptureSelection selection;if(!parseCapturePath(desc.path,selection))return false;
     const auto formats=formatsByPath(selection.videoPath);
