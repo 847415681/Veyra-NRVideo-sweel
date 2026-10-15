@@ -10,7 +10,9 @@ Item {
     width: 1480
     height: 1500
 
-    VSwitch { id: sw; x: 10; y: 10 }
+    // Owned the way every page owns a switch: bound to a model value, written back on toggle.
+    property bool swModel: false
+    VSwitch { id: sw; x: 10; y: 10; checked: root.swModel; onToggled: v => root.swModel = v }
     SignalSpy { id: swSpy; target: sw; signalName: "toggled" }
 
     VSeg {
@@ -210,7 +212,7 @@ Item {
         }
 
         function test_switch() {
-            sw.checked=false
+            root.swModel = false
             swSpy.clear()
             compare(sw.checked, false)
             mouseClick(sw)
@@ -219,6 +221,25 @@ Item {
             compare(swSpy.signalArguments[0][0], true)
             mouseClick(sw)
             compare(sw.checked, false)
+            // GitHub #29: after a click the switch must still follow the model when
+            // something else changes it (a preset, the same setting on another page).
+            root.swModel = true
+            compare(sw.checked, true)
+            root.swModel = false
+            compare(sw.checked, false)
+        }
+
+        function test_switch_refused() {
+            // An owner that refuses the change leaves the switch where the model is.
+            const refusing = Qt.createQmlObject('import Veyra; VSwitch { checked: false }', root)
+            refusing.x = 10; refusing.y = 1400
+            const spy = Qt.createQmlObject('import QtTest; SignalSpy { signalName: "toggled" }', root)
+            spy.target = refusing
+            mouseClick(refusing)
+            compare(spy.count, 1)
+            compare(spy.signalArguments[0][0], true)
+            compare(refusing.checked, false)
+            refusing.destroy(); spy.destroy()
         }
 
         function test_seg() {

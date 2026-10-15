@@ -1206,11 +1206,20 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
             if(p.audioFilter)p.graph->RemoveFilter(p.audioFilter.Get());
             p.audioFilter.Reset();
         }
-        // Pin the common graph clock before Run; removing DirectShow's audio
-        // renderer must not silently change the capture graph's reference.
-        ComPtr<IMediaFilter> mediaFilter;
-        if(FAILED(CoCreateInstance(CLSID_SystemClock,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&p.referenceClock)))||
-            FAILED(p.graph.As(&mediaFilter))||FAILED(mediaFilter->SetSyncSource(p.referenceClock.Get())))return false;
+        // A separate audio device and the video device need one common clock: pin
+        // the system clock before Run (removing DirectShow's audio renderer must not
+        // silently change the capture graph's reference). Audio from the video
+        // filter's own pin comes from the same device; leave the clock to DirectShow
+        // as OBS does and as the video-only graph does (start() picks the default).
+        // GitHub #38: an AVerMedia GC550 sent audio but not one video frame with
+        // the system clock pinned, and video alone with the default clock.
+        const bool embeddedAudio=audio==kCaptureAudioFromVideoDevice&&audioReady;
+        if(!embeddedAudio||!embeddedAudioDeviceClock_){
+            ComPtr<IMediaFilter> mediaFilter;
+            if(FAILED(CoCreateInstance(CLSID_SystemClock,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&p.referenceClock)))||
+                FAILED(p.graph.As(&mediaFilter))||FAILED(mediaFilter->SetSyncSource(p.referenceClock.Get())))return false;
+        }
+        log::info("capture-audio",std::format("graph clock={} embeddedAudio={}",embeddedAudio&&embeddedAudioDeviceClock_?"directshow-default":"system",embeddedAudio?1:0));
     }
     if(FAILED(p.graph.As(&p.control))||FAILED(p.graph.As(&p.events)))return false;
     if(p.grab&&(FAILED(p.grab->SetBufferSamples(FALSE))||FAILED(p.grab->SetCallback(&p,0))))return false;
@@ -1672,6 +1681,16 @@ bool CaptureCardSource::reconnect(float gain,unsigned syncMode,int offsetMs){
         log::warn("capture-reconnect","Stable device and format identity unavailable; manual selection required");return false;
     }
     const auto desc=reconnectDesc_;const auto key=reconnectFormat_;const auto expected=reconnectInfo_;
+    // Audio from the video filter's pin kept arriving while no video frame ever
+    // did: the other graph-clock mode gets the next attempt (see configure()).
+    if(selection.audio==kCaptureAudioFromVideoDevice&&p_->audioSession){
+        const auto audioBlocks=p_->audioSession->snapshot().inputBlocks;
+        std::lock_guard lock(p_->mutex);
+        if(p_->received==0&&audioBlocks>0){
+            embeddedAudioDeviceClock_=!embeddedAudioDeviceClock_;
+            log::warn("capture-reconnect",std::format("embedded audio delivered {} blocks but no video; next graph clock={}",audioBlocks,embeddedAudioDeviceClock_?"directshow-default":"system"));
+        }
+    }
     // Stop callbacks before carrying counters into the next device session.
     // Never hold the mailbox lock while DirectShow Stop waits for a callback.
     if(p_->decklink)p_->decklink->stop();

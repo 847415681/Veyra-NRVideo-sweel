@@ -12,6 +12,7 @@
 #include "veyra/Log.h"
 #include "veyra/NgxResult.h"
 #include "veyra/gfx/CommandSlotRing.h"
+#include "veyra/gfx/PresentationHooks.h"
 
 namespace veyra::gfx {
 
@@ -336,6 +337,14 @@ bool D3D12DeviceContext::reportDeviceFailure(std::string_view operation,uint64_t
     uint32_t reason=0;const bool alive=checkDeviceAlive(reason);
     const auto completed=fence_?fence_->GetCompletedValue():0;
     veyra::log::error("gpu-failure",std::format("operation={} alive={} removedReason=0x{:X} requestedFence={} completedFence={} sentinel={} adapter={} device=0x{:X} luid={} driver={}",operation,alive,reason,requestedFence,completed,completed==UINT64_MAX,narrow(adapterInfo_.description),adapterInfo_.deviceId,adapterInfo_.luidString,narrow(adapterInfo_.driverVersion)));
+    // Which capture and overlay tools shared the GPU (once per run): the 2026-10-15 hangs
+    // came with 抖音直播伴侣 running, and the log could not show it.
+    static bool reportedCompany=false;
+    if(!reportedCompany){
+        reportedCompany=true;
+        veyra::log::warn("gpu-failure",std::format("concurrent douyinCompanion={} nvidiaOverlay={} gamePP={} rivaTuner={} modules={}",
+            gfx::douyinLiveCompanionRunning(),gfx::nvidiaOverlayRunning(),gfx::gamePPRunning(),gfx::rivaTunerRunning(),gfx::thirdPartyModules()));
+    }
     // Read at most 16 recent display/driver events; no application logs,
     // registry changes or global diagnostic settings are touched.
     const auto events=EvtQuery(nullptr,L"System",L"*[System[(Provider[@Name='Display'] or Provider[@Name='nvlddmkm']) and (EventID=4101 or EventID=153 or EventID=13 or EventID=14) and TimeCreated[timediff(@SystemTime)<=60000]]]",EvtQueryChannelPath|EvtQueryReverseDirection);

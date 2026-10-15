@@ -367,6 +367,11 @@ struct QmlPlayerBridge::Impl {
     std::chrono::steady_clock::time_point gpuReconnectDue{}, gpuReconnectLast{};
     struct CaptureListCache { bool valid = false; uint64_t generation = 0; QString language; std::wstring a, b; QVariantList list; };
     CaptureListCache captureFormatsCache, captureResolutionCache, captureRateCache, capturePixelCache;
+    // Settings → 组件与许可. Read once and on refreshComponentList(): the property used to
+    // notify with every engine snapshot, so each 60 Hz tick re-read the manifest and
+    // rebuilt the page's 49 rows (audit 2026-10-15 B5).
+    QVariantList componentList; bool componentListRead = false;
+    bool liveCompanionCap = false;   // updateLiveCompanionCompat
     int captureHiddenRates = 0;   // set with captureRateCache
     template <class Build> const QVariantList& captureList(CaptureListCache& cache, const std::wstring& a, const std::wstring& b, Build&& build) {
         const QString language = i18n::current();
@@ -1191,6 +1196,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     });
     capabilityTimer->start(2000);
     applyPreference(QStringLiteral("gpuPriority"));
+    updateLiveCompanionCompat();
     applyPreference(QStringLiteral("prewarmEnhancement"));
     impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));
     connect(&impl_->exportQueue,&QmlExportQueueModel::changed,this,&QmlPlayerBridge::exportChanged);
@@ -1399,7 +1405,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         const bool wasFullscreenUnsafe = impl_->snapshot.vramFullscreenUnsafe;
         const auto wasTransport = impl_->snapshot.transport;
         const uint64_t wasSession = impl_->snapshot.sessionId;
-        if(impl_->poll()){emit settingsChanged();emit chainChanged();}
+        if(impl_->poll()){emit settingsChanged();emitChainChanged();}
         if (impl_->snapshot.vramRunawayMiB && (impl_->vramNoticeSession != impl_->snapshot.sessionId ||
             (!wasFullscreenUnsafe && impl_->snapshot.vramFullscreenUnsafe))) {
             impl_->vramNoticeSession = impl_->snapshot.sessionId;
@@ -1597,6 +1603,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                 automatic ? "compatibility restart suggested" : "monitoring compatibility off"));
             if (automatic) emit overlayRestartSuggested(QStringLiteral("gamepp"));
         }
+        updateLiveCompanionCompat();
         // RivaTuner's default hooking keeps OBS game capture from hooking any Direct3D 12
         // program (2026-10-03, RTSS 7.3.5.28314 + OBS 32.1.2, a bare D3D12 window included;
         // RTSS version corrected against the executable on 2026-10-04); its
@@ -1966,7 +1973,7 @@ void QmlPlayerBridge::setFgBackendName(const QString& value) {
     }
     if (clamped) emit notice(tr("所选补帧后端的倍率已调整为 %1X").arg(chain.fgMultiplier), false);
     emit settingsChanged();
-    emit chainChanged();
+    emitChainChanged();
 }
 
 int QmlPlayerBridge::fgMaxMultiplier() const {
@@ -2010,7 +2017,7 @@ void QmlPlayerBridge::setVfgQuality(int value){
     if(value<0||uint32_t(value)>=engine::kVfgQualityCount)return;auto s=settings();if(s.vfgQuality==uint32_t(value))return;
     s.vfgQuality=uint32_t(value);
     if(!impl_->commit(s)){emit notice(tr("VFG 质量设置未被接受，原设置保留"),true);return;}
-    emit settingsChanged();emit chainChanged();
+    emit settingsChanged();emitChainChanged();
 }
 
 bool QmlPlayerBridge::fgStrict() const { return impl_->chain.fgStrictAdmission; }
@@ -2023,7 +2030,7 @@ void QmlPlayerBridge::setFgStrict(bool value) {
         emit notice(uiText(error), true);
     }
     emit settingsChanged();
-    emit chainChanged();
+    emitChainChanged();
 }
 
 // 低延迟队列 is the presentation queue (1.4.4 PresentationSettings.enabled),
@@ -2087,7 +2094,7 @@ void QmlPlayerBridge::resetCurrentPage() {
         emit notice(uiText(error),true);
     }
     emit settingsChanged();
-    emit chainChanged();
+    emitChainChanged();
 }
 
 
@@ -2151,6 +2158,17 @@ QString QmlPlayerBridge::remotePlayState() const {
 }
 
 QVariantList QmlPlayerBridge::componentList() const {
+    if (!impl_->componentListRead) { impl_->componentList = readComponentList(); impl_->componentListRead = true; }
+    return impl_->componentList;
+}
+void QmlPlayerBridge::refreshComponentList() {
+    auto list = readComponentList();
+    impl_->componentListRead = true;
+    if (list == impl_->componentList) return;
+    impl_->componentList = std::move(list);
+    emit componentListChanged();
+}
+QVariantList QmlPlayerBridge::readComponentList() const {
     // Read from the runtime manifest the build produces rather than a list written
     // by hand here, so the page cannot claim a component the package lacks.
     QVariantList out;
@@ -3824,7 +3842,7 @@ bool QmlPlayerBridge::commitColour(const engine::ColorSettings& colour){
     }
     auto& node=impl_->chain.nodes[index];
     if(node.color==colour&&node.enabled==colour.enabled)return true;
-    const auto previous=node;
+    const auto previous=node;const bool wasValid=chainValid();
     node.color=colour;node.enabled=colour.enabled;
     if(!impl_->revalidate(true)){
         const auto error=impl_->validation.message;node=previous;impl_->revalidate();
@@ -3840,7 +3858,9 @@ bool QmlPlayerBridge::commitColour(const engine::ColorSettings& colour){
         }
         impl_->colourLastPushMs=now;impl_->colourLastIndex=index;impl_->colourRedo.clear();
     }
-    emit settingsChanged();emit chainChanged();return true;
+    emit settingsChanged();
+    if(previous.enabled!=node.enabled)emitChainChanged();else emitParameterChanged(&QmlPlayerBridge::colourParamsChanged,wasValid);
+    return true;
 }
 QVariantMap QmlPlayerBridge::colourState() const { return colourStateAt(impl_->colourIndex()); }
 // Any colour node's full state, so several node cards can show their own
@@ -4701,6 +4721,7 @@ bool QmlPlayerBridge::setHdrCurveParameter(const QString& key,double value){
     return commitHdrTuning(std::move(s));
 }
 bool QmlPlayerBridge::commitHdrTuning(engine::EnhancementSettings settings){
+    const bool wasValid=chainValid();
     const auto curve=settings.hdrCurve;
     const auto metadata=settings.hdrMetadata;
     if(!impl_->commit(std::move(settings)))return false;
@@ -4713,7 +4734,9 @@ bool QmlPlayerBridge::commitHdrTuning(engine::EnhancementSettings settings){
     impl_->facade.setPending(after);
     impl_->draftGlobals.hdrCurve=curve;impl_->draftGlobals.hdrMetadata=metadata;
     impl_->persistSession();
-    emit settingsChanged();emit chainChanged();return true;
+    emit settingsChanged();
+    if(chainValid()!=wasValid)emitChainChanged();
+    return true;
 }
 QString QmlPlayerBridge::hdrTuningPreset() const {
     const auto& s=settings();
@@ -4782,7 +4805,7 @@ bool QmlPlayerBridge::setVideoHdrParameter(const QString& key, double value) {
     for (uint32_t i = 0; i < impl_->chain.nodeCount; ++i) {
         auto& node = impl_->chain.nodes[i];
         if (node.type != engine::EffectType::VideoHdr) continue;
-        const auto before = node;
+        const auto before = node; const bool wasValid = chainValid();
         if (value < 0) return false;
         const auto v = unsigned(std::lround(value));
         if (key == "contrast") node.videoHdr.contrast = v;
@@ -4794,7 +4817,7 @@ bool QmlPlayerBridge::setVideoHdrParameter(const QString& key, double value) {
         if (node == before) return true;
         const bool accepted = impl_->revalidate(true);
         if (!accepted) { const auto error = impl_->validation.message; node = before; impl_->revalidate(); emit notice(uiText(error), true); }
-        emit settingsChanged(); emit chainChanged(); return accepted;
+        emit settingsChanged(); emitParameterChanged(&QmlPlayerBridge::videoHdrParamsChanged, wasValid); return accepted;
     }
     emit notice(tr("请先添加 RTX Video HDR 节点"), true);
     return false;
@@ -4836,7 +4859,7 @@ void QmlPlayerBridge::setFgMultiplier(int multiplier) {
         node->enabled = beforeEnabled; chain.fgMultiplier = beforeMultiplier; impl_->revalidate();
         emit notice(uiText(error), true);
     }
-    emit settingsChanged(); emit chainChanged();
+    emit settingsChanged(); emitChainChanged();
 }
 
 bool QmlPlayerBridge::colorEnabled() const {return selectedColourSettings().enabled;}
@@ -4873,7 +4896,7 @@ bool QmlPlayerBridge::setProtectionRegion(double left,double top,double right,do
     for (uint32_t i=0;i<impl_->chain.nodeCount;++i) {
         auto& node=impl_->chain.nodes[i];
         if (node.type!=engine::EffectType::Protection) continue;
-        const auto before=node;
+        const auto before=node;const bool wasValid=chainValid();
         // Explicit edits replace legacy multi-rectangle settings with the one global region.
         node.protection.regions={};
         node.protection.regions[0]={float(left),float(top),float(right),float(bottom)};
@@ -4881,7 +4904,7 @@ bool QmlPlayerBridge::setProtectionRegion(double left,double top,double right,do
         if(node==before)return true;
         const bool accepted=impl_->revalidate(true);
         if(!accepted){const auto error=impl_->validation.message;node=before;impl_->revalidate();emit notice(uiText(error),true);}
-        emit settingsChanged();emit chainChanged();return accepted;
+        emit settingsChanged();emitParameterChanged(&QmlPlayerBridge::protectionChanged,wasValid);return accepted;
     }
     return false;
 }
@@ -4894,12 +4917,15 @@ bool QmlPlayerBridge::setProtectionRegion(double left,double top,double right,do
     }                                                                      \
     void QmlPlayerBridge::setter(type value){                               \
         auto* n=impl_->nrNode(); if(!n||type(n->member)==value)return;        \
-        const auto before=*n; n->member=decltype(n->member)(value);          \
+        const auto before=*n; const bool wasValid=chainValid();             \
+        n->member=decltype(n->member)(value);                                \
         if(!impl_->revalidate(true)){                                       \
             const auto error=impl_->validation.message; *n=before;          \
             impl_->revalidate();emit notice(uiText(error),true);             \
         }                                                                  \
-        emit settingsChanged();emit chainChanged();                         \
+        emit settingsChanged();                                              \
+        if(before.enabled!=n->enabled)emitChainChanged();                    \
+        else emitParameterChanged(&QmlPlayerBridge::nrLayersChanged,wasValid); \
     }
 VEYRA_NR_PROP(nrEnabled,setNrEnabled,enabled,bool)
 VEYRA_NR_PROP(nrTemporal,setNrTemporal,nr.temporal,bool)
@@ -4926,7 +4952,7 @@ void QmlPlayerBridge::setLowLatency(bool value){
         const auto error=impl_->validation.message;impl_->chain=before;
         impl_->revalidate();emit notice(uiText(error),true);
     }
-    emit settingsChanged();emit chainChanged();
+    emit settingsChanged();emitChainChanged();
 }
 
 // Stage-5 output stabiliser (anti-flicker). Global, not per-node: it runs once,
@@ -5074,9 +5100,9 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
                 impl_->chain.nodes[i].nr.runtime=static_cast<engine::NrRuntime>(int(value));
         const bool accepted=impl_->revalidate(true);
         if(!accepted){const auto error=impl_->validation.message;impl_->chain=before;impl_->revalidate();emit notice(uiText(error),true);}
-        emit settingsChanged();emit chainChanged();return accepted;
+        emit settingsChanged();emitChainChanged();return accepted;
     }
-    auto& node=impl_->chain.nodes[index];const auto before=node;auto& n=node.nr;
+    auto& node=impl_->chain.nodes[index];const auto before=node;auto& n=node.nr;const bool wasValid=chainValid();
     if(key=="intensity")n.model.intensity=float(value);
     else if(key=="tone")n.model.tone=float(value);
     else if(key=="structure")n.model.structure=float(value);
@@ -5115,7 +5141,7 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
     if(node==before)return true;
     const bool accepted=impl_->revalidate(true);
     if(!accepted){const auto error=impl_->validation.message;node=before;impl_->revalidate();emit notice(uiText(error),true);}
-    emit settingsChanged();emit chainChanged();return accepted;
+    emit settingsChanged();emitParameterChanged(&QmlPlayerBridge::nrLayersChanged,wasValid);return accepted;
 }
 
 QVariantList QmlPlayerBridge::effectCatalog() const {
@@ -5156,6 +5182,17 @@ QVariantList QmlPlayerBridge::effectCatalog() const {
 }
 
 QString QmlPlayerBridge::chainError() const { return uiText(impl_->validation.message); }
+void QmlPlayerBridge::emitChainChanged() {
+    emit chainChanged(); emit nrLayersChanged(); emit videoHdrParamsChanged();
+    emit colourParamsChanged(); emit protectionChanged();
+}
+// Every chainChanged re-evaluated all chain-bound bindings on every page (the pro
+// and node pages stay loaded) and repainted the node wires: 65-80 ms of interface
+// thread per 40 ms slider step with six effects (audit 2026-10-15).
+void QmlPlayerBridge::emitParameterChanged(void (QmlPlayerBridge::*group)(), bool wasValid) {
+    if (chainValid() != wasValid) { emitChainChanged(); return; }
+    (this->*group)();
+}
 bool QmlPlayerBridge::chainValid() const { return impl_->validation.accepted; }
 int QmlPlayerBridge::nodeMode() const { return impl_->chain.mode == engine::ChainMode::Node ? 1 : 0; }
 void QmlPlayerBridge::setNodeMode(int mode) {
@@ -5196,7 +5233,7 @@ void QmlPlayerBridge::setNodeMode(int mode) {
     impl_->restoreConfiguration(configuration);
     impl_->revalidate();
     impl_->options = engine::PlayerOptions::from(next,engine::runtimeOrder(impl_->activeRuntime()));
-    emit chainChanged();
+    emitChainChanged();
     emit settingsChanged();
 }
 
@@ -5698,6 +5735,7 @@ QString QmlPlayerBridge::gpuPriorityStatus() const {
     if(status.state==gfx::GpuPriorityState::Pending)return tr("创建显卡会话后生效");
     if(status.state==gfx::GpuPriorityState::Unavailable)return tr("系统不支持调整 GPU 优先级");
     if(status.state==gfx::GpuPriorityState::Rejected)return tr("系统未接受设置，当前：%1").arg(status.actual<0?tr("未知"):name(status.actual));
+    if(status.capped)return tr("已生效：%1（抖音直播伴侣运行中，暂不使用实时）").arg(name(status.actual));
     return tr("已生效：%1").arg(name(status.actual));
 }
 bool QmlPlayerBridge::enhancementPrewarmAvailable() const {
@@ -5839,6 +5877,7 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
         gfx::requestGpuPriority(value==QLatin1String("normal")?gfx::GpuPriority::Normal:
                                 value==QLatin1String("high")?gfx::GpuPriority::High:gfx::GpuPriority::Realtime);
     }
+    if(key==QLatin1String("overlayCompat"))updateLiveCompanionCompat();
     if(key==QLatin1String("fullscreenMemoryProtection")){impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));emit snapshotChanged();}
     if(key==QLatin1String("captureShowAllFrameRates"))emit captureChanged();
     if (key == QLatin1String("audioDevice")) sink::setPreferredRenderEndpoint(impl_->prefString("audioDevice").toStdWString());
@@ -5918,7 +5957,7 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
                     impl_->revalidate();
                     impl_->options = engine::PlayerOptions::from(next, engine::runtimeOrder(impl_->activeRuntime()));
                     if (!impl_->persistSession()) veyra::log::warn("effect-availability", "compute gpu refit not saved");
-                    emit chainChanged(); emit settingsChanged();
+                    emitChainChanged(); emit settingsChanged();
                 } else veyra::log::warn("effect-availability", "compute gpu refit not accepted; chain unchanged");
                 if (!disabled.isEmpty()) {
                     const auto message = tr("已关闭当前硬件或包不支持的效果，参数仍保留：") + disabled.join("; ");
@@ -6028,7 +6067,25 @@ bool QmlPlayerBridge::obsGameCaptureActive() const { return qApp && qApp->proper
 bool QmlPlayerBridge::overlayCompatActive() const { return qApp && qApp->property("veyraOverlayCompat").toBool(); }
 bool QmlPlayerBridge::rivaTunerRunning() const { return gfx::rivaTunerRunning(); }
 bool QmlPlayerBridge::presentationOverlayRunning() const {
-    return gfx::rivaTunerRunning() || gfx::nvidiaOverlayRunning() || gfx::gamePPRunning();
+    return gfx::rivaTunerRunning() || gfx::nvidiaOverlayRunning() || gfx::gamePPRunning() || gfx::douyinLiveCompanionRunning();
+}
+// The field hangs with 抖音直播伴侣 (2026-10-15) came with this process at Realtime GPU
+// priority. OBS itself never asks for Realtime when hardware-accelerated GPU scheduling
+// is on (High instead, libobs-d3d11 set_priority); the same class is used here while
+// the companion runs, so neither program can hold the GPU off from the other.
+void QmlPlayerBridge::updateLiveCompanionCompat() {
+    const bool automatic = impl_->prefString("overlayCompat") != QLatin1String("off");
+    const bool running = automatic && !GetEnvironmentVariableW(L"VEYRA_TEST_IGNORE_DOUYIN", nullptr, 0)
+                         && gfx::douyinLiveCompanionRunning();
+    if (running == impl_->liveCompanionCap) return;
+    impl_->liveCompanionCap = running;
+    gfx::setGpuPriorityCap(running ? gfx::GpuPriority::High : gfx::GpuPriority::Realtime);
+    const auto status = gfx::gpuPriorityStatus();
+    veyra::log::warn("overlay-hooks", std::format("Douyin live companion {}: GPU priority cap={} requested={} actual={}",
+        running ? "running" : "gone", running ? "high" : "none", int(status.requested), status.actual));
+    if (running && status.capped)
+        emit notice(tr("检测到抖音直播伴侣：GPU 优先级暂时从“实时”降为“高”，避免两个程序争用显卡时卡死；直播伴侣退出后自动恢复"), false);
+    emit preferencesChanged();
 }
 
 int QmlPlayerBridge::uiScaleActive() const { return qApp ? qApp->property("veyraUiScale").toInt() : 0; }
@@ -6268,7 +6325,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
         }
         if (info->type == engine::EffectType::NrEnhance) impl_->selectedNr = index;
         if (info->type == engine::EffectType::Color) impl_->selectedColour = index;
-        emit chainChanged(); emit settingsChanged(); return index;
+        emitChainChanged(); emit settingsChanged(); return index;
     }
     if(fgType) {
         const auto before=impl_->chain;const auto previous=settings();
@@ -6292,7 +6349,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
             emit notice(tr("补帧选择未被接受，保留原设置；请检查倍率和后端能力"),true);return -1;
         }
         impl_->options=engine::PlayerOptions::from(next,engine::runtimeOrder(c));
-        emit settingsChanged();emit chainChanged();return slot;
+        emit settingsChanged();emitChainChanged();return slot;
     }
     engine::EffectType wanted = engine::EffectType::NrEnhance;
     bool found = false;
@@ -6353,7 +6410,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
         impl_->selectedColour=colourSelected;
         impl_->revalidate();emit notice(uiText(error),true);return -1;
     }
-    emit chainChanged();
+    emitChainChanged();
     if (!impl_->validation.accepted) {
         emit notice(uiText(impl_->validation.message), true);
     } else {
@@ -6394,7 +6451,7 @@ int QmlPlayerBridge::duplicateNode(uint id) {
     const int index = nodeIndexForId(created);
     if (impl_->chain.nodes[index].type == engine::EffectType::NrEnhance) impl_->selectedNr = index;
     if (impl_->chain.nodes[index].type == engine::EffectType::Color) impl_->selectedColour = index;
-    emit chainChanged(); emit settingsChanged(); return index;
+    emitChainChanged(); emit settingsChanged(); return index;
 }
 
 bool QmlPlayerBridge::resetNode(uint id) {
@@ -6424,7 +6481,7 @@ bool QmlPlayerBridge::resetNode(uint id) {
         impl_->chain.fgMultiplier = multiplier; impl_->chain.fgStrictAdmission = strict; impl_->revalidate();
         emit notice(uiText(error), true); return false;
     }
-    emit chainChanged(); emit settingsChanged(); return true;
+    emitChainChanged(); emit settingsChanged(); return true;
 }
 
 bool QmlPlayerBridge::connectNodes(uint from, uint to) {
@@ -6436,7 +6493,7 @@ bool QmlPlayerBridge::connectNodes(uint from, uint to) {
         const auto error = impl_->validation.message; impl_->layout = before; impl_->revalidate();
         emit notice(uiText(error), true); return false;
     }
-    emit chainChanged(); emit settingsChanged(); return true;
+    emitChainChanged(); emit settingsChanged(); return true;
 }
 
 bool QmlPlayerBridge::disconnectNode(uint from) {
@@ -6448,7 +6505,7 @@ bool QmlPlayerBridge::disconnectNode(uint from) {
         const auto error = impl_->validation.message; impl_->layout = before; impl_->revalidate();
         emit notice(uiText(error), true); return false;
     }
-    emit chainChanged(); emit settingsChanged(); return true;
+    emitChainChanged(); emit settingsChanged(); return true;
 }
 
 bool QmlPlayerBridge::insertNodeAfter(uint id, uint after) {
@@ -6460,7 +6517,7 @@ bool QmlPlayerBridge::insertNodeAfter(uint id, uint after) {
         const auto error = impl_->validation.message; impl_->layout = before; impl_->revalidate();
         emit notice(uiText(error), true); return false;
     }
-    emit chainChanged(); emit settingsChanged(); return true;
+    emitChainChanged(); emit settingsChanged(); return true;
 }
 
 int QmlPlayerBridge::duplicateNrLayer(int index){
@@ -6479,7 +6536,7 @@ int QmlPlayerBridge::duplicateNrLayer(int index){
         impl_->selectedColour=colourSelected;
         impl_->revalidate();emit notice(uiText(error),true);return -1;
     }
-    emit chainChanged();emit settingsChanged();return index+1;
+    emitChainChanged();emit settingsChanged();return index+1;
 }
 
 bool QmlPlayerBridge::removeEffect(int index) {
@@ -6506,7 +6563,7 @@ bool QmlPlayerBridge::removeEffect(int index) {
         impl_->selectedColour=colourSelected;
         impl_->revalidate();emit notice(uiText(error),true);return false;
     }
-    emit chainChanged();
+    emitChainChanged();
     emit settingsChanged();
     return true;
 }
@@ -6547,7 +6604,7 @@ bool QmlPlayerBridge::moveEffect(int from, int to) {
     };
     impl_->selectedNr=remap(impl_->selectedNr);
     impl_->selectedColour=remap(impl_->selectedColour);
-    emit chainChanged();
+    emitChainChanged();
     emit settingsChanged();
     return true;
 }
@@ -6561,7 +6618,7 @@ bool QmlPlayerBridge::setEffectEnabled(int index, bool enabled) {
         const auto error=impl_->validation.message;c.nodes[index].enabled=!enabled;
         impl_->revalidate();emit notice(uiText(error),true);return false;
     }
-    emit chainChanged();
+    emitChainChanged();
     emit settingsChanged();
     return true;
 }
@@ -6588,10 +6645,10 @@ bool QmlPlayerBridge::setAllNrEnabled(bool enabled) {
     }
     if(!impl_->revalidate(true)){
         const auto error=impl_->validation.message;c=before;impl_->revalidate();
-        emit notice(uiText(error),true);emit chainChanged();return false;
+        emit notice(uiText(error),true);emitChainChanged();return false;
     }
     veyra::log::info("ui-nr",std::format("master switch {} layers={}",enabled?"on":"off",layers.size()));
-    emit chainChanged();emit settingsChanged();
+    emitChainChanged();emit settingsChanged();
     return true;
 }
 
@@ -6617,7 +6674,7 @@ bool QmlPlayerBridge::setEffectPosition(int index, double x, double y) {
     c.nodes[index].viewY = float(y);
     // Positions never affect the picture, so this deliberately does not
     // revalidate or touch the engine: dragging a node must not cost a rebuild.
-    emit chainChanged();
+    emitChainChanged();
     return true;
 }
 
@@ -6710,7 +6767,7 @@ bool QmlPlayerBridge::applyPresetIndex(int index) {
         if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "preset content cadence not saved");
     }
     emit settingsChanged();
-    emit chainChanged();
+    emitChainChanged();
     return true;
 }
 
@@ -7155,12 +7212,13 @@ bool QmlPlayerBridge::editProtection(const std::function<bool(engine::ChainNode&
     for (uint32_t i = 0; i < impl_->chain.nodeCount; ++i) {
         auto& node = impl_->chain.nodes[i];
         if (node.type != engine::EffectType::Protection) continue;
-        const auto before = node;
+        const auto before = node; const bool wasValid = chainValid();
         if (!edit(node)) return false;
         if (node == before) return true;
         const bool accepted = impl_->revalidate(true);
         if (!accepted) { const auto error = impl_->validation.message; node = before; impl_->revalidate(); emit notice(uiText(error), true); }
-        emit settingsChanged(); emit chainChanged();
+        emit settingsChanged();
+        if (before.enabled != node.enabled) emitChainChanged(); else emitParameterChanged(&QmlPlayerBridge::protectionChanged, wasValid);
         return accepted;
     }
     emit notice(tr("处理链中没有 NR 保护节点，未更改设置"), true);
@@ -7602,7 +7660,7 @@ bool QmlPlayerBridge::resetNrLayer(int index) {
         const auto error = impl_->validation.message; node = before; impl_->revalidate();
         emit notice(uiText(error), true); return false;
     }
-    emit settingsChanged(); emit chainChanged();
+    emit settingsChanged(); emitChainChanged();
     return true;
 }
 

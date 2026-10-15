@@ -53,6 +53,19 @@ Logger::~Logger()
     closeFile();
 }
 
+void Logger::setRotation(uint64_t startBytes, uint64_t runningBytes)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    rotateAtOpen_=startBytes;rotateWhileRunning_=runningBytes;nextRotation_=runningBytes;
+}
+
+namespace {
+std::filesystem::path oldLogPath(const std::filesystem::path& path)
+{
+    return path.parent_path()/(path.stem().wstring()+L".old"+path.extension().wstring());
+}
+}
+
 bool Logger::openFile(const std::wstring& path, bool append)
 {
     std::error_code ec;
@@ -68,6 +81,15 @@ bool Logger::openFile(const std::wstring& path, bool append)
         std::fclose(file_);
         file_ = nullptr;
     }
+    path_=path;
+    // Field logs reached 129-186 MB by appending every session forever (audit
+    // 2026-10-15). A big log from earlier sessions moves aside once at start; a
+    // second running instance holds the file, so the rename fails and nothing moves.
+    uint64_t movedBytes=0;
+    if(append&&rotateAtOpen_){
+        const auto size=std::filesystem::file_size(fsPath,ec);
+        if(!ec&&size>=rotateAtOpen_&&MoveFileExW(path.c_str(),oldLogPath(fsPath).c_str(),MOVEFILE_REPLACE_EXISTING))movedBytes=size;
+    }
     // Diagnostics may read a running session without stopping capture. Keep
     // concurrent writers excluded so another instance cannot truncate this log.
     file_ = _wfsopen(path.c_str(), append ? L"ab" : L"wb", _SH_DENYWR);
@@ -76,7 +98,37 @@ bool Logger::openFile(const std::wstring& path, bool append)
     }
     std::setvbuf(file_,nullptr,_IOFBF,64*1024);
     bufferedLogBytes_=0;lastFileFlushTick_=GetTickCount64();
+    const auto size=append?std::filesystem::file_size(fsPath,ec):0;
+    fileBytes_=ec?0:size;nextRotation_=rotateWhileRunning_;
+    if(movedBytes){
+        std::fprintf(file_,"%s t=%lu [INFO ] [log] earlier sessions moved to %s (%llu bytes)\n",timestampUtc().c_str(),GetCurrentThreadId(),
+            oldLogPath(fsPath).filename().string().c_str(),static_cast<unsigned long long>(movedBytes));
+        std::fflush(file_);
+    }
     return true;
+}
+
+// Caller holds mutex_. Starts a fresh file under the same name; when the rename is
+// refused (the old copy is open elsewhere) logging continues in the current file and
+// the next attempt waits for another rotateWhileRunning_ bytes.
+bool Logger::rotateLocked(const char* reason)
+{
+    if(path_.empty()||file_==nullptr)return false;
+    const std::filesystem::path current(path_);
+    const uint64_t bytes=fileBytes_;
+    std::fflush(file_);std::fclose(file_);file_=nullptr;
+    const bool moved=MoveFileExW(path_.c_str(),oldLogPath(current).c_str(),MOVEFILE_REPLACE_EXISTING)!=FALSE;
+    const DWORD error=moved?0:GetLastError();
+    file_=_wfsopen(path_.c_str(),L"ab",_SH_DENYWR);
+    if(file_==nullptr)return false;
+    std::setvbuf(file_,nullptr,_IOFBF,64*1024);
+    std::error_code ec;const auto size=std::filesystem::file_size(current,ec);
+    fileBytes_=ec?0:size;nextRotation_=moved?rotateWhileRunning_:fileBytes_+rotateWhileRunning_;
+    if(moved)std::fprintf(file_,"%s t=%lu [INFO ] [log] rotated reason=%s; the earlier part of this session is in %s (%llu bytes)\n",timestampUtc().c_str(),
+        GetCurrentThreadId(),reason,oldLogPath(current).filename().string().c_str(),static_cast<unsigned long long>(bytes));
+    else std::fprintf(file_,"%s t=%lu [WARN ] [log] rotation refused error=%lu; continuing in this file\n",timestampUtc().c_str(),GetCurrentThreadId(),error);
+    std::fflush(file_);bufferedLogBytes_=0;lastFileFlushTick_=GetTickCount64();
+    return moved;
 }
 
 void Logger::closeFile()
@@ -127,7 +179,8 @@ void Logger::write(LogLevel level, const char* component, const std::string& mes
     }
     if (file_ != nullptr) {
         std::fprintf(file_, "%s\n", line.c_str());
-        bufferedLogBytes_+=line.size()+1;
+        bufferedLogBytes_+=line.size()+1;fileBytes_+=line.size()+1;
+        if(nextRotation_&&fileBytes_>=nextRotation_){rotateLocked("size");return;}
         const auto tick=GetTickCount64();
         // Keep every event, but avoid a write/flush syscall for every pass.
         // Errors and explicit crash/teardown flush() calls remain immediate.

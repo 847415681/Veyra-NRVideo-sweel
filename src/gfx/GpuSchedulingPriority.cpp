@@ -17,15 +17,19 @@ struct Api {
 };
 std::mutex mutex;
 GpuPriorityStatus current;
+GpuPriority cap=GpuPriority::Realtime;
+GpuPriority effective(){return int(current.requested)<=int(cap)?current.requested:cap;}
 void publish(GpuPriorityState state,int actual,uint32_t status){
-    if(current.state==state&&current.actual==actual&&current.status==status)return;
-    current.state=state;current.actual=actual;current.status=status;++current.revision;
-    log::info("gpu-priority",std::format("requested={} actual={} state={} ntstatus=0x{:08X}",
-        int(current.requested),actual,int(state),status));
+    const bool capped=effective()!=current.requested;
+    if(current.state==state&&current.actual==actual&&current.status==status&&current.capped==capped)return;
+    current.state=state;current.actual=actual;current.status=status;current.capped=capped;++current.revision;
+    log::info("gpu-priority",std::format("requested={} actual={} state={} ntstatus=0x{:08X} cap={}",
+        int(current.requested),actual,int(state),status,int(cap)));
 }
 void applyLocked(){
     static Api api;
     if(!api.get||!api.set){publish(GpuPriorityState::Unavailable,-1,ERROR_PROC_NOT_FOUND);return;}
+    const auto wanted=effective();
     int before=-1,after=-1;
     const auto query=api.get(GetCurrentProcess(),&before);
     if(query<0){
@@ -34,22 +38,22 @@ void applyLocked(){
     }
     // Query first and avoid a redundant scheduler call when the requested
     // class is already in effect, including after a device reopen.
-    if(before==int(current.requested)){
+    if(before==int(wanted)){
         publish(GpuPriorityState::Applied,before,0);return;
     }
-    auto set=api.set(GetCurrentProcess(),int(current.requested));
+    auto set=api.set(GetCurrentProcess(),int(wanted));
     auto verify=api.get(GetCurrentProcess(),&after);
     // Realtime is the default (field request 2026-10-05). Where Windows refuses it
     // for this process, High is the closest class it may still grant; the status
     // then reports Rejected with High as the actual class.
-    if(current.requested==GpuPriority::Realtime&&(set<0||verify<0||after!=int(current.requested))){
+    if(wanted==GpuPriority::Realtime&&(set<0||verify<0||after!=int(wanted))){
         const auto refused=set<0?set:verify;
         set=api.set(GetCurrentProcess(),int(GpuPriority::High));
         verify=api.get(GetCurrentProcess(),&after);
         publish(GpuPriorityState::Rejected,verify>=0?after:before,uint32_t(refused));
         return;
     }
-    publish(set>=0&&verify>=0&&after==int(current.requested)?GpuPriorityState::Applied:GpuPriorityState::Rejected,
+    publish(set>=0&&verify>=0&&after==int(wanted)?GpuPriorityState::Applied:GpuPriorityState::Rejected,
         verify>=0?after:before,uint32_t(set<0?set:verify));
 }
 }
@@ -60,5 +64,12 @@ void requestGpuPriority(GpuPriority priority){
     applyLocked();
 }
 void applyRequestedGpuPriority(){std::lock_guard lock(mutex);applyLocked();}
+void setGpuPriorityCap(GpuPriority value){
+    if(value!=GpuPriority::Normal&&value!=GpuPriority::High&&value!=GpuPriority::Realtime)return;
+    std::lock_guard lock(mutex);
+    if(cap==value)return;
+    cap=value;++current.revision;
+    applyLocked();
+}
 GpuPriorityStatus gpuPriorityStatus(){std::lock_guard lock(mutex);return current;}
 }

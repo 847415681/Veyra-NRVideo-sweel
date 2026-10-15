@@ -336,10 +336,10 @@ VPage {
                     VButton { visible: veyra.imageBatchActive; text: qsTr("取消图片批次"); onClicked: veyra.cancelImageBatch() }
                 }
                 Note { visible: root.exportKind === "video"; text: qsTr("点击开始时冻结本批设置。") + (veyra.preferences.exportStopsPlayback !== false ? qsTr("开始导出时会关闭正在播放的内容，显卡全部留给导出。") : qsTr("导出期间可以继续预览其他文件，会和导出抢显卡。")) }
-                VRow { label: qsTr("导出时关闭正在播放的内容"); VSwitch { objectName: "export-stop-playback"; checked: veyra.preferences.exportStopsPlayback !== false; onToggled: veyra.setPreference("exportStopsPlayback", checked) } }
+                VRow { label: qsTr("导出时关闭正在播放的内容"); VSwitch { objectName: "export-stop-playback"; checked: veyra.preferences.exportStopsPlayback !== false; onToggled: v => veyra.setPreference("exportStopsPlayback", v) } }
                 VButton { objectName: "export-target"; Layout.fillWidth: true; iconName: "folder"; text: qsTr("选择保存目录…"); onClicked: veyra.chooseExportPath() }
                 Note { text: veyra.exportTarget; wrapMode: Text.WrapAnywhere }
-                VRow { label: qsTr("完成提示音"); VSwitch { objectName: "export-sound"; checked: veyra.exportCompletionSound; onToggled: veyra.exportCompletionSound = checked } }
+                VRow { label: qsTr("完成提示音"); VSwitch { objectName: "export-sound"; checked: veyra.exportCompletionSound; onToggled: v => veyra.exportCompletionSound = v } }
             }
         }
     }

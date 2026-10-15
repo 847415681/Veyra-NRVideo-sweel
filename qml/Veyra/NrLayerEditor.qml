@@ -22,11 +22,14 @@ ColumnLayout {
     function updateAutoReason() { autoReason = veyra.nrAutoSelectionReason(layerData.index) }
     Component.onCompleted: updateAutoReason()
     onLayerDataChanged: updateAutoReason()
+    // The snapshot arrives about 60 times a second and both editor pages stay
+    // loaded; a hidden editor catches up when it is shown.
+    onVisibleChanged: if (visible) updateAutoReason()
     Connections {
         target: veyra
         function onSettingsChanged() { editor.updateAutoReason() }
         function onChainChanged() { editor.updateAutoReason() }
-        function onSnapshotChanged() { editor.updateAutoReason() }
+        function onSnapshotChanged() { if (editor.visible) editor.updateAutoReason() }
         function onEffectCapabilitiesChanged() { editor.updateAutoReason() }
     }
     readonly property var sizeChoices: [

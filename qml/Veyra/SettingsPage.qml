@@ -913,6 +913,7 @@ VPage {
                     Layout.fillWidth: true
                     spacing: 12
                     visible: root.section === "comp"
+                    onVisibleChanged: if (visible) veyra.refreshComponentList()
                     VH1 { text: qsTr("组件与许可") }
                     Text {
                         Layout.fillWidth: true

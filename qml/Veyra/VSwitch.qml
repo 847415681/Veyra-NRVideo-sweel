@@ -23,5 +23,8 @@ Rectangle {
         Behavior on width { NumberAnimation { duration: Theme.d(200) } }
     }
     HoverHandler { cursorShape: Qt.PointingHandCursor }
-    TapHandler { id: tap; gesturePolicy: TapHandler.WithinBounds; onTapped: { sw.checked = !sw.checked; sw.toggled(sw.checked) } }
+    // Controlled: owners bind checked to their model and write the new value back in
+    // onToggled. Assigning checked here destroyed that binding, so a value changed
+    // elsewhere (a preset, another page) no longer moved the switch (GitHub #29).
+    TapHandler { id: tap; gesturePolicy: TapHandler.WithinBounds; onTapped: sw.toggled(!sw.checked) }
 }

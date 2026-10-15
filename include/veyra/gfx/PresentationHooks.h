@@ -125,6 +125,21 @@ inline bool gamePPInjected() {
     return GetModuleHandleW(L"GPP64.dll") || GetModuleHandleW(L"GameTracker64.dll") || GetModuleHandleW(L"shade64.dll");
 }
 
+// 抖音直播伴侣 (Douyin live companion): the launcher 直播伴侣.exe and its capture and
+// encoding engine MediaSDK_Server.exe (named in the vendor's guide 如何设置直播伴侣以高性能
+// 模式运行). Field logs 2026-10-15 (RTX 4070 SUPER, driver 616.64, capture with NR and
+// NVIDIA optical flow): the GPU hung (nvlddmkm 153, DXGI_ERROR_DEVICE_HUNG) a few
+// minutes into capture, twice within three minutes, also with the interface drawn in
+// software; the user ties the hangs to the companion running. Not installed here.
+inline bool douyinLiveCompanionRunning() {
+    // 直播伴侣.exe, spelled as code points so the interface-string extractor
+    // (scripts/i18n/extract.py) does not take the process name for UI text.
+    static constexpr wchar_t launcher[] = {0x76F4, 0x64AD, 0x4F34, 0x4FA3, L'.', L'e', L'x', L'e', 0};
+    return processRunning([](const wchar_t* name) {
+        return _wcsicmp(name, launcher) == 0 || _wcsicmp(name, L"MediaSDK_Server.exe") == 0;
+    });
+}
+
 // RTSS reads this variable from the process it hooks whenever it (re)loads its profile for
 // it ("Name,value[,Name,value…]", RTSSHooks64.dll); EnableOSD is one of the properties it
 // accepts. With EnableOSD,0 it still counts frames but never draws in this process.

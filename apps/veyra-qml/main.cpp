@@ -436,6 +436,10 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     auto logPath = overrideLength > 0 && overrideLength < 32768
                        ? std::filesystem::path(logOverride)
                        : veyra::runtime::logsDirectory() / L"veyra-qml.log";
+    // Bounded: earlier sessions move to veyra-qml.old.log once this file passes
+    // 16 MB at start, and a session that alone reaches 64 MB (about five hours of
+    // capture) continues in a fresh file (audit 2026-10-15 B3).
+    veyra::Logger::instance().setRotation(16ull << 20, 64ull << 20);
     if (!veyra::Logger::instance().openFile(logPath.wstring(), true)) {
         logPath = logPath.parent_path() / (L"veyra-qml-" + std::to_wstring(GetCurrentProcessId()) + L".log");
         (void)veyra::Logger::instance().openFile(logPath.wstring(), true);
@@ -506,8 +510,13 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     const bool nvidiaOverlay = !GetEnvironmentVariableW(L"VEYRA_TEST_IGNORE_NVIDIA_OVERLAY", nullptr, 0)
                                && veyra::gfx::nvidiaOverlayRunning();
     const bool gamePP = !GetEnvironmentVariableW(L"VEYRA_TEST_IGNORE_GAMEPP", nullptr, 0) && veyra::gfx::gamePPRunning();
+    // 抖音直播伴侣 captures the screen or this window while Veyra runs; with it the GPU
+    // hung in the field (gfx/PresentationHooks.h). The interface leaves the GPU like for
+    // the other capture and overlay tools; the bridge also lowers the GPU priority while
+    // it runs. VEYRA_TEST_IGNORE_DOUYIN=1 starts as if it were not running.
+    const bool douyin = !GetEnvironmentVariableW(L"VEYRA_TEST_IGNORE_DOUYIN", nullptr, 0) && veyra::gfx::douyinLiveCompanionRunning();
     const bool overlayCompat = !obsGameCapture && overlayCompatAuto
-                               && (rivaTuner || nvidiaOverlay || gamePP || overlayCompatRestart) && !forcedRenderer[0];
+                               && (rivaTuner || nvidiaOverlay || gamePP || douyin || overlayCompatRestart) && !forcedRenderer[0];
     const bool softwareUi = obsGameCapture || overlayCompat;
     if (softwareUi)
         veyra::log::info("app", "software UI: cached raster paths; normal partial updates; no additional frame requests");
@@ -516,8 +525,8 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         veyra::log::info("app", "OBS game capture compatibility: software UI; native D3D12 video unchanged");
     } else if (overlayCompat) {
         QQuickWindow::setSceneGraphBackend(QStringLiteral("software"));
-        veyra::log::info("app", std::format("RTSS compatibility: software UI; activeServer={} nvidiaOverlay={} gamePP={} acceptedRestart={}; native D3D12 video unchanged",
-                                          rivaTuner, nvidiaOverlay, gamePP, overlayCompatRestart));
+        veyra::log::info("app", std::format("RTSS compatibility: software UI; activeServer={} nvidiaOverlay={} gamePP={} douyinCompanion={} acceptedRestart={}; native D3D12 video unchanged",
+                                          rivaTuner, nvidiaOverlay, gamePP, douyin, overlayCompatRestart));
     }
     {
         // A GPU interface keeps RTSS from drawing in this process at all, so a RivaTuner
@@ -532,7 +541,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         else if (!gpuD3d12 && ours) SetEnvironmentVariableW(veyra::gfx::kRivaTunerProfileOverride, nullptr);
         veyra::log::info("app", std::format("RivaTuner running={} injected={} compat={} OSD in this process={}", rivaTuner,
             GetModuleHandleW(L"RTSSHooks64.dll") != nullptr, overlayCompatAuto ? "auto" : "off", gpuD3d12 ? "off (GPU interface)" : "on"));
-        veyra::log::info("app", std::format("NVIDIA overlay running={} GamePP running={} interface={}", nvidiaOverlay, gamePP, softwareUi ? "software" : "GPU"));
+        veyra::log::info("app", std::format("NVIDIA overlay running={} GamePP running={} Douyin companion running={} interface={}", nvidiaOverlay, gamePP, douyin, softwareUi ? "software" : "GPU"));
     }
     QApplication app(argc, argv);
     // Qt does not automatically use the executable's Win32 icon for its windows.

@@ -163,6 +163,22 @@ struct ScreenCaptureSource::Impl {
     winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice wrapped{nullptr};
     GraphicsCaptureItem item{nullptr};Direct3D11CaptureFramePool pool{nullptr};GraphicsCaptureSession session{nullptr};
     winrt::Windows::Graphics::SizeInt32 poolSize{};
+    // A window being resized reports a new content size on almost every frame.
+    // Each new size used to recreate the pool and rebuild the whole effect graph
+    // (about 0.6 s with NR + frame generation, audit 2026-10-15 B2), so the video
+    // stood still for as long as the drag lasted. Frames keep the current size
+    // (the new content clipped or padded) until the size has held for settle100ns.
+    winrt::Windows::Graphics::SizeInt32 pendingSize{};
+    int64_t pendingSince=0;
+    static constexpr int64_t settle100ns=3000000;
+    bool resizeSettled(winrt::Windows::Graphics::SizeInt32 size,int64_t now){
+        if(size.Width!=pendingSize.Width||size.Height!=pendingSize.Height){pendingSize=size;pendingSince=now;}
+        return now-pendingSince>=settle100ns;
+    }
+    void applyPendingSize(){
+        poolSize=pendingSize;pendingSize={};pool.Recreate(wrapped,DirectXPixelFormat(format),2,poolSize);wasWaiting=true;
+        log::info("screen",std::format("capture size {}x{} after resizing settled",poolSize.Width,poolSize.Height));
+    }
     std::array<std::shared_ptr<Surface>,6> slots;
     AVFrame* frame=nullptr;
     uint64_t signal=0,sequence=0;int64_t lastPts=0,nextPts=0,clockOffset=0,lastColorCheck=0;
@@ -306,9 +322,18 @@ SourceReadStatus ScreenCaptureSource::read(pipeline::FramePacket& packet,const A
             LARGE_INTEGER freq{};QueryPerformanceFrequency(&freq);pts=int64_t(static_cast<long double>(fi.LastPresentTime.QuadPart)*10000000/freq.QuadPart)+p.clockOffset;++p.metrics.received;
         }else{
             for(unsigned i=0;i<2;++i){auto next=p.pool.TryGetNextFrame();if(!next)break;if(captured){captured.Close();++p.metrics.dropped;}captured=std::move(next);++p.metrics.received;}
-            if(!captured)return SourceReadStatus::Waiting;
+            if(!captured){
+                // A window whose content stops changing sends no further frame:
+                // apply a settled size here, and the recreated pool delivers one.
+                if(p.pendingSize.Width>0&&p.pendingSize.Height>0&&p.resizeSettled(p.pendingSize,now))p.applyPendingSize();
+                return SourceReadStatus::Waiting;
+            }
             const auto size=captured.ContentSize();
-            if(size.Width!=p.poolSize.Width||size.Height!=p.poolSize.Height){captured.Close();captured=nullptr;if(size.Width>0&&size.Height>0){p.poolSize=size;p.pool.Recreate(p.wrapped,DirectXPixelFormat(p.format),2,size);}p.wasWaiting=true;return SourceReadStatus::Waiting;}
+            if(size.Width!=p.poolSize.Width||size.Height!=p.poolSize.Height){
+                if(size.Width<=0||size.Height<=0){captured.Close();captured=nullptr;p.wasWaiting=true;return SourceReadStatus::Waiting;}
+                if(p.resizeSettled(size,now)){captured.Close();captured=nullptr;p.applyPendingSize();return SourceReadStatus::Waiting;}
+                // Still resizing: deliver this frame at the current size below.
+            }else p.pendingSize={};
             auto access=captured.Surface().as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();check(access->GetInterface(IID_PPV_ARGS(&texture)),"capture surface");
             pts=captured.SystemRelativeTime().count()+p.clockOffset;
         }

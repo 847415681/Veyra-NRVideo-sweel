@@ -1949,7 +1949,7 @@ Item {
             VRow {
                 label: qsTr("保存后设为启动默认")
                 hint: qsTr("下次启动软件时自动应用这个预设")
-                VSwitch { id: saveAsDefault; objectName: "preset-save-default"; checked: false }
+                VSwitch { id: saveAsDefault; objectName: "preset-save-default"; checked: false; onToggled: v => checked = v }
             }
         }
         Text {

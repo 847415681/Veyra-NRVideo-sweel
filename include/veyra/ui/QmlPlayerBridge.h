@@ -104,7 +104,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString remotePlayState READ remotePlayState NOTIFY snapshotChanged)
     // The loaded runtime components, as the engine reports them. A hand-written
     // list here could drift from what the package actually contains.
-    Q_PROPERTY(QVariantList componentList READ componentList NOTIFY snapshotChanged)
+    Q_PROPERTY(QVariantList componentList READ componentList NOTIFY componentListChanged)
     Q_PROPERTY(QObject* updates READ updates CONSTANT)
 
     // --- capture dialog ----------------------------------------------------
@@ -294,9 +294,9 @@ class QmlPlayerBridge : public QObject {
     // --- settings (what the UI shows) --------------------------------------
     Q_PROPERTY(bool nrEnabled READ nrEnabled WRITE setNrEnabled NOTIFY settingsChanged)
     Q_PROPERTY(int selectedNrLayer READ selectedNrLayer WRITE setSelectedNrLayer NOTIFY settingsChanged)
-    Q_PROPERTY(QVariantList nrLayers READ nrLayers NOTIFY chainChanged)
+    Q_PROPERTY(QVariantList nrLayers READ nrLayers NOTIFY nrLayersChanged)
     // List mode's NR master switch: true while any NR layer is on.
-    Q_PROPERTY(bool nrAnyEnabled READ nrAnyEnabled NOTIFY chainChanged)
+    Q_PROPERTY(bool nrAnyEnabled READ nrAnyEnabled NOTIFY nrLayersChanged)
     Q_PROPERTY(bool srEnabled READ srEnabled WRITE setSrEnabled NOTIFY settingsChanged)
     Q_PROPERTY(int fgMultiplier READ fgMultiplier WRITE setFgMultiplier NOTIFY settingsChanged)
     Q_PROPERTY(bool lowLatency READ lowLatency WRITE setLowLatency NOTIFY settingsChanged)
@@ -304,7 +304,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(double nrHoldStrength READ nrHoldStrength WRITE setNrHoldStrength NOTIFY settingsChanged)
     Q_PROPERTY(double nrHoldTolerance READ nrHoldTolerance WRITE setNrHoldTolerance NOTIFY settingsChanged)
     Q_PROPERTY(bool videoHdr READ videoHdr WRITE setVideoHdr NOTIFY settingsChanged)
-    Q_PROPERTY(QVariantMap videoHdrParams READ videoHdrParams NOTIFY chainChanged)
+    Q_PROPERTY(QVariantMap videoHdrParams READ videoHdrParams NOTIFY videoHdrParamsChanged)
     // Custom: static HDR output tuning (globals, every field live).
     Q_PROPERTY(bool hdrCurve READ hdrCurve WRITE setHdrCurve NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap hdrCurveParams READ hdrCurveParams NOTIFY settingsChanged)
@@ -331,7 +331,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int dlssSrModel READ dlssSrModel WRITE setDlssSrModel NOTIFY settingsChanged)
     Q_PROPERTY(QVariantList dlssSrModelChoices READ dlssSrModelChoices CONSTANT)
     Q_PROPERTY(bool protectionEnabled READ protectionEnabled WRITE setProtectionEnabled NOTIFY settingsChanged)
-    Q_PROPERTY(QVariantMap protectionState READ protectionState NOTIFY chainChanged)
+    Q_PROPERTY(QVariantMap protectionState READ protectionState NOTIFY protectionChanged)
     Q_PROPERTY(bool colorEnabled READ colorEnabled WRITE setColorEnabled NOTIFY settingsChanged)
     Q_PROPERTY(int audioOffsetMs READ audioOffsetMs WRITE setAudioOffsetMs NOTIFY settingsChanged)
     // 1.4.4 声音补偿: 0 自动(软件估算) / 1 手动 / 2 关闭; live sources only.
@@ -427,7 +427,7 @@ class QmlPlayerBridge : public QObject {
     // says meanwhile ("" once it plays or when nothing is opening).
     Q_PROPERTY(QString liveOpeningText READ liveOpeningText NOTIFY snapshotChanged)
     // Protection regions as the engine holds them: [{left,top,right,bottom,ellipse}].
-    Q_PROPERTY(QVariantList protectionRegions READ protectionRegions NOTIFY chainChanged)
+    Q_PROPERTY(QVariantList protectionRegions READ protectionRegions NOTIFY protectionChanged)
     Q_PROPERTY(QString protectionDrawShape READ protectionDrawShape NOTIFY protectionDrawChanged)
     Q_PROPERTY(double volume READ volume WRITE setVolume NOTIFY snapshotChanged)
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY snapshotChanged)
@@ -516,10 +516,10 @@ class QmlPlayerBridge : public QObject {
     // property per field, the page reads and writes them by name through one pair
     // of calls, and colourParameters() reports the catalogue the UI builds its
     // controls from - so a control can only exist for a parameter that is real.
-    Q_PROPERTY(QVariantList colourParameters READ colourParameters NOTIFY chainChanged)
+    Q_PROPERTY(QVariantList colourParameters READ colourParameters NOTIFY colourParamsChanged)
     // The same catalogue grouped by section, so the page can nest its collapsible
     // sub-panels without re-grouping in QML.
-    Q_PROPERTY(QVariantList colourGroups READ colourGroups NOTIFY chainChanged)
+    Q_PROPERTY(QVariantList colourGroups READ colourGroups NOTIFY colourParamsChanged)
     Q_PROPERTY(int selectedColourLayer READ selectedColourLayer WRITE setSelectedColourLayer NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap colourState READ colourState NOTIFY settingsChanged)
     // Imported .cube files (ColorLutStore, the folder the engine resolves) and
@@ -603,6 +603,7 @@ public:
     void setCurrentPage(const QString& value);
     QString remotePlayState() const;
     QVariantList componentList() const;
+    QVariantList readComponentList() const;
     QVariantList captureDevices() const;
     QString captureDeviceId() const;
     void setCaptureDeviceId(const QString& value);
@@ -1185,6 +1186,8 @@ public:
     Q_INVOKABLE QString diagnosticsReport() const;
     Q_INVOKABLE void openProjectPage();
     Q_INVOKABLE void copyDiagnostics();
+    // Re-reads the runtime manifest (Settings → 组件与许可 calls it when shown).
+    Q_INVOKABLE void refreshComponentList();
 
 signals:
     void playlistRequested();
@@ -1201,6 +1204,7 @@ signals:
     // Emitted only when the underlying snapshot actually changed, so QML
     // bindings do not re-evaluate 60 times a second for nothing.
     void snapshotChanged();
+    void componentListChanged();
     void perfChanged();
     void protectionDrawChanged();
     void presentationChanged();
@@ -1211,6 +1215,12 @@ signals:
     void fgChoicesChanged();
     void effectCapabilitiesChanged();
     void chainChanged();
+    // A slider edits one group's values without touching the chain's structure,
+    // labels or positions; only that group notifies (audit 2026-10-15 B1).
+    void nrLayersChanged();
+    void videoHdrParamsChanged();
+    void colourParamsChanged();
+    void protectionChanged();
     void recentFilesChanged();
     void presetsChanged();
     void exportChanged();
@@ -1234,7 +1244,14 @@ signals:
     void gameModeStopped(const QString& reason);
 
 private:
+    // Structural change: every chain-derived property notifies.
+    void emitChainChanged();
+    // Value edit of one group; a change of the chain's validity notifies everything.
+    void emitParameterChanged(void (QmlPlayerBridge::*group)(), bool wasValid);
     void updateGameMode();
+    // 抖音直播伴侣 running (gfx/PresentationHooks.h): Realtime GPU priority is capped at
+    // High while it runs and restored when it exits; 监控软件兼容 "off" leaves it alone.
+    void updateLiveCompanionCompat();
     // The settings the UI is showing: the facade's pending copy, which the
     // engine has been asked to apply. Every settings property reads this, so
     // they can never disagree with each other.

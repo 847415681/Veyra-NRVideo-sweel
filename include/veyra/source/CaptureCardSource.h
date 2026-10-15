@@ -92,5 +92,9 @@ private:
     std::wstring reconnectFormat_;
     SourceInfo reconnectInfo_;
     uint64_t epoch_=1,receivedOffset_=0,deliveredOffset_=0,droppedOffset_=0;
+    // Graph clock when the audio comes from the video filter's own pin: true leaves
+    // it to DirectShow (the device's clock, as OBS does), false pins the system
+    // clock. reconnect() flips it after a session that sent audio but no video.
+    bool embeddedAudioDeviceClock_=true;
 };
 }
