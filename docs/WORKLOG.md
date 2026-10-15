@@ -9569,3 +9569,5 @@ BMD日志53：5次进入原生协商的尝试均SDI连接0x1、locked0/noInput�
 ### 2.0.8正式发布完成
 
 用户批准原包仅改外名发布已完成。主https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.8 ID413665238 published_at2026-10-15T10:17:26Z，latest/non-prerelease；源码https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.8-sources ID413665184非latest。普通atomic推送main+v2.0.8/v2.0.8-sources到33b22b9；先草稿上传、校验服务器digest/size/body后发布，旧2.0.7/源资产不改。主两包、源归档一个应用源，未变FFmpeg和依赖源只链接，不重复上传。公开链接/双图width220/知识库检查通过；原包SHA/内部test标志/组件/679输入不变，无重编译重打包。完整报告RELEASE_2.0.8_REPORT_2026-10-15.md；reports/.../remote-final.json/assets.json/public-links-final.json记录证据。此次收尾只追加报告和日志、不移动发布标签。原75非当前树/509脏文件和五原归档保护，最终再核对；全部产物E盘，无子Agent/代发/关机。
+
+发布最终辅助检查首次失败：校验器误将main另一个工作树的原始字节与构建树输入SHA比较。五个ColorDetail头/源/着色器仅LF/CRLF差异；逐文件归一化内容和Git hash-object完全相同，实际构建树679输入仍逐字节匹配。只修外部final-audit使用实际构建树并加两树同HEAD/归一化/Git对象证据，不修改任何产品文件或包。记录reports/release-2.0.8-20261015/checkout-eol-difference.json，原失败保留。服务器发布/下载已验证正常，标签及资产保持。
