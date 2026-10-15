@@ -9543,3 +9543,5 @@ BMD日志53：5次进入原生协商的尝试均SDI连接0x1、locked0/noInput�
 实际GUI：六效果器NR单步节点4.95ms/专业5.05ms，对照Claude同脚本原65–80ms，只表示UI响应；移动节点仍61–64ms。窗口捕获NR+FG连续缩放只在稳定后重建一次，有最终约0.5s初始化成本；进程名模拟伴侣启动software、实时5→高4→伴侣退出恢复5；启动/运行日志轮换通过，生产16MB/64MB不变。实际DLSS性能模式和VFG Low4X呈现生成帧1233/4768、无错误；首解析器错把实际[vfg]当vfg-gpu，修解析后仅复核既有日志，原回执保留。日志在logs/claude-release-2.0.8-20261015的handoff-*、log-rotation-165437和logs/test-2.0.8-handoff-20261015各探针。
 
 后续本地main快进、stage/seal/cold及最终保护复核回执写入reports/test-2.0.8-handoff-20261015/final.json和test-packages/claude-release-2.0.8-20261015。两包保留VFG间歇校验限制、releaseReady=false；GC550/BMD/AMD和真实直播伴侣负载需现场验证。未将模拟或NVIDIA本机播放当作对应硬件验收。
+
+2.0.8首次stage停在签名检查：宿主PowerShell7模块路径影响子WindowsPowerShell5.1的Security自动加载，实际hash/size/version匹配且显式加载其PSHOME系统模块后签名Valid。脚本使用显式模块和ErrorAction Stop，身份断言全部保留；本轮半成品保留为stage-interrupted-NVIDIA-20261015后重试，不改原件。清理命令被自动审查拦截且未执行，采用保留目录的重命名方式继续；记录logs/test-2.0.8-handoff-20261015/stage-signature-module-failure.json。

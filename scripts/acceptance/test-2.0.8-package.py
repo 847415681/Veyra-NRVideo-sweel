@@ -48,7 +48,8 @@ def atomic(src,dst):write(dst,src.read_bytes())
 def stagepath(flavor):return OUT/f'Veyra-{LABEL}-{flavor}-win64-portable'
 def check_lite(p):
     # The path travels in the environment: -Command joins extra arguments into the script text.
-    script=("$p=$env:VEYRA_IDENTITY_PATH;$i=Get-Item -LiteralPath $p;$v=$i.VersionInfo;$s=Get-AuthenticodeSignature -LiteralPath $p;"
+    script=("$ErrorActionPreference='Stop';Import-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Security/Microsoft.PowerShell.Security.psd1') -ErrorAction Stop;"
+            "$p=$env:VEYRA_IDENTITY_PATH;$i=Get-Item -LiteralPath $p;$v=$i.VersionInfo;$s=Get-AuthenticodeSignature -LiteralPath $p;"
             "'{0}.{1}.{2}.{3}|{4}|{5}' -f $v.FileMajorPart,$v.FileMinorPart,$v.FileBuildPart,$v.FilePrivatePart,$s.Status,$s.SignerCertificate.Subject")
     out=subprocess.check_output(['powershell','-NoProfile','-Command',script],text=True,env=dict(os.environ,VEYRA_IDENTITY_PATH=str(p))).strip()
     version,status,signer=out.split('|',2)
