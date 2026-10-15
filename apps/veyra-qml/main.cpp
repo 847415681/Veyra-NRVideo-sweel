@@ -439,7 +439,12 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     // Bounded: earlier sessions move to veyra-qml.old.log once this file passes
     // 16 MB at start, and a session that alone reaches 64 MB (about five hours of
     // capture) continues in a fresh file (audit 2026-10-15 B3).
-    veyra::Logger::instance().setRotation(16ull << 20, 64ull << 20);
+    uint64_t rotateAtStart = 16ull << 20, rotateWhileRunning = 64ull << 20;
+    // VEYRA_TEST_LOG_ROTATE_BYTES=N sets both limits to N bytes (rotation tests only).
+    wchar_t rotateTest[32]{};
+    if (GetEnvironmentVariableW(L"VEYRA_TEST_LOG_ROTATE_BYTES", rotateTest, 32) > 0 && _wtoi64(rotateTest) > 0)
+        rotateAtStart = rotateWhileRunning = uint64_t(_wtoi64(rotateTest));
+    veyra::Logger::instance().setRotation(rotateAtStart, rotateWhileRunning);
     if (!veyra::Logger::instance().openFile(logPath.wstring(), true)) {
         logPath = logPath.parent_path() / (L"veyra-qml-" + std::to_wstring(GetCurrentProcessId()) + L".log");
         (void)veyra::Logger::instance().openFile(logPath.wstring(), true);
