@@ -9545,3 +9545,13 @@ BMD日志53：5次进入原生协商的尝试均SDI连接0x1、locked0/noInput�
 后续本地main快进、stage/seal/cold及最终保护复核回执写入reports/test-2.0.8-handoff-20261015/final.json和test-packages/claude-release-2.0.8-20261015。两包保留VFG间歇校验限制、releaseReady=false；GC550/BMD/AMD和真实直播伴侣负载需现场验证。未将模拟或NVIDIA本机播放当作对应硬件验收。
 
 2.0.8首次stage停在签名检查：宿主PowerShell7模块路径影响子WindowsPowerShell5.1的Security自动加载，实际hash/size/version匹配且显式加载其PSHOME系统模块后签名Valid。脚本使用显式模块和ErrorAction Stop，身份断言全部保留；本轮半成品保留为stage-interrupted-NVIDIA-20261015后重试，不改原件。清理命令被自动审查拦截且未执行，采用保留目录的重命名方式继续；记录logs/test-2.0.8-handoff-20261015/stage-signature-module-failure.json。
+
+### 2.0.8 测试交付完成
+
+本地main已从7571919快进整合到80a3d7c，五个来源分支与原Claude集成f074e40均在祖先链，原Claude分支保持。scripts/acceptance/test-2.0.8-package.py stage、seal、cold --cold-run handoff-final 全部完成：NVIDIA1654 payload/96 PE/49运行组件、AMD2093 payload/83 PE/534运行组件；原donor1641/2081文件SHA保持，所有ZIP及对应源码/许可证/厂商分离/PE依赖闭包通过。
+
+最终ZIP：NVIDIA718608815字节，SHAe89972d234fc79167c08b2183b42347c9ace606663b9ac363e2d09a547afe0ba；AMD355816850字节，SHA1740d7dbc6c8307d0dd8deefb9aaafac4398ed0e40022b1e40e66a86092ecda9；源ZIP SHA4ca39a70797c6080ef02646e1d2aec0a392346ea3594206c8809f188a64d3d99。目录test-packages/claude-release-2.0.8-20261015。封包main/source80a3d7c，产品构建99435ae；此后只追加报告/WORKLOG证据，679产品输入和35EXE不变。
+
+最终ZIP独立解压，Windows-only PATH、私有配置，普通D3D12/OBS软件界面×NVIDIA/AMD四场GTA4K播放全部通过，原帧呈现提交397/403/401/404，无GPU/QML错误，sentinel配置保留。不是AMD实卡测试或屏幕实际FPS测量。DELIVERY.json/cold-start.json固定归档哈希/源码/日志；最终保护与增量源码bundle在reports/archives/test-2.0.8-handoff-20261015，原75非当前树、509脏文件、原会话保持。所有回归并非全绿：VFG合成22项间歇失败根因仍未定，独立2425项和真实播放通过，已明确写进包内报告/knownIssues，releaseReady=false；HDR桌面5个旧RGB阈值失败也如实保留。
+
+自动审批拦截递归删除本轮解压验证副本（blocked by policy、未给更具体原因），没有执行或换方式绕过；验证目录verify/claude-release-2.0.8-20261015/handoff-final保留3749文件、1947013415逻辑字节，预检receipt在reports/.../cleanup-preflight.json。初次stage半成品此前安全改名保留。私有QA当前构建保留供复查，恢复Main.qml原文，不含测试注入。未触碰其它任务产物、未远端push/发布/关闭issue/代发/关机。

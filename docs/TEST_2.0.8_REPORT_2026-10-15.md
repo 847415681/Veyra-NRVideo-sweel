@@ -54,7 +54,9 @@
 
 NVIDIA 包新增已获准的 `runtime/experimental/dlssg-lite/nvngx_dlssg.dll`：310.9.16.0、7506544 字节、SHA256 `CADEE1AA6DB3907BABDC3285DA2AEBC4553D92B89C38BA3EAE8ABD8BBA1BEA72`、Valid NVIDIA 签名；只用于 RTX 50 可选性能模式，默认关闭，AMD 包不含它。不修改运行库原件，不锁定用户兼容替换。
 
-交付流程：`python -X utf8 -B -I scripts/acceptance/test-2.0.8-package.py stage` → `seal` → `cold`。原 NVIDIA / AMD donor 清单 1641 / 2081 文件逐一复核，PE 导入闭包、厂商分离、许可证、patched FFmpeg 与对应源码、源码禁止项、ZIP CRC/逐文件哈希均设断言。cold 从最终 ZIP 解压，用只有 Windows 的 PATH 分别跑 D3D12 / software 界面，GTA 4K 原片每场 14s，要求实际渲染器匹配、realPresented≥100、无 GPU/QML 错误和独立配置 sentinel 保留。具体执行结果以外部 `DELIVERY.json`、`cold-start.json`、`reports/test-2.0.8-handoff-20261015/final.json` 为准，不由本流程说明推断测试通过。
+交付流程：`python -X utf8 -B -I scripts/acceptance/test-2.0.8-package.py stage` → `seal` → `cold --cold-run handoff-final`。原 NVIDIA / AMD donor 清单 1641 / 2081 文件逐一复核，PE 导入闭包、厂商分离、许可证、patched FFmpeg 与对应源码、源码禁止项、ZIP CRC/逐文件哈希均通过。cold 从最终 ZIP 解压，用只有 Windows 的 PATH 分别跑 D3D12 / software 界面，GTA 4K 原片每场 14s，四场实际渲染器、realPresented≥100、GPU/QML 无错误、独立配置 sentinel 均通过：NVIDIA 397 / 403，AMD 401 / 404 张原帧呈现提交。具体执行结果见外部 `DELIVERY.json`、`cold-start.json`、`reports/test-2.0.8-handoff-20261015/final.json`。
+
+封包时 main / 源码提交为 `80a3d7cc3b66e9b49cd64f97c9552fe879098912`；源码 ZIP SHA256 `4ca39a70797c6080ef02646e1d2aec0a392346ea3594206c8809f188a64d3d99`。NVIDIA ZIP 718608815 字节 / SHA256 `e89972d234fc79167c08b2183b42347c9ace606663b9ac363e2d09a547afe0ba`；AMD ZIP 355816850 字节 / SHA256 `1740d7dbc6c8307d0dd8deefb9aaafac4398ed0e40022b1e40e66a86092ecda9`。封包后仅追加本报告与 WORKLOG 的实际结果，产品679输入及35EXE不变，最终 main 和封包提交差异由 final.json 明确记录。无需为文档更新重新编译或改变已验 ZIP。
 
 AMD/Intel 增强、GC550/BMD 硬件、真实直播伴侣负载还需对应用户实测；AMD 包在本机启动成功也不等于 AMD NR/FG 实卡已验收。此次不关闭远端 issue，不发布正式 Release。
 
@@ -65,4 +67,4 @@ AMD/Intel 增强、GC550/BMD 硬件、真实直播伴侣负载还需对应用户
 - GUI：同根 `handoff-node-fixed-164020`、`handoff-pro-fixed-164032`、`handoff-resize-fx-164901`、`handoff-douyin-165329`、`log-rotation-165437`。
 - 原版屏幕颜色基线与延迟输入 VFG：`logs/test-2.0.8-handoff-20261015/baseline-screen-164400`、`vfg-delayed-capture-164407`。
 - 启动保护快照/源码 bundle：`archives/test-2.0.8-handoff-20261015`，覆盖77旧工作树、509脏文件及原Claude会话。只按授权更新当前源码树和main；其它工作树、原包、运行库原件与用户配置保持。
-- 只清理本轮私有 QA 和解压重复副本；保留最终包、源码、可用构建、原日志和诊断证据。
+- 当前 QA 保留供 VFG 复查，恢复为未注入测试 QML 的原始 Main.qml。首次中断 stage 与最终解压验证副本暂保留：自动审批拒绝了递归删除命令（只返回 blocked by policy），没有执行删除或换其它方式绕过。验证副本3749文件、1947013415逻辑字节，路径 `verify/claude-release-2.0.8-20261015/handoff-final`；最终 ZIP、源码、可用构建和日志均保留。
