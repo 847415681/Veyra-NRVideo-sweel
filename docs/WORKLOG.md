@@ -9564,3 +9564,8 @@ BMD日志53：5次进入原生协商的尝试均SDI连接0x1、locked0/noInput�
 整理双方v2.0.7以来全部非merge提交和最终产品路径，生成RELEASE_NOTES_2.0.8、CHANGE_INDEX、BUILD_2.0.8、ACCEPTANCE和中英README。重点延迟/游戏模式/VRR/采集卡手柄与第三方远程电脑游戏；公开说明不叙述用户要求省略的旧显示同步设定。测量区分CPU提交、GPU阶段和光学端到端，未用理论PBP或错误时间归属数据宣传；VRR当前依赖NVAPI、真实硬件未验边界保留。两二维码width220/Discord/Ko-fi/知识库原样保留，主Release拟仅两包、源归档只上传新应用源并链接既有FFmpeg/依赖。尚未推送/上传/发布，后续回执另记。
 
 原包发布审计实际通过：tmp/release-2.0.8-20261015/audit.py核验两个ZIP全部1654/2093payload、49/534运行组件、EXE/PE/CRC、应用源2011文件、679构建输入及原四冷启回执；正式命名文件硬链接复用，SHA相同，未重编译重封包。两旧源码源资产服务器digest正确；assets.json记录两用户包+一个新应用源+两固定旧源链接。文档gate通过，51非merge/72产品路径已覆盖，双方README支持footer逐字保持，Release/SOURCE两图width220及知识库保持。尚未上传或发布。
+
+
+### 2.0.8正式发布完成
+
+用户批准原包仅改外名发布已完成。主https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.8 ID413665238 published_at2026-10-15T10:17:26Z，latest/non-prerelease；源码https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.8-sources ID413665184非latest。普通atomic推送main+v2.0.8/v2.0.8-sources到33b22b9；先草稿上传、校验服务器digest/size/body后发布，旧2.0.7/源资产不改。主两包、源归档一个应用源，未变FFmpeg和依赖源只链接，不重复上传。公开链接/双图width220/知识库检查通过；原包SHA/内部test标志/组件/679输入不变，无重编译重打包。完整报告RELEASE_2.0.8_REPORT_2026-10-15.md；reports/.../remote-final.json/assets.json/public-links-final.json记录证据。此次收尾只追加报告和日志、不移动发布标签。原75非当前树/509脏文件和五原归档保护，最终再核对；全部产物E盘，无子Agent/代发/关机。
