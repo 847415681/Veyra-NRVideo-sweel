@@ -16423,6 +16423,41 @@
    "zh-TW": "顯示佇列恢復失敗 · ",
    "en": "Display queue could not be restored · ",
    "ja": "表示キューを復元できませんでした · "
+  },
+  {
+   "zh": "将自动重新连接采集卡一次",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "將自動重新連接擷取卡一次",
+   "en": "the capture card will be reconnected once automatically",
+   "ja": "キャプチャーカードを一度だけ自動で再接続します"
+  },
+  {
+   "zh": "GPU 已重置，正在自动重新连接采集卡",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "GPU 已重置，正在自動重新連接擷取卡",
+   "en": "The GPU was reset; reconnecting the capture card automatically",
+   "ja": "GPU がリセットされました。キャプチャーカードを自動で再接続しています"
+  },
+  {
+   "zh": "显示全部可用帧率",
+   "src": "qml/Veyra/DialogHost.qml",
+   "zh-TW": "顯示全部可用幀率",
+   "en": "Show all available frame rates",
+   "ja": "利用可能なフレームレートをすべて表示"
+  },
+  {
+   "zh": "默认只列常用帧率：24、25、30、50、60、100、120、144、165、240（含 59.94 这类非整数帧率）。这张卡另外上报了 %1 个帧率",
+   "src": "qml/Veyra/DialogHost.qml",
+   "zh-TW": "預設只列常用幀率：24、25、30、50、60、100、120、144、165、240（含 59.94 這類非整數幀率）。這張卡另外回報了 %1 個幀率",
+   "en": "Only common frame rates are listed by default: 24, 25, 30, 50, 60, 100, 120, 144, 165, 240 (including non-integer rates such as 59.94). This card reports %1 more",
+   "ja": "既定では一般的なフレームレートのみ表示します：24、25、30、50、60、100、120、144、165、240（59.94 などの非整数レートを含む）。このカードはほかに %1 個のフレームレートを報告しています"
+  },
+  {
+   "zh": "放大时重建细节；原尺寸时修复视频文件和串流的压缩伪影，无压缩的采集卡格式在原尺寸不运行。效果取决于片源。",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "放大時重建細節；原尺寸時修復影片檔案和串流的壓縮瑕疵，無壓縮的擷取卡格式在原尺寸不執行。效果取決於片源。",
+   "en": "Reconstructs detail when upscaling; at native size it reduces compression artifacts in video files and streams, and does not run for uncompressed capture-card formats. Results depend on the source.",
+   "ja": "拡大時は細部を再構成し、元の解像度では動画ファイルとストリームの圧縮ノイズを軽減します。非圧縮のキャプチャーカード形式では元の解像度で実行しません。効果はソースにより異なります。"
   }
  ]
 }

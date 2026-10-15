@@ -1,8 +1,10 @@
 #pragma once
 #include "veyra/source/CaptureFrameRate.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <format>
+#include <iterator>
 #include <span>
 #include <vector>
 
@@ -12,7 +14,9 @@ namespace veyra::source {
 // persisted identity so an old combined selection still restores one type.
 struct CaptureFormat {int index=0;unsigned width=0,height=0;double fps=0;std::wstring label;std::wstring key;int rank=0;int tier=0;bool driverCurrent=false;std::wstring pixel;std::wstring scan;bool interlaced=false;int64_t interval100ns=0;bool supported=true;bool automatic=false;};
 enum class CaptureFormatAxis { Resolution, FrameRate };
-struct CaptureFormatOption { std::wstring id, label; bool disabled=false, discouraged=false; };
+// Frame-rate rows also carry the rate itself and whether it is a common one (see
+// captureVisibleFrameRates); the other menus leave those fields at their defaults.
+struct CaptureFormatOption { std::wstring id, label; bool disabled=false, discouraged=false; double fps=0; bool interlaced=false, common=true; };
 
 inline const CaptureFormat* selectCaptureFormat(std::span<const CaptureFormat> formats,int legacyIndex,std::wstring_view key){
     for(const auto& format:formats)
@@ -67,6 +71,13 @@ inline std::wstring captureResolutionLabel(const CaptureFormat& format){
     if(format.automatic)return L"自动检测实际信号";
     return std::format(L"{} × {}",format.width,format.height);
 }
+// The rates people pick. A driver rate counts as one of them within 0.15 %, which also covers
+// the 1000/1001 rates cards report instead (59.94 for 60, 29.97 for 30, 119.88 for 120) and
+// nominal rates such as 60.00024.
+inline bool captureCommonFrameRate(double fps){
+    static constexpr double common[]{24,25,30,50,60,100,120,144,165,240};
+    return std::any_of(std::begin(common),std::end(common),[fps](double rate){return std::abs(fps-rate)<=rate*0.0015;});
+}
 inline std::wstring captureFrameRateLabel(const CaptureFormat& format){
     if(format.automatic)return L"跟随实际信号";
     if(format.fps<=0)return L"设备默认帧率";
@@ -104,9 +115,47 @@ inline std::vector<CaptureFormatOption> captureFrameRateOptions(std::span<const 
         auto label=captureFrameRateLabel(format);
         if(std::any_of(out.begin(),out.end(),[&](const CaptureFormatOption& option){return option.label==label;}))
             label+=std::format(L" [format {}]",format.index);
-        out.push_back({id,std::move(label)});
+        out.push_back({id,std::move(label),false,false,format.fps,format.interlaced,format.automatic||format.fps<=0||captureCommonFrameRate(format.fps)});
     }
     return out;
+}
+// Some drivers list every rate from 1 to 120 fps for each format (logs(18)). The menu shows
+// one row per common rate; the rest wait behind 显示全部可用帧率. The selected rate is always
+// listed, and a resolution offering no common rate lists everything. Either list runs from the
+// highest rate down (signal-following/default rows first; progressive before interlaced).
+// `hidden` counts the rows the short list leaves out (0 when there is nothing more to show).
+inline std::vector<CaptureFormatOption> captureVisibleFrameRates(const std::vector<CaptureFormatOption>& all,std::wstring_view selected,bool showAll,size_t* hidden=nullptr){
+    if(hidden)*hidden=0;
+    std::vector<CaptureFormatOption> shown;
+    if(std::none_of(all.begin(),all.end(),[](const CaptureFormatOption& option){return option.common;}))shown=all;
+    else{
+        std::vector<std::pair<long long,bool>> rates;
+        for(const auto& option:all){
+            const std::pair<long long,bool> rate{std::llround(option.fps*1000),option.interlaced};
+            const bool repeat=std::find(rates.begin(),rates.end(),rate)!=rates.end();
+            if(option.id!=selected&&(!option.common||repeat))continue;
+            shown.push_back(option);if(option.common)rates.push_back(rate);
+        }
+        if(hidden)*hidden=all.size()-shown.size();
+        if(showAll)shown=all;
+    }
+    std::stable_sort(shown.begin(),shown.end(),[](const CaptureFormatOption& a,const CaptureFormatOption& b){
+        if((a.fps<=0)!=(b.fps<=0))return a.fps<=0;
+        if(a.fps!=b.fps)return a.fps>b.fps;
+        return !a.interlaced&&b.interlaced;
+    });
+    return shown;
+}
+// The rate a newly chosen resolution starts with when the current one is missing there: its
+// first common rate in list order, or else its first rate. Null when the resolution is unknown.
+inline const CaptureFormat* captureDefaultFrameRate(std::span<const CaptureFormat> formats,std::wstring_view resolution){
+    const CaptureFormat* first=nullptr;
+    for(const auto& f:formats){
+        if(captureResolutionId(f)!=resolution)continue;
+        if(f.automatic||f.fps<=0||captureCommonFrameRate(f.fps))return &f;
+        if(!first)first=&f;
+    }
+    return first;
 }
 inline std::vector<CaptureFormatOption> capturePixelOptions(std::span<const CaptureFormat> formats,const CaptureFormat* current){
     std::vector<CaptureFormatOption> out;

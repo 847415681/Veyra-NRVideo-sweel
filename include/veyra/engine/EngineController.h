@@ -148,6 +148,9 @@ struct PlayerSnapshot {
     int fsrMaxGeneratedFrames=0;
     std::string fsrProviderVersion;
     bool running=false,failed=false,image=false,capture=false,remotePlay=false;
+    // The session ended because the GPU stopped completing work (frame-ready timeout or a
+    // removed device / driver reset), not because the source failed.
+    bool gpuFailed=false;
     int remotePlayState=0; uint64_t remotePlaySkipped=0;
     bool remoteRecovering=false;unsigned remoteReconnectAttempts=0;std::wstring remoteRecoveryMessage;
     remoteplay::SessionInbox::Snapshot remoteStream;

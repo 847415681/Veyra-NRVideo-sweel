@@ -137,5 +137,31 @@ int main(){
             check(std::any_of(options.begin(),options.end(),[&](const CaptureFormatOption& option){return option.id==format.key;}),"every reported media identity is reachable through linked selectors");
         }
     }
+    {
+        // logs(18): a driver listing 1..120 fps for every format. The menu keeps the common
+        // rates (59.94 and 60.00024 count as 60) and hides the rest behind 显示全部可用帧率.
+        check(captureCommonFrameRate(60)&&captureCommonFrameRate(60000.0/1001)&&captureCommonFrameRate(60.00024)&&captureCommonFrameRate(29.97)
+              &&captureCommonFrameRate(23.976)&&captureCommonFrameRate(143.856)&&captureCommonFrameRate(239.76)&&captureCommonFrameRate(165),"60, 59.94, 60.00024 and the 1000/1001 rates are common");
+        check(!captureCommonFrameRate(59)&&!captureCommonFrameRate(61)&&!captureCommonFrameRate(75)&&!captureCommonFrameRate(1),"neighbouring and odd rates are not");
+        std::vector<CaptureFormat> many;
+        for(int rate=1;rate<=120;++rate){CaptureFormat f{0,1920,1080,double(rate),L"",std::format(L"r{}",rate)};f.interval100ns=(10000000+rate/2)/rate;many.push_back(f);}
+        CaptureFormat ntsc{1,1920,1080,60000.0/1001,L"",L"r59.94"};ntsc.interval100ns=166833;many.push_back(ntsc);
+        const auto all=captureFrameRateOptions(many,&many[0]);
+        size_t hidden=0;
+        const auto shortList=captureVisibleFrameRates(all,L"",false,&hidden);
+        check(all.size()==121&&shortList.size()==8&&hidden==113,"1..120 fps plus 59.94 lists 24 25 30 50 60 100 120 and 59.94");
+        check(std::any_of(shortList.begin(),shortList.end(),[](const CaptureFormatOption& o){return std::abs(o.fps-59.94)<0.01;}),"59.94 keeps its own row next to 60");
+        {std::vector<double> order;for(const auto& o:shortList)order.push_back(std::round(o.fps*100)/100);
+         check(order==std::vector<double>{120,100,60,59.94,50,30,25,24},"short list runs from the highest rate down");}
+        check(captureVisibleFrameRates(all,L"",true).size()==all.size(),"show all lists every reported rate");
+        check(captureVisibleFrameRates(all,captureFrameRateId(many[74]),false).size()==9,"a selected uncommon rate (75) stays listed");
+        std::vector<CaptureFormat> twice{many[59],many[59]};twice[1].key=L"r60-vih2";twice[1].interval100ns=166666;
+        check(captureVisibleFrameRates(captureFrameRateOptions(twice,&twice[0]),L"",false).size()==1,"two intervals for the same 60 fps show one row");
+        std::vector<CaptureFormat> odd{{0,1280,1024,75,L"",L"sxga75"},{1,1280,1024,85,L"",L"sxga85"}};
+        size_t oddHidden=9;
+        check(captureVisibleFrameRates(captureFrameRateOptions(odd,&odd[0]),L"",false,&oddHidden).size()==2&&oddHidden==0,"a resolution without common rates lists everything and shows no switch");
+        check(captureDefaultFrameRate(many,L"1920x1080")==&many[23],"a new resolution starts at its first common rate (24), not 1 fps");
+        check(captureDefaultFrameRate(odd,L"1280x1024")==&odd[0]&&!captureDefaultFrameRate(odd,L"640x480"),"no common rate: first rate; unknown resolution: none");
+    }
     std::cout<<"capture format selection failures="<<failures<<'\n';return failures?1:0;
 }

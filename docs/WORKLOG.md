@@ -9455,3 +9455,34 @@ PR #7：OPEN、CONFLICTING，基线 05998da 落后 525 个提交；界面部分�
 GUI 发现并修复：断开后采集任务拆除期间（Stopping）轮询又把控制连上。
 
 测试：全部构建通过（新代码无警告）；remoteplay 边界默认/200 次压力/双虚拟手柄跟随/原虚拟手柄全过；repair 259/0、UI 合同、realtime preview 0 失败；节奏 4 项通过；screen capture 仍是 HDR 桌面 5 项基线失败。GUI（全部只连 192.0.2.1）：开关、播放中开→5 s 失败→重连→断开、PIN/已连接布局、PS5 对话框行、主页标签、英文、正在连接时退出（0.26 s、cancelled=true）。测试包 r6（a7d8598，EXE eeec127d…）冒烟通过。LivePresentationTests 的 PS5 用例会连真实配对，未跑；真 PS5、真 ViGEm、HDMI 是否降级未测。
+
+## 2026-10-15 现场修复：2.0.7 打开采集卡闪退、GPU 卡死后条栏图标消失（Claude）
+
+- 授权：用户提交 veyra-qml(56).log、logs(18).zip 和条栏截图，要求排查修复两个问题、汇报后关机。存档 checkpoint/pre-claude-field-20261015（main 7571919）与 E:/项目/Veyra/archives/claude-field-20261015；分支 claude/field-20261015。
+- logs(18)：272 个能力项 × 120 帧率 = 15474 个格式（PR34 起列出全部帧率）。本机用 VEYRA_TEST_CAPTURE_EXTRA_RATES=160 在 T911 造出 15558 个格式复现卡死；主线程栈证明 QML 的 captureFormats.find 每个元素都重读整个列表（O(n²)）。桥接按输入缓存四个列表、新增 captureFormatLabel/captureFormatCostHint、枚举去重改哈希；15558 个格式时界面心跳最大 0.30 秒，选择 73/46/14 ms。
+- 日志 56：9 次 GPU 卡死（nvlddmkm 153），界面与视频共用 D3D12 设备一起停；Qt 重建界面后曲线渲染的 Shape 图标全空（本机移除界面设备复现）。修复：场景图重建后 VIcon 重设路径；采集卡会话因 GPU 失败结束后自动重连一次（十分钟内再失败交给用户）；收尾时设备已移除则补写 DRED。长时间变卡与卡死根因未定，默认值不改。
+- 构建/回归：tmp/claude-field-20261015/build.py，最终 build-20261015-013917，exe a79714fb…；6 组单元/集成测试与 qml_quick 68/0 通过（logs/claude-field-20261015/unit-final-013928）；界面脚本证据见 docs/FIELD_FIXES_2026-10-15.md。
+- 测试包：E:/项目/Veyra/test-packages/claude-field-20261015（覆盖补丁 fa715aad4a4da092…，NVIDIA 8762448fd9ba43cc…，AMD 5573da62692e6a4f…），冷启动通过；SHA256 全文见 docs/FIELD_FIXES_2026-10-15.md。
+- 不 merge/push/Release，不改默认 GPU 优先级/NR 版本、运行库、模型、驱动、用户配置；无子 Agent。
+
+## 2026-10-15 帧率菜单只列常用帧率（Claude，用户追加）
+
+- 用户要求帧率不要列那么多，默认只列常用帧率（30/50/60/120/144/240 等），注意 59.94 这类非整数，帧率特别多的卡加“显示全部可用帧率”勾选。分支 claude/field-20261015。
+- 常用帧率 24/25/30/50/60/100/120/144/165/240，±0.15% 内算同一帧率（含 59.94、60.00024、240.004）；默认短列表、同帧率一行、选中帧率保留、无常用帧率时全列，按帧率从高到低；有隐藏时出现开关（偏好 captureShowAllFrameRates，默认关）；换分辨率默认落到第一个常用帧率。
+- 验证：新增单元测试通过；T911 原样不变（1080p 7 个常用帧率、无开关）；模拟 1–160 fps 时 1080p 11 行、隐藏 153、全部 164；英文布局正常；回归 6 组 + qml_quick 68/0 通过（logs/claude-field-20261015/unit-rates-final-095820）。详见 docs/FIELD_FIXES_2026-10-15.md。
+- 测试包 r2：E:/项目/Veyra/test-packages/claude-field-20261015-r2（补丁 cd74c3442d94bd10…，NVIDIA 09db90a8cbed1a58…，AMD fd637493121e8bed…），冷启动通过。
+
+## 2026-10-15 5090 开销变大：原尺寸 RTX Video SR 只给压缩视频（Claude，用户追加）
+
+- 日志 44（2.0.6）/57（2.0.7）：同为美乐威 4K P010 + NR + 补帧，2.0.7 多跑 RTX Video SR 4K→4K（质量 4，p95 约 8.7 ms/帧），NR 也变慢，超出 60 fps 预算。来源 108cbaa 的原尺寸修复。
+- 用户选“只给压缩视频”：屏幕捕获和无压缩采集格式在原尺寸不跑超分（回到 2.0.6）；文件、串流、MJPEG/H.264 采集照旧；放大与 DLSS/FSR 规则不变；超分说明文字与翻译更新。
+- 验证：effect_chain 新增 4 项通过，回归全部通过；T911 4K60 NV12 开超分 sr=0、耗时 0，MJPEG 开超分 sr=1。详见 docs/FIELD_FIXES_2026-10-15.md。
+- 测试包 r3：E:/项目/Veyra/test-packages/claude-field-20261015-r3（补丁 ec6a00855830a3d7…，NVIDIA a66911f17c90bba1…，AMD 2c63b522754e2517…），冷启动通过。
+
+## 2026-10-15 2.0.8 发布前审查（Claude，用户追加）
+
+- 用户：“准备发2.0.8，整个软件审一遍，看看有没有已知bug和性能缺陷”。只审查和测量，不改产品，不合并、不 push。
+- 待合入：field（7 个提交）、fg-gpu-home（20 个，含 latency-min 的 10 个）、codex issues36-37-bmd（5 个）、codex update-check（5 个）、latency-chain-audit（文档和验收脚本）。merge-tree 试算只在 AGENTS/WORKLOG/catalog 末尾追加和偏好白名单一行冲突，两项都保留。dlssg-lite 运行库进正式包需要用户授权。
+- 实测缺陷：拖动参数滑块时每次 chainChanged 占 UI 线程 65–80 ms（约 12–15 fps）；窗口捕获改尺寸每次整图重建（NR + 补帧约 0.6 秒冻结）；日志没有大小上限（现场 129–186 MB）；VSwitch 点击断开绑定（#29）；组件列表随快照每次读盘并解析 manifest。
+- 开着的 issue 18 个，7 个合入后可关；#33 本机 280+ 次缩放未复现；#38 的日志未下载。详见 docs/AUDIT_2.0.8_2026-10-15.md。
+- 收尾：私有程序副本（自有 68.5 MB，另有硬链接 974 MB）、独立配置和空运行目录已删除，脚本和日志保留。

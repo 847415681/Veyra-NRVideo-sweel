@@ -17,6 +17,9 @@ Item {
     readonly property bool known: IconData.paths[name] !== undefined
     readonly property bool softwareRendering: (typeof vySoftwareUi !== "undefined" && vySoftwareUi)
         || GraphicsInfo.api === GraphicsInfo.Software
+    // Bumped when the interface's graphics device was lost and recreated (GPU reset): Qt
+    // 6.8.3's curve renderer then leaves the new nodes empty until the path changes.
+    readonly property int deviceGeneration: (typeof veyra !== "undefined" && veyra) ? veyra.uiDeviceGeneration : 0
 
     implicitWidth: size
     implicitHeight: size
@@ -58,7 +61,7 @@ Item {
             strokeWidth: icon.strokeWidth
             capStyle: ShapePath.RoundCap
             joinStyle: ShapePath.RoundJoin
-            PathSvg { path: icon.known ? IconData.paths[icon.name] : "" }
+            PathSvg { path: icon.known ? IconData.paths[icon.name] + (icon.deviceGeneration % 2 ? " " : "") : "" }
         }
     }
 }

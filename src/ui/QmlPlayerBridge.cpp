@@ -352,6 +352,29 @@ struct QmlPlayerBridge::Impl {
     int captureQueryKind = 0;   // 0 device list, 1 formats, 2 formats then connect (continue)
     std::vector<source::CaptureDevice> captureVideo, captureAudio;
     std::vector<source::CaptureFormat> captureFormatList;
+    // The capture dialog's lists are built once per input. QML re-reads a list property on
+    // every element access (Qt 6 sequence references), so a getter that rebuilt the list
+    // made `.find()` and VSelect quadratic: 15474 formats hung the interface (logs(18)).
+    // Each cache is checked against what it was built from, not reset by captureChanged:
+    // QML bindings receive a notify signal before any ordinary connection does.
+    uint64_t captureFormatGeneration = 0;   // bumped whenever captureFormatList is replaced
+    int uiDeviceGeneration = 0;   // interface scene graphs recreated after a lost device
+    // One automatic capture-card reconnect after the GPU stopped completing work. Field
+    // logs 56: after the hang and driver reset the session just ended; reconnecting by hand
+    // ran smoothly again. A second GPU failure within ten minutes is left to the user.
+    uint64_t gpuReconnectSession = 0;
+    std::chrono::steady_clock::time_point gpuReconnectDue{}, gpuReconnectLast{};
+    struct CaptureListCache { bool valid = false; uint64_t generation = 0; QString language; std::wstring a, b; QVariantList list; };
+    CaptureListCache captureFormatsCache, captureResolutionCache, captureRateCache, capturePixelCache;
+    int captureHiddenRates = 0;   // set with captureRateCache
+    template <class Build> const QVariantList& captureList(CaptureListCache& cache, const std::wstring& a, const std::wstring& b, Build&& build) {
+        const QString language = i18n::current();
+        if (!cache.valid || cache.generation != captureFormatGeneration || cache.language != language || cache.a != a || cache.b != b) {
+            cache.list = build();
+            cache.valid = true; cache.generation = captureFormatGeneration; cache.language = language; cache.a = a; cache.b = b;
+        }
+        return cache.list;
+    }
     std::wstring captureFormatKey;
     std::wstring captureResolutionChoice, captureRateChoice;
     int captureAudioChoice = source::kCaptureAudioDisabled;
@@ -1463,12 +1486,35 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                     QFile marker(lastFailurePath());
                     if (marker.open(QIODevice::WriteOnly)) marker.write((QStringLiteral("device\n") + injected + QStringLiteral("\n")).toUtf8());
                 }
+                const auto now = std::chrono::steady_clock::now();
+                const bool reconnect = s.gpuFailed && !s.remotePlay && impl_->liveKind == QLatin1String("capture") &&
+                    (impl_->gpuReconnectLast == std::chrono::steady_clock::time_point{} || now - impl_->gpuReconnectLast > std::chrono::minutes(10));
+                if (s.gpuFailed) veyra::log::warn("gpu-reconnect", std::format("session={} kind={} automatic={}", s.sessionId, impl_->liveKind.toStdString(), reconnect));
+                if (reconnect) { impl_->gpuReconnectSession = s.sessionId; impl_->gpuReconnectDue = {}; text += QStringLiteral("；") + tr("将自动重新连接采集卡一次"); }
                 emit notice(text, true);
-                if (impl_->currentPage == QLatin1String("min")) emit navigate(QStringLiteral("home"));
+                if (!reconnect && impl_->currentPage == QLatin1String("min")) emit navigate(QStringLiteral("home"));
             }
             // Engine watchdog (field logs(15)): a frozen picture says why, once.
             if (had && !wasEngineHung && s.status == engine::kEngineHangStatus) emit notice(uiText(s.status), true);
             emit snapshotChanged();
+        }
+        // The reconnect waits for the failed session's teardown (the GPU reset can hold it for
+        // seconds) and is dropped if anything else was opened meanwhile.
+        if (impl_->gpuReconnectSession) {
+            const auto& s = impl_->snapshot;
+            const auto now = std::chrono::steady_clock::now();
+            if (s.sessionId != impl_->gpuReconnectSession || impl_->openingSource) {
+                veyra::log::info("gpu-reconnect", "cancelled: another source was opened");
+                impl_->gpuReconnectSession = 0;
+            } else if (!s.running) {
+                if (impl_->gpuReconnectDue == std::chrono::steady_clock::time_point{}) impl_->gpuReconnectDue = now + std::chrono::seconds(3);
+                else if (now >= impl_->gpuReconnectDue) {
+                    impl_->gpuReconnectSession = 0; impl_->gpuReconnectLast = now;
+                    veyra::log::warn("gpu-reconnect", "reconnecting the capture card after the GPU failure");
+                    emit notice(tr("GPU 已重置，正在自动重新连接采集卡"), false);
+                    resumeCaptureSession();
+                }
+            }
         }
         // An export in flight needs its own poll; it is a separate job and its
         // snapshot is not part of the player snapshot.
@@ -2043,6 +2089,13 @@ void QmlPlayerBridge::resetCurrentPage() {
 
 // --- shell preferences -------------------------------------------------------
 bool QmlPlayerBridge::reducedMotion() const { return impl_->facade.reducedMotion(); }
+int QmlPlayerBridge::uiDeviceGeneration() const { return impl_->uiDeviceGeneration; }
+void QmlPlayerBridge::noteUiDeviceRecreated(const QString& window) {
+    ++impl_->uiDeviceGeneration;
+    veyra::log::warn("ui-device", std::format("{} scene graph recreated after a lost graphics device; icons rebuilt generation={}",
+                                              window.toStdString(), impl_->uiDeviceGeneration));
+    emit uiDeviceGenerationChanged();
+}
 void QmlPlayerBridge::setReducedMotion(bool value) {
     if (impl_->facade.reducedMotion() == value) return;
     impl_->facade.setReducedMotion(value);
@@ -2173,7 +2226,7 @@ void QmlPlayerBridge::setCaptureDeviceId(const QString& value) {
     if (impl_->captureDriverSettingsOpen) return;
     if (impl_->captureDevice == wideOf(value)) return;
     impl_->captureDevice = wideOf(value);
-    impl_->captureFormatList.clear();
+    impl_->captureFormatList.clear();++impl_->captureFormatGeneration;
     impl_->captureResolutionChoice.clear();impl_->captureRateChoice.clear();
     impl_->captureFormatKey=impl_->captureDevice==impl_->capturePrefs.videoPath?impl_->capturePrefs.formatKey:std::wstring{};
     impl_->captureDriverFormatKey.clear();
@@ -2190,19 +2243,37 @@ QString QmlPlayerBridge::captureDeviceLabel() const {
     for (const auto& d : impl_->captureVideo) if (d.path == impl_->captureDevice) return captureDeviceUiLabel(d);
     return impl_->captureDevice.empty() ? tr("未选择设备") : tr("设备未连接");
 }
+static QString captureFormatUiLabel(const source::CaptureFormat& f, const std::wstring& device) {
+    auto label=uiText(f.label);
+    if(source::decklink::isPath(device))label=label.replace(QStringLiteral("逐行"),QmlPlayerBridge::tr("逐行")).replace(QStringLiteral("隔行"),QmlPlayerBridge::tr("隔行"));
+    return label;
+}
 QVariantList QmlPlayerBridge::captureFormats() const {
-    QVariantList out;
-    for (const auto& f : impl_->captureFormatList) {
-        auto label=uiText(f.label);
-        if(source::decklink::isPath(impl_->captureDevice))label=label.replace(QStringLiteral("逐行"),tr("逐行")).replace(QStringLiteral("隔行"),tr("隔行"));
-        out << QVariantMap{{"id", utf8Of(f.key)}, {"label", label}, {"tier", f.tier},
-                           {"costHint", source::captureFormatNeedsCostHint(static_cast<source::CaptureFormatTier>(f.tier))}, {"driverCurrent", f.driverCurrent},
-                           {"width", int(f.width)}, {"height", int(f.height)}, {"fps", f.fps}, {"pixel", uiText(f.pixel)},
-                           {"scan", uiText(f.scan)}, {"interlaced", f.interlaced}};
-    }
-    return out;
+    return impl_->captureList(impl_->captureFormatsCache, impl_->captureDevice, {}, [this] {
+        QVariantList out;
+        out.reserve(qsizetype(impl_->captureFormatList.size()));
+        for (const auto& f : impl_->captureFormatList) {
+            out << QVariantMap{{"id", utf8Of(f.key)}, {"label", captureFormatUiLabel(f, impl_->captureDevice)}, {"tier", f.tier},
+                               {"costHint", source::captureFormatNeedsCostHint(static_cast<source::CaptureFormatTier>(f.tier))}, {"driverCurrent", f.driverCurrent},
+                               {"width", int(f.width)}, {"height", int(f.height)}, {"fps", f.fps}, {"pixel", uiText(f.pixel)},
+                               {"scan", uiText(f.scan)}, {"interlaced", f.interlaced}};
+        }
+        return out;
+    });
 }
 QString QmlPlayerBridge::captureFormatKey() const { return utf8Of(impl_->captureFormatKey); }
+QString QmlPlayerBridge::captureFormatLabel() const {
+    if (impl_->captureFormatKey.empty()) return {};
+    for (const auto& f : impl_->captureFormatList)
+        if (f.key == impl_->captureFormatKey) return captureFormatUiLabel(f, impl_->captureDevice);
+    return {};
+}
+bool QmlPlayerBridge::captureFormatCostHint() const {
+    if (impl_->captureFormatKey.empty()) return false;
+    for (const auto& f : impl_->captureFormatList)
+        if (f.key == impl_->captureFormatKey) return source::captureFormatNeedsCostHint(static_cast<source::CaptureFormatTier>(f.tier));
+    return false;
+}
 void QmlPlayerBridge::setCaptureFormatKey(const QString& key) {
     const auto* format=source::selectCaptureFormat(impl_->captureFormatList,-1,wideOf(key));
     if(!format){
@@ -2232,7 +2303,7 @@ const source::CaptureFormat* selectedCaptureFormat(const std::vector<source::Cap
 }
 }
 QVariantList QmlPlayerBridge::captureResolutionOptions() const {
-    return captureChoiceList(source::captureResolutionOptions(impl_->captureFormatList));
+    return impl_->captureList(impl_->captureResolutionCache, {}, {}, [this] { return captureChoiceList(source::captureResolutionOptions(impl_->captureFormatList)); });
 }
 QString QmlPlayerBridge::captureResolutionId() const {
     return utf8Of(impl_->captureResolutionChoice);
@@ -2243,13 +2314,27 @@ void QmlPlayerBridge::setCaptureResolutionId(const QString& id) {
     const auto* sample=source::captureResolutionSample(impl_->captureFormatList,wide);
     if(!sample){emit notice(tr("此采集卡无此格式，请重新选择分辨率、帧率和像素格式。"),true);return;}
     impl_->captureResolutionChoice=wide;
-    if(!source::captureRateSample(impl_->captureFormatList,wide,impl_->captureRateChoice))impl_->captureRateChoice=source::captureFrameRateId(*sample);
+    // A rate the new resolution lacks becomes its first common rate, not the driver's first row.
+    if(!source::captureRateSample(impl_->captureFormatList,wide,impl_->captureRateChoice))
+        if(const auto* rate=source::captureDefaultFrameRate(impl_->captureFormatList,wide))impl_->captureRateChoice=source::captureFrameRateId(*rate);
     impl_->captureFormatKey.clear();
     if(!impl_->persistCaptureSelection(true))emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
     emit captureChanged();
 }
 QVariantList QmlPlayerBridge::captureFrameRateOptions() const {
-    return captureChoiceList(source::captureFrameRateOptions(impl_->captureFormatList, source::captureResolutionSample(impl_->captureFormatList, impl_->captureResolutionChoice)));
+    // Common rates only unless 显示全部可用帧率 is on (captureVisibleFrameRates).
+    const bool all = impl_->prefBool("captureShowAllFrameRates", false);
+    return impl_->captureList(impl_->captureRateCache, impl_->captureResolutionChoice, impl_->captureRateChoice + (all ? L"|all" : L""), [this, all] {
+        size_t hidden = 0;
+        const auto rates = source::captureVisibleFrameRates(source::captureFrameRateOptions(impl_->captureFormatList,
+            source::captureResolutionSample(impl_->captureFormatList, impl_->captureResolutionChoice)), impl_->captureRateChoice, all, &hidden);
+        impl_->captureHiddenRates = int(hidden);
+        return captureChoiceList(rates);
+    });
+}
+int QmlPlayerBridge::captureHiddenFrameRates() const {
+    (void)captureFrameRateOptions();   // the count is built with the list
+    return impl_->captureHiddenRates;
 }
 QString QmlPlayerBridge::captureFrameRateId() const {
     return utf8Of(impl_->captureRateChoice);
@@ -2266,7 +2351,9 @@ void QmlPlayerBridge::setCaptureFrameRateId(const QString& id) {
     emit captureChanged();
 }
 QVariantList QmlPlayerBridge::capturePixelOptions() const {
-    return captureChoiceList(source::capturePixelOptions(impl_->captureFormatList, source::captureRateSample(impl_->captureFormatList,impl_->captureResolutionChoice,impl_->captureRateChoice)));
+    return impl_->captureList(impl_->capturePixelCache, impl_->captureResolutionChoice, impl_->captureRateChoice, [this] {
+        return captureChoiceList(source::capturePixelOptions(impl_->captureFormatList, source::captureRateSample(impl_->captureFormatList,impl_->captureResolutionChoice,impl_->captureRateChoice)));
+    });
 }
 QString QmlPlayerBridge::capturePixelId() const {
     const auto* format = source::selectCapturePixelFormat(impl_->captureFormatList,impl_->captureResolutionChoice,impl_->captureRateChoice,impl_->captureFormatKey);
@@ -2437,6 +2524,7 @@ void QmlPlayerBridge::tickCapture() {
     }
     if (q.device != i.captureDevice) { emit captureChanged(); return; }   // stale answer
     i.captureFormatList = std::move(q.formats);
+    ++i.captureFormatGeneration;
     const bool remembered = i.captureDevice == i.capturePrefs.videoPath;
     const std::wstring driverSelection = i.captureDriverFormatKey.empty() ? i.captureFormatKey : i.captureDriverFormatKey;
     if (q.kind == 3) i.captureDriverFormatKey.clear();
@@ -5655,7 +5743,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"listInspectorWidth", {376, 4000}}};
     static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
-                                   "magewellLowLatency", "blackmagicNativeCapture", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu"};
+                                   "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -5749,6 +5837,7 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
                                 value==QLatin1String("high")?gfx::GpuPriority::High:gfx::GpuPriority::Realtime);
     }
     if(key==QLatin1String("fullscreenMemoryProtection")){impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));emit snapshotChanged();}
+    if(key==QLatin1String("captureShowAllFrameRates"))emit captureChanged();
     if (key == QLatin1String("audioDevice")) sink::setPreferredRenderEndpoint(impl_->prefString("audioDevice").toStdWString());
     else if (key == QLatin1String("audioForceStereo")) sink::setForceStereoDownmix(impl_->prefBool("audioForceStereo", false));
     else if (key == QLatin1String("magewellLowLatency")) source::magewell::setLowLatencyPreference(impl_->prefBool("magewellLowLatency", false));
