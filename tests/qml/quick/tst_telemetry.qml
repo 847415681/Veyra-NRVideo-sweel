@@ -27,8 +27,14 @@ Item {
         function cleanup() { samples.stop(); motion.animate = false }
         function test_converges_and_retargets() {
             motion.targetValue = 1
-            wait(50)
-            verify(motion.value > 0 && motion.value < 1)
+            compare(motion.driver.interval, 33)
+            verify(motion.driver.running)
+            // A wall-clock sleep can resume after the entire 120 ms animation.
+            // Check the intermediate trajectory separately, then observe actual
+            // timer progress without requiring a sample at exactly 50 ms.
+            const intermediate = motion.atTime(motion.started + motion.duration / 2)
+            verify(intermediate > 0 && intermediate < 1)
+            tryVerify(function() { return motion.value > 0 }, 400)
             motion.targetValue = 0.2
             tryCompare(motion, "value", 0.2, 400)
             verify(!motion.driver.running)

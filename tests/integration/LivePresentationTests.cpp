@@ -368,7 +368,12 @@ int wmain(int argc,wchar_t**argv){
         engine.stop();check(until([&](const auto&){return engine.idle();},5),"recovery session drains");DestroyWindow(window);CoUninitialize();return failures?1:0;
     }
     if(fileContinuity){
-        check(until([](const auto& s){return s.frames>=20;}),"XeSS/NR file starts with actual audio");
+        // Cold NGX/XeSS initialization can exceed the generic 8 s deadline.
+        // Measure steady-state continuity only after real playback has started;
+        // otherwise initialization's first audio release contaminates the sample.
+        const bool started=until([](const auto& s){return s.frames>=20;},30);
+        check(started,"XeSS/NR file starts with actual audio");
+        if(!started){engine.stop();until([&](const auto&){return engine.idle();},5);DestroyWindow(window);CoUninitialize();return 1;}
         const auto before=engine.snapshot();const auto begin=std::chrono::steady_clock::now();
         check(until([&](const auto& s){return s.frames>=before.frames+100;},15),"XeSS/NR advances one hundred real source frames");
         const auto after=engine.snapshot();const double wall=std::chrono::duration<double>(std::chrono::steady_clock::now()-begin).count();
