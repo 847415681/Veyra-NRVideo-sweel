@@ -9367,3 +9367,4 @@ v2.0.7 ID 410800361，published_at 2026-10-12T16:24:59Z，latest/非草稿/非�
 - 日志 44（2.0.6）/57（2.0.7）：同为美乐威 4K P010 + NR + 补帧，2.0.7 多跑 RTX Video SR 4K→4K（质量 4，p95 约 8.7 ms/帧），NR 也变慢，超出 60 fps 预算。来源 108cbaa 的原尺寸修复。
 - 用户选“只给压缩视频”：屏幕捕获和无压缩采集格式在原尺寸不跑超分（回到 2.0.6）；文件、串流、MJPEG/H.264 采集照旧；放大与 DLSS/FSR 规则不变；超分说明文字与翻译更新。
 - 验证：effect_chain 新增 4 项通过，回归全部通过；T911 4K60 NV12 开超分 sr=0、耗时 0，MJPEG 开超分 sr=1。详见 docs/FIELD_FIXES_2026-10-15.md。
+- 测试包 r3：E:/项目/Veyra/test-packages/claude-field-20261015-r3（补丁 ec6a00855830a3d7…，NVIDIA a66911f17c90bba1…，AMD 2c63b522754e2517…），冷启动通过。

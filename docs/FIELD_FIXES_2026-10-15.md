@@ -85,6 +85,7 @@
 - 完整包 `Veyra-2.0.7-test-field-NVIDIA-win64-portable.zip`（714770070 字节，SHA256 `8762448fd9ba43cc1311c84d53b10adb1fd163c259b65c1a6ea2503216d8d9c8`）、`Veyra-2.0.7-test-field-AMD-win64-portable.zip`（355706701 字节，SHA256 `5573da62692e6a4fcc23dcbd62c0d30c626803e9fe5ea6c3870f77fd507390c8`）。
 - 两个完整包用独立数据目录和日志冷启动通过（退出码 0、0 条错误），包目录未写入任何文件。
 - r2（含帧率菜单改动，源码 6fb7df2）：`E:/项目/Veyra/test-packages/claude-field-20261015-r2/`，覆盖补丁 `Veyra-2.0.7-test-field-r2-patch.zip`（SHA256 `cd74c3442d94bd10ab6c4bb501d079cd35a98b774c235ea764b5350c3950fe40`），完整包 NVIDIA `09db90a8cbed1a587473b9d7953278374a8d391a506040e131865d9aee885be5`、AMD `fd637493121e8bed603de999dc61cdd144e9e0f7f8dc8530e903e57c94d271d4`，两包冷启动通过、包目录未写入。第一套（r1）保留不动。
+- r3（再加原尺寸超分改动，源码 d06ed04）：`E:/项目/Veyra/test-packages/claude-field-20261015-r3/`，覆盖补丁 `Veyra-2.0.7-test-field-r3-patch.zip`（SHA256 `ec6a00855830a3d75edfe20ef7b25abd8c9cfceaa3b7d4662e6ab509b74bdd6b`，含 exe 与 4 个 QML），完整包 NVIDIA `a66911f17c90bba1d2a0a84ad60308974e1800851119e8c5ea48097990cb334d`、AMD `2c63b522754e2517526c9ef2314455c78da6e18ad55dc0f613a05d362884f6b5`，两包冷启动通过、包目录未写入。r1、r2 保留不动。
 
 ## 未验证
 - 用户那张 272 能力项的卡和 RTX 3080 没有实机，本机用测试开关造出同量级格式。
