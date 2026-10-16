@@ -8,7 +8,8 @@ int failures=0, panels=0, exits=0;
 GameHotkeyListener* listener=nullptr;
 void check(bool ok,const char* text){std::cout<<(ok?"PASS ":"FAIL ")<<text<<std::endl;failures+=!ok;}
 LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp){
-    if(m==GameHotkeyListener::message){if(listener&&listener->current(lp)){if(wp==0)++panels;else if(wp==1)++exits;}return 0;}
+    if(m==GameHotkeyListener::message){const bool current=listener&&listener->current(lp);if(current){if(wp==0)++panels;else if(wp==1)++exits;}
+        std::cout<<"EVENT action="<<wp<<" epoch="<<lp<<" current="<<current<<" panels="<<panels<<" exits="<<exits<<std::endl;return 0;}
     return DefWindowProcW(w,m,wp,lp);
 }
 void pump(unsigned ms){const auto end=GetTickCount64()+ms;do{MSG m;while(PeekMessageW(&m,nullptr,0,0,PM_REMOVE)){TranslateMessage(&m);DispatchMessageW(&m);}Sleep(1);}while(GetTickCount64()<end);}
@@ -61,7 +62,7 @@ int main(int argc,char** argv){
         check(panels==1,"real key repeat emits one panel event");
         hook.panelOwned(false);tap(VK_F9);check(panels==1,"listener leaves panel key to other contexts");hook.panelOwned(true);
         RAWINPUTDEVICE raw{1,6,RIDEV_NOLEGACY,window};check(RegisterRawInputDevices(&raw,1,sizeof(raw))!=0,"test foreground uses raw keyboard without legacy messages");
-        tap(VK_F9);check(panels==2,"hotkey still arrives with raw keyboard foreground");
+        tap(VK_F9);std::cout<<"RAW panels="<<panels<<" exits="<<exits<<" running="<<hook.running()<<std::endl;check(panels==2,"hotkey still arrives with raw keyboard foreground");
         check(send({{VK_LCONTROL,false},{VK_LMENU,false},{VK_F10,false},{VK_F10,true},{VK_LMENU,true},{VK_LCONTROL,true}}),"custom exit chord delivered");pump(100);
         check(exits==1,"custom Ctrl Alt F10 exits once");
         std::thread inputThread([]{Sleep(100);key(VK_F9);key(VK_F9,true);});Sleep(1500);inputThread.join();pump(100);
