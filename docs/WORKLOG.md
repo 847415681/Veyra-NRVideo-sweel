@@ -9579,3 +9579,8 @@ BMD日志53：5次进入原生协商的尝试均SDI连接0x1、locked0/noInput�
 实际命令包括git branch --no-merged main、git log main..<branch>、git cherry、git merge-base --is-ancestor、git diff以及python -X utf8 -B -I E:/项目/Veyra/tmp/branch-integration-20261016/audit.py audit。84个tip祖先检查通过，NR计划diff为空；GitHub只读git ls-remote --heads nrvideo只返回main0cfa8a8。5旧树509个未提交文件的status/SHA全部与10-15发布开工快照一致，其它历史树HEAD保持。start/audit回执位于archives/reports/branch-integration-20261016。
 
 本轮只将分支归属记录和本WORKLOG提交本地main，产品代码/着色器/QML/构建配置/运行组件不变，因此没有重新构建或GPU/采集/播放测试，没有新的性能或实卡通过结论。提交后的diff检查、main干净及76其它树/88其它分支/509脏文件保护由audit.py verify记录到reports/branch-integration-20261016/final.json。无push/Release/打包/子Agent/关机，各分支与旧稿原样保留。
+
+
+## 2026-10-16 PR44 HDR显示整合开工
+
+实际读取PR正文/评论、固定head3ee17b6，取回10个贡献提交并no-ff合到隔离codex/pr44-hdr-display-20261016（main8d8eb09暂不变）。78旧树/509脏文件快照、PR元信息/两桥接diff与checkpoint在E盘archives/pr44-hdr-display-20261016。计划PR44_HDR_DISPLAY_PLAN_2026-10-16.md：五卡/预设/记忆保留，原像素回读改GPU归约统计、HDR曲线保留RTXHDR适用性、元数据/图示用真实解析参数、抑制高频枚举/存盘并做真实HDR/GPU/持久化/语言回归。用户授权PR合并，不等于新Release或打包；上一轮issues分支不混入。无子Agent/评论/关机。
