@@ -64,7 +64,6 @@ private:
 
 class GameHotkeyListener {
 public:
-    void (*testObserver)(unsigned,bool,bool,int) = nullptr;
     static constexpr UINT message = WM_APP + 0x347;
     ~GameHotkeyListener() { stop(); }
     void bindings(GameKey panel, GameKey exit) {
@@ -125,7 +124,6 @@ private:
                 const GameKey panel{unsigned(config & 255), unsigned((config >> 8) & 15)};
                 const GameKey exit{unsigned((config >> 16) & 255), unsigned((config >> 24) & 15)};
                 const auto result = self.state_.input(key->vkCode, down, panel, exit, self.panelOwned_.load());
-                if (self.testObserver) self.testObserver(key->vkCode,down,result.consume,result.action);
                 if (result.action >= 0 && epoch == self.epoch_.load()) PostMessageW(self.target_, message, WPARAM(result.action), LPARAM(epoch));
                 if (result.consume) return 1;
             }
