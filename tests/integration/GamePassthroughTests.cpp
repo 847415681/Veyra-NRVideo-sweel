@@ -6,6 +6,9 @@ using namespace veyra::ui;
 namespace {
 int failures=0, panels=0, exits=0;
 GameHotkeyListener* listener=nullptr;
+struct Trace {unsigned vk=0;bool down=false,consume=false;int action=-1;};
+std::array<Trace,128> trace{};std::atomic<unsigned> traced{0};
+void observe(unsigned vk,bool down,bool consume,int action){if(vk!=VK_F9&&vk!=VK_F10&&vk!=VK_LCONTROL&&vk!=VK_LMENU)return;const auto i=traced.fetch_add(1);if(i<trace.size())trace[i]={vk,down,consume,action};}
 void check(bool ok,const char* text){std::cout<<(ok?"PASS ":"FAIL ")<<text<<std::endl;failures+=!ok;}
 LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp){
     if(m==GameHotkeyListener::message){const bool current=listener&&listener->current(lp);if(current){if(wp==0)++panels;else if(wp==1)++exits;}
@@ -55,7 +58,7 @@ int main(int argc,char** argv){
         SetWindowPos(target,nullptr,420,300,720,400,SWP_NOACTIVATE|SWP_NOZORDER);const auto moved=geometry.pictureBounds();
         check(moved.left-r.left==70&&moved.top-r.top==20&&moved.right-moved.left==720,"window move and resize keep physical coordinates");
     }
-    GameHotkeyListener hook;listener=&hook;hook.bindings({VK_F9,0},{VK_F10,3});
+    GameHotkeyListener hook;hook.testObserver=observe;listener=&hook;hook.bindings({VK_F9,0},{VK_F10,3});
     check(hook.start(window),"real WH_KEYBOARD_LL installs on its own message thread");hook.panelOwned(true);
     if(hook.running()){
         check(send({{VK_F9,false},{VK_F9,false},{VK_F9,true}}),"real repeat input delivered");pump(100);
@@ -72,5 +75,6 @@ int main(int argc,char** argv){
         check(hook.start(window),"listener can reenter after exit");hook.panelOwned(true);tap(VK_F9);check(panels==4,"new session responds to custom key");hook.stop();
     }
     listener=nullptr;DestroyWindow(target);DestroyWindow(window);if(IsWindow(previous))SetForegroundWindow(previous);
+    for(unsigned i=0;i<std::min<unsigned>(traced.load(),unsigned(trace.size()));++i){const auto t=trace[i];std::cout<<"TRACE vk="<<t.vk<<" down="<<t.down<<" consume="<<t.consume<<" action="<<t.action<<std::endl;}
     std::cout<<"TOTAL failures="<<failures<<std::endl;return failures?1:0;
 }
