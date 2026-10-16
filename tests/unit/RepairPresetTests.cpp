@@ -128,7 +128,7 @@ bool legacyBackends(const std::filesystem::path& path) {
    const auto value=store.defaultSettings();
    if(value.lowLatency||value.forceSdrPreview)return false;
    if(value.captureCompatible!=(version>=10))return false;
-   if(value.nrRuntime!=(version>=9?NrRuntime::Ampere:NrRuntime::Original))return false;
+   if(value.nrRuntime!=NrRuntime::Ampere)return false;
    const auto expectedBackend=fsr?FrameGenerationBackend::Fsr:xess?FrameGenerationBackend::XeSS:FrameGenerationBackend::Dlss;
    if(value.frameGenerationBackend!=expectedBackend||value.multiplier!=multiplier||value.videoSrQuality!=2)return false;
    if(version>=7&&(value.audioSync!=AudioSyncMode::Manual||value.audioOffsetMs!=137))return false;
@@ -159,9 +159,9 @@ int main(int argc,char** argv){if(argc!=2)return 2;using namespace veyra::engine
      &&veyra::ngx::nrRuntimeNeedsAmpereRewrite((311u<<16)|0u,0u);
  s.srTarget=veyra::pipeline::SrTarget::Uhd8K;
  ok=ok&&veyra::ngx::preferSfNr(0x10DE,L"NVIDIA GeForce RTX 2080 Ti")&&veyra::ngx::preferSfNr(0x10DE,L"NVIDIA GeForce RTX 3090")
-      &&veyra::ngx::preferSfNr(0x10DE,L"NVIDIA GeForce RTX 4070 SUPER")&&!veyra::ngx::preferSfNr(0x10DE,L"NVIDIA GeForce RTX 5070")
+      &&veyra::ngx::preferSfNr(0x10DE,L"NVIDIA GeForce RTX 4070 SUPER")&&veyra::ngx::preferSfNr(0x10DE,L"NVIDIA GeForce RTX 5070")
       &&!veyra::ngx::preferSfNr(0x1002,L"RTX 4070")&&!veyra::ngx::preferSfNr(0x10DE,L"Unknown")
-      &&currentNrRuntime(NrRuntime::Community)==NrRuntime::Ampere&&currentNrRuntime(NrRuntime::Original)==NrRuntime::Original;
+      &&currentNrRuntime(NrRuntime::Community)==NrRuntime::Ampere&&currentNrRuntime(NrRuntime::Original)==NrRuntime::Ampere;
  s.audioSync=AudioSyncMode::Manual;s.audioOffsetMs=137;
 s.nrRuntime=NrRuntime::Ampere;s.captureCompatible=true;s.lowLatency=true;s.forceSdrPreview=true;
 s.videoHdr={true,110,80,45,800};

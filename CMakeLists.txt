@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(veyra VERSION 2.0.8 LANGUAGES C CXX RC)
+project(veyra VERSION 2.0.9 LANGUAGES C CXX RC)
 # Moonlight/Xbox have C sources independently of the optional PS5 backend.
 # Shown in the EXE's version resource and in the package name. CMake versions
 # must be numeric, so the beta marker lives here instead.
-set(VEYRA_DISPLAY_VERSION "2.0.8" CACHE STRING "Human-readable version string")
+set(VEYRA_DISPLAY_VERSION "2.0.9" CACHE STRING "Human-readable version string")
 # The cache keeps the first value it ever saw, so a release that bumps
 # project(VERSION) used to ship an EXE still stamped with the previous display
 # string. Re-align it whenever the cached label does not start with the project
@@ -772,6 +772,11 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   add_executable(veyra_nr_runtime_switch_tests tests/integration/NrRuntimeSwitchTests.cpp)
   target_compile_features(veyra_nr_runtime_switch_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_nr_runtime_switch_tests PRIVATE veyra_engine)
+
+  add_executable(veyra_nr_model_settings_tests tests/unit/NrModelSettingsTests.cpp)
+  target_compile_features(veyra_nr_model_settings_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_model_settings_tests PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_model_settings_tests PRIVATE veyra_engine)
   add_executable(veyra_audio_timeline_tests tests/integration/AudioTimelineTests.cpp)
   target_compile_features(veyra_audio_timeline_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_audio_timeline_tests PRIVATE veyra_sinks)

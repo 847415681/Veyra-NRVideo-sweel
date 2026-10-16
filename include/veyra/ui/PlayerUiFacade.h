@@ -119,7 +119,7 @@ private:
     veyra::engine::EnhancementSettings pending_{};
     uint64_t pendingFgRevision_=0;
     uint64_t pendingNrRevision_=0;
-    veyra::engine::NrRuntime requestedNrRuntime_=veyra::engine::NrRuntime::Original;
+    veyra::engine::NrRuntime requestedNrRuntime_=veyra::engine::NrRuntime::Ampere;
     veyra::engine::FrameGenerationBackend requestedFgBackend_=veyra::engine::FrameGenerationBackend::Dlss;
     uint32_t requestedFgMultiplier_=1;
     uint32_t requestedVfgQuality_=1;

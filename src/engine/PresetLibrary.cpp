@@ -93,6 +93,7 @@ void PresetLibrary::addBuiltins() {
 bool PresetLibrary::load() {
     error_.clear();
     addBuiltins();
+    const auto directNr=std::filesystem::path(path_).concat(L".nr-model");
     const auto directDlss=std::filesystem::path(path_).concat(L".dlss-sr");
     const auto directHdr=std::filesystem::path(path_).concat(L".hdr-output");
     const auto directFlow=std::filesystem::path(path_).concat(L".flow");
@@ -120,6 +121,9 @@ bool PresetLibrary::load() {
     const auto dlssPath=std::filesystem::path(path_).concat(L".dlss-sr");
     if(std::filesystem::exists(directDlss))path_=directDlss;
     else if(std::filesystem::exists(dlssPath))path_=dlssPath;
+    const auto nrPath=std::filesystem::path(path_).concat(L".nr-model");
+    if(std::filesystem::exists(directNr))path_=directNr;
+    else if(std::filesystem::exists(nrPath))path_=nrPath;
     if (!std::filesystem::exists(path_)) return true;
     std::error_code ec;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -214,6 +218,8 @@ bool PresetLibrary::save() {
     // Match PresetStore: never replace a valid file with one our reader rejects.
     if (!parse(data, checked, checkedDefault, error_)) return false;
     // Opting into a new model must leave the older build's library intact.
+    if(data.starts_with("VEYRA_PRESET_LIBRARY 13")&&!path_.wstring().ends_with(L".nr-model"))path_=std::filesystem::path(path_).concat(L".nr-model");
+    if(!path_.wstring().ends_with(L".nr-model")){
     if(data.starts_with("VEYRA_PRESET_LIBRARY 12")&&!path_.wstring().ends_with(L".dlss-sr"))path_=std::filesystem::path(path_).concat(L".dlss-sr");
     if(!path_.wstring().ends_with(L".dlss-sr")){
     if(data.starts_with("VEYRA_PRESET_LIBRARY 11")&&!path_.wstring().ends_with(L".hdr-output"))path_=std::filesystem::path(path_).concat(L".hdr-output");
@@ -229,6 +235,7 @@ bool PresetLibrary::save() {
             return e.nodeConfiguration && e.nodeConfiguration->editor && e.nodeConfiguration->editor->globals;
         }) && !path_.wstring().ends_with(L".field-render")&&!path_.wstring().ends_with(L".p3-globals"))
         path_ = std::filesystem::path(path_).concat(L".p3-globals");
+    }
     }
     }
     }
@@ -658,7 +665,13 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         const auto& c=*e.nodeConfiguration;
         return c.dlssSrModel!=0||(c.editor&&c.editor->globals&&c.editor->globals->dlssSrModel!=0);
     });
-    const int version=std::max(minimumVersion, dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    const auto oldModel=[](const EffectChain& chain){
+        return std::any_of(chain.nodes.begin(),chain.nodes.begin()+chain.nodeCount,[](const auto& n){
+            return n.type==EffectType::NrEnhance&&!n.nr.model.performance;});};
+    const bool nrModel=std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){
+        return oldModel(e.chain)||(e.nodeConfiguration&&(oldModel(e.nodeConfiguration->chain)||
+            (e.nodeConfiguration->editor&&oldModel(e.nodeConfiguration->editor->nodes))));});
+    const int version=std::max(minimumVersion, nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -684,6 +697,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
               << n.videoHdr.middleGray << ' ' << n.videoHdr.peakNits << ' ';
             if(version>=3)o<<int(n.nr.sizePolicy)<<' ';
             if(version>=8){writeNrCorrection(o,n.nr.residual.correction,version>=9);o<<' ';}
+            if(version>=13)o<<n.nr.model.performance<<' ';
             if (version>=2 && n.type == EffectType::Color) {
                 writeColorSettings(o, n.color, utf8(n.color.lutNameString()));
                 o << ' ';
@@ -722,7 +736,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     std::string magic, quoted;
     int version = 0;
     size_t count = 0;
-    const int allowedVersion=maxVersion>0?std::min(maxVersion,12):12;
+    const int allowedVersion=maxVersion>0?std::min(maxVersion,13):13;
     if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > allowedVersion) { error = L"预设库格式或版本不支持"; return false; }
     if (!(in >> std::quoted(quoted) >> count) || count > 64) { error = L"预设库条目数非法"; return false; }
     def = wide(quoted);
@@ -781,6 +795,9 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
                 node.nr.sizePolicy=static_cast<pipeline::NrSizePolicy>(size);
             }
             if(version>=8&&!readNrCorrection(in,node.nr.residual.correction,version>=9)){error=L"预设库 NR 调控参数损坏";return false;}
+            if(version>=13){int performance=0;
+                if(!(in>>performance)||performance<0||performance>1){error=L"预设库 NR 模型字段损坏";return false;}
+                node.nr.model.performance=performance!=0;}
             if (version >= 2 && node.type == EffectType::Color) {
                 std::string lut;
                 if (!readColorSettings(in, node.color, lut, 19) ||
@@ -861,7 +878,12 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
     const bool dlss=std::any_of(session.configurations.begin(),session.configurations.end(),[](const auto& c){
         return c.dlssSrModel!=0||(c.editor&&c.editor->globals&&c.editor->globals->dlssSrModel!=0);
     });
-    const int version = dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
+    const auto oldModel=[](const EffectChain& chain){
+        return std::any_of(chain.nodes.begin(),chain.nodes.begin()+chain.nodeCount,[](const auto& n){
+            return n.type==EffectType::NrEnhance&&!n.nr.model.performance;});};
+    const bool nrModel=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){
+        return oldModel(c.chain)||(c.editor&&oldModel(c.editor->nodes));});
+    const int version = nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
     out << "VEYRA_CHAIN_SESSION " << version << '\n' << int(session.active) << ' ' << session.initialized[0] << ' ' << session.initialized[1];
     if(version>=4)out<<' '<<bool(editor);out<<'\n';
     std::vector<PresetEntry> entries;
@@ -915,7 +937,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     std::istringstream in(data); in.imbue(std::locale::classic());
     std::string magic, body; int version = 0, active = 0, list = 0, node = 0;
     if (!(in >> magic >> version >> active >> list >> node) || magic != "VEYRA_CHAIN_SESSION" ||
-        (version < 1 || version > 7) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
+        (version < 1 || version > 8) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
     int hasEditor=version>=2?1:0;
     if(version>=4&&(!(in>>hasEditor)||hasEditor<0||hasEditor>1))return false;
     ChainSession parsed; parsed.active = ChainMode(active); parsed.initialized = {true, node != 0};
@@ -930,7 +952,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     }
     if (!(in >> std::quoted(body))) return false;
     std::vector<PresetEntry> entries; std::wstring def, error;
-    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, 11) || entries.size() != 2 || !def.empty()) return false;
+    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=8?13:11) || entries.size() != 2 || !def.empty()) return false;
     for (size_t i = 0; i < entries.size(); ++i) {
         if (entries[i].kind != ChainMode(i)) return false;
         parsed.configurations[i].chain = entries[i].chain;
@@ -964,7 +986,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
         }
         if (!(in >> std::quoted(body))) return false;
         entries.clear(); def.clear(); error.clear();
-        if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, 11) || entries.size() != 1 ||
+        if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=8?13:11) || entries.size() != 1 ||
             !def.empty() || entries[0].kind != ChainMode::Node || entries[0].chain.nodeCount != count) return false;
         editor->nodes = std::move(entries[0].chain);
         for (uint32_t i = 0; i < count; ++i) {
@@ -981,6 +1003,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
 }
 
 bool ChainSessionStore::load(ChainSession& session) {
+    const auto directNr=std::filesystem::path(path_).concat(L".nr-model");
     const auto directDlss=std::filesystem::path(path_).concat(L".dlss-sr");
     error_.clear();
     std::error_code ec;
@@ -1006,6 +1029,9 @@ bool ChainSessionStore::load(ChainSession& session) {
     const auto dlssPath=std::filesystem::path(path_).concat(L".dlss-sr");
     if(std::filesystem::exists(directDlss,ec))path_=directDlss;
     else if(std::filesystem::exists(dlssPath,ec))path_=dlssPath;
+    const auto nrPath=std::filesystem::path(path_).concat(L".nr-model");
+    if(std::filesystem::exists(directNr,ec))path_=directNr;
+    else if(std::filesystem::exists(nrPath,ec))path_=nrPath;
     const bool exists = std::filesystem::exists(path_, ec);
     if (!exists && !ec) return true;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -1035,6 +1061,8 @@ bool ChainSessionStore::save(const ChainSession& session) {
     const auto data = encode(session);
     ChainSession checked;
     if (!decode(data, checked)) { error_ = L"模式会话编码校验失败，未保存"; return false; }
+    if(data.starts_with("VEYRA_CHAIN_SESSION 8")&&!path_.wstring().ends_with(L".nr-model"))path_=std::filesystem::path(path_).concat(L".nr-model");
+    if(!path_.wstring().ends_with(L".nr-model")){
     if(data.starts_with("VEYRA_CHAIN_SESSION 7")&&!path_.wstring().ends_with(L".dlss-sr"))path_=std::filesystem::path(path_).concat(L".dlss-sr");
     if(!path_.wstring().ends_with(L".dlss-sr")){
     if(data.starts_with("VEYRA_CHAIN_SESSION 6")&&!path_.wstring().ends_with(L".hdr-output"))path_=std::filesystem::path(path_).concat(L".hdr-output");
@@ -1050,6 +1078,7 @@ bool ChainSessionStore::save(const ChainSession& session) {
     if (session.configurations[1].editor && session.configurations[1].editor->globals &&
         !path_.wstring().ends_with(L".field-render")&&!path_.wstring().ends_with(L".p3-globals"))
         path_ = std::filesystem::path(path_).concat(L".p3-globals");
+    }
     }
     }
     }

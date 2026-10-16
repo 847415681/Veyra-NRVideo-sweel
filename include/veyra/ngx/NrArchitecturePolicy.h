@@ -6,7 +6,8 @@ namespace veyra::ngx {
 // session win. Unknown/professional adapters are not guessed from a PCI range.
 constexpr bool preferSfNr(uint32_t vendorId, std::wstring_view description) {
     return vendorId == 0x10DE && (description.find(L"RTX 20") != description.npos ||
-        description.find(L"RTX 30") != description.npos || description.find(L"RTX 40") != description.npos);
+        description.find(L"RTX 30") != description.npos || description.find(L"RTX 40") != description.npos ||
+        description.find(L"RTX 50") != description.npos);
 }
 // The experimental profile only changes a successful query for the exact
 // selected Ampere adapter. Other GPUs and driver failures retain their result.

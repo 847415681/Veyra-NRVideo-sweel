@@ -449,6 +449,13 @@
    "ja": "%1 · 現在約 %2 fps"
   },
   {
+   "zh": "%1 关闭",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "%1 關閉",
+   "en": "%1 to close",
+   "ja": "%1 で閉じる"
+  },
+  {
    "zh": "%1 已用于其他操作",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "%1 已用於其他操作",
@@ -876,13 +883,6 @@
    "ja": "CQ は画質を一定に保ちます。ファイルサイズは映像の複雑さによって変わります。"
   },
   {
-   "zh": "Ctrl+Alt+Home 已被其它软件占用，游戏模式不能穿透操作；关闭占用它的软件后重新全屏",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "Ctrl+Alt+Home 已被其他軟體佔用，遊戲模式不能穿透操作；關閉佔用它的軟體後重新全螢幕",
-   "en": "Another program has taken Ctrl+Alt+Home, so game mode cannot pass input through; close that program and go fullscreen again",
-   "ja": "Ctrl+Alt+Home が他のソフトに使われているため、ゲームモードで操作を通せません。そのソフトを閉じてから全画面にし直してください"
-  },
-  {
    "zh": "Ctrl+Alt+Shift+S 隐藏",
    "src": "qml/StreamHud.qml",
    "zh-TW": "Ctrl+Alt+Shift+S 隱藏",
@@ -1231,20 +1231,6 @@
    "zh-TW": "HDR（10bit）匯出需要 NVIDIA NVENC；當前顯示卡只有 8bit 系統編碼器。請關閉 HDR 或換 N 卡匯出",
    "en": "HDR (10-bit) export needs NVIDIA NVENC; this GPU only has an 8-bit system encoder. Turn HDR off or export on an NVIDIA GPU",
    "ja": "HDR（10bit）の書き出しには NVIDIA NVENC が必要です。この GPU には 8bit のシステムエンコーダーしかありません。HDR をオフにするか、NVIDIA GPU で書き出してください"
-  },
-  {
-   "zh": "Home 关闭",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "Home 關閉",
-   "en": "Home to close",
-   "ja": "Home で閉じる"
-  },
-  {
-   "zh": "Home 已被其它软件占用：游戏模式里不能用 Home 呼出调整面板，按 Ctrl+Alt+Home 退出后再调整",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "Home 已被其他軟體佔用：遊戲模式裡不能用 Home 叫出調整面板，按 Ctrl+Alt+Home 退出後再調整",
-   "en": "Another program has taken Home: in game mode Home cannot open the adjust panel; press Ctrl+Alt+Home to leave, then adjust",
-   "ja": "Home が他のソフトに使われています。ゲームモード中は Home で調整パネルを開けません。Ctrl+Alt+Home で終了してから調整してください"
   },
   {
    "zh": "IP 或主机名，端口不是 47989 时写成 192.168.1.20:47989",
@@ -3102,6 +3088,13 @@
    "ja": "バランスのよい輝度分布"
   },
   {
+   "zh": "仅在游戏模式中接管按键；支持 Ctrl、Alt、Shift 组合",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "僅在遊戲模式中接管按鍵；支援 Ctrl、Alt、Shift 組合",
+   "en": "Keys are captured only in game mode; Ctrl, Alt and Shift combinations are supported",
+   "ja": "ゲームモード中のみキーを使用します。Ctrl、Alt、Shift の組み合わせに対応"
+  },
+  {
    "zh": "仅清空列表，不删除硬盘文件",
    "src": "qml/PlaylistWindow.qml",
    "zh-TW": "僅清空清單，不刪除硬碟檔案",
@@ -3571,11 +3564,11 @@
    "ja": "全画面表示（映像をダブルクリック / F11）"
   },
   {
-   "zh": "全屏（双击画面 / F11）· 全屏后按 Home 打开快速调节",
+   "zh": "全屏（双击画面 / F11）· 全屏后按 %1 打开快速调节",
    "src": "qml/ProPage.qml",
-   "zh-TW": "全螢幕（雙擊畫面 / F11）· 全螢幕後按 Home 開啟快速調節",
-   "en": "Fullscreen (double-click the picture / F11) · press Home in fullscreen for quick settings",
-   "ja": "全画面（映像をダブルクリック / F11）· 全画面中に Home でクイック設定"
+   "zh-TW": "全螢幕（雙擊畫面 / F11）· 全螢幕後按 %1 開啟快速調整",
+   "en": "Fullscreen (double-click / F11) · Press %1 for quick adjustments",
+   "ja": "全画面（ダブルクリック / F11）· %1 でクイック調整"
   },
   {
    "zh": "全部显卡",
@@ -3719,18 +3712,18 @@
    "ja": "互換モードではマウスポインターをオフにするか、Windows キャプチャーを使ってください"
   },
   {
-   "zh": "内容亮度远超显示设备能力",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "內容亮度遠超顯示裝置能力",
-   "en": "Content brightness far exceeds the display capability",
-   "ja": "コンテンツの輝度がディスプレイの能力を大幅に上回ります"
-  },
-  {
    "zh": "兼容软解",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "相容軟解",
    "en": "software compatibility",
    "ja": "互換ソフトウェア"
+  },
+  {
+   "zh": "内容亮度远超显示设备能力",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "內容亮度遠超顯示裝置能力",
+   "en": "Content brightness far exceeds the display capability",
+   "ja": "コンテンツの輝度がディスプレイの能力を大幅に上回ります"
   },
   {
    "zh": "内容节奏",
@@ -4991,6 +4984,20 @@
    "zh-TW": "啟動預設預設儲存失敗",
    "en": "Could not save the startup default preset",
    "ja": "起動時の既定プリセットを保存できませんでした"
+  },
+  {
+   "zh": "启用失败",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "啟用失敗",
+   "en": "Failed to enable",
+   "ja": "有効化に失敗"
+  },
+  {
+   "zh": "启用性能优化版",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "啟用效能最佳化版",
+   "en": "Use performance model",
+   "ja": "性能最適化モデルを使う"
   },
   {
    "zh": "启用的 NR 层必须使用同一运行时和 NR/SR 顺序",
@@ -7289,6 +7296,13 @@
    "ja": "スイッチ、進行状況、選択状態"
   },
   {
+   "zh": "开启使用新版模型 B；关闭使用旧版模型 A。切换会重建 NR，画面可能有所不同。",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "開啟使用新版模型 B；關閉使用舊版模型 A。切換會重建 NR，畫面可能有所不同。",
+   "en": "On: new model B. Off: legacy model A. Switching rebuilds NR and may change the picture.",
+   "ja": "オンは新モデル B、オフは旧モデル A。切り替えると NR を再作成し、映像が変わる場合があります。"
+  },
+  {
    "zh": "开启调控",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "開啟調控",
@@ -7317,18 +7331,11 @@
    "ja": "書き込み開始後、書き込み量から推定"
   },
   {
-   "zh": "开始后 Veyra 在游戏所在的屏幕上全屏盖住游戏，键鼠和手柄照常操作游戏；Home 调整画面，Ctrl+Alt+Home 退出。游戏请设为无边框全屏",
+   "zh": "开始后 Veyra 在这块屏幕上全屏，键鼠和手柄直接操作屏幕上的程序；%1 调整画面，%2 退出",
    "src": "qml/DialogHost.qml",
-   "zh-TW": "開始後 Veyra 在遊戲所在的螢幕上全螢幕蓋住遊戲，鍵鼠和手把照常操作遊戲；Home 調整畫面，Ctrl+Alt+Home 退出。遊戲請設為無邊框全螢幕",
-   "en": "Veyra goes fullscreen over the game on its screen; keyboard, mouse and gamepad still play the game. Home adjusts the picture, Ctrl+Alt+Home leaves. Set the game to borderless fullscreen",
-   "ja": "開始すると Veyra がゲームのある画面で全画面になってゲームを覆い、キーボード・マウス・ゲームパッドはそのままゲームを操作します。Home で映像を調整、Ctrl+Alt+Home で終了。ゲームはボーダーレス全画面にしてください"
-  },
-  {
-   "zh": "开始后 Veyra 在这块屏幕上全屏，键鼠和手柄直接操作屏幕上的任何程序，就像直接用电脑；Home 调整画面，Ctrl+Alt+Home 退出",
-   "src": "qml/DialogHost.qml",
-   "zh-TW": "開始後 Veyra 在這塊螢幕上全螢幕，鍵鼠和手把直接操作螢幕上的任何程式，就像直接用電腦；Home 調整畫面，Ctrl+Alt+Home 退出",
-   "en": "Veyra goes fullscreen on this screen; keyboard, mouse and gamepad work every program on it as if you used the computer directly. Home adjusts the picture, Ctrl+Alt+Home leaves",
-   "ja": "開始すると Veyra がこの画面で全画面になり、キーボード・マウス・ゲームパッドで画面上のどのソフトもそのまま操作できます。Home で映像を調整、Ctrl+Alt+Home で終了"
+   "zh-TW": "開始後 Veyra 在此螢幕全螢幕顯示，鍵鼠與手把直接操作螢幕上的程式；%1 調整畫面，%2 退出",
+   "en": "Veyra opens fullscreen on this display. Keyboard, mouse and controller operate its programs; %1 adjusts the picture and %2 exits.",
+   "ja": "この画面で全画面表示し、キーボード・マウス・コントローラーで背後のアプリを操作します。%1 で画面調整、%2 で解除。"
   },
   {
    "zh": "开始后键鼠交给主机；Ctrl+Alt+Shift+Z 释放，+Q 断开，+S 统计",
@@ -11084,18 +11091,25 @@
    "ja": "ゲームモードでは実際のポインターを使い、映像には描きません"
   },
   {
-   "zh": "游戏模式：调整画面 / 退出",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "遊戲模式：調整畫面 / 退出",
-   "en": "Game mode: adjust picture / leave",
-   "ja": "ゲームモード：映像を調整 / 終了"
+   "zh": "游戏模式键盘监听启动失败，未开启鼠标穿透；请退出全屏后重试",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "遊戲模式鍵盤監聽啟動失敗，未開啟滑鼠穿透；請退出全螢幕後重試",
+   "en": "Game mode keyboard listener could not start. Mouse passthrough is off; leave fullscreen and try again.",
+   "ja": "ゲームモードのキー監視を開始できません。マウス透過はオフです。全画面を解除して再試行してください。"
   },
   {
-   "zh": "游戏窗口没有铺满屏幕：画面会放大显示，鼠标点到的位置可能和看到的不一致；建议把游戏设为无边框全屏",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "遊戲視窗沒有鋪滿螢幕：畫面會放大顯示，滑鼠點到的位置可能和看到的不一致；建議把遊戲設為無邊框全螢幕",
-   "en": "The game window does not fill the screen: the picture is enlarged, so clicks may not land where you see them. Set the game to borderless fullscreen",
-   "ja": "ゲームのウィンドウが画面全体を覆っていません。映像が拡大されるため、クリック位置が見た位置とずれることがあります。ゲームをボーダーレス全画面にしてください"
+   "zh": "游戏模式：调整画面",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "遊戲模式：調整畫面",
+   "en": "Game mode: adjust picture",
+   "ja": "ゲームモード：画面調整"
+  },
+  {
+   "zh": "游戏模式：退出鼠标穿透",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "遊戲模式：退出滑鼠穿透",
+   "en": "Game mode: exit mouse passthrough",
+   "ja": "ゲームモード：マウス透過を解除"
   },
   {
    "zh": "游戏锁 30/40 帧、采集卡输出 60 帧时选“自动识别内容节奏”：只去掉与上一张完全相同的画面，补帧时间均匀；“采集 60→30”固定每两帧取一帧，稳定 30 帧",
@@ -11467,6 +11481,13 @@
    "zh-TW": "畫面調控已接管時域穩定；關閉調控後恢復此設定",
    "en": "Image correction controls temporal stability; this setting returns when correction is off",
    "ja": "画質調整が時間方向の安定化を制御中。オフにするとこの設定に戻ります。"
+  },
+  {
+   "zh": "画面贴合游戏窗口的位置，键鼠和手柄照常操作游戏；%1 调整画面，%2 退出。独占全屏请改为无边框窗口",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "畫面貼合遊戲視窗位置，鍵鼠與手把照常操作遊戲；%1 調整畫面，%2 退出。獨佔全螢幕請改為無邊框視窗",
+   "en": "The picture follows the game window position. Use the keyboard, mouse and controller normally; %1 adjusts the picture and %2 exits. Use borderless mode instead of exclusive fullscreen.",
+   "ja": "ゲームウィンドウの位置に画面を合わせます。通常どおり操作し、%1 で画面調整、%2 で解除。排他全画面ではなくボーダーレスにしてください。"
   },
   {
    "zh": "界面卡住超过 3 秒，已退出游戏模式",
@@ -14850,6 +14871,13 @@
    "ja": "終了"
   },
   {
+   "zh": "退出全屏，恢复普通窗口操作",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "退出全螢幕，恢復一般視窗操作",
+   "en": "Leave fullscreen and restore normal window controls",
+   "ja": "全画面を解除して通常のウィンドウ操作に戻る"
+  },
+  {
    "zh": "退出游戏",
    "src": "qml/DialogHost.qml",
    "zh-TW": "退出遊戲",
@@ -15557,11 +15585,11 @@
    "ja": "ゼロモーションは時間方向の再構成を制限します。RTX ビデオ超解像はこの入力を使いません"
   },
   {
-   "zh": "需 1080p SDR 文件、Lecram 和 NVIDIA 光流；关闭超分、补帧、抗闪烁、调色及 HDR",
+   "zh": "需 1080p SDR 文件、SF 和 NVIDIA 光流；关闭超分、补帧、抗闪烁、调色及 HDR",
    "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "需 1080p SDR 檔案、Lecram 與 NVIDIA 光流；關閉超解析度、補幀、抗閃爍、調色及 HDR",
-   "en": "Requires 1080p SDR files, Lecram and NVIDIA optical flow; disable upscaling, frame generation, temporal stabilization, color adjustments and HDR",
-   "ja": "1080p SDR ファイル、Lecram、NVIDIA オプティカルフローが必要です。超解像、フレーム生成、ちらつき抑制、色調整、HDR を無効にしてください"
+   "zh-TW": "需 1080p SDR 檔案、SF 與 NVIDIA 光流；關閉超解析度、補幀、抗閃爍、調色及 HDR",
+   "en": "Requires a 1080p SDR file, SF and NVIDIA optical flow; turn off upscaling, frame generation, anti-flicker, grading and HDR",
+   "ja": "1080p SDR ファイル、SF、NVIDIA 光フローが必要です。超解像、フレーム生成、ちらつき抑制、色調整、HDR をオフにしてください"
   },
   {
    "zh": "需系统解码/转换",
@@ -16108,6 +16136,13 @@
    "zh-TW": "預設庫 NR 解析度非法",
    "en": "Preset library: invalid NR resolution",
    "ja": "プリセットライブラリの NR 解像度が不正です"
+  },
+  {
+   "zh": "预设库 NR 模型字段损坏",
+   "src": "src/engine/PresetLibrary.cpp",
+   "zh-TW": "預設庫 NR 模型欄位損壞",
+   "en": "Corrupt NR model field in preset library",
+   "ja": "プリセットライブラリの NR モデル項目が破損しています"
   },
   {
    "zh": "预设库 NR 调控参数损坏",
@@ -16934,76 +16969,6 @@
    "zh-TW": "；預設“即時”，同時執行遊戲或其他重負載程式變慢時可改為“高”或“普通”",
    "en": "; Realtime by default. If a game or other heavy program running alongside slows down, choose High or Normal",
    "ja": "；既定は「リアルタイム」。同時に動かすゲームや重い処理が遅くなる場合は「高」か「通常」に変更してください"
-  },
-  {
-   "zh": "启用失败",
-   "src": "qml/NodePage.qml; qml/ProPage.qml",
-   "zh-TW": "啟用失敗",
-   "en": "Failed to enable",
-   "ja": "有効化に失敗"
-  },
-  {
-   "zh": "游戏模式键盘监听启动失败，未开启鼠标穿透；请退出全屏后重试",
-   "src": "fan-subtitle-passthrough-20261016",
-   "zh-TW": "遊戲模式鍵盤監聽啟動失敗，未開啟滑鼠穿透；請退出全螢幕後重試",
-   "en": "Game mode keyboard listener could not start. Mouse passthrough is off; leave fullscreen and try again.",
-   "ja": "ゲームモードのキー監視を開始できません。マウス透過はオフです。全画面を解除して再試行してください。"
-  },
-  {
-   "zh": "游戏模式：调整画面",
-   "src": "fan-subtitle-passthrough-20261016",
-   "zh-TW": "遊戲模式：調整畫面",
-   "en": "Game mode: adjust picture",
-   "ja": "ゲームモード：画面調整"
-  },
-  {
-   "zh": "仅在游戏模式中接管按键；支持 Ctrl、Alt、Shift 组合",
-   "src": "fan-subtitle-passthrough-20261016",
-   "zh-TW": "僅在遊戲模式中接管按鍵；支援 Ctrl、Alt、Shift 組合",
-   "en": "Keys are captured only in game mode; Ctrl, Alt and Shift combinations are supported",
-   "ja": "ゲームモード中のみキーを使用します。Ctrl、Alt、Shift の組み合わせに対応"
-  },
-  {
-   "zh": "游戏模式：退出鼠标穿透",
-   "src": "fan-subtitle-passthrough-20261016",
-   "zh-TW": "遊戲模式：退出滑鼠穿透",
-   "en": "Game mode: exit mouse passthrough",
-   "ja": "ゲームモード：マウス透過を解除"
-  },
-  {
-   "zh": "退出全屏，恢复普通窗口操作",
-   "src": "fan-subtitle-passthrough-20261016",
-   "zh-TW": "退出全螢幕，恢復一般視窗操作",
-   "en": "Leave fullscreen and restore normal window controls",
-   "ja": "全画面を解除して通常のウィンドウ操作に戻る"
-  },
-  {
-   "zh": "开始后 Veyra 在这块屏幕上全屏，键鼠和手柄直接操作屏幕上的程序；%1 调整画面，%2 退出",
-   "src": "fan-subtitle-passthrough-20261016",
-   "zh-TW": "開始後 Veyra 在此螢幕全螢幕顯示，鍵鼠與手把直接操作螢幕上的程式；%1 調整畫面，%2 退出",
-   "en": "Veyra opens fullscreen on this display. Keyboard, mouse and controller operate its programs; %1 adjusts the picture and %2 exits.",
-   "ja": "この画面で全画面表示し、キーボード・マウス・コントローラーで背後のアプリを操作します。%1 で画面調整、%2 で解除。"
-  },
-  {
-   "zh": "画面贴合游戏窗口的位置，键鼠和手柄照常操作游戏；%1 调整画面，%2 退出。独占全屏请改为无边框窗口",
-   "src": "fan-subtitle-passthrough-20261016",
-   "zh-TW": "畫面貼合遊戲視窗位置，鍵鼠與手把照常操作遊戲；%1 調整畫面，%2 退出。獨佔全螢幕請改為無邊框視窗",
-   "en": "The picture follows the game window position. Use the keyboard, mouse and controller normally; %1 adjusts the picture and %2 exits. Use borderless mode instead of exclusive fullscreen.",
-   "ja": "ゲームウィンドウの位置に画面を合わせます。通常どおり操作し、%1 で画面調整、%2 で解除。排他全画面ではなくボーダーレスにしてください。"
-  },
-  {
-   "zh": "全屏（双击画面 / F11）· 全屏后按 %1 打开快速调节",
-   "src": "fan-subtitle-passthrough-20261016",
-   "zh-TW": "全螢幕（雙擊畫面 / F11）· 全螢幕後按 %1 開啟快速調整",
-   "en": "Fullscreen (double-click / F11) · Press %1 for quick adjustments",
-   "ja": "全画面（ダブルクリック / F11）· %1 でクイック調整"
-  },
-  {
-   "zh": "%1 关闭",
-   "src": "fan-subtitle-passthrough-20261016",
-   "zh-TW": "%1 關閉",
-   "en": "%1 to close",
-   "ja": "%1 で閉じる"
   }
  ]
 }

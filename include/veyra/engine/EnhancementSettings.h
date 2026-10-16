@@ -88,17 +88,17 @@ constexpr std::wstring_view captureAudioIngressName(CaptureAudioIngress mode) {
     }
     return L"自动（优先 PCM，必要时位流解码）";
 }
-// The original slot (0) became Lecram in 2.0.0. Give the restored NVIDIA
-// binary a new value so existing presets keep selecting the same DLL.
+// Keep retired 0/1 IDs decodable; new builds migrate them to the SF slot.
+// 3 remains the explicitly selected NVIDIA original, 4 the AMD backend.
 enum class NrRuntime { Original = 0, Community = 1, Ampere = 2, NvidiaOriginal = 3, LmxxfAmd = 4 };
 constexpr bool validNrRuntime(NrRuntime runtime) {
     return runtime == NrRuntime::Original || runtime == NrRuntime::Community ||
            runtime == NrRuntime::Ampere || runtime == NrRuntime::NvidiaOriginal || runtime == NrRuntime::LmxxfAmd;
 }
-// Persisted value 1 selected the retired RTX40 DLL. Never load that DLL in
-// current builds; preserve 0 (Lecram) and 2 (SF compatible) as explicit user choices.
+// Lecram and the older RTX40 community DLL are no longer packaged. Explicit
+// NVIDIA-original and AMD choices survive migration; no DLL hash loading lock.
 constexpr NrRuntime currentNrRuntime(NrRuntime runtime) {
-    return runtime == NrRuntime::Community ? NrRuntime::Ampere : runtime;
+    return runtime == NrRuntime::Original || runtime == NrRuntime::Community ? NrRuntime::Ampere : runtime;
 }
 constexpr std::string_view nrRuntimeName(NrRuntime runtime) {
     switch(runtime) {
@@ -141,8 +141,14 @@ constexpr std::string_view opticalFlowBackendName(OpticalFlowBackend backend) {
 struct NrSettings {
     float intensity=1,tone=1,structure=1,skin=-1;
     int32_t style=0,autoMask=0,uiCorrection=0;
+    bool performance=true; // SF 310.9.16: preset B; false selects legacy A.
     bool operator==(const NrSettings&) const = default;
 };
+// Create-time I32 contract, verified against both embedded models in the
+// user-provided 310.9.16 runtime. Original/AMD keep their previous parameters.
+constexpr int32_t nrRenderPreset(NrRuntime runtime,const NrSettings& model) {
+    return currentNrRuntime(runtime)==NrRuntime::Ampere ? (model.performance?2:1) : 0;
+}
 struct NrCorrectionSettings {
     bool enabled=false,automatic=true;
     // Manual values survive switching automatic control on and off.
@@ -189,7 +195,7 @@ struct ResidualSettings {
 struct NrLayerSettings {
     NrSettings model{};
     ResidualSettings residual{};
-    NrRuntime runtime=NrRuntime::Original;
+    NrRuntime runtime=NrRuntime::Ampere;
     bool temporal=false,lowLatencyPairing=false,enabled=false;
     // The tier only applies when `temporal` is set; `temporal=false` forces Off.
     // Kept as a separate field so an older preset that only knew the boolean
@@ -236,7 +242,7 @@ struct EnhancementSettings {
     ProtectionSettings protection;
     bool nr=false,sr=false;
     bool lowLatency=false; // preview only: NR before SR, opt-in
-    NrRuntime nrRuntime=NrRuntime::Original;
+    NrRuntime nrRuntime=NrRuntime::Ampere;
     bool nrTemporal=false; // optional motion-reprojected residual stabilization
     // Which anti-flicker tier the temporal pass runs, for the flat (non-list)
     // path. Ignored when nrTemporal is false.
@@ -273,12 +279,14 @@ struct EnhancementSettings {
     }
     bool sameNrTopology(const EnhancementSettings& other) const {
         if(nrLayerCount!=other.nrLayerCount)return false;
+        if(nrRenderPreset(nrRuntime,model)!=nrRenderPreset(other.nrRuntime,other.model))return false;
         if(residual.correction.enabled!=other.residual.correction.enabled||usesNrTemporal()!=other.usesNrTemporal())return false;
         for(uint32_t i=0;i<nrLayerCount&&i<nrLayers.size();++i){
             const auto& a=nrLayers[i]; const auto& b=other.nrLayers[i];
             if(a.enabled!=b.enabled||a.temporal!=b.temporal||a.usesTemporal()!=b.usesTemporal()||
                a.residual.correction.enabled!=b.residual.correction.enabled||a.runtime!=b.runtime||
-               a.lowLatencyPairing!=b.lowLatencyPairing||a.sizePolicy!=b.sizePolicy)return false;
+               a.lowLatencyPairing!=b.lowLatencyPairing||a.sizePolicy!=b.sizePolicy||
+               nrRenderPreset(a.runtime,a.model)!=nrRenderPreset(b.runtime,b.model))return false;
         }
         return true;
     }
@@ -368,11 +376,15 @@ struct EnhancementSettings {
             active.nrAntiFlicker=defaults.nrAntiFlicker;active.nrPolicy=defaults.nrPolicy;
             active.nrMotion=defaults.nrMotion;active.nrLayers=defaults.nrLayers;
         }else{
+            active.nrRuntime=currentNrRuntime(active.nrRuntime);
+            if(active.nrRuntime!=NrRuntime::Ampere)active.model.performance=defaults.model.performance;
             if(!active.residual.correction.enabled)active.residual.correction={};
             if(!active.nrTemporal)active.nrAntiFlicker=defaults.nrAntiFlicker;
             for(size_t i=0;i<active.nrLayers.size();++i){
                 auto& layer=active.nrLayers[i];
                 if(i>=nrLayerCount||!layer.enabled){layer={};continue;}
+                layer.runtime=currentNrRuntime(layer.runtime);
+                if(layer.runtime!=NrRuntime::Ampere)layer.model.performance=defaults.model.performance;
                 if(!layer.residual.correction.enabled)layer.residual.correction={};
                 if(!layer.temporal)layer.antiFlicker=NrAntiFlicker::Flow;
             }

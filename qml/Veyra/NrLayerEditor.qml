@@ -85,9 +85,22 @@ ColumnLayout {
             objectName: "nr-runtime"
             value: editor.layerData.runtime === 4 ? qsTr("RX 9000 · lmxxf（实验）")
                    : editor.layerData.runtime === 3 ? qsTr("RTX 50 · NVIDIA 原版")
-                   : editor.layerData.runtime === 2 ? "RTX 20–50 · SF-v2" : "RTX 50 · Lecram"
-            options: veyra.nrRuntimeChoices || [{id:"0",label:"RTX 50 · Lecram"},{id:"2",label:"RTX 20–50 · SF-v2"},{id:"3",label:qsTr("RTX 50 · NVIDIA 原版")},{id:"4",label:qsTr("RX 9000 · lmxxf（实验）")}]
+                   : "RTX 20–50 · SF 310.9.16"
+            options: veyra.nrRuntimeChoices || [{id:"2",label:"RTX 20–50 · SF 310.9.16"},{id:"3",label:qsTr("RTX 50 · NVIDIA 原版")},{id:"4",label:qsTr("RX 9000 · lmxxf（实验）")}]
             onPicked: id => editor.edited(editor.layerData.index, "runtime", Number(id))
+        }
+    }
+    VRow {
+        objectName: "nr-performance-row"
+        visible: !editor.amdNr
+        label: qsTr("启用性能优化版")
+        hint: qsTr("开启使用新版模型 B；关闭使用旧版模型 A。切换会重建 NR，画面可能有所不同。")
+        enabled: editor.layerData.runtime === 2 && Support.available(veyra, "nr2")
+        opacity: enabled ? 1 : 0.4
+        VSwitch {
+            objectName: "nr-performance"
+            checked: editor.layerData.performance ?? true
+            onToggled: checked => editor.edited(editor.layerData.index, "performance", checked ? 1 : 0)
         }
     }
     VRow {

@@ -87,7 +87,7 @@ struct EnhanceGraphDesc {
     bool enableSr = false;       // upscale source -> work extent (1:1 bypass otherwise)
     bool enableNr = true;
     bool nrBeforeSr = false;
-    engine::NrRuntime nrRuntime=engine::NrRuntime::Original;
+    engine::NrRuntime nrRuntime=engine::NrRuntime::Ampere;
     bool nrTemporal=false;
     engine::NrAntiFlicker nrAntiFlicker=engine::NrAntiFlicker::Flow;
     bool enableFg = true;

@@ -30,13 +30,19 @@ int wmain(int argc,wchar_t** argv) {
         auto check=[&](bool ok,const char* text){std::cout<<(ok?"PASS ":"FAIL ")<<text<<std::endl;failures+=!ok;return ok;};
         engine.open(window,argv[1],{});
         check(wait([](const auto& s){return s.frames>30&&!s.nrActive&&!s.srActive&&!s.fgActive&&s.nrEvaluated==0&&s.generated==0;}),"fresh defaults play without enhancement");
+        // GTA's intro fades to black. Use a stable natural scene for every
+        // output check so a valid black source frame is not a regression.
+        engine.seek(20);
+        check(wait([](const auto& s){return s.position>=20&&s.frames>40;}),"seek to non-black comparison interval");
         int cycle=0;
-        for(const auto runtime:{veyra::engine::NrRuntime::Original,veyra::engine::NrRuntime::Ampere,veyra::engine::NrRuntime::NvidiaOriginal,veyra::engine::NrRuntime::Original}) {
+        for(const auto runtime:{veyra::engine::NrRuntime::Ampere,veyra::engine::NrRuntime::Ampere,veyra::engine::NrRuntime::NvidiaOriginal,veyra::engine::NrRuntime::Ampere}) {
             if(failures)break;
             auto settings=engine.snapshot().desired;settings.nr=true;settings.nrRuntime=runtime;
+            settings.model.performance=cycle!=1;
+            for(auto& layer:settings.nrLayers){layer.runtime=runtime;layer.model.performance=cycle!=1;}
             if(!check(engine.requestSettings(settings),"request runtime switch"))break;
             const auto revision=engine.snapshot().desired.revision;
-            if(!check(wait([&](const auto& s){return !s.applying&&s.applied.revision==revision&&s.applied.nrRuntime==runtime&&s.nrActive&&s.nrEvaluated>10;},25),"selected runtime produces NR output"))break;
+            if(!check(wait([&](const auto& s){return !s.applying&&s.applied.revision==revision&&s.applied.nrRuntime==runtime&&s.applied.model.performance==settings.model.performance&&s.nrActive&&s.nrEvaluated>10;},25),"selected runtime and model produce NR output"))break;
             const auto path=output/(L"runtime-"+std::to_wstring(cycle++)+L".png");
             engine.saveFrame(path.wstring());
             check(wait([&](const auto&){return std::filesystem::exists(path)&&std::filesystem::file_size(path)>1024;}),"actual processed output saved");

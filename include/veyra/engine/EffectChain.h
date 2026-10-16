@@ -49,7 +49,7 @@ constexpr std::string_view effectTypeName(EffectType type) {
 struct ChainNrParams {
     NrSettings model{};
     ResidualSettings residual{};
-    NrRuntime runtime = NrRuntime::Original;
+    NrRuntime runtime = NrRuntime::Ampere;
     bool temporal = false;          // motion-reprojected residual stabilization
     bool lowLatencyPairing = false; // this layer may run before SR (preview only)
     // Anti-flicker tier, only meaningful when `temporal` is set. Flow is the

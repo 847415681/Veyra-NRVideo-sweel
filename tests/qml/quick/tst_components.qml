@@ -73,7 +73,7 @@ Item {
             property int lastIndex: -1
             property string lastKey: ""
             property var rows: [0,1,2,3].map(i => ({
-                index: 2*i+1, enabled: true, runtime: 0, sizePolicy: 0, intensity: 1,
+                index: 2*i+1, enabled: true, runtime: 2, sizePolicy: 0, intensity: 1, performance: true,
                 tone: 1, structure: 1, skin: -1, style: 0, autoMask: false,
                 uiCorrection: false, total: 1, darken: 1, brighten: 1,
                 color: 1, luminance: 1, temporal: false, antiFlicker: 2,
@@ -500,6 +500,26 @@ Item {
             compare(fixture.rows[1].correctionEnabled,false)
         }
 
+        function test_nr_performance_model_and_disabled_original() {
+            const fixture=createTemporaryObject(nrFixture,root)
+            verify(fixture)
+            const card=findChild(fixture,"nr-card-1")
+            verify(card)
+            const row=findChild(card,"nr-performance-row")
+            const control=findChild(card,"nr-performance")
+            verify(row.visible && row.enabled && control.checked)
+            mouseClick(control)
+            compare(fixture.lastKey,"performance")
+            compare(Boolean(fixture.rows[0].performance),false)
+            const changed=fixture.rows.map(r => Object.assign({},r))
+            changed[0].runtime=3
+            fixture.rows=changed
+            verify(row.visible && !row.enabled && !control.enabled)
+            compare(control.checked,false)
+            changed[0].runtime=4
+            fixture.rows=changed.map(r => Object.assign({},r))
+            verify(!row.visible)
+        }
         function test_nr_complete_parameters_and_skin_range() {
             const fixture=createTemporaryObject(nrFixture,root)
             verify(waitForPolish(root.Window.window))

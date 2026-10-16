@@ -1441,7 +1441,11 @@ bool EnhanceGraph::createNrFeature(NrInstance& layer) {
     pb.setU32(p::kOutputDotWidth,nrW);pb.setU32(p::kOutputDotHeight,nrH);
     pb.setU32(p::kUpscaling,0);pb.setF32(p::kScale,1.0f);pb.setF32(p::kScalingRatio,1.0f);
     pb.setVoid(p::kComputeScalingRatioCallback,reinterpret_cast<void*>(&ngx::DlssNrRuntimeAdapter::scalingRatioCallback));
-    pb.setI32(p::kHintRenderPreset,0);pb.setU32(p::kStdWidth,nrW);pb.setU32(p::kStdHeight,nrH);
+    const auto preset=engine::nrRenderPreset(desc_.nrRuntime,layer.model);
+    pb.setI32(p::kHintRenderPreset,preset);pb.setU32(p::kStdWidth,nrW);pb.setU32(p::kStdHeight,nrH);
+    log::info("nr-model",std::format("runtime={} preset={} performance={} internal={}x{}",
+        engine::nrRuntimeName(engine::currentNrRuntime(desc_.nrRuntime)),preset,
+        engine::currentNrRuntime(desc_.nrRuntime)==engine::NrRuntime::Ampere&&layer.model.performance,nrW,nrH));
     pb.setI32(p::kPerfQualityValue,1);pb.setU32(p::kCreationNodeMask,1);pb.setU32(p::kVisibilityNodeMask,1);
     auto* list=ring_.acquire(0,st);
     if(!list){failedBackend_=engine::FailedBackend::Infrastructure;return false;}
@@ -1463,7 +1467,7 @@ bool EnhanceGraph::createAutoNrPool() {
     const auto index=*desc_.nrAutoPoolLayer;
     const bool admitted=nrEnabled_&&!srEnabled_&&!fgEnabled_&&!lmxxfNr_&&!desc_.hdrWorking()&&!desc_.stillImage&&
         !desc_.noFeatures&&!desc_.noNgx&&!desc_.runtimeNodeOrder&&!desc_.nrTemporal&&desc_.nrHoldStrength==0&&
-        desc_.nrRuntime==engine::NrRuntime::Original&&desc_.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia&&
+        engine::currentNrRuntime(desc_.nrRuntime)==engine::NrRuntime::Ampere&&desc_.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia&&
         context_.adapter().deviceId==0x2f04&&context_.adapter().isNvidia&&index<nrInstances_.size()&&nrInstances_.size()+4<=8&&
         workW_==1920&&workH_==1080&&desc_.nrLayersExtent[index]==Extent{1920,1080}&&
         std::none_of(nrInstances_.begin(),nrInstances_.end(),[](const auto& layer){return layer->temporalEnabled;});
@@ -3214,6 +3218,9 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if(s.nr&&desc_.enableNr){
         if(s.activeNrLayerCount()!=nrInstances_.size())return false;
         for(size_t i=0;i<nrInstances_.size();++i){
+            const auto& model=i<nextNr.nrLayersModel.size()?nextNr.nrLayersModel[i]:nextNr.model;
+            if(!lmxxfNr_&&engine::nrRenderPreset(s.nrRuntime,model)!=
+                engine::nrRenderPreset(desc_.nrRuntime,nrInstances_[i]->model))return false;
             const bool temporal=i<nextNr.nrLayersTemporal.size()?nextNr.nrLayersTemporal[i]:nextNr.nrTemporal;
             if(temporal!=nrInstances_[i]->temporalEnabled)return false;
             const auto tier=i<nextNr.nrLayersAntiFlicker.size()?nextNr.nrLayersAntiFlicker[i]:nextNr.nrAntiFlicker;

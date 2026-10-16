@@ -759,7 +759,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                        !nrAutoPoolUnavailable&&selected.settings.activeNrLayerCount()<=2&&
                        !isCapture&&!isImage&&desc.enableNr&&!desc.enableSr&&!desc.enableFg&&
                        !desc.hdrWorking()&&!desc.videoHdr.enabled&&!desc.color.enabled&&!desc.additionalColorCount&&!desc.runtimeNodeOrder&&desc.nrHoldStrength==0&&
-                       desc.nrRuntime==NrRuntime::Original&&desc.opticalFlowBackend==OpticalFlowBackend::Nvidia&&
+                       currentNrRuntime(desc.nrRuntime)==NrRuntime::Ampere&&desc.opticalFlowBackend==OpticalFlowBackend::Nvidia&&
                        desc.nrMotion==MotionSource::OpticalFlow&&
                        nvidiaAdapter&&ctx.adapter().deviceId==0x2f04&&desc.workWidth==1920&&desc.workHeight==1080&&
                        desc.sourceWidth==1920&&desc.sourceHeight==1080&&

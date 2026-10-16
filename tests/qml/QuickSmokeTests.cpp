@@ -22,8 +22,8 @@ public slots:
         QQmlComponent snapshot(engine);
         snapshot.setData(R"qml(import QtQml
 QtObject {
-    property var effectCapabilities: ({nr0:{available:true}})
-    property var nrRuntimeChoices: [{id:"0",label:"RTX 50 · Lecram"}]
+    property var effectCapabilities: ({nr2:{available:true},nr3:{available:true},nr4:{available:true}})
+    property var nrRuntimeChoices: [{id:"2",label:"RTX 20–50 · SF 310.9.16"},{id:"3",label:"RTX 50 · NVIDIA original"}]
     property var nrLayers: [{index:1}]
     property int nrMotionSource: 1
     property string nrAutoStatus: ""

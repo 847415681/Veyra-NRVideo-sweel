@@ -650,7 +650,7 @@ struct QmlPlayerBridge::Impl {
                 DXGI_ADAPTER_DESC1 desc{};
                 if(FAILED(adapter->GetDesc1(&desc))||(desc.Flags&DXGI_ADAPTER_FLAG_SOFTWARE))continue;
                 auto initial=facade.pendingSettings();
-                initial.nrRuntime=desc.VendorId==0x1002?engine::NrRuntime::LmxxfAmd:ngx::preferSfNr(desc.VendorId,desc.Description)?engine::NrRuntime::Ampere:engine::NrRuntime::Original;
+                initial.nrRuntime=desc.VendorId==0x1002?engine::NrRuntime::LmxxfAmd:engine::NrRuntime::Ampere;
                 if(desc.VendorId==0x1002||desc.VendorId==0x8086){
                     initial.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;
                     initial.videoSrQuality=engine::kVideoSrFsr;
@@ -1030,10 +1030,10 @@ static QVariantMap scanEffectCapabilities() {
         const bool supported = ui::hardwareSupports(hardware, gpu);
         out[id] = QVariantMap{{"available", supported && files}, {"reason", !supported ? requirement : !files ? QObject::tr("当前包缺少此功能的运行组件") : QString{}}};
     };
-    add("nr0", H::NvidiaNr50, exists(nr / "nvngx_dlssnr.dll"), QObject::tr("需要 NVIDIA RTX 50 / Blackwell"));
+    add("nr2", H::NvidiaNrSf, exists(nr / "nr-ampere/nvngx_dlssnr.dll"), QObject::tr("需要 NVIDIA RTX 显卡"));
+    out["nr0"]=out["nr2"]; // Retired preset ID; no retired runtime is loaded.
     out["nrAuto"]=QVariantMap{{"available",gpu.vendor==0x10DE&&gpu.deviceId==0x2f04&&out.value("nr0").toMap().value("available").toBool()},
         {"reason",gpu.deviceId!=0x2f04?QObject::tr("自动 NR 当前仅验证 RTX 5070"):!out.value("nr0").toMap().value("available").toBool()?QObject::tr("当前包缺少此功能的运行组件"):QString{}}};
-    add("nr2", H::NvidiaNrSf, exists(nr / "nr-ampere/nvngx_dlssnr.dll"), QObject::tr("需要 NVIDIA RTX 显卡"));
     add("nr3", H::NvidiaNr50, exists(nr / "nr-original/nvngx_dlssnr.dll"), QObject::tr("需要 NVIDIA RTX 50 / Blackwell"));
     add("nr4", H::AmdNr, exists(nr / "../amd-nr/LmxxfNrRuntime.dll"), QObject::tr("需要 AMD RX 9000"));
     wchar_t systemDir[MAX_PATH]{};
@@ -1154,7 +1154,7 @@ QVariantMap QmlPlayerBridge::effectAvailability(const QString& id) const {
 QVariantList QmlPlayerBridge::nrRuntimeChoices() const {
     QVariantList choices;
     const auto caps = effectCapabilities();
-    for (const auto& entry : std::initializer_list<std::pair<int, QString>>{{0, "RTX 50 · Lecram"}, {2, "RTX 20–50 · SF"}, {3, tr("RTX 50 · NVIDIA 原版")}, {4, tr("RX 9000 · lmxxf（实验）")}}) {
+    for (const auto& entry : std::initializer_list<std::pair<int, QString>>{{2, "RTX 20–50 · SF 310.9.16"}, {3, tr("RTX 50 · NVIDIA 原版")}, {4, tr("RX 9000 · lmxxf（实验）")}}) {
         const auto cap = caps.value("nr" + QString::number(entry.first)).toMap();
         choices << QVariantMap{{"id", QString::number(entry.first)}, {"label", entry.second}, {"disabled", !cap.value("available").toBool()}, {"note", cap.value("reason")}};
     }
@@ -5499,7 +5499,7 @@ QVariantList QmlPlayerBridge::nrLayers() const {
         out<<QVariantMap{{"index",int(i)},{"enabled",node.enabled},{"sizePolicy",int(n.sizePolicy)},{"runtime",int(engine::currentNrRuntime(n.runtime))},
             {"intensity",n.model.intensity},{"tone",n.model.tone},{"structure",n.model.structure},
             {"skin",n.model.skin},{"style",n.model.style},{"autoMask",bool(n.model.autoMask)},
-            {"uiCorrection",bool(n.model.uiCorrection)},{"total",n.residual.total},
+            {"uiCorrection",bool(n.model.uiCorrection)},{"performance",n.model.performance},{"total",n.residual.total},
             {"darken",n.residual.darken},{"brighten",n.residual.brighten},
             {"color",n.residual.color},{"luminance",n.residual.luminance},{"temporal",n.temporal},
             {"antiFlicker",int(n.antiFlicker)},
@@ -5527,11 +5527,11 @@ QString QmlPlayerBridge::nrAutoSelectionReason(int index) const {
         otherAuto|=int(i)!=index&&node.enabled&&node.nr.sizePolicy==pipeline::NrSizePolicy::Auto;
     }
     if(first!=index||count>2||otherAuto)return tr("自动 NR 仅支持一至两层列表的第一层");
-    if(impl_->chain.mode!=engine::ChainMode::List||s.nrRuntime!=engine::NrRuntime::Original||s.sr||s.multiplier>1||temporal||
+    if(impl_->chain.mode!=engine::ChainMode::List||engine::currentNrRuntime(s.nrRuntime)!=engine::NrRuntime::Ampere||s.sr||s.multiplier>1||temporal||
        s.nrHoldStrength>0||s.color.enabled||s.additionalColorCount||s.videoHdr.enabled||
        s.opticalFlowBackend!=engine::OpticalFlowBackend::Nvidia||s.nrMotion!=engine::MotionSource::OpticalFlow||snapshot.capture||snapshot.image||snapshot.sourceHdr||
        (snapshot.sourceWidth&& (snapshot.sourceWidth!=1920||snapshot.sourceHeight!=1080)))
-        return tr("需 1080p SDR 文件、Lecram 和 NVIDIA 光流；关闭超分、补帧、抗闪烁、调色及 HDR");
+        return tr("需 1080p SDR 文件、SF 和 NVIDIA 光流；关闭超分、补帧、抗闪烁、调色及 HDR");
     return {};
 }
 
@@ -5539,7 +5539,8 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
     if(index<0||uint32_t(index)>=impl_->chain.nodeCount||
        impl_->chain.nodes[index].type!=engine::EffectType::NrEnhance||!std::isfinite(value))return false;
     if(key=="runtime") {
-        if(value!=0&&value!=2&&value!=3&&value!=4)return false;
+        if(value!=0&&value!=1&&value!=2&&value!=3&&value!=4)return false;
+        value=int(engine::currentNrRuntime(static_cast<engine::NrRuntime>(int(value))));
         const auto cap = effectCapabilities().value("nr" + QString::number(int(value))).toMap();
         if (!cap.value("available").toBool()) { emit notice(cap.value("reason").toString(), true); return false; }
         const auto before=impl_->chain;
@@ -5579,6 +5580,7 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
         else if(key=="style"&&value<=2)n.model.style=int(value);
         else if(key=="autoMask"&&value<=1)n.model.autoMask=int(value);
         else if(key=="uiCorrection"&&value<=1)n.model.uiCorrection=int(value);
+        else if(key=="performance"&&value<=1&&engine::currentNrRuntime(n.runtime)==engine::NrRuntime::Ampere)n.model.performance=value!=0;
         else if(key=="temporal"&&value<=1)n.temporal=value!=0;
         else if(key=="correctionEnabled"&&value<=1)n.residual.correction.enabled=value!=0;
         else if(key=="correctionAuto"&&value<=1)n.residual.correction.automatic=value!=0;

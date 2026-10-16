@@ -32,7 +32,10 @@ public:
         settings.revision=0;
         Key result{std::move(settings),std::move(order),desc.sourceWidth,desc.sourceHeight,desc.workWidth,desc.workHeight,
             desc.nrWidth,desc.nrHeight,desc.hdrInput,desc.hdrOutput,desc.rgbInput,desc.captureBitDepth,desc.packedInput,desc.yuy2Input,desc.runtimeAbsPath};
-        std::error_code error;const auto module=std::filesystem::path(desc.runtimeAbsPath)/L"nvngx_dlssnr.dll";
+        auto module=std::filesystem::path(desc.runtimeAbsPath);
+        if(currentNrRuntime(desc.nrRuntime)==NrRuntime::Ampere)module/=L"nr-ampere";
+        else if(currentNrRuntime(desc.nrRuntime)==NrRuntime::NvidiaOriginal)module/=L"nr-original";
+        module/=L"nvngx_dlssnr.dll";std::error_code error;
         result.nrFileBytes=std::filesystem::file_size(module,error);
         if(error)result.nrFileBytes=0;
         const auto time=std::filesystem::last_write_time(module,error);
@@ -42,7 +45,7 @@ public:
     static bool eligible(const pipeline::EnhanceGraphDesc& desc){
         return desc.enableNr&&!desc.enableSr&&!desc.enableFg&&!desc.hdrInput&&!desc.hdrOutput&&!desc.videoHdr.enabled&&!desc.color.enabled&&desc.additionalColorCount==0&&
             desc.nrHoldStrength==0&&!desc.noFeatures&&!desc.noNgx&&!desc.stillImage&&!desc.nrAutoPoolLayer&&
-            desc.nrRuntime==NrRuntime::Original&&!desc.nrTemporal&&desc.nrLayersModel.size()<=1&&
+            currentNrRuntime(desc.nrRuntime)==NrRuntime::Ampere&&!desc.nrTemporal&&desc.nrLayersModel.size()<=1&&
             std::none_of(desc.nrLayersTemporal.begin(),desc.nrLayersTemporal.end(),[](bool value){return value;})&&
             !desc.runtimeNodeOrder&&(!desc.fixedExecutionPlan||(
                 desc.fixedExecutionPlan->stepCount==1&&desc.fixedExecutionPlan->steps[0].type==EffectType::NrEnhance));

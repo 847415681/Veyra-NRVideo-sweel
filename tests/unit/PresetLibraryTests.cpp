@@ -890,12 +890,14 @@ void testNrVariants() {
         entry.color=settings.color; // v1 stores the shared colour payload outside the chain.
         entry.fg={settings.multiplier,settings.frameGenerationBackend};
         check(writer.load()&&writer.put(entry), "NR variant: save preset");
+        for(unsigned i=0;i<entry.chain.nodeCount;++i)entry.chain.nodes[i].nr.runtime=currentNrRuntime(entry.chain.nodes[i].nr.runtime);
         PresetLibrary reader(path); reader.setIncludeBuiltins(false);
         check(reader.load()&&reader.entries().size()==1&&reader.entries()[0]==entry,
               "NR variant: preset retains exact DLL selection");
         const auto sessionPath=scratch((L"nr-session-"+std::to_wstring(int(runtime))+L".v1").c_str());
         auto session=std::make_unique<ChainSession>(ChainSession::initial(settings));
         check(session->select(ChainMode::Node), "NR variant: initialize node session");
+        for(auto& c:session->configurations)for(unsigned i=0;i<c.chain.nodeCount;++i)c.chain.nodes[i].nr.runtime=currentNrRuntime(c.chain.nodes[i].nr.runtime);
         ChainSessionStore store(sessionPath);
         auto restored=std::make_unique<ChainSession>(ChainSession::initial({}));
         check(store.save(*session)&&store.load(*restored)&&*restored==*session,
