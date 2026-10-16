@@ -9579,3 +9579,7 @@ BMD日志53：5次进入原生协商的尝试均SDI连接0x1、locked0/noInput�
 实际命令包括git branch --no-merged main、git log main..<branch>、git cherry、git merge-base --is-ancestor、git diff以及python -X utf8 -B -I E:/项目/Veyra/tmp/branch-integration-20261016/audit.py audit。84个tip祖先检查通过，NR计划diff为空；GitHub只读git ls-remote --heads nrvideo只返回main0cfa8a8。5旧树509个未提交文件的status/SHA全部与10-15发布开工快照一致，其它历史树HEAD保持。start/audit回执位于archives/reports/branch-integration-20261016。
 
 本轮只将分支归属记录和本WORKLOG提交本地main，产品代码/着色器/QML/构建配置/运行组件不变，因此没有重新构建或GPU/采集/播放测试，没有新的性能或实卡通过结论。提交后的diff检查、main干净及76其它树/88其它分支/509脏文件保护由audit.py verify记录到reports/branch-integration-20261016/final.json。无push/Release/打包/子Agent/关机，各分支与旧稿原样保留。
+
+## 2026-10-16 Issues45/43/42/41 开工
+
+用户指定四项修复，43为英文专业模式。实际通过GitHub connector读取四正文和45/41已有评论，原件存archives/issues41-45-20261016/issues.json。main8d8eb09干净；先记录77旧树/509脏文件逐文件SHA，checkpoint/pre-issues41-45-20261016及before.bundle，再建立E盘独立codex/issues41-45-20261016。计划docs/ISSUES_41_45_PLAN_2026-10-16.md；仅必要VRR/状态布局/网络文件输入/去隔行及共享接点，保留33ms/250ms、运行库模型/驱动/真实配置，不派Agent。无本轮main合并/push/Release/打包/关闭issue/代发/关机。
