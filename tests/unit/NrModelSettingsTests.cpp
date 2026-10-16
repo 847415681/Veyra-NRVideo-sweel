@@ -28,7 +28,7 @@ int wmain(int argc,wchar_t** argv){
     }
     auto off=s;off.nr=false;auto draft=off;draft.model.performance=false;
     check(!requiresGraphRebuild(off,draft)&&off.sameActiveVideoParameters(draft),"disabled NR model edit does not disturb playback");
-    s.nrLayerCount=2;for(auto& n:s.nrLayers){n.enabled=true;n.runtime=s.nrRuntime;}
+    s.nrLayerCount=2;for(unsigned i=0;i<s.nrLayerCount;++i){s.nrLayers[i].enabled=true;s.nrLayers[i].runtime=s.nrRuntime;}
     a=s;a.nrLayers[1].model.performance=false;
     check(requiresGraphRebuild(s,a),"second active NR layer model change rebuilds");
     s.nrLayers[1].enabled=a.nrLayers[1].enabled=false;
