@@ -856,3 +856,23 @@ without it, the native backend is unavailable and DirectShow remains usable.
 The runtime uses the user's installed Desktop Video COM server; no driver DLL
 or SDK is bundled. `PackedCaptureToLinear.hlsl` implements the documented v210
 and R10l layouts using Veyra's existing HDR color functions and GPU ingress.
+
+## HDR display controls — PR #44 (2026-10-16)
+
+The five HDR control cards, composed content/ambient presets, plain-language
+dials, luminance graph, source metadata recommendations, and film/display
+memory incorporate [georgeg911's PR #44](https://github.com/Likely7/Veyra-NRVideo/pull/44),
+from `georgeg911/Veyra-NRVideo`, pinned to
+`3ee17b62f00154fd3efef2d91f6053ce12470f06` (GPL-3.0, the Veyra repository license).
+The original ten contribution commits and authorship are preserved in the merge.
+
+Adapted files: `include/veyra/engine/HdrOutputTuning.h`,
+`include/veyra/ui/QmlPlayerBridge.h`, `src/ui/QmlPlayerBridge.cpp`,
+`qml/Veyra/ProPage.qml`, `src/engine/EngineController.cpp`,
+`src/engine/VideoPresenter.cpp`, their headers, translations and HDR tests.
+Veyra replaces the pixel readback with a visibility-gated GPU statistics pass
+(`shaders/HdrCurveCoverage.hlsl`), supports both HDR10/scRGB and SDR converted
+through RTX Video HDR, resolves metadata from the actual output curve, and
+repairs persistence, failure reporting, translation and custom-preset states.
+The source contribution adds no SDK, model or runtime binary. Implementation
+and local validation details are in `docs/PR44_HDR_DISPLAY_REPORT_2026-10-16.md`.
