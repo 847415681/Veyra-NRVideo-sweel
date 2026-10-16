@@ -9595,3 +9595,15 @@ PR44最终产品输入26db779；37目标构建通过（命令python -X utf8 -B -
 ## 2026-10-16 粉丝字幕与鼠标穿透适配开工
 
 用户要求适配所附2.0.8粉丝补丁及自定义鼠标穿透快捷键，完成汇报后关机。先运行tmp/fan-subtitle-passthrough-20261016/archive.py，81旧树/93分支/509未提交文件与两附件独立保护，pre标签main b571a44，source-before.bundle 74957056字节verify通过。新隔离分支codex/fan-subtitle-passthrough-20261016；方案FAN_SUBTITLE_PASSTHROUGH_PLAN_2026-10-16.md。不混入NR独立修复，不合main/push/Release/用户包，不派Agent/造压/改驱动或真实配置，产物全E盘；源码先实现再真实回归，后续记录失败和结果。
+
+### 粉丝补丁适配完成与实际验收
+
+最终产品5f6a8a9：共享压缩字幕预算4GiB按需/严格环境输入/64位算术及有限拒绝日志；游戏专用真实窗口/显示器区域、Qt DPI/物理取整、原250ms几何缓存；独立键盘消息线程、投递UI事件、左右修饰键、长按/抬起配对、离开卸载/旧事件失效；设置两可保存快捷键Home/Ctrl+Alt+Home默认、自定义/冲突/还原和实时文案，游戏内不重复QML Home；补Qt全屏激活完成后再接管输入。普通电影/专业播放条与33ms/250ms保持，未改增强/帧调度/着色器/驱动/专有组件/真实配置。来源两附件SHA及差异已记THIRD_PARTY_NOTICES。
+
+实际python -X utf8 -B -I tmp/.../build.py --label 2.0.8-fan-adapt首次12目标完整构建119.1秒，最终增量build-20261016-223446通过25.3秒，739输入/12EXE绑定5f6a8a9；stage.py初建私有QA，修正后restage.py逐文件核对再替换仅自身副本。checks.py最终checks-223730共13测试进程全退出0，Qt Quick76/76；真实PGS运行缓存78643200字节、五轨各40条，旧64MiB五轨后段截断，新预算五轨末段/像素均通过。PGS/SUP/VobSub/DVB/文本/字幕栅格/异步取消、链/事务/UI合同和原生热键均过；所有测试≤300秒、构建≤900秒，无竞争/显存造压。
+
+preferences.py最终preferences-224017三次启动的保存/无效组合拒绝/读取/还原/再读取及sentinel保持通过。ui.py最终ui-224204，列表普通界面与节点OBS软件界面125%两场真实捕获/点击(100,100)/F9开关重开/自定义退出/重新进入/窗口移动缩放全部通过；第二场外部目标进程注册NOLEGACY Raw Input。原生视频边界初始(307,240)-(1193,803)，变化后(457,290)-(1443,903)均匹配目标。最终两场无QML/GPU ERROR，截图只用于界面；英文快捷键页复核，i18n --check 2402条全语言缺译/占位符0。实际命令和日志指针详见FAN_SUBTITLE_PASSTHROUGH_REPORT_2026-10-16.md，产物E:/项目/Veyra/{用途}/fan-subtitle-passthrough-20261016。
+
+失败如实保留：同进程NOLEGACY夹具5项断言失败，唤醒/发键线程猜测无改善且相关猜测撤回；最后按产品分进程架构建立外部Raw Input目标并实测通过，同进程差异底层原因未进一步解释、不冒称修复，临时按键跟踪已删除。ui-223056暴露Qt全屏切换中的requestActivate与no-focus时序ERROR，产品排队一次接管后ui-224204严格无ERROR。没有拿模拟WM_HOTKEY代替实际键盘，也没用QML抓图黑区域冒充黑屏。未测独占/反作弊/提权游戏、跨屏混合DPI、物理键盘，不承诺封锁所有Raw Input物理按键或任何性能百分比。
+
+final-audit.py pre已通过：81旧树/93原分支/509脏文件、原附件/存档SHA、739构建输入/12EXE/1544共享运行文件保持，QA Main.qml原字节恢复，main仍b571a44，NR独立修复分支原样。后续只提交报告/本日志，post写最终final.json并创建verify通过的增量source-after.bundle；代码/证据保存后按本次授权正常关机（后台延迟后shutdown /s /t 0，无/f），实际PID/安排记录reports/.../shutdown.json。无合main/push/Release/用户包/代发/子Agent。
