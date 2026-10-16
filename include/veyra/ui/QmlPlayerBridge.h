@@ -167,6 +167,7 @@ class QmlPlayerBridge : public QObject {
     // fullscreen picture is click-through and the captured program has the input.
     Q_PROPERTY(bool gameMode READ gameMode NOTIFY gameModeChanged)
     Q_PROPERTY(bool passthroughActive READ passthroughActive NOTIFY gameModeChanged)
+    Q_PROPERTY(QRectF gameVideoRect READ gameVideoRect NOTIFY gameModeChanged)
 
     // Subtitles (P4-c): the engine's SubtitleLoader reads the embedded tracks and
     // the same-name external file; the old shell's SubtitleOverlay draws them as a
@@ -689,6 +690,7 @@ public:
     Q_INVOKABLE bool startScreenCapture();
     bool gameMode() const;
     bool passthroughActive() const;
+    QRectF gameVideoRect() const;
     // The Home panel is open: the picture stays on top but takes the input back.
     Q_INVOKABLE void setGamePanelOpen(bool open);
     // Index into Qt.application.screens of the monitor 游戏模式 covers, or -1.
@@ -1308,7 +1310,7 @@ signals:
     // The UI moves to a page by name when a command implies it.
     void navigate(const QString& page);
     void gameModeChanged();
-    // 游戏模式 hotkeys: 0 = Home (adjust panel), 1 = Ctrl+Alt+Home (leave).
+    // Configurable game hotkeys: 0 = adjust panel, 1 = leave.
     void gameHotkey(int which);
     // The game-mode capture ended or failed, or the GUI hung, while the picture was in
     // front: the UI leaves fullscreen and shows the reason.
@@ -1320,6 +1322,7 @@ private:
     // Value edit of one group; a change of the chain's validity notifies everything.
     void emitParameterChanged(void (QmlPlayerBridge::*group)(), bool wasValid);
     void updateGameMode();
+    void updateGameGeometry();
     // 抖音直播伴侣 running (gfx/PresentationHooks.h): Realtime GPU priority is capped at
     // High while it runs and restored when it exits; 监控软件兼容 "off" leaves it alone.
     void updateLiveCompanionCompat();

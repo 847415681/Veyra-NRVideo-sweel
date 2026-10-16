@@ -10,10 +10,10 @@
 // software interface it drops a layered bit set behind its back. Qt does not set
 // WS_EX_NOACTIVATE on it, so this class adds that bit, makes the window topmost,
 // hands the foreground over, owns the hotkeys and the watchdog, and makes any other
-// visible Veyra window click-through too. Home, a system hotkey while the picture is
+// visible Veyra window click-through too. The configurable panel key while the picture is
 // in front, opens the adjust panel and takes the input back; closing the panel hands
-// it to the program again. Ctrl+Alt+Home leaves. RegisterHotKey, not a low-level
-// keyboard hook: nothing else is listened to, and there is no hook thread.
+// it to the program again. The configurable exit key leaves. The keyboard hook has
+// a dedicated message thread and only posts recognized actions to the GUI thread.
 //
 // Everything is in-process on the GUI thread, so a crash takes the windows with it
 // and no click-through window can be left behind. A GUI thread that stops answering
@@ -36,6 +36,7 @@
 #include <vector>
 #include "veyra/Log.h"
 #include "veyra/source/ScreenCaptureSource.h"
+#include "veyra/ui/GameHotkeys.h"
 
 namespace veyra::ui {
 
@@ -44,13 +45,14 @@ public:
     // Off: a normal window. Panel: on top and interactive (Home panel open).
     // Through: on top, click-through, the captured program has the foreground.
     enum class Mode { Off, Panel, Through };
-    enum class Event { PanelHotkey, ExitHotkey, HomeUnavailable, ExitUnavailable, HangReleased };
+    enum class Event { PanelHotkey, ExitHotkey, ExitUnavailable, HangReleased };
     std::function<void(Event)> onEvent;
 
     GamePassthrough() { s_instance = this; }
     ~GamePassthrough() override {
         stopWatchdog();
         apply(Mode::Off);
+        keys_.stop();
         if (s_instance == this) s_instance = nullptr;
     }
     GamePassthrough(const GamePassthrough&) = delete;
@@ -64,17 +66,35 @@ public:
     }
     Mode mode() const { return mode_; }
 
-    // Entering from Off: the exit hotkey must exist before anything may become
-    // click-through. False (and ExitUnavailable) when another program owns it.
+    void setHotkeys(GameKey panel, GameKey exit) { keys_.bindings(panel, exit); }
+    // WGC captures the visible window frame, not an enlarged movie viewport.
+    // Coordinates are physical pixels in the fullscreen host's client space.
+    RECT pictureBounds() const {
+        RECT r{}; POINT origin{};
+        if (!main_ || !ClientToScreen(main_, &origin)) return {};
+        if (monitorCapture_) {
+            MONITORINFO m{}; m.cbSize = sizeof(m);
+            if (!GetMonitorInfoW(monitor_, &m)) return {};
+            r = m.rcMonitor;
+        } else {
+            if (!target_ || !IsWindow(target_) || IsIconic(target_)) return {};
+            if (FAILED(DwmGetWindowAttribute(target_, DWMWA_EXTENDED_FRAME_BOUNDS, &r, sizeof(r))) &&
+                !GetWindowRect(target_, &r)) return {};
+        }
+        OffsetRect(&r, -origin.x, -origin.y);
+        return r;
+    }
+
+    // The listener must exist before anything may become click-through.
     bool arm() {
         if (!main_) return false;
-        if (exitRegistered_) return true;
-        exitRegistered_ = RegisterHotKey(main_, kExitId, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, VK_HOME) != 0;
-        if (!exitRegistered_) {
-            veyra::log::warn("game-mode", std::format("Ctrl+Alt+Home unavailable err={}; click-through refused", GetLastError()));
+        if (keys_.running()) return true;
+        if (!keys_.start(main_)) {
+            veyra::log::warn("game-mode", "keyboard listener unavailable; click-through refused");
             if (onEvent) onEvent(Event::ExitUnavailable);
             return false;
         }
+        veyra::log::info("game-mode", "keyboard hook installed on dedicated message thread");
         return true;
     }
     // The caller publishes the new mode first, so Qt has applied (or removed) the
@@ -88,7 +108,7 @@ public:
             sunk_ = false;
             topmost(false);
             setPanelHotkey(false);
-            if (exitRegistered_) { UnregisterHotKey(main_, kExitId); exitRegistered_ = false; }
+            keys_.stop();
             if (hook_) { UnhookWinEvent(hook_); hook_ = nullptr; }
             armed_.store(false);
             mode_ = Mode::Off;
@@ -101,7 +121,6 @@ public:
             if (!arm()) return;
             topmostBefore_ = (GetWindowLongPtrW(main_, GWL_EXSTYLE) & WS_EX_TOPMOST) != 0;
             hook_ = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr, &GamePassthrough::winEvent, 0, 0, WINEVENT_OUTOFCONTEXT);
-            panelWarned_ = false;
             startWatchdog();
         }
         mode_ = next;
@@ -139,9 +158,10 @@ public:
         if (type != "windows_generic_MSG") return false;
         const auto* msg = static_cast<const MSG*>(message);
         switch (msg->message) {
-        case WM_HOTKEY:
-            if (msg->wParam != kPanelId && msg->wParam != kExitId) return false;
-            if (onEvent) onEvent(msg->wParam == kPanelId ? Event::PanelHotkey : Event::ExitHotkey);
+        case GameHotkeyListener::message:
+            if (!keys_.current(msg->lParam) || mode_ == Mode::Off || msg->wParam > 1 ||
+                (msg->wParam == 0 && !panelOwned_)) return false;
+            if (onEvent) onEvent(msg->wParam == 0 ? Event::PanelHotkey : Event::ExitHotkey);
             if (result) *result = 0;
             return true;
         case WM_SHOWWINDOW:
@@ -158,8 +178,6 @@ public:
     }
 
 private:
-    static constexpr int kPanelId = 0x5647;   // "VG"
-    static constexpr int kExitId = 0x5658;    // "VX"
     static constexpr ULONGLONG kHangMs = 3000;
     static inline GamePassthrough* s_instance = nullptr;
 
@@ -167,7 +185,8 @@ private:
     HMONITOR monitor_ = nullptr;
     bool monitorCapture_ = false;
     Mode mode_ = Mode::Off;
-    bool exitRegistered_ = false, panelRegistered_ = false, panelWarned_ = false;
+    bool panelOwned_ = false;
+    GameHotkeyListener keys_;
     bool topmostBefore_ = false, sunk_ = false;
     HWINEVENTHOOK hook_ = nullptr;
     std::vector<std::pair<HWND, LONG_PTR>> changed_;   // windows made click-through, with their original style
@@ -181,8 +200,8 @@ private:
 
     void log(const char* what) {
         const LONG_PTR ex = main_ ? GetWindowLongPtrW(main_, GWL_EXSTYLE) : 0;
-        veyra::log::info("game-mode", std::format("{} monitorCapture={} target=0x{:X} exstyle=0x{:X} windows={} panelHotkey={} exitHotkey={}",
-            what, monitorCapture_, uint64_t(uintptr_t(target_)), uint64_t(ex), changed_.size(), panelRegistered_, exitRegistered_));
+        veyra::log::info("game-mode", std::format("{} monitorCapture={} target=0x{:X} exstyle=0x{:X} windows={} panelOwned={} exitHook={}",
+            what, monitorCapture_, uint64_t(uintptr_t(target_)), uint64_t(ex), changed_.size(), panelOwned_, keys_.running()));
     }
     static bool ours(HWND w) {
         DWORD pid = 0;
@@ -291,14 +310,9 @@ private:
         veyra::log::info("game-mode", std::format("focus -> {} 0x{:X} ok={}", what, uint64_t(uintptr_t(w)), ok));
     }
     void setPanelHotkey(bool on) {
-        if (on == panelRegistered_) return;
-        if (!on) { UnregisterHotKey(main_, kPanelId); panelRegistered_ = false; return; }
-        panelRegistered_ = RegisterHotKey(main_, kPanelId, MOD_NOREPEAT, VK_HOME) != 0;
-        if (!panelRegistered_ && !panelWarned_) {
-            panelWarned_ = true;
-            veyra::log::warn("game-mode", std::format("Home unavailable err={}", GetLastError()));
-            if (onEvent) onEvent(Event::HomeUnavailable);
-        }
+        if (on == panelOwned_) return;
+        panelOwned_ = on;
+        keys_.panelOwned(on);
     }
     // Home belongs to Veyra while the user is "inside" the picture: the captured
     // program (window capture) or anything on that monitor (monitor capture). In

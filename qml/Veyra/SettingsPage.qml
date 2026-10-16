@@ -826,7 +826,9 @@ VPage {
                                 { id: "lock", a: qsTr("锁定全屏控制条") },
                                 { id: "hold", a: qsTr("按住查看原画") },
                                 { id: "screenshot", a: qsTr("截图") },
-                                { id: "toggleMode", a: qsTr("切换极简 / 专业") }
+                                { id: "toggleMode", a: qsTr("切换极简 / 专业") },
+                                { id: "gamePanel", a: qsTr("游戏模式：调整画面"), note: qsTr("仅在游戏模式中接管按键；支持 Ctrl、Alt、Shift 组合") },
+                                { id: "gameExit", a: qsTr("游戏模式：退出鼠标穿透"), note: qsTr("退出全屏，恢复普通窗口操作") }
                             ]
                             delegate: VRow {
                                 id: keyRow
@@ -869,7 +871,6 @@ VPage {
                                 { a: qsTr("打开文件 / 导出页"), k: "Ctrl+O / Ctrl+E" },
                                 { a: qsTr("字幕开关 / 主轨 / 副轨"), k: "B / T / Y" },
                                 { a: qsTr("字幕延时 50 ms（Shift = 1 s）"), k: "Z / X" },
-                                { a: qsTr("游戏模式：调整画面 / 退出"), k: "Home / Ctrl+Alt+Home" }
                             ]
                             delegate: VRow {
                                 required property var modelData

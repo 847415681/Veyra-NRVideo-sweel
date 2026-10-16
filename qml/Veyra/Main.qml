@@ -66,6 +66,7 @@ Window {
     // 16:9 until a source reports its own shape: a PS5 / capture session has no
     // aspect while it connects, and 2.39 then left a thin black strip.
     property real filmAspect: 16 / 9
+    readonly property bool gameAligned: fullscreen && veyra.gameMode
     readonly property real reportedAspect: veyra.previewAspect
     onReportedAspectChanged: if (reportedAspect < 0.2) fitToFilm(16 / 9)
     property string lastPage: "home"
@@ -216,6 +217,9 @@ Window {
     // numbers rather than read from a laid-out child. A child reports 0x0 on the
     // frame the user opens a file, and that once produced a 1x1 swapchain.
     function videoRect() {
+        if (fullscreen && veyra.gameMode &&
+            veyra.gameVideoRect.width > 0 && veyra.gameVideoRect.height > 0)
+            return veyra.gameVideoRect
         // Fullscreen is a video-only viewport (AppShell): the picture is the screen
         // and the controls float above it in their own window (FullscreenBar).
         if ((fullscreen || (maximized && page === "min")) && page !== "home" && page !== "set")
@@ -446,6 +450,7 @@ Window {
             toast.show(reason, true)
         }
         function onGameModeChanged() {
+            videoHost.syncRect()
             if (veyra.passthroughActive && playlistWindow.visible) playlistWindow.hide()
         }
     }
@@ -686,7 +691,7 @@ Window {
     Shortcut {
         sequence: "Home"
         enabled: root.fullscreen && !root.fullLocked && dialogs.dialog === "" &&
-                 (root.page === "min" || root.page === "pro" || root.page === "node")
+                 !veyra.gameMode && (root.page === "min" || root.page === "pro" || root.page === "node")
         onActivated: root.toggleQuickPanel()
     }
     // 5 s steps (field request 2026-10-02).

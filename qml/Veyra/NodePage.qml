@@ -589,7 +589,7 @@ VPage {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.margins: 12
-                text: qsTr("Home 关闭")
+                text: qsTr("%1 关闭").arg(veyra.gameMode ? veyra.shortcuts.gamePanel : "Home")
                 color: Theme.t3
                 font.family: Theme.fontUi
                 font.pixelSize: 11

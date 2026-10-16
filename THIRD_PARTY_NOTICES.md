@@ -876,3 +876,22 @@ through RTX Video HDR, resolves metadata from the actual output curve, and
 repairs persistence, failure reporting, translation and custom-preset states.
 The source contribution adds no SDK, model or runtime binary. Implementation
 and local validation details are in `docs/PR44_HDR_DISPLAY_REPORT_2026-10-16.md`.
+
+## User-provided fan contribution — subtitles / game passthrough (2026-10-16)
+
+The user supplied `veyra-2.0.8-local-changes.patch` (16,129 bytes, SHA256
+`f0c74f69c37c82f3efeb4e7d89d972352fad12258328dc01d0e09237e7612b1c`)
+and `Veyra-2.0.8-源码改动说明.md` (SHA256
+`a06ee46d6df240b2380ee08283b23088577c0ac28f4d313e236c0166aca53c16`),
+based on Veyra `33b22b9138a00ffc9a5e5077215d997ce328a2d1` (GPL-3.0).
+The supplied files contain no author name; none is invented here. Originals and
+identities are retained in the task archive. No binary accompanies this adaptation.
+
+`SubtitleCacheBudget.h` / `Subtitles.cpp` adapt the raised on-demand cache limit
+with strict parsing and 64-bit arithmetic. `GameHotkeys.h` / `GamePassthrough.h`
+adapt the low-level-hook approach with a dedicated message thread, queued UI
+actions, paired releases and configurable bindings. The global top-left-video
+change is replaced by native window/monitor alignment only in game mode, using
+actual screen bounds and Qt DPI conversion; ordinary movie layout is preserved.
+See `docs/FAN_SUBTITLE_PASSTHROUGH_PLAN_2026-10-16.md` and the task report for
+scope, provenance and actual tests. Veyra's GPL-3.0 source license is unchanged.

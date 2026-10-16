@@ -734,7 +734,7 @@ VPage {
                     HoverHandler { id: fullHover; cursorShape: Qt.PointingHandCursor }
                     TapHandler { onTapped: root.requestFullscreen() }
                     ToolTip.visible: fullHover.hovered
-                    ToolTip.text: qsTr("全屏（双击画面 / F11）· 全屏后按 Home 打开快速调节")
+                    ToolTip.text: qsTr("全屏（双击画面 / F11）· 全屏后按 %1 打开快速调节").arg(veyra.gameMode ? veyra.shortcuts.gamePanel : "Home")
                 }
             }
         }
@@ -1118,7 +1118,7 @@ VPage {
             spacing: 12
             PerfOrbs { size: 46; spacing: 10 }
             Text {
-                text: qsTr("Home 关闭")
+                text: qsTr("%1 关闭").arg(veyra.gameMode ? veyra.shortcuts.gamePanel : "Home")
                 color: Theme.t3
                 font.family: Theme.fontUi
                 font.pixelSize: 11
