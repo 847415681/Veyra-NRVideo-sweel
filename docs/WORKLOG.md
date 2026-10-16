@@ -9655,3 +9655,11 @@ RTX5070/616.56，以同一2.0.8 EXE和GTA4K源旧/新/新/旧短测，相同8–
 失败原件保留：早期黑场截图、节点未建/未切页超时、测试错用私有预设API/启用未声明层、Qt未展开卡片、请求未构建目标均已纠正再测；UI只关一层和异步抓图提前退出亦修夹具。导出夹具误写不可invokable/JS路径导致文件框重入及重试残留重复id，已只终止本轮QA父子进程、还原私有Main并改既有--export-out/先推进phase，全新两模型导出成功。离屏D3D12 QML抓图无效，不当作产品黑屏，最终软件窗口显式背景截图复核。详细内容与回执见NR_SF_310916_REPORT_2026-10-17.md；所有单测≤300秒、构建≤900秒，无GPU竞争造压。
 
 final-audit.py pre已通过82旧树/94旧分支/509脏文件与main b571a44不变，745构建输入/52EXE/1522共享运行文件匹配，用户候选SHA保持、QA Main还原、无遗留进程。后续package209.py seal/cold生成本轮NVIDIA/AMD ZIP、应用源与三依赖源并核对ZIP逐文件/两后端四次冷启；实际结果记同级DELIVERY.json、cold-start.json及reports/.../package.json。最终post再审旧状态并创建verify通过的source-after.bundle。仅NVIDIA新包移除旧Lecram/SF-v2，保留NVIDIA原版；AMD运行库行/文件逐字节沿用。2060/其它20–40和AMD实卡及长期显存/光学延迟仍待实测，未宣称NV显存问题已根治。
+
+### 2.0.9本地封包与ZIP冷启动完成
+
+实际执行package209.py seal/cold全部通过。NVIDIA ZIP677304267bytes/SHA6618461d722428aff65e8eee1847cd673aaa02d6c00beab87b7e661b97e0f843，1666payload/48运行组件；AMD ZIP356014225bytes/SHAe9224fb7f546253e351d2262168a8cedd3c80319f68379392699ecb439c6cc83，2106payload/534运行组件。两包PE2.0.9.0/同EXE7add56b9…，包含当前QML与独立avfilter模块且无测试注入。每个ZIP逐文件大小/SHA/CRC和PE导入均通过，NVIDIA只有新版SF与有效签名原版两个NR；AMD运行库清单与原包完全相同。对应应用源2044文件/SHAefc2463bf09bb2936e36e3537bbb23a5de11e252d17aeabee41d099ad68ab408，源码快照提交c9e779b；本节只追加交付记录，不重编译或改包。三个依赖源码及各SHA同目录齐全。
+
+从最终两个ZIP各自全新解压，最小PATH/全新配置/关闭增强，普通D3D12和OBS软件UI四次真实GTA4K冷启动播放均退出0、至少100原帧，无QML或GPU错误，配置sentinel保留；实际呈现/用时见同级cold-start.json。此为基础播放/封包检查，AMD包在本机NVIDIA上启动不等于AMD实卡增强验收。DELIVERY.json绑定ZIP/源码/EXE，reports/.../package.json passed=true。
+
+已按cleanup.py删除本轮6个被替代的私有测试app副本和作者DLL解压重复件，保留最终product209/构建/两最终包/源码/所有日志与前后存档；目标全部先核对解析后绝对路径及无reparse、无共享来源引用。cleanup.json记录7048678414逻辑字节，含硬链接，不能冒充实际磁盘释放量。首清理脚本误用Python3.12才有的is_junction，在删除前即失败；改3.11支持的FILE_ATTRIBUTE_REPARSE_POINT核验后成功，没有扩大删除范围。最后执行final-audit.py post写保护/交付/增量bundle核验回执final.json。main仍b571a44，无推送/正式发布/关机。
