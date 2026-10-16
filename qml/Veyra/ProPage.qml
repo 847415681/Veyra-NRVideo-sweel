@@ -282,9 +282,9 @@ VPage {
     }
     // The status light: 1.4.4's 当前状态 (正常 / 补帧调度降档 / 输出未达标 /
     // 输入帧率不足 …) as a glowing strip with the detail beside it.
-    component StatusLight: ColumnLayout {
+    component StatusLight: RowLayout {
         id: light
-        spacing: 6
+        spacing: 8
         readonly property color tone: veyra.runStatusLevel === "ok" ? Theme.ok
                                     : veyra.runStatusLevel === "warn" ? "#F2B941"
                                     : veyra.runStatusLevel === "err" ? Theme.err : Qt.rgba(1, 1, 1, 0.3)
@@ -313,7 +313,8 @@ VPage {
         }
         Text {
             objectName: "run-status"
-            Layout.fillWidth: true
+            Layout.maximumWidth: Math.max(0, light.width - 40)
+            Layout.preferredWidth: Math.min(implicitWidth, light.width * 0.75)
             text: veyra.runStatus + (veyra.runStatusDetail.length > 0 ? " · " + veyra.runStatusDetail : "")
             color: light.tone
             font.family: Theme.fontUi
@@ -321,6 +322,8 @@ VPage {
             font.weight: Font.Medium
             horizontalAlignment: Text.AlignRight
             wrapMode: Text.Wrap
+            maximumLineCount: 2
+            elide: Text.ElideRight
             HoverHandler { id: statusHover }
             ToolTip.visible: statusHover.hovered
             ToolTip.delay: 400
@@ -339,6 +342,8 @@ VPage {
             font.family: Theme.fontUi
             font.pixelSize: 11
             wrapMode: Text.Wrap
+            maximumLineCount: 3
+            elide: Text.ElideRight
             HoverHandler { id: optionsHover }
             ToolTip.visible: optionsHover.hovered
             ToolTip.delay: 400
@@ -2188,19 +2193,24 @@ VPage {
 
             // .insp-foot
             RowLayout {
+                objectName: "pro-inspector-footer"
                 Layout.fillWidth: true
                 Layout.margins: 10
                 spacing: 8
-                VDot { off: !veyra.running; warn: veyra.captureRecovering; err: veyra.failed }
+                VDot { Layout.alignment: Qt.AlignTop; Layout.topMargin: 5; off: !veyra.running; warn: veyra.captureRecovering; err: veyra.failed }
                 Text {
+                    objectName: "pro-inspector-status"
                     Layout.fillWidth: true
+                    Layout.minimumWidth: 0
                     text: veyra.statusText
                     color: Theme.t2
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsSmall
-                    elide: Text.ElideRight
+                    wrapMode: Text.Wrap
                 }
                 VButton {
+                    objectName: "pro-reset-current-page"
+                    Layout.alignment: Qt.AlignTop
                     ghost: true
                     text: qsTr("重置本页")
                     onClicked: veyra.resetCurrentPage()

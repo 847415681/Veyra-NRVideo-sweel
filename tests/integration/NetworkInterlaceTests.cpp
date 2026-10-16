@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iostream>
 #include <cmath>
+#include <d3d12sdklayers.h>
 extern "C" {
 #include <libavutil/hwcontext.h>
 }
@@ -110,11 +111,24 @@ int wmain(int argc,wchar_t** argv){
             if(count>1000){check(false,"output remains bounded");break;}
         }
         if(expected>=0){check(result==source::SourceReadStatus::Eos,"all tail fields drain to EOF");check(int(count)==expected,"exact field/frame count including EOF");}
-        check(chronological,"PTS strictly increases across every field");
-        if(desc.deinterlace)check(progressive,"interlaced fields are delivered as progressive frames");
+        check(count>0&&chronological,"PTS strictly increases across every field");
+        if(desc.deinterlace)check(count>0&&progressive,"interlaced fields are delivered as progressive frames");
         if(fps>0)check(std::abs(input.info().averageFps-fps)<0.01,"source metadata reports actual progressive rate");
         std::cout<<"RESULT pass="<<pass<<" count="<<count<<" first="<<first<<" last="<<last<<" comb="<<(count?comb/count:0)<<" deinterlace="<<input.info().deinterlacePath<<" hardware="<<input.info().hardwareDecodeActive<<" failures="<<failures<<std::endl;
         if(result==source::SourceReadStatus::Error)std::wcerr<<input.errorMessage()<<std::endl;
     }
-    input.close();return failures?1:0;
+    input.close();
+    if(device.device()){
+        Microsoft::WRL::ComPtr<ID3D12InfoQueue> queue;
+        if(SUCCEEDED(device.device()->QueryInterface(IID_PPV_ARGS(&queue)))){
+            for(UINT64 n=0;n<queue->GetNumStoredMessages();++n){
+                SIZE_T size=0;queue->GetMessage(n,nullptr,&size);std::vector<uint8_t> bytes(size);
+                auto* message=reinterpret_cast<D3D12_MESSAGE*>(bytes.data());
+                if(SUCCEEDED(queue->GetMessage(n,message,&size))&&message->Severity<=D3D12_MESSAGE_SEVERITY_ERROR){
+                    ++failures;std::cout<<"GPU_VALIDATION "<<message->pDescription<<std::endl;
+                }
+            }
+        }
+    }
+    return failures?1:0;
 }
