@@ -2,8 +2,10 @@ from pathlib import Path
 import hashlib,json,os,subprocess,time,urllib.request,zipfile
 
 import argparse
-parser=argparse.ArgumentParser();parser.add_argument('--task',default='issues41-45-20261016');args=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument('--task',default='issues41-45-20261016');parser.add_argument('--compile-only',action='store_true');args=parser.parse_args()
 base=Path('E:/项目/Veyra');task=args.task
+import re
+assert re.fullmatch(r'[a-z0-9][a-z0-9.-]{0,79}',task)
 root=Path(__file__).resolve().parents[2]
 work=base/'build'/task/'ffmpeg-filter';logs=base/'logs'/task/'ffmpeg-filter'
 tmp=base/'tmp'/task/'filter-build';prefix=base/'deps'/('ffmpeg-filter-'+task)
@@ -37,7 +39,7 @@ configuration=configure_source.read_text(encoding='utf8')
 # This host has the Chinese-only MSVC banner. Detection must not require
 # 'Microsoft' at column 0; retain the actual compiler, flags and ABI.
 configuration=configuration.replace('grep -q ^Microsoft','grep -q Microsoft').replace('grep ^Microsoft','grep Microsoft')
-configure_source.write_text(configuration,encoding='utf8')
+if configuration!=configure_source.read_text(encoding='utf8'):configure_source.write_text(configuration,encoding='utf8')
 env={key:value for key,value in os.environ.items() if not key.upper().startswith(('VEYRA_','QT_','QML_','QSG_'))}
 env.update(TEMP=str(tmp),TMP=str(tmp),VSLANG='1033',PYTHONDONTWRITEBYTECODE='1')
 setup=subprocess.run(['cmd.exe','/u','/d','/c',r'call C:\PROGRA~2\MICROS~3\2022\BUILDT~1\VC\Auxiliary\Build\vcvars64.bat >nul && set'],env=env,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,check=True)
@@ -60,6 +62,7 @@ flags=['--toolchain=msvc','--arch=x86_64','--target-os=win32','--disable-doc','-
        '--ar='+str(msys/'usr/share/automake-1.18/ar-lib')+' lib.exe','--ranlib=:',
        '--extra-cflags=-MD','--extra-cxxflags=-MD','--prefix='+str(prefix)]
 commands=[('configure',[str(bash),'./configure',*flags]),('compile',[str(make),'-j8','libavfilter/avfilter-12.dll'])]
+if args.compile_only:commands=commands[1:]
 start=time.monotonic()
 for name,command in commands:
     if (logs/(name+'.log')).exists():
@@ -97,4 +100,25 @@ receipt=dict(passed=True,tag='n9.0.1',commit=obj['sha'],archive=str(archive),arc
              seconds=time.monotonic()-start,license='LGPL-2.1-or-later')
 (logs/'receipt.json').write_text(json.dumps(receipt,ensure_ascii=False,indent=2),encoding='utf8')
 assert receipt['existingRuntimeFilesPreserved']
+# Preserve complete upstream source plus the actual local patch/build recipe.
+archive_out=base/'archives'/task/'FFmpeg-9.0.1-deinterlace-module-source.zip'
+archive_out.parent.mkdir(parents=True,exist_ok=True)
+with zipfile.ZipFile(archive) as upstream,zipfile.ZipFile(archive_out,'w',zipfile.ZIP_DEFLATED,6) as result:
+    for entry in upstream.infolist():
+        if entry.is_dir():continue
+        rel=Path(*Path(entry.filename).parts[1:])
+        content=(src/rel).read_bytes() if rel.as_posix() in ('configure','libavfilter/vf_deinterlace_d3d12.c') else upstream.read(entry)
+        result.writestr(entry.filename,content)
+    result.writestr('veyra-build/build-deinterlace-module.py',Path(__file__).read_bytes())
+    result.writestr('veyra-build/deinterlace-d3d12-async.patch',patch.read_bytes())
+    result.writestr('veyra-build/configuration.json',json.dumps(dict(upstreamCommit=obj['sha'],configuration=flags,receipt=receipt),ensure_ascii=False,indent=2))
+with zipfile.ZipFile(archive_out) as result:assert result.testzip() is None
+share=prefix/'share/ffmpeg';share.mkdir(parents=True,exist_ok=True)
+for name in ('COPYING.LGPLv2.1','LICENSE.md'):shutil.copy2(src/name,share/('filter-'+name))
+metadata=dict(schema=1,sourceTag='n9.0.1',sourceCommit=obj['sha'],license='LGPL-2.1-or-later',configuration=flags,
+              patchSha256=sha(patch),correspondingSource=dict(archive=str(archive_out),sha256=sha(archive_out)),
+              files=[dict(name='avfilter-12.dll',sha256=sha(dll),bytes=dll.stat().st_size)],existingRuntimeFilesPreserved=True)
+(share/'veyra-filter-build.json').write_text(json.dumps(metadata,ensure_ascii=False,indent=2),encoding='utf8')
+receipt['filterManifest']=str(share/'veyra-filter-build.json');receipt['correspondingSource']=metadata['correspondingSource']
+(logs/'receipt.json').write_text(json.dumps(receipt,ensure_ascii=False,indent=2),encoding='utf8')
 print('PASS',json.dumps(receipt,ensure_ascii=False),flush=True)

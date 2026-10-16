@@ -144,6 +144,19 @@ def audit_ffmpeg(prefix):
     for name in ('copyright','vcpkg.spdx.json'):
         if not (prefix / 'share/zlib' / name).is_file():
             raise ValueError('Missing zlib license or build provenance')
+    module_manifest = prefix / 'share/ffmpeg/veyra-filter-build.json'
+    if module_manifest.is_file():
+        module = json.loads(module_manifest.read_text(encoding='utf8'))
+        if module['sourceCommit'] != 'bf1b838f2ab88b4f8fd83443325c782ea0e0f7fa' or module['patchSha256'] != digest(ROOT / 'scripts/ffmpeg/deinterlace-d3d12-async.patch'):
+            raise ValueError('Deinterlacing module provenance mismatch')
+        for record in module['files']:
+            if record['name'] != 'avfilter-12.dll' or digest(prefix / 'bin' / record['name']) != record['sha256']:
+                raise ValueError('Deinterlacing module identity mismatch')
+            build['files'].append(record)
+        source = module['correspondingSource']
+        if digest(Path(source['archive'])) != source['sha256']:
+            raise ValueError('Deinterlacing module corresponding source missing or changed')
+        build['filterModule'] = module
     return build
 
 
@@ -185,6 +198,8 @@ def main():
     cache = (args.build / 'CMakeCache.txt').read_text(encoding='utf8')
     ffmpeg = args.ffmpeg_root or Path(re.search(r'^VEYRA_FFMPEG_ROOT:[^=]+=(.+)$', cache, re.M).group(1))
     ffbuild = audit_ffmpeg(ffmpeg)
+    if re.search(r'^VEYRA_ENABLE_DEINTERLACE:BOOL=ON$', cache, re.M) and 'filterModule' not in ffbuild:
+        raise ValueError('This build enables deinterlacing but its filter module is missing from the dependency prefix')
     stage = args.output / ('Veyra-' + args.label + '-win64-portable')
     archive = Path(str(stage) + '.zip')
     if stage.exists() or archive.exists():
@@ -231,6 +246,10 @@ def main():
         if digest(source) != record['sha256'].lower():
             raise ValueError('Patched FFmpeg binary mismatch: ' + record['name'])
         copy(source, record['name'])
+    if 'filterModule' in ffbuild:
+        for source, target in [('veyra-filter-build.json','FFMPEG-DEINTERLACE-BUILD.json'),
+                               ('filter-COPYING.LGPLv2.1','FFMPEG-DEINTERLACE-LICENSE.txt'),('filter-LICENSE.md','FFMPEG-DEINTERLACE-NOTICE.md')]:
+            copy(ffmpeg / 'share/ffmpeg' / source,'licenses/' + target)
     if not (stage / 'dav1d.dll').is_file():
         copy(ffmpeg / 'bin/dav1d.dll', 'dav1d.dll')
 

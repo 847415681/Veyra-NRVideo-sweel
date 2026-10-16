@@ -106,14 +106,21 @@ int wmain(int argc,wchar_t** argv){
             if(media::networkMediaInput(desc.path))break;
             check(input.seek({0,1}),"seek after EOF resets decoder and filter");
         }
-        unsigned count=0,pixelSamples=0;double last=-1e30,first=-1,comb=0;bool chronological=true,progressive=true;
+        unsigned count=0,pixelSamples=0,networkClockChanges=0;double last=-1e30,first=-1,comb=0;bool chronological=true,progressive=true;
         const AVFrame* decoded=nullptr;pipeline::FramePacket packet;source::SourceReadStatus result;
         while((result=input.read(packet,&decoded))==source::SourceReadStatus::Frame){
             check(decoded!=nullptr,"decoded field exists");if(!decoded)break;
             const double seconds=packet.pts.toDouble();
             if(count==0)first=seconds;
-            chronological=chronological&&!packet.pts.isUnknown()&&seconds>last;
-            if(count&&fps>0)check(std::abs((seconds-last)-1/fps)<0.0001,"field PTS has requested real cadence");
+            const bool clockReset=(packet.flags&uint32_t(pipeline::FrameFlagBits::Discontinuity))!=0;
+            chronological=chronological&&!packet.pts.isUnknown()&&(seconds>last||(media::networkMediaInput(desc.path)&&clockReset));
+            if(count&&fps>0){
+                const bool regular=std::abs((seconds-last)-1/fps)<0.0001;
+                // RTSP's RTP/RTCP clock may legitimately rebase once sender
+                // reports arrive. Preserve its PTS and demand reset on reversal.
+                if(media::networkMediaInput(desc.path))networkClockChanges+=!regular;
+                else check(regular,"field PTS has requested real cadence");
+            }
             if(pass&&count==0)check(packet.flags&uint32_t(pipeline::FrameFlagBits::Seek),"first post-seek field carries seek reset");
             last=seconds;progressive=progressive&&!(decoded->flags&AV_FRAME_FLAG_INTERLACED);
             AVFrame* downloaded=nullptr;const AVFrame* pixels=decoded;
@@ -147,7 +154,7 @@ int wmain(int argc,wchar_t** argv){
         check(count>0&&chronological,"PTS strictly increases across every field");
         if(desc.deinterlace)check(count>0&&progressive,"interlaced fields are delivered as progressive frames");
         if(fps>0)check(std::abs(input.info().averageFps-fps)<0.01,"source metadata reports actual progressive rate");
-        std::cout<<"RESULT pass="<<pass<<" count="<<count<<" first="<<first<<" last="<<last<<" comb="<<(pixelSamples?comb/pixelSamples:-1)<<" pixelSamples="<<pixelSamples<<" deinterlace="<<input.info().deinterlacePath<<" hardware="<<input.info().hardwareDecodeActive<<" failures="<<failures<<std::endl;
+        std::cout<<"RESULT pass="<<pass<<" count="<<count<<" first="<<first<<" last="<<last<<" comb="<<(pixelSamples?comb/pixelSamples:-1)<<" networkClockChanges="<<networkClockChanges<<" pixelSamples="<<pixelSamples<<" deinterlace="<<input.info().deinterlacePath<<" hardware="<<input.info().hardwareDecodeActive<<" failures="<<failures<<std::endl;
         if(result==source::SourceReadStatus::Error)std::wcerr<<input.errorMessage()<<std::endl;
     }
     input.close();

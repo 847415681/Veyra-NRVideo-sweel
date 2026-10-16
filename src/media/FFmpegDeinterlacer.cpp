@@ -10,7 +10,7 @@ extern "C" {
 #include <libavutil/frame.h>
 #include <libavutil/error.h>
 }
-#if __has_include(<libavfilter/avfilter.h>)
+#if defined(VEYRA_ENABLE_DEINTERLACE) && __has_include(<libavfilter/avfilter.h>)
 #define VEYRA_HAS_AVFILTER_HEADERS 1
 extern "C" {
 #include <libavfilter/avfilter.h>

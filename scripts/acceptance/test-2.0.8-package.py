@@ -20,7 +20,7 @@ assert args.cold_run is None or re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}',args.col
 ROOT=Path(__file__).resolve().parents[2];B=Path('E:/项目/Veyra');TASK=args.task;LABEL=args.label
 VALIDATION=args.validation_record
 BUILD=B/'build'/TASK;OUT=B/'test-packages'/TASK;REPORT=B/'reports'/TASK
-FF=B/'deps/ffmpeg-subtitle-formats-20261009/installed'
+FF=B/'deps/ffmpeg-filter-issues41-45-20261016'
 FFSOURCE=B/'test-packages/subtitle-formats-20261009/FFmpeg-9.0.1-slices256-dav1d-zlib-source.zip'
 FFSHA='49db22049f072bd5448faa664aa736074dccfe6e72b4a933f673d8ae954b0bb6'
 DEPSOURCE=B/'releases/release-2.0.6-20261007/Veyra-2.0.6-dependency-source.zip'
@@ -116,6 +116,9 @@ def refresh(flavor):
     ff=pkg.audit_ffmpeg(FF)
     for r in ff['files']:atomic(FF/'bin'/r['name'],app/r['name'])
     atomic(FF/'share/ffmpeg/veyra-local-build.json',app/'licenses/FFMPEG-VEYRA-BUILD.json')
+    assert 'filterModule' in ff,'Deinterlacing module required for this candidate'
+    for src,dst in [('veyra-filter-build.json','FFMPEG-DEINTERLACE-BUILD.json'),('filter-COPYING.LGPLv2.1','FFMPEG-DEINTERLACE-LICENSE.txt'),('filter-LICENSE.md','FFMPEG-DEINTERLACE-NOTICE.md')]:
+        atomic(FF/'share/ffmpeg'/src,app/'licenses'/dst)
     for src,dst in [('copyright','ZLIB-COPYRIGHT.txt'),('vcpkg.spdx.json','ZLIB-SPDX.json')]:atomic(FF/'share/zlib'/src,app/'licenses'/dst)
     runtime=json.loads((DONORS[flavor]/'release-runtime-manifest.json').read_text('utf8'));runtime.update(package='2.0.8',candidate=LABEL,localOnly=True)
     if flavor=='NVIDIA':
@@ -152,6 +155,7 @@ def manifest(flavor,source=False):
         knownIssues=['AMD/Intel enhancement, GC550 and Blackmagic field validation require affected hardware','Douyin live companion compatibility not reproduced locally (not installed); process-name simulation only; field confirmation needed','VFG synthetic async validation failed 22 checks once, then 2425 checks passed in an isolated rerun; cause unresolved; see validation record'],
         correspondingSource=dict(application='../'+SOURCE.name,applicationSha256=sha(SOURCE) if source else None,
             dependencies='../'+DEPSOURCE.name,dependencySha256=DEPSHA,ffmpeg='../'+FFSOURCE.name,ffmpegSha256=FFSHA,
+            deinterlaceModule=pkg.audit_ffmpeg(FF)['filterModule']['correspondingSource'],
             instructions='docs/BUILD_2.0.8_TEST.md',displayVersionOverride='-DVEYRA_DISPLAY_VERSION='+LABEL),files=payload(app))
     document(app/'package-manifest.json',data);return data
 def stage():
@@ -178,7 +182,8 @@ def source_archive():
     return dict(path=str(SOURCE),sha256=sha(SOURCE),files=len(records),excludedTrackedCache=skipped)
 def seal():
     source=source_archive();rows=[]
-    for p,h in [(FFSOURCE,FFSHA),(DEPSOURCE,DEPSHA)]:
+    module=pkg.audit_ffmpeg(FF)['filterModule']['correspondingSource']
+    for p,h in [(FFSOURCE,FFSHA),(DEPSOURCE,DEPSHA),(Path(module['archive']),module['sha256'])]:
         assert sha(p)==h
         with zipfile.ZipFile(p) as z:assert z.testzip() is None
         linked=OUT/p.name

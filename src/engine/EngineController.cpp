@@ -532,7 +532,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             if(GetEnvironmentVariableW(L"VEYRA_TEST_COMMAND_SLOTS",testSlots,16))commandSlots=std::clamp(unsigned(_wtoi(testSlots)),6u,24u);
             if(!gpu->initialize(commandSlots)){status(L"D3D12初始化失败，请查看诊断",true);break;}
             auto ext=std::filesystem::path(path).extension().wstring();for(auto& c:ext)c=towlower(c);
-            const bool isImage=ext==L".png"||ext==L".jpg"||ext==L".jpeg";
+            const bool isImage=!media::networkMediaInput(path)&&(ext==L".png"||ext==L".jpg"||ext==L".jpeg");
             sink::RgbaImage image;
             uint32_t width=0,height=0;double duration=0;
             if(isImage){
