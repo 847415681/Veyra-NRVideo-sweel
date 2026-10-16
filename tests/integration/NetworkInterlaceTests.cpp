@@ -1,5 +1,8 @@
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
+#include "veyra/gfx/CommandSlotRing.h"
+#include <cstring>
+#include <libavutil/hwcontext_d3d12va.h>
 #include "veyra/Log.h"
 #include "veyra/engine/EngineController.h"
 #include <chrono>
@@ -13,6 +16,34 @@ extern "C" {
 #include <libavutil/hwcontext.h>
 }
 using namespace veyra;
+// Test-only plane readback on the DIRECT queue. The upstream FFmpeg COPY
+// helper uses a mismatched barrier layout; product playback never uses either.
+bool readLuma(gfx::D3D12DeviceContext& device,gfx::CommandSlotRing& ring,const AVFrame* frame,AVFrame* output){
+    const auto* native=reinterpret_cast<const AVD3D12VAFrame*>(frame->data[0]);
+    if(!native||!native->texture)return false;
+    const auto desc=native->texture->GetDesc();if(desc.Format!=DXGI_FORMAT_NV12)return false;
+    if(native->sync_ctx.fence&&FAILED(device.directQueue()->Wait(native->sync_ctx.fence,native->sync_ctx.fence_value)))return false;
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};UINT64 bytes=0;
+    device.device()->GetCopyableFootprints(&desc,native->subresource_index,1,0,&footprint,nullptr,nullptr,&bytes);
+    D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_READBACK;
+    D3D12_RESOURCE_DESC buffer{};buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;buffer.Width=bytes;buffer.Height=1;
+    buffer.DepthOrArraySize=buffer.MipLevels=1;buffer.SampleDesc.Count=1;buffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    gfx::ComPtr<ID3D12Resource> download;
+    if(FAILED(device.device()->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&download))))return false;
+    uint32_t slot=0;Status status;auto* list=ring.acquireNext(slot,status);if(!list)return false;
+    D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition={native->texture,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE};
+    list->ResourceBarrier(1,&barrier);
+    D3D12_TEXTURE_COPY_LOCATION source{},target{};source.pResource=native->texture;source.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;source.SubresourceIndex=native->subresource_index;
+    target.pResource=download.Get();target.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;target.PlacedFootprint=footprint;
+    list->CopyTextureRegion(&target,0,0,0,&source,nullptr);std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);
+    if(!ring.submitAndSignal(slot)||!ring.waitIdle())return false;
+    output->format=AV_PIX_FMT_GRAY8;output->width=frame->width;output->height=frame->height;
+    if(av_frame_get_buffer(output,32)<0)return false;
+    void* data=nullptr;D3D12_RANGE read{0,SIZE_T(bytes)};if(FAILED(download->Map(0,&read,&data)))return false;
+    for(int y=0;y<frame->height;++y)std::memcpy(output->data[0]+ptrdiff_t(y)*output->linesize[0],static_cast<const uint8_t*>(data)+footprint.Offset+size_t(y)*footprint.Footprint.RowPitch,frame->width);
+    D3D12_RANGE written{};download->Unmap(0,&written);return true;
+}
 int enginePlayback(const wchar_t* path,const wchar_t* directory,const wchar_t* effects){
     CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     const std::filesystem::path out=directory;std::filesystem::create_directories(out);
@@ -65,6 +96,8 @@ int wmain(int argc,wchar_t** argv){
         if(!device.initialize(options,status))return 3;
         desc.d3d12Device=device.device();desc.d3d12Queue=device.directQueue();desc.d3d12AdapterLuid=device.adapter().luid;
     }
+    gfx::CommandSlotRing readback;
+    if(desc.preferHardwareDecode&&!readback.initialize(device.device(),device.directQueue(),device.fence(),device.fenceEvent(),4,status))return 3;
     source::MediaFileSource input;
     if(!input.open(desc)){std::wcerr<<L"OPEN FAILED "<<input.errorMessage()<<std::endl;return 1;}
     int failures=0;auto check=[&](bool ok,const char* name){failures+=!ok;std::cout<<(ok?"PASS ":"FAIL ")<<name<<std::endl;};
@@ -84,18 +117,11 @@ int wmain(int argc,wchar_t** argv){
             if(pass&&count==0)check(packet.flags&uint32_t(pipeline::FrameFlagBits::Seek),"first post-seek field carries seek reset");
             last=seconds;progressive=progressive&&!(decoded->flags&AV_FRAME_FLAG_INTERLACED);
             AVFrame* downloaded=nullptr;const AVFrame* pixels=decoded;
-            if(decoded->format==AV_PIX_FMT_D3D12&&!input.info().deinterlaced){
-                // The old FFmpeg D3D12 decoder/readback helper has a COPY queue
-                // layout mismatch under the debug layer. Do not invoke that
-                // unrelated diagnostic on the unchanged progressive bypass.
-                // Actual progressive presentation is checked by the engine test.
-                pixels=nullptr;
-            }else if(decoded->format==AV_PIX_FMT_D3D12||decoded->format==AV_PIX_FMT_D3D11){
-                // Explicit diagnostic readback only. Production source/filter
-                // never transfers a GPU frame to CPU memory.
+            if(decoded->format==AV_PIX_FMT_D3D12||decoded->format==AV_PIX_FMT_D3D11){
                 downloaded=av_frame_alloc();
-                check(downloaded&&av_hwframe_transfer_data(downloaded,decoded,0)>=0,"diagnostic GPU readback succeeds");
-                pixels=downloaded;
+                const bool read=downloaded&&(decoded->format==AV_PIX_FMT_D3D12
+                    ?readLuma(device,readback,decoded,downloaded):av_hwframe_transfer_data(downloaded,decoded,0)>=0);
+                check(read,"diagnostic GPU readback succeeds");pixels=read?downloaded:nullptr;
             }
             if(pixels&&pixels->data[0]){
                 ++pixelSamples;

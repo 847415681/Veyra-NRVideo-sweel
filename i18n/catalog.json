@@ -4335,6 +4335,13 @@
    "ja": "インターレース解除の出力に失敗しました。診断を確認してください。"
   },
   {
+   "zh": "去隔行输出格式无法导入，已停止处理",
+   "src": "src/source/MediaFileSource.cpp",
+   "zh-TW": "去隔行輸出格式無法匯入，已停止處理",
+   "en": "Cannot import the deinterlaced output format; processing stopped",
+   "ja": "インターレース解除の出力形式を取り込めないため、処理を停止しました"
+  },
+  {
    "zh": "参数化亮调",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "參數化亮調",
@@ -8919,6 +8926,13 @@
    "zh-TW": "顯示同步：自動 + 可變更新 · 螢幕跟著畫面更新，不撕裂",
    "en": "Display sync: auto + variable refresh · the display refreshes with each frame, no tearing",
    "ja": "表示の同期：自動 + 可変リフレッシュ · 画面がフレームに合わせて更新、ティアリングなし"
+  },
+  {
+   "zh": "显示同步：自动 + 可变刷新 · 已请求，等待驱动确认",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "顯示同步：自動 + 可變更新率 · 已請求，等待驅動確認",
+   "en": "Display sync: Auto + variable refresh · requested, awaiting driver confirmation",
+   "ja": "表示同期：自動 + 可変リフレッシュ · 要求済み、ドライバーの確認待ち"
   },
   {
    "zh": "显示同步：自动 · 不撕裂，也不等待垂直同步（延迟最低）",

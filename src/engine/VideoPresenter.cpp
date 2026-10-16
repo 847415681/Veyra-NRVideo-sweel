@@ -489,7 +489,7 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
     if(vrrSync_){requested.display=DisplaySync::Vsync;effective.display=DisplaySync::Vsync;}
     const bool vsync=presentationVsync(requested),tearing=presentationTearing(requested);
     providerOwnedPresentation_=xessActive();
-    const std::wstring sync=vrrSync_?L"显示同步：自动 + 可变刷新 · 屏幕跟着画面刷新，不撕裂":requested.display==DisplaySync::Automatic?L"显示同步：自动 · 不撕裂，也不等待垂直同步（延迟最低）":vsync?L"显示同步：垂直同步":L"显示同步：允许撕裂";
+    const std::wstring sync=vrrSync_?(gfx::vrrLevel(vrr_)>=4?L"显示同步：自动 + 可变刷新 · 屏幕跟着画面刷新，不撕裂":L"显示同步：自动 + 可变刷新 · 已请求，等待驱动确认"):requested.display==DisplaySync::Automatic?L"显示同步：自动 · 不撕裂，也不等待垂直同步（延迟最低）":vsync?L"显示同步：垂直同步":L"显示同步：允许撕裂";
     if(!reflexDisabled){effective.enabled=false;sink_.configurePacing(false,vsync,tearing);status=L"Reflex 驱动状态撤销失败；低延迟队列已停用 · "+sync;return effective;}
     if(xessActive()){
         // The provider owns Present for its generated frames, so neither the
