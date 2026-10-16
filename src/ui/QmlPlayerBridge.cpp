@@ -1,3 +1,4 @@
+#include "veyra/media/FFmpegDeinterlacer.h"
 #include "veyra/ui/QmlPlayerBridge.h"
 #include "veyra/gfx/PresentSink.h"
 #include "veyra/gfx/NvidiaVrr.h"
@@ -5636,7 +5637,7 @@ void QmlPlayerBridge::openPath(const QString& path) {
     auto options = impl_->options;
     options.softwareDecode = impl_->prefString("decode") == QLatin1String("software");
     options.hardwareDecodeOnly = impl_->prefString("decode") == QLatin1String("hardware");
-    options.deinterlace=impl_->prefBool("deinterlace",true);
+    options.deinterlace=deinterlaceAvailable()&&impl_->prefBool("deinterlace",true);
     impl_->engine.open(impl_->videoWindow, wide, options);
     impl_->openingSessionId = impl_->engine.snapshot().sessionId;
     impl_->playlistSession = network?0:impl_->openingSessionId;
@@ -5648,6 +5649,7 @@ void QmlPlayerBridge::openPath(const QString& path) {
     refreshSubtitles(network?std::wstring():wide);
 }
 
+bool QmlPlayerBridge::deinterlaceAvailable() const { return media::FFmpegDeinterlacer::available(); }
 void QmlPlayerBridge::openNetworkDialog(){emit navigate(QStringLiteral("network"));}
 bool QmlPlayerBridge::openNetworkAddress(const QString& address){
     const QUrl url(address.trimmed(),QUrl::StrictMode);

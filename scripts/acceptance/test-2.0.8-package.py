@@ -155,7 +155,8 @@ def manifest(flavor,source=False):
         knownIssues=['AMD/Intel enhancement, GC550 and Blackmagic field validation require affected hardware','Douyin live companion compatibility not reproduced locally (not installed); process-name simulation only; field confirmation needed','VFG synthetic async validation failed 22 checks once, then 2425 checks passed in an isolated rerun; cause unresolved; see validation record'],
         correspondingSource=dict(application='../'+SOURCE.name,applicationSha256=sha(SOURCE) if source else None,
             dependencies='../'+DEPSOURCE.name,dependencySha256=DEPSHA,ffmpeg='../'+FFSOURCE.name,ffmpegSha256=FFSHA,
-            deinterlaceModule=pkg.audit_ffmpeg(FF)['filterModule']['correspondingSource'],
+            deinterlaceModule=dict(archive='../'+Path(pkg.audit_ffmpeg(FF)['filterModule']['correspondingSource']['archive']).name,
+                sha256=pkg.audit_ffmpeg(FF)['filterModule']['correspondingSource']['sha256']),
             instructions='docs/BUILD_2.0.8_TEST.md',displayVersionOverride='-DVEYRA_DISPLAY_VERSION='+LABEL),files=payload(app))
     document(app/'package-manifest.json',data);return data
 def stage():

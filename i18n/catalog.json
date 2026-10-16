@@ -7429,6 +7429,13 @@
    "ja": "このデバイスでは選択した NR を実行できません。この GPU に対応する NR ランタイムを選択してください。"
   },
   {
+   "zh": "当前软件包未包含去隔行组件",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "目前軟體包未包含去隔行元件",
+   "en": "This package does not include the deinterlacing module",
+   "ja": "このパッケージにはインターレース解除モジュールが含まれていません"
+  },
+  {
    "zh": "当前配置未启用自动 NR，保留固定 1080p 档",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "目前設定未啟用自動 NR，保留固定 1080p 檔",

@@ -358,8 +358,8 @@ VPage {
                         }
                         VRow {
                             label: qsTr("自动去隔行")
-                            hint: qsTr("只处理标记为隔行的视频，优先使用 GPU；软解使用兼容算法。下次打开视频生效。")
-                            VSwitch { checked: veyra.preferences.deinterlace !== false; onToggled: checked => veyra.setPreference("deinterlace",checked) }
+                            hint: veyra.deinterlaceAvailable ? qsTr("只处理标记为隔行的视频，优先使用 GPU；软解使用兼容算法。下次打开视频生效。") : qsTr("当前软件包未包含去隔行组件")
+                            VSwitch { enabled: veyra.deinterlaceAvailable; checked: veyra.preferences.deinterlace !== false; onToggled: checked => veyra.setPreference("deinterlace",checked) }
                         }
                         // HDR 亮度曲线: static, so the highlights are protected.
                         // One-click presets (same ids as the list page).

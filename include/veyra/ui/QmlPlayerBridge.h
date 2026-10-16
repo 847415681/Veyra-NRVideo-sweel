@@ -245,6 +245,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString version READ version CONSTANT)
 
     // --- playback ----------------------------------------------------------
+    Q_PROPERTY(bool deinterlaceAvailable READ deinterlaceAvailable CONSTANT)
     Q_PROPERTY(QString statusText READ statusText NOTIFY snapshotChanged)
     Q_PROPERTY(bool running READ running NOTIFY snapshotChanged)
     Q_PROPERTY(bool paused READ paused NOTIFY snapshotChanged)
@@ -770,6 +771,7 @@ public:
     // --- property accessors (Q_PROPERTY READ targets) -----------------------
     // Split into read-only and read-write so a reviewer can see at a glance
     // which values the UI can command and which it can only display.
+    bool deinterlaceAvailable() const;
     QString statusText() const;
     bool running() const;
     bool paused() const;

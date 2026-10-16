@@ -106,6 +106,13 @@ struct FFmpegDeinterlacer::Impl {
     }
 #endif
 };
+bool FFmpegDeinterlacer::available(){
+#ifdef VEYRA_HAS_AVFILTER_HEADERS
+    auto& filters=api();return filters.ready&&filters.avfilter_get_by_name("deinterlace_d3d12")&&filters.avfilter_get_by_name("bwdif");
+#else
+    return false;
+#endif
+}
 FFmpegDeinterlacer::FFmpegDeinterlacer():impl_(std::make_unique<Impl>()){}
 FFmpegDeinterlacer::~FFmpegDeinterlacer(){close();}
 bool FFmpegDeinterlacer::open(const AVFrame* frame,const HardwareSurfaceView* surface,int num,int den,int fpsNum,int fpsDen){

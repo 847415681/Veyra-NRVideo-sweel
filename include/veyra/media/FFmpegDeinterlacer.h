@@ -8,6 +8,7 @@ struct HardwareSurfaceView;
 // decoded frames use bwdif. Sources own demux/decode/PTS and seek resets.
 class FFmpegDeinterlacer {
 public:
+    static bool available();
     FFmpegDeinterlacer();
     ~FFmpegDeinterlacer();
     bool open(const AVFrame*,const HardwareSurfaceView*,int tbNum,int tbDen,int fpsNum,int fpsDen);
