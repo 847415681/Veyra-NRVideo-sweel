@@ -1173,6 +1173,11 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   target_compile_features(veyra_nr_dynamic_size_experiment PRIVATE cxx_std_20)
   target_compile_options(veyra_nr_dynamic_size_experiment PRIVATE /utf-8)
   target_link_libraries(veyra_nr_dynamic_size_experiment PRIVATE veyra_ngx)
+
+  add_executable(veyra_nr_model_preset_experiment tests/perf/NrModelPresetExperiment.cpp)
+  target_compile_features(veyra_nr_model_preset_experiment PRIVATE cxx_std_20)
+  target_compile_options(veyra_nr_model_preset_experiment PRIVATE /utf-8)
+  target_link_libraries(veyra_nr_model_preset_experiment PRIVATE veyra_ngx)
   add_executable(veyra_nr_concurrent_create_experiment tests/perf/NrConcurrentCreateExperiment.cpp)
   target_compile_features(veyra_nr_concurrent_create_experiment PRIVATE cxx_std_20)
   target_compile_options(veyra_nr_concurrent_create_experiment PRIVATE /utf-8)

@@ -80,11 +80,11 @@ struct Feature {
         for(auto key:{p::kWidth,p::kInputWidth,p::kOutputWidth,p::kOutputDotWidth,p::kStdWidth})b.setU32(key,w);
         for(auto key:{p::kHeight,p::kInputHeight,p::kOutputHeight,p::kOutputDotHeight,p::kStdHeight})b.setU32(key,h);
     }
-    bool create(gfx::CommandSlotRing& ring,uint32_t w,uint32_t h) {
+    bool create(gfx::CommandSlotRing& ring,uint32_t w,uint32_t h,int32_t preset=0) {
         if(!params)return false;dimensions(w,h);ngx::ParameterBlock b(params);
         b.setU32(p::kUpscaling,0);b.setF32(p::kScale,1);b.setF32(p::kScalingRatio,1);
         b.setVoid(p::kComputeScalingRatioCallback,reinterpret_cast<void*>(&ngx::DlssNrRuntimeAdapter::scalingRatioCallback));
-        b.setI32(p::kHintRenderPreset,0);b.setI32(p::kPerfQualityValue,1);
+        b.setI32(p::kHintRenderPreset,preset);b.setI32(p::kPerfQualityValue,1);
         b.setU32(p::kCreationNodeMask,1);b.setU32(p::kVisibilityNodeMask,1);
         Status s;uint32_t slot;auto* list=ring.acquireNext(slot,s);if(!list)return false;
         uint64_t r=0;uint32_t e=0;const auto start=nowMs();
