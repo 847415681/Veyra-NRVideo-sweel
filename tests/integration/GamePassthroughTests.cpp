@@ -17,7 +17,13 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp){
 }
 void pump(unsigned ms){const auto end=GetTickCount64()+ms;do{MSG m;while(PeekMessageW(&m,nullptr,0,0,PM_REMOVE)){TranslateMessage(&m);DispatchMessageW(&m);}Sleep(1);}while(GetTickCount64()<end);}
 bool key(WORD vk,bool up=false){INPUT i{};i.type=INPUT_KEYBOARD;i.ki.wVk=vk;i.ki.dwFlags=up?KEYEVENTF_KEYUP:0;return SendInput(1,&i,sizeof(i))==1;}
-bool send(std::initializer_list<std::pair<WORD,bool>> keys){bool ok=true;for(auto [vk,up]:keys)ok=key(vk,up)&&ok;return ok;}
+bool send(std::initializer_list<std::pair<WORD,bool>> keys){
+    // Do not block the receiving window's message pump inside SendInput. In
+    // particular, unclaimed input must be able to finish the native hook chain.
+    bool ok=true;std::atomic<bool> done{false};
+    std::thread sender([&]{for(auto [vk,up]:keys)ok=key(vk,up)&&ok;done.store(true);});
+    while(!done.load())pump(1);sender.join();pump(20);return ok;
+}
 void tap(WORD vk){check(send({{vk,false},{vk,true}}),"SendInput reaches our test foreground");pump(80);}
 }
 int main(int argc,char** argv){

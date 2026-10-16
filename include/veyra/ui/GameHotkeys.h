@@ -88,10 +88,7 @@ public:
                 const HHOOK hook = SetWindowsHookExW(WH_KEYBOARD_LL, callback, GetModuleHandleW(nullptr), 0);
                 running_.store(hook != nullptr); ready.set_value(hook != nullptr);
                 if (hook) {
-                    // Raw-input/low-level-hook notifications can already have
-                    // been observed by PeekMessage without being removed. Wake
-                    // for input still available, not only a newly changed bit.
-                    while (MsgWaitForMultipleObjectsEx(1, &stopEvent_, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_OBJECT_0 + 1) {
+                    while (MsgWaitForMultipleObjects(1, &stopEvent_, FALSE, INFINITE, QS_ALLINPUT) == WAIT_OBJECT_0 + 1) {
                         MSG msg; while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&msg); DispatchMessageW(&msg); }
                     }
                     UnhookWindowsHookEx(hook);
