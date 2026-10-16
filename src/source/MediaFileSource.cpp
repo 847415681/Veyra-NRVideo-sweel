@@ -183,12 +183,13 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
         // instead of falling back (docs/DIAG_HEVC_D3D12VA_AND_EXPORT_CFR_2026-09-17.md).
         // The D3D11VA path decodes on its own device and shares the surfaces as
         // NT handles, so a failure there can only cost a software fallback.
-        if (params->codec_id == AV_CODEC_ID_HEVC) {
+        const bool interlaced=params->field_order!=AV_FIELD_UNKNOWN&&params->field_order!=AV_FIELD_PROGRESSIVE;
+        if (params->codec_id == AV_CODEC_ID_HEVC||interlaced) {
             decoderOpen = decoder_.openD3D11VA(params, demuxer_.videoTimeBaseNum(),
                 demuxer_.videoTimeBaseDen(), desc.d3d12AdapterLuid,
                 static_cast<ID3D12Device*>(desc.d3d12Device));
             if (decoderOpen) {
-                veyra::log::info("source-file", "D3D11VA decode active (NT-handle surfaces shared to the D3D12 graph)");
+                veyra::log::info("source-file", "D3D11VA decode active (HEVC/interlaced compatibility; NT-handle surfaces shared to D3D12)");
             } else {
                 veyra::log::warn("source-file", "D3D11VA open failed; falling back to software decode (explicit)");
             }

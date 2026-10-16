@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <format>
 #include <algorithm>
+#include <deque>
 extern "C" {
 #include <libavutil/frame.h>
 #include <libavutil/error.h>
@@ -59,6 +60,9 @@ struct FFmpegDeinterlacer::Impl {
 #ifdef VEYRA_HAS_AVFILTER_HEADERS
     AVFilterGraph* graph=nullptr;AVFilterContext* source=nullptr;AVFilterContext* sink=nullptr;
     AVFrame* output=nullptr;AVBufferRef* bridgeFrames=nullptr;
+    struct Clock {int64_t pts,duration;unsigned field=0,fields=1;};
+    std::deque<Clock> clocks;
+    AVRational inputTimeBase{},inputRate{};
     AVFrame* input(const AVFrame* frame,const HardwareSurfaceView* surface){
         if(!frame)return nullptr;
         auto* copy=av_frame_clone(frame);
@@ -114,10 +118,14 @@ bool FFmpegDeinterlacer::open(const AVFrame* frame,const HardwareSurfaceView* su
     const auto args=std::format("video_size={}x{}:pix_fmt={}:time_base={}/{}:pixel_aspect={}/{}:frame_rate={}/{}",
         input->width,input->height,input->format,num,den,sar.num,sar.den,std::max(1,fpsNum),std::max(1,fpsDen));
     int result=a.avfilter_graph_create_filter(&i.source,a.avfilter_get_by_name("buffer"),"in",args.c_str(),nullptr,i.graph);
-    if(result>=0&&input->hw_frames_ctx){
+    if(result>=0){
         auto* parameters=a.av_buffersrc_parameters_alloc();
         if(!parameters)result=AVERROR(ENOMEM);
-        else{parameters->hw_frames_ctx=av_buffer_ref(input->hw_frames_ctx);result=a.av_buffersrc_parameters_set(i.source,parameters);av_buffer_unref(&parameters->hw_frames_ctx);av_free(parameters);}
+        else{
+            if(input->hw_frames_ctx)parameters->hw_frames_ctx=av_buffer_ref(input->hw_frames_ctx);
+            parameters->color_space=input->colorspace;parameters->color_range=input->color_range;
+            result=a.av_buffersrc_parameters_set(i.source,parameters);av_buffer_unref(&parameters->hw_frames_ctx);av_free(parameters);
+        }
     }
     const bool hardware=input->format==AV_PIX_FMT_D3D12;
     const char* name=hardware?"deinterlace_d3d12":"bwdif";
@@ -132,6 +140,7 @@ bool FFmpegDeinterlacer::open(const AVFrame* frame,const HardwareSurfaceView* su
     if(result<0){log::error("deinterlace",std::format("filter configuration failed method={} code={}",name,result));close();return false;}
     i.output=av_frame_alloc();if(!i.output){close();return false;}
     const auto tb=a.av_buffersink_get_time_base(i.sink);i.num=tb.num;i.den=tb.den;i.path=hardware?"d3d12-video-processor":"bwdif-software";
+    i.inputTimeBase={num,den};i.inputRate={fpsNum,fpsDen};
     log::info("deinterlace",std::format("method={} fieldRate=true inputFps={}/{} outputTimeBase={}/{} gpuPixelReadbacks=0",i.path,fpsNum,fpsDen,i.num,i.den));
     return true;
 #else
@@ -142,7 +151,15 @@ int FFmpegDeinterlacer::push(const AVFrame* frame,const HardwareSurfaceView* sur
 #ifdef VEYRA_HAS_AVFILTER_HEADERS
     auto& i=*impl_;if(!i.source)return AVERROR(EINVAL);
     auto* input=i.input(frame,surface);if(frame&&!input)return AVERROR(ENOMEM);
+    if(input&&i.clocks.size()>=32){av_frame_free(&input);return AVERROR(ENOBUFS);}
+    Impl::Clock clock{};
+    if(input){
+        clock.pts=input->pts;clock.duration=input->duration;clock.fields=(input->flags&AV_FRAME_FLAG_INTERLACED)?2:1;
+        if(clock.duration<=0&&i.inputRate.num>0&&i.inputRate.den>0)
+            clock.duration=av_rescale_q(1,av_inv_q(i.inputRate),i.inputTimeBase);
+    }
     const int result=api().av_buffersrc_add_frame_flags(i.source,input,AV_BUFFERSRC_FLAG_KEEP_REF);
+    if(result>=0&&input)i.clocks.push_back(clock);
     av_frame_free(&input);return result;
 #else
     return AVERROR(ENOSYS);
@@ -153,7 +170,20 @@ int FFmpegDeinterlacer::receive(const AVFrame** frame){
 #ifdef VEYRA_HAS_AVFILTER_HEADERS
     auto& i=*impl_;if(!i.output)return AVERROR(EINVAL);
     av_frame_unref(i.output);const int result=api().av_buffersink_get_frame(i.sink,i.output);
-    if(result>=0)*frame=i.output;return result;
+    if(result>=0){
+        if(i.clocks.empty())return AVERROR_INVALIDDATA;
+        auto& clock=i.clocks.front();const AVRational outputBase{i.num,i.den};
+        if(clock.pts!=AV_NOPTS_VALUE){
+            i.output->pts=av_rescale_q(clock.pts,i.inputTimeBase,outputBase);
+            const int64_t duration=clock.duration>0?av_rescale_q(clock.duration,i.inputTimeBase,outputBase)/clock.fields:0;
+            if(clock.field&&duration>0)i.output->pts+=duration*clock.field;
+            i.output->duration=duration;
+        }
+        if(++clock.field==clock.fields)i.clocks.pop_front();
+        *frame=i.output;
+    }
+    if(result==AVERROR_EOF&&!i.clocks.empty())return AVERROR_INVALIDDATA;
+    return result;
 #else
     return AVERROR(ENOSYS);
 #endif
@@ -173,6 +203,7 @@ void FFmpegDeinterlacer::close(){
     auto& i=*impl_;av_frame_free(&i.output);
     if(i.graph)api().avfilter_graph_free(&i.graph);
     av_buffer_unref(&i.bridgeFrames);i.source=i.sink=nullptr;
+    i.clocks.clear();i.inputTimeBase={};i.inputRate={};
 #endif
     impl_->path.clear();impl_->num=impl_->den=0;
 }
