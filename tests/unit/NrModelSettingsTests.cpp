@@ -46,10 +46,13 @@ int wmain(int argc,wchar_t** argv){
     for(auto old:{NrRuntime::Original,NrRuntime::Community,NrRuntime::Ampere,NrRuntime::NvidiaOriginal,NrRuntime::LmxxfAmd}){
         EnhancementSettings oldSettings;oldSettings.nr=true;oldSettings.nrRuntime=old;
         PresetEntry entry;entry.name=L"legacy runtime";entry.chain=toChain(oldSettings);
-        std::vector<PresetEntry> decoded;std::wstring def,error;
-        check(PresetLibrary::parse(PresetLibrary::encodeEntries({entry},{}),decoded,def,error)&&decoded.size()==1&&
-            decoded[0].chain.firstOf(EffectType::NrEnhance)->nr.runtime==currentNrRuntime(old)&&
-            decoded[0].chain.firstOf(EffectType::NrEnhance)->nr.model.performance,"old runtime selection migrates without losing original or AMD");
+        const auto path=out/(L"migration-"+std::to_wstring(int(old))+L".v1");
+        PresetLibrary writer(path);writer.setIncludeBuiltins(false);
+        const bool saved=writer.load()&&writer.put(entry);
+        PresetLibrary reader(path);reader.setIncludeBuiltins(false);
+        check(saved&&reader.load()&&reader.entries().size()==1&&
+            reader.entries()[0].chain.firstOf(EffectType::NrEnhance)->nr.runtime==currentNrRuntime(old)&&
+            reader.entries()[0].chain.firstOf(EffectType::NrEnhance)->nr.model.performance,"old runtime selection migrates without losing original or AMD");
     }
     const auto libraryPath=out/L"library.v1";PresetLibrary library(libraryPath);library.setIncludeBuiltins(false);
     PresetEntry entry;entry.name=L"NR models";entry.chain=toChain(s);

@@ -777,6 +777,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_features(veyra_nr_model_settings_tests PRIVATE cxx_std_20)
   target_compile_options(veyra_nr_model_settings_tests PRIVATE /utf-8)
   target_link_libraries(veyra_nr_model_settings_tests PRIVATE veyra_engine)
+  target_link_options(veyra_nr_model_settings_tests PRIVATE /STACK:33554432)
   add_executable(veyra_audio_timeline_tests tests/integration/AudioTimelineTests.cpp)
   target_compile_features(veyra_audio_timeline_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_audio_timeline_tests PRIVATE veyra_sinks)
