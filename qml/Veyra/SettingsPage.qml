@@ -891,6 +891,7 @@ VPage {
                             const modifierOnly = [Qt.Key_Control, Qt.Key_Shift, Qt.Key_Alt, Qt.Key_Meta].indexOf(event.key) >= 0
                             if (modifierOnly) return
                             const parts = []
+                            if (event.modifiers & Qt.MetaModifier) parts.push("Meta")
                             if (event.modifiers & Qt.ControlModifier) parts.push("Ctrl")
                             if (event.modifiers & Qt.AltModifier) parts.push("Alt")
                             if (event.modifiers & Qt.ShiftModifier) parts.push("Shift")
