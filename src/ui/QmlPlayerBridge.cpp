@@ -4793,8 +4793,11 @@ void QmlPlayerBridge::setHdrPresetMode(const QString& mode){
 }
 
 QVariantMap QmlPlayerBridge::hdrAxes() const {
+  auto environment=impl_->prefString("hdrAxesEnvironment");
+  if(environment==QLatin1String("bright"))environment=QStringLiteral("compensate");
+  else if(environment==QLatin1String("dark"))environment=QStringLiteral("plain");
   return {{"content",impl_->prefString("hdrAxesContent")},
-          {"environment",impl_->prefString("hdrAxesEnvironment")}};
+          {"environment",environment}};
 }
 
 QVariantMap QmlPlayerBridge::hdrAxesMatch() const {
@@ -4857,9 +4860,11 @@ bool QmlPlayerBridge::setHdrDial(const QString& key,int level){
 
 bool QmlPlayerBridge::applyHdrAxesPreset(const QString& content,const QString& environment){
   const QByteArray contentId=content.toUtf8();
-  const QByteArray environmentId=environment.toUtf8();
+  const QString normalizedEnvironment=environment==QLatin1String("bright")?QStringLiteral("compensate")
+      :environment==QLatin1String("dark")?QStringLiteral("plain"):environment;
+  const QByteArray environmentId=normalizedEnvironment.toUtf8();
   if(!engine::findHdrContentPreset(contentId.constData())||
-      (environment!=QLatin1String("compensate")&&environment!=QLatin1String("plain")))return false;
+      (normalizedEnvironment!=QLatin1String("compensate")&&normalizedEnvironment!=QLatin1String("plain")))return false;
   const auto curve=engine::hdrAxesCurve(contentId.constData(),environmentId.constData());
   auto s=settings();
   // The strength dial and the display peak belong to the user, not to the preset.
@@ -4871,7 +4876,7 @@ bool QmlPlayerBridge::applyHdrAxesPreset(const QString& content,const QString& e
   if(!commitHdrTuning(std::move(s)))return false;
   setHdrAppliedFrom(QStringLiteral("axes"));
   impl_->prefs[QStringLiteral("hdrAxesContent")]=content;
-  impl_->prefs[QStringLiteral("hdrAxesEnvironment")]=environment;
+  impl_->prefs[QStringLiteral("hdrAxesEnvironment")]=normalizedEnvironment;
   if(!impl_->savePrefs())veyra::log::warn("ui-prefs","hdr axes choice not saved");
   emit preferencesChanged();
   return true;

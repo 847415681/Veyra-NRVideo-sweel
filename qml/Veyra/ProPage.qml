@@ -2073,6 +2073,7 @@ VPage {
                             }
                             // 高光预警（自定义）：片源峰值 vs 曲线生效后的硬上限。
                             VRow {
+                                objectName: "list-hdrcurve-peakwarning"
                                 label: qsTr("高光预警")
                                 hint: !veyra.hdrSourceInfo.valid ? qsTr("片源没有携带亮度信息")
                                     : !veyra.hdrPeakWarning.valid ? qsTr("曲线未开启")
@@ -2083,7 +2084,8 @@ VPage {
                                         .arg(veyra.hdrPeakWarning.clipped
                                              ? qsTr("超过上限的亮度需要压缩；是否触及硬上限以抽样读数为准")
                                              : qsTr("上限覆盖片源标注峰值；处理后的画面以抽样读数为准"))
-                                value: veyra.hdrPeakWarning.clipped ? qsTr("会压缩") : qsTr("安全")
+                                value: !veyra.hdrSourceInfo.valid || !veyra.hdrPeakWarning.valid ? qsTr("—")
+                                    : veyra.hdrPeakWarning.clipped ? qsTr("会压缩") : qsTr("安全")
                             }
                             Canvas {
                                 id: hdrCurveCanvas
@@ -2312,7 +2314,8 @@ VPage {
                             Text {
                                 Layout.fillWidth: true
                                 visible: veyra.hdrPresetMode !== "axes"
-                                text: veyra.hdrTuningPreset !== ""
+                                objectName: "list-hdrcurve-active-preset"
+                                text: veyra.hdrTuningPreset !== "custom"
                                     ? qsTr("当前生效：整档预设「%1」").arg(
                                         veyra.hdrTuningPreset === "darkLift" ? qsTr("暗场提亮")
                                         : veyra.hdrTuningPreset === "highlightGuard" ? qsTr("高光保护")
@@ -2348,7 +2351,8 @@ VPage {
                             // 同时生效。手动微调过的曲线不匹配任何整档预设，这句话自然消失。
                             Text {
                                 Layout.fillWidth: true
-                                visible: veyra.hdrPresetMode === "axes" && veyra.hdrTuningPreset !== ""
+                                objectName: "list-hdrcurve-equivalent"
+                                visible: veyra.hdrPresetMode === "axes" && veyra.hdrTuningPreset !== "custom"
                                 text: qsTr("这条曲线目前也等同于整档预设「%1」").arg(
                                     veyra.hdrTuningPreset === "darkLift" ? qsTr("暗场提亮")
                                     : veyra.hdrTuningPreset === "highlightGuard" ? qsTr("高光保护")
