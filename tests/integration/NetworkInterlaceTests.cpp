@@ -20,8 +20,8 @@ int enginePlayback(const wchar_t* path,const wchar_t* directory,const wchar_t* e
     if(!window)return 2;ShowWindow(window,SW_SHOWNOACTIVATE);
     engine::EngineController player;player.setVolume(0,true);
     engine::PlayerOptions options;options.nr=std::wstring_view(effects)==L"nr-xess";options.fg=options.nr;options.fgMultiplier=2;
-    options.settings.nrRuntime=engine::NrRuntime::NvidiaOriginal;options.settings.nrPolicy=pipeline::NrSizePolicy::P1080;
-    options.settings.frameGenerationBackend=engine::FrameGenerationBackend::Xess;
+    options.settings.nrRuntime=engine::NrRuntime::NvidiaOriginal;options.settings.nrPolicy=pipeline::NrSizePolicy::Realtime;
+    options.settings.frameGenerationBackend=engine::FrameGenerationBackend::XeSS;
     player.open(window,path,options);
     auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(35);
     uint64_t frames=0,generated=0;bool audio=false,failed=false,nr=false,fg=false,playing=false;
