@@ -4856,9 +4856,10 @@ bool QmlPlayerBridge::setHdrDial(const QString& key,int level){
 }
 
 bool QmlPlayerBridge::applyHdrAxesPreset(const QString& content,const QString& environment){
-  setHdrAppliedFrom(QStringLiteral("axes"));
   const QByteArray contentId=content.toUtf8();
   const QByteArray environmentId=environment.toUtf8();
+  if(!engine::findHdrContentPreset(contentId.constData())||
+      (environment!=QLatin1String("compensate")&&environment!=QLatin1String("plain")))return false;
   const auto curve=engine::hdrAxesCurve(contentId.constData(),environmentId.constData());
   auto s=settings();
   // The strength dial and the display peak belong to the user, not to the preset.
@@ -4868,6 +4869,7 @@ bool QmlPlayerBridge::applyHdrAxesPreset(const QString& content,const QString& e
   s.hdrCurve.strengthPercent=strength;
   s.hdrCurve.displayPeakNits=displayPeak;
   if(!commitHdrTuning(std::move(s)))return false;
+  setHdrAppliedFrom(QStringLiteral("axes"));
   impl_->prefs[QStringLiteral("hdrAxesContent")]=content;
   impl_->prefs[QStringLiteral("hdrAxesEnvironment")]=environment;
   if(!impl_->savePrefs())veyra::log::warn("ui-prefs","hdr axes choice not saved");
@@ -5114,8 +5116,6 @@ QVariantMap QmlPlayerBridge::hdrPeakWarning() const {
 }
 
 bool QmlPlayerBridge::applyRecommendedHdrTuning(){
-  // The recommendation applies within the view the user is in, so that view owns it.
-  setHdrAppliedFrom(hdrPresetMode());
   const auto& snap=impl_->snapshot;
   const auto rec=engine::recommendHdrTuning(snap.sourceMasteringPeakNits,snap.sourceMaxCllNits,
       snap.sourceMaxFallNits,effectiveHdrDisplayPeakNits());
@@ -5127,7 +5127,7 @@ bool QmlPlayerBridge::applyRecommendedHdrTuning(){
     QString environment=impl_->prefString("hdrAxesEnvironment");
     if(environment.isEmpty())environment=QStringLiteral("compensate");
     const QString content=QString::fromLatin1(engine::hdrAxesContentForPreset(rec.presetId));
-    applyHdrAxesPreset(content,environment);
+    if(!applyHdrAxesPreset(content,environment))return false;
     emit notice(tr("已按片源自动选档：%1").arg(content),false);
     return true;
   }
@@ -5141,7 +5141,8 @@ bool QmlPlayerBridge::applyRecommendedHdrTuning(){
   s.hdrCurve=preset->curve;s.hdrMetadata=preset->metadata;
   s.hdrCurve.strengthPercent=strength;
   s.hdrCurve.displayPeakNits=displayPeak;
-  commitHdrTuning(std::move(s));
+  if(!commitHdrTuning(std::move(s)))return false;
+  setHdrAppliedFrom(QStringLiteral("legacy"));
   // One line per application, for diagnostics: it records what the recommendation decided
 
   // and on which numbers, so an odd suggestion can be explained afterwards. Per-user
@@ -5157,7 +5158,6 @@ bool QmlPlayerBridge::applyRecommendedHdrTuning(){
 }
 
 bool QmlPlayerBridge::applyHdrTuningPreset(const QString& id){
-  setHdrAppliedFrom(QStringLiteral("legacy"));
     for(const auto& p:engine::kHdrTuningPresets){
         if(id!=QLatin1String(p.id))continue;
         auto s=settings();
@@ -5168,7 +5168,9 @@ bool QmlPlayerBridge::applyHdrTuningPreset(const QString& id){
         s.hdrCurve=p.curve;s.hdrMetadata=p.metadata;
         s.hdrCurve.strengthPercent=strength;s.hdrCurve.displayPeakNits=displayPeak;
         if(!s.hdrCurve.valid()||!s.hdrMetadata.valid())return false;
-        return commitHdrTuning(std::move(s));
+        if(!commitHdrTuning(std::move(s)))return false;
+        setHdrAppliedFrom(QStringLiteral("legacy"));
+        return true;
     }
     return false;
 }

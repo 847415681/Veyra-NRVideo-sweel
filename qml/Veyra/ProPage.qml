@@ -2046,8 +2046,7 @@ VPage {
                                     open: true
                                     title: qsTr("曲线图、读数与提示")
                                     summary: qsTr("2 项")
-                            // 实时裁剪表（自定义）：由呈现器每 15 帧探测一帧算出，
-                            // 因此只在播放中、曲线开启时才有数字。
+                            // GPU 抽样统计：本卡可见且输出曲线生效时至多每秒 4 次。
                             VRow {
                                 hintBelow: true
                                 objectName: "list-hdrcurve-live"
