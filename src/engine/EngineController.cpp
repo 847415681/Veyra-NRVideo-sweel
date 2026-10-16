@@ -687,9 +687,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             };
             pipeline::EnhanceGraphDesc gd;gd.sourceWidth=width;gd.sourceHeight=height;gd.hdrInput=!isImage&&activeSource->info().color.isHdrPath();
             {const auto& sourceColor=activeSource->info().color;
-    const unsigned sourceMastering=unsigned(std::max(0.0f,sourceColor.hdrMasteringPeakNits));
-    const unsigned sourceCll=unsigned(std::max(0.0f,sourceColor.hdrMaxCllNits));
-    const unsigned sourceFall=unsigned(std::max(0.0f,sourceColor.hdrMaxFallNits));
+    const unsigned sourceMastering=hdrMetadataNits(sourceColor.hdrMasteringPeakNits);
+    const unsigned sourceCll=hdrMetadataNits(sourceColor.hdrMaxCllNits);
+    const unsigned sourceFall=hdrMetadataNits(sourceColor.hdrMaxFallNits);
     std::lock_guard lock(mutex_);snapshot_.sourceHdr=gd.hdrInput;
     snapshot_.sourceMasteringPeakNits=sourceMastering;snapshot_.sourceMaxCllNits=sourceCll;
     snapshot_.sourceMaxFallNits=sourceFall;}
@@ -1858,9 +1858,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     describeStages(stageRequest(options),options.snapshot(),gd);
                     gd.hdrInput=!isImage&&activeSource->info().color.isHdrPath();gd.hdrOutput=options.settings.useHdrPreview(gd.hdrInput,displayHdrActive());
                     const auto resizeSourceColor=activeSource->info().color;
-                    const unsigned resizeMastering=unsigned(std::max(0.0f,resizeSourceColor.hdrMasteringPeakNits));
-                    const unsigned resizeCll=unsigned(std::max(0.0f,resizeSourceColor.hdrMaxCllNits));
-                    const unsigned resizeFall=unsigned(std::max(0.0f,resizeSourceColor.hdrMaxFallNits));
+                    const unsigned resizeMastering=hdrMetadataNits(resizeSourceColor.hdrMasteringPeakNits);
+                    const unsigned resizeCll=hdrMetadataNits(resizeSourceColor.hdrMaxCllNits);
+                    const unsigned resizeFall=hdrMetadataNits(resizeSourceColor.hdrMaxFallNits);
                     if(nativeCapture){
                         captureGraphColor=activeSource->info().color;gd.rgbInput=captureGraphColor.pixelFormat==pipeline::SourcePixelFormat::Bgra8;
                         gd.yuy2Input=false;gd.packedInput=pipeline::packedInputCode(captureGraphColor.pixelFormat);gd.captureBitDepth=ingressBitDepth(captureGraphColor.pixelFormat);
@@ -2494,15 +2494,6 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             presenter.observeHdrCoverage(hdrCoverageObserved_.load());
                             if(!presenter.present(ctx,ring,*graph,item.lease->slot,generated,item.lease->referencesValid,comparisonMode_,comparisonBase_,comparisonSplit_,item.identity,previewView(),item.pts100ns))return {State::Failed};
                             const auto presentEndHost=host100ns();
-                            // Custom: publish the live curve coverage the presenter just collected.
-                            // Only a completed probe updates it, so the panel never shows a stale reading.
-                            {
-                                std::lock_guard lock(mutex_);
-                                snapshot_.hdrCoverageValid=presenter.liveCurveCoverage().valid;
-                                snapshot_.hdrAboveCeilingPercent=presenter.liveCurveCoverage().aboveCeilingPercent();
-                                snapshot_.hdrInRollOffPercent=presenter.liveCurveCoverage().inRollOffPercent();
-                                snapshot_.hdrInLiftPercent=presenter.liveCurveCoverage().inLiftPercent();
-                            }
                             const double returnDeviation=deviationValid?nowMs()-itemPtsMs:0;
                             item.lease->consumerFence=presenter.consumerFenceValue(ring.lastSignaledValue());const bool didPresent=presenter.submittedCount()>before;s.blit=presenter.blitTiming(ctx.fence());
                             const auto elapsed=elapsedMs(begin);s.presentMs+=elapsed;flow->cpu(diagnostics::CpuStage::Present,elapsed,host100ns());
@@ -2704,6 +2695,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     snapshot_.previewSkipped=measured.flow.counters.previewSkippedBeforeGraph;
                     snapshot_.fgBudgetLimited=measured.flow.lastFgRejected100ns>0&&host100ns()-measured.flow.lastFgRejected100ns<10000000;
                     snapshot_.xessGenerationSuppressed=graph->xessEnabled()&&presenter.xessGenerationSuppressed();
+                    // Reuse the existing snapshot lock, rather than locking once
+                    // more for every generated Present.
+                    const auto& coverage=presenter.liveCurveCoverage();
+                    snapshot_.hdrCoverageValid=coverage.valid;
+                    snapshot_.hdrAboveCeilingPercent=coverage.aboveCeilingPercent();
+                    snapshot_.hdrInRollOffPercent=coverage.inRollOffPercent();
+                    snapshot_.hdrInLiftPercent=coverage.inLiftPercent();
                     snapshot_.displayVrr=gfx::vrrLevel(presenter.displayVrr());snapshot_.presentationVrrSync=presenter.vrrSync();
                     snapshot_.nrActive=graph->nrEnabled()&&graphStats.nrEvaluateCount>0;
                     snapshot_.nrAutoActive=graph->autoNrPoolReady();

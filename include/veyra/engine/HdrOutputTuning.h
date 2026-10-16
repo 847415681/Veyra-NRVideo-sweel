@@ -596,6 +596,9 @@ inline double pqCodeToNits(double normalized) {
 }
 // Optional per-frame metadata is sticky within one source epoch only. The
 // presenter owns this state; reopening it or switching sources must clear it.
+inline unsigned hdrMetadataNits(float value){
+    return std::isfinite(value)&&value>0?unsigned(std::lround(std::clamp(value,1.0f,10000.0f))):0u;
+}
 struct HdrSourceMetadata {
     uint64_t epoch=0;
     bool hasEpoch=false;

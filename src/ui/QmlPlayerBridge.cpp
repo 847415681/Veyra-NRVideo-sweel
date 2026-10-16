@@ -4821,7 +4821,7 @@ QVariantMap QmlPlayerBridge::hdrCurveCoverage() const {
           {"lift",snap.hdrInLiftPercent}};
 }
 
-void QmlPlayerBridge::observeHdrCoverage(bool on){impl_->hdrCoverageObserved=on;impl_->engine.observeHdrCoverage(on);}
+void QmlPlayerBridge::observeHdrCoverage(bool on){if(impl_->hdrCoverageObserved==on)return;impl_->hdrCoverageObserved=on;impl_->engine.observeHdrCoverage(on);emit snapshotChanged();}
 QVariantMap QmlPlayerBridge::hdrCurveGraph() const {
   auto base=settings().hdrCurve;if(!base.displayPeakNits)base.displayPeakNits=effectiveHdrDisplayPeakNits();
   engine::HdrCurveSettings c;engine::HdrMetadataSettings metadata;

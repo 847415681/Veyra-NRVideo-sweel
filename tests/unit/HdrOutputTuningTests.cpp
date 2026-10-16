@@ -371,6 +371,8 @@ int main() {
             const auto disabled=hdrCurveCoverage(frame,7,HdrCurveSettings{});
             check(!disabled.valid&&disabled.samples==0&&disabled.aboveCeilingPercent()==0.0,
                   "coverage: a disabled curve reports nothing instead of zeroes that look real");
+            check(hdrMetadataNits(INFINITY)==0&&hdrMetadataNits(NAN)==0&&hdrMetadataNits(-1)==0&&hdrMetadataNits(10001)==10000,
+                  "source metadata: non-finite values are absent and finite values bounded");
             const auto empty=hdrCurveCoverage(nullptr,0,curve);
             check(!empty.valid,"coverage: no samples means no reading");
             // 20 nit sits inside the 35-nit lift range; 50 would not.
