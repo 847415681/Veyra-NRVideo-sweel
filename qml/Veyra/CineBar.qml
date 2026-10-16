@@ -470,6 +470,7 @@ Rectangle {
         title: qsTr("载入片源")
         items: [
             { label: qsTr("打开视频"), note: qsTr("MP4 · MKV · 图片"), icon: "folder", act: "file" },
+            { label: qsTr("播放地址…"), note: "HTTP · HTTPS · RTSP", icon: "cast", act: "network" },
             { label: qsTr("采集卡"), note: qsTr("HDMI 采集设备"), icon: "video", act: "capture" },
             { label: qsTr("PS5 串流"), note: qsTr("局域网串流"), icon: "gamepad", act: "ps5" },
             { label: qsTr("PC 串流"), note: qsTr("Sunshine 主机"), icon: "cast", act: "moonlight" },
@@ -479,6 +480,7 @@ Rectangle {
         onPicked: (i, o) => {
             switch (o.act) {
             case "file": veyra.openFileDialog(); break
+            case "network": veyra.openNetworkDialog(); break
             case "capture": veyra.openCaptureDialog(); break
             case "ps5": veyra.openPs5Dialog(); break
             case "moonlight": veyra.openMoonlightDialog(); break

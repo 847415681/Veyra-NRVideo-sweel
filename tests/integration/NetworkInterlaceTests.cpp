@@ -1,0 +1,91 @@
+#include "veyra/source/MediaFileSource.h"
+#include "veyra/gfx/D3D12DeviceContext.h"
+#include "veyra/Log.h"
+#include <chrono>
+#include <thread>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <cmath>
+extern "C" {
+#include <libavutil/hwcontext.h>
+}
+using namespace veyra;
+int wmain(int argc,wchar_t** argv){
+    if(argc<3)return 2;
+    std::atomic<bool> cancel=false;
+    source::SourceOpenDesc desc;desc.path=argv[1];desc.cancelled=&cancel;
+    if(std::wstring_view(argv[2])==L"cancel"){
+        desc.preferHardwareDecode=false;
+        std::jthread stop([&]{std::this_thread::sleep_for(std::chrono::milliseconds(200));cancel=true;});
+        source::MediaFileSource input;const auto start=std::chrono::steady_clock::now();const bool opened=input.open(desc);
+        const auto ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();
+        std::cout<<"CANCEL opened="<<opened<<" milliseconds="<<ms<<std::endl;return !opened&&ms<2500?0:1;
+    }
+    if(argc<7)return 2;
+    desc.preferHardwareDecode=std::wstring_view(argv[2])==L"hardware";
+    desc.requireHardwareDecode=desc.preferHardwareDecode;
+    desc.deinterlace=std::wstring_view(argv[3])==L"on";
+    const int expected=_wtoi(argv[4]);const double fps=_wtof(argv[5]);
+    const std::filesystem::path out=argv[6];std::filesystem::create_directories(out);
+    Logger::instance().openFile((out/L"source.log").wstring());Logger::instance().setConsoleEnabled(false);
+    gfx::D3D12DeviceContext device;Status status=Status::Ok;
+    if(desc.preferHardwareDecode){
+        gfx::DeviceContextDesc options;options.enableDebugLayer=true;
+        if(!device.initialize(options,status))return 3;
+        desc.d3d12Device=device.device();desc.d3d12Queue=device.directQueue();desc.d3d12AdapterLuid=device.adapter().luid;
+    }
+    source::MediaFileSource input;
+    if(!input.open(desc)){std::wcerr<<L"OPEN FAILED "<<input.errorMessage()<<std::endl;return 1;}
+    int failures=0;auto check=[&](bool ok,const char* name){failures+=!ok;std::cout<<(ok?"PASS ":"FAIL ")<<name<<std::endl;};
+    for(int pass=0;pass<2;++pass){
+        if(pass){
+            if(media::networkMediaInput(desc.path))break;
+            check(input.seek({0,1}),"seek after EOF resets decoder and filter");
+        }
+        unsigned count=0;double last=-1e30,first=-1,comb=0;bool chronological=true,progressive=true;
+        const AVFrame* decoded=nullptr;pipeline::FramePacket packet;source::SourceReadStatus result;
+        while((result=input.read(packet,&decoded))==source::SourceReadStatus::Frame){
+            check(decoded!=nullptr,"decoded field exists");if(!decoded)break;
+            const double seconds=packet.pts.toDouble();
+            if(count==0)first=seconds;
+            chronological=chronological&&!packet.pts.isUnknown()&&seconds>last;
+            if(count&&fps>0)check(std::abs((seconds-last)-1/fps)<0.0001,"field PTS has requested real cadence");
+            if(pass&&count==0)check(packet.flags&uint32_t(pipeline::FrameFlagBits::Seek),"first post-seek field carries seek reset");
+            last=seconds;progressive=progressive&&!(decoded->flags&AV_FRAME_FLAG_INTERLACED);
+            AVFrame* downloaded=nullptr;const AVFrame* pixels=decoded;
+            if(decoded->format==AV_PIX_FMT_D3D12||decoded->format==AV_PIX_FMT_D3D11){
+                // Explicit diagnostic readback only. Production source/filter
+                // never transfers a GPU frame to CPU memory.
+                downloaded=av_frame_alloc();
+                check(downloaded&&av_hwframe_transfer_data(downloaded,decoded,0)>=0,"diagnostic GPU readback succeeds");
+                pixels=downloaded;
+            }
+            if(pixels&&pixels->data[0]){
+                double energy=0;
+                for(int y=1;y<decoded->height-1;++y)for(int x=0;x<decoded->width;++x){
+                    const int a=pixels->data[0][ptrdiff_t(y-1)*pixels->linesize[0]+x];
+                    const int b=pixels->data[0][ptrdiff_t(y)*pixels->linesize[0]+x];
+                    const int c=pixels->data[0][ptrdiff_t(y+1)*pixels->linesize[0]+x];
+                    energy+=std::abs(a-2*b+c);
+                }
+                comb+=energy/double(decoded->width*(decoded->height-2));
+                if(pass==0&&count<4){
+                    std::ofstream image(out/(L"field-"+std::to_wstring(count)+L".pgm"),std::ios::binary);
+                    image<<"P5\n"<<decoded->width<<" "<<decoded->height<<"\n255\n";
+                    for(int y=0;y<decoded->height;++y)image.write(reinterpret_cast<const char*>(pixels->data[0]+ptrdiff_t(y)*pixels->linesize[0]),decoded->width);
+                }
+            }
+            av_frame_free(&downloaded);++count;
+            if(expected<0&&count>=120)break;
+            if(count>1000){check(false,"output remains bounded");break;}
+        }
+        if(expected>=0){check(result==source::SourceReadStatus::Eos,"all tail fields drain to EOF");check(int(count)==expected,"exact field/frame count including EOF");}
+        check(chronological,"PTS strictly increases across every field");
+        if(desc.deinterlace)check(progressive,"interlaced fields are delivered as progressive frames");
+        if(fps>0)check(std::abs(input.info().averageFps-fps)<0.01,"source metadata reports actual progressive rate");
+        std::cout<<"RESULT pass="<<pass<<" count="<<count<<" first="<<first<<" last="<<last<<" comb="<<(count?comb/count:0)<<" deinterlace="<<input.info().deinterlacePath<<" hardware="<<input.info().hardwareDecodeActive<<" failures="<<failures<<std::endl;
+        if(result==source::SourceReadStatus::Error)std::wcerr<<input.errorMessage()<<std::endl;
+    }
+    input.close();return failures?1:0;
+}

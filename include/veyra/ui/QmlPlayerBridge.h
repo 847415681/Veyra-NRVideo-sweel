@@ -1107,6 +1107,8 @@ public:
     // Every one returns immediately; none touches the GPU or waits for the
     // engine.
     Q_INVOKABLE void openFileDialog();
+    Q_INVOKABLE void openNetworkDialog();
+    Q_INVOKABLE bool openNetworkAddress(const QString& address);
     Q_INVOKABLE void openPath(const QString& path);
     Q_INVOKABLE void openCaptureDialog();
     // Reopens the last capture session with the same device and format.

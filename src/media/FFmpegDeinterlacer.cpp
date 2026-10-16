@@ -1,0 +1,179 @@
+#include "veyra/media/FFmpegDeinterlacer.h"
+#include "veyra/media/FFmpegVideoDecoder.h"
+#include "veyra/Log.h"
+#include <windows.h>
+#include <filesystem>
+#include <format>
+#include <algorithm>
+extern "C" {
+#include <libavutil/frame.h>
+#include <libavutil/error.h>
+}
+#if __has_include(<libavfilter/avfilter.h>)
+#define VEYRA_HAS_AVFILTER_HEADERS 1
+extern "C" {
+#include <libavfilter/avfilter.h>
+#include <libavfilter/buffersrc.h>
+#include <libavfilter/buffersink.h>
+#include <libavutil/hwcontext.h>
+#include <libavutil/hwcontext_d3d12va.h>
+}
+#endif
+
+namespace veyra::media {
+#ifdef VEYRA_HAS_AVFILTER_HEADERS
+namespace {
+struct FilterApi {
+#define FILTER_API(name) decltype(&::name) name=nullptr
+    FILTER_API(avfilter_graph_alloc);FILTER_API(avfilter_graph_free);
+    FILTER_API(avfilter_get_by_name);FILTER_API(avfilter_graph_create_filter);
+    FILTER_API(avfilter_link);FILTER_API(avfilter_graph_config);
+    FILTER_API(av_buffersrc_add_frame_flags);FILTER_API(av_buffersink_get_frame);
+    FILTER_API(av_buffersink_get_time_base);FILTER_API(av_buffersrc_parameters_alloc);
+    FILTER_API(av_buffersrc_parameters_set);
+#undef FILTER_API
+    bool ready=false;
+    FilterApi(){
+        wchar_t executable[32768]{};
+        if(!GetModuleFileNameW(nullptr,executable,32768))return;
+        const auto path=std::filesystem::path(executable).parent_path()/L"avfilter-12.dll";
+        auto module=LoadLibraryExW(path.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
+        if(!module){log::warn("deinterlace",std::format("optional avfilter module unavailable Win32={}",GetLastError()));return;}
+#define FILTER_API(name) name=reinterpret_cast<decltype(name)>(GetProcAddress(module,#name));if(!name)return
+        FILTER_API(avfilter_graph_alloc);FILTER_API(avfilter_graph_free);
+        FILTER_API(avfilter_get_by_name);FILTER_API(avfilter_graph_create_filter);
+        FILTER_API(avfilter_link);FILTER_API(avfilter_graph_config);
+        FILTER_API(av_buffersrc_add_frame_flags);FILTER_API(av_buffersink_get_frame);
+        FILTER_API(av_buffersink_get_time_base);FILTER_API(av_buffersrc_parameters_alloc);
+        FILTER_API(av_buffersrc_parameters_set);
+#undef FILTER_API
+        ready=true; // Module intentionally retained while filters can exist.
+    }
+};
+FilterApi& api(){static FilterApi value;return value;}
+}
+#endif
+struct FFmpegDeinterlacer::Impl {
+    std::string path;
+    int num=0,den=0;
+#ifdef VEYRA_HAS_AVFILTER_HEADERS
+    AVFilterGraph* graph=nullptr;AVFilterContext* source=nullptr;AVFilterContext* sink=nullptr;
+    AVFrame* output=nullptr;AVBufferRef* bridgeFrames=nullptr;
+    AVFrame* input(const AVFrame* frame,const HardwareSurfaceView* surface){
+        if(!frame)return nullptr;
+        auto* copy=av_frame_clone(frame);
+        if(copy&&copy->pts==AV_NOPTS_VALUE)copy->pts=copy->best_effort_timestamp!=AV_NOPTS_VALUE?copy->best_effort_timestamp:copy->pkt_dts;
+        if(!copy||frame->format!=AV_PIX_FMT_D3D11)return copy;
+        if(!surface||!surface->texture||!surface->waitFence){av_frame_free(&copy);return nullptr;}
+        if(!bridgeFrames){
+            auto* device=av_hwdevice_ctx_alloc(AV_HWDEVICE_TYPE_D3D12VA);
+            if(!device){av_frame_free(&copy);return nullptr;}
+            auto* context=reinterpret_cast<AVHWDeviceContext*>(device->data);
+            auto* hardware=reinterpret_cast<AVD3D12VADeviceContext*>(context->hwctx);
+            if(FAILED(surface->texture->GetDevice(IID_PPV_ARGS(&hardware->device)))||av_hwdevice_ctx_init(device)<0){
+                av_buffer_unref(&device);av_frame_free(&copy);return nullptr;
+            }
+            bridgeFrames=av_hwframe_ctx_alloc(device);av_buffer_unref(&device);
+            if(!bridgeFrames){av_frame_free(&copy);return nullptr;}
+            auto* frames=reinterpret_cast<AVHWFramesContext*>(bridgeFrames->data);
+            frames->format=AV_PIX_FMT_D3D12;
+            frames->sw_format=surface->texture->GetDesc().Format==DXGI_FORMAT_P010?AV_PIX_FMT_P010:AV_PIX_FMT_NV12;
+            frames->width=surface->textureWidth;frames->height=surface->textureHeight;
+            if(av_hwframe_ctx_init(bridgeFrames)<0){av_buffer_unref(&bridgeFrames);av_frame_free(&copy);return nullptr;}
+        }
+        auto* descriptor=static_cast<AVD3D12VAFrame*>(av_mallocz(sizeof(AVD3D12VAFrame)));
+        if(!descriptor){av_frame_free(&copy);return nullptr;}
+        descriptor->texture=surface->texture;descriptor->texture->AddRef();
+        descriptor->subresource_index=int(surface->subresourceIndex);
+        descriptor->sync_ctx.fence=surface->waitFence;surface->waitFence->AddRef();
+        descriptor->sync_ctx.fence_value=surface->waitValue;
+        auto* reference=av_buffer_create(reinterpret_cast<uint8_t*>(descriptor),sizeof(*descriptor),
+            [](void*,uint8_t* data){auto* d=reinterpret_cast<AVD3D12VAFrame*>(data);d->texture->Release();d->sync_ctx.fence->Release();av_free(d);},nullptr,0);
+        if(!reference){descriptor->texture->Release();descriptor->sync_ctx.fence->Release();av_free(descriptor);av_frame_free(&copy);return nullptr;}
+        // Keep the original D3D11 pool reference in buf[0]. This extra buffer
+        // owns only the imported descriptor, texture and interop fence.
+        int slot=0;while(slot<AV_NUM_DATA_POINTERS&&copy->buf[slot])++slot;
+        if(slot==AV_NUM_DATA_POINTERS){av_buffer_unref(&reference);av_frame_free(&copy);return nullptr;}
+        copy->buf[slot]=reference;copy->data[0]=reference->data;copy->data[1]=nullptr;copy->format=AV_PIX_FMT_D3D12;
+        av_buffer_unref(&copy->hw_frames_ctx);copy->hw_frames_ctx=av_buffer_ref(bridgeFrames);
+        return copy;
+    }
+#endif
+};
+FFmpegDeinterlacer::FFmpegDeinterlacer():impl_(std::make_unique<Impl>()){}
+FFmpegDeinterlacer::~FFmpegDeinterlacer(){close();}
+bool FFmpegDeinterlacer::open(const AVFrame* frame,const HardwareSurfaceView* surface,int num,int den,int fpsNum,int fpsDen){
+    close();
+#ifdef VEYRA_HAS_AVFILTER_HEADERS
+    auto& a=api();auto& i=*impl_;
+    if(!a.ready||!frame||num<=0||den<=0)return false;
+    auto* input=i.input(frame,surface);if(!input)return false;
+    i.graph=a.avfilter_graph_alloc();
+    if(!i.graph){av_frame_free(&input);return false;}
+    const auto sar=input->sample_aspect_ratio.num>0&&input->sample_aspect_ratio.den>0?input->sample_aspect_ratio:AVRational{1,1};
+    const auto args=std::format("video_size={}x{}:pix_fmt={}:time_base={}/{}:pixel_aspect={}/{}:frame_rate={}/{}",
+        input->width,input->height,input->format,num,den,sar.num,sar.den,std::max(1,fpsNum),std::max(1,fpsDen));
+    int result=a.avfilter_graph_create_filter(&i.source,a.avfilter_get_by_name("buffer"),"in",args.c_str(),nullptr,i.graph);
+    if(result>=0&&input->hw_frames_ctx){
+        auto* parameters=a.av_buffersrc_parameters_alloc();
+        if(!parameters)result=AVERROR(ENOMEM);
+        else{parameters->hw_frames_ctx=av_buffer_ref(input->hw_frames_ctx);result=a.av_buffersrc_parameters_set(i.source,parameters);av_buffer_unref(&parameters->hw_frames_ctx);av_free(parameters);}
+    }
+    const bool hardware=input->format==AV_PIX_FMT_D3D12;
+    const char* name=hardware?"deinterlace_d3d12":"bwdif";
+    const char* options=hardware?"method=default:mode=field:deint=interlaced":"mode=send_field:parity=auto:deint=interlaced";
+    AVFilterContext* filter=nullptr;
+    if(result>=0)result=a.avfilter_graph_create_filter(&filter,a.avfilter_get_by_name(name),"deinterlace",options,nullptr,i.graph);
+    if(result>=0)result=a.avfilter_graph_create_filter(&i.sink,a.avfilter_get_by_name("buffersink"),"out",nullptr,nullptr,i.graph);
+    if(result>=0)result=a.avfilter_link(i.source,0,filter,0);
+    if(result>=0)result=a.avfilter_link(filter,0,i.sink,0);
+    if(result>=0)result=a.avfilter_graph_config(i.graph,nullptr);
+    av_frame_free(&input);
+    if(result<0){log::error("deinterlace",std::format("filter configuration failed method={} code={}",name,result));close();return false;}
+    i.output=av_frame_alloc();if(!i.output){close();return false;}
+    const auto tb=a.av_buffersink_get_time_base(i.sink);i.num=tb.num;i.den=tb.den;i.path=hardware?"d3d12-video-processor":"bwdif-software";
+    log::info("deinterlace",std::format("method={} fieldRate=true inputFps={}/{} outputTimeBase={}/{} gpuPixelReadbacks=0",i.path,fpsNum,fpsDen,i.num,i.den));
+    return true;
+#else
+    return false;
+#endif
+}
+int FFmpegDeinterlacer::push(const AVFrame* frame,const HardwareSurfaceView* surface){
+#ifdef VEYRA_HAS_AVFILTER_HEADERS
+    auto& i=*impl_;if(!i.source)return AVERROR(EINVAL);
+    auto* input=i.input(frame,surface);if(frame&&!input)return AVERROR(ENOMEM);
+    const int result=api().av_buffersrc_add_frame_flags(i.source,input,AV_BUFFERSRC_FLAG_KEEP_REF);
+    av_frame_free(&input);return result;
+#else
+    return AVERROR(ENOSYS);
+#endif
+}
+int FFmpegDeinterlacer::receive(const AVFrame** frame){
+    *frame=nullptr;
+#ifdef VEYRA_HAS_AVFILTER_HEADERS
+    auto& i=*impl_;if(!i.output)return AVERROR(EINVAL);
+    av_frame_unref(i.output);const int result=api().av_buffersink_get_frame(i.sink,i.output);
+    if(result>=0)*frame=i.output;return result;
+#else
+    return AVERROR(ENOSYS);
+#endif
+}
+int FFmpegDeinterlacer::timeBaseNum()const{return impl_->num;}
+int FFmpegDeinterlacer::timeBaseDen()const{return impl_->den;}
+bool FFmpegDeinterlacer::active()const{
+#ifdef VEYRA_HAS_AVFILTER_HEADERS
+    return impl_->output!=nullptr;
+#else
+    return false;
+#endif
+}
+const std::string& FFmpegDeinterlacer::path()const{return impl_->path;}
+void FFmpegDeinterlacer::close(){
+#ifdef VEYRA_HAS_AVFILTER_HEADERS
+    auto& i=*impl_;av_frame_free(&i.output);
+    if(i.graph)api().avfilter_graph_free(&i.graph);
+    av_buffer_unref(&i.bridgeFrames);i.source=i.sink=nullptr;
+#endif
+    impl_->path.clear();impl_->num=impl_->den=0;
+}
+}

@@ -695,6 +695,7 @@ Window {
     Shortcut { sequence: "Up"; onActivated: veyra.volume = Math.min(1, veyra.volume + 0.05) }
     Shortcut { sequence: "Down"; onActivated: veyra.volume = Math.max(0, veyra.volume - 0.05) }
     Shortcut { sequence: "Ctrl+O"; onActivated: veyra.openFileDialog() }
+    Shortcut { sequence: "Ctrl+U"; onActivated: veyra.openNetworkDialog() }
     Shortcut { sequence: "Ctrl+E"; onActivated: root.page = "exp" }
     Shortcut {
         sequence: veyra.shortcuts.lock
@@ -789,7 +790,7 @@ Window {
         function onOverlayRestartSuggested(kind) { overlayRestart.kind = kind; overlayRestart.open() }
         function onNavigate(p) {
             // A dialog key opens the dialog; anything else is a page.
-            if (p === "capture" || p === "ps5" || p === "moonlight" || p === "xbox" || p === "screen"
+            if (p === "network" || p === "capture" || p === "ps5" || p === "moonlight" || p === "xbox" || p === "screen"
                 || p === "subtitle" || p === "audio" || p === "save" || p === "manage") {
                 dialogs.open(p)
                 return

@@ -1,6 +1,7 @@
 #include "veyra/sink/AudioGain.h"
 #include "veyra/sink/WasapiAudioSink.h"
 #include "veyra/engine/PlaybackRate.h"
+#include "veyra/media/NetworkInput.h"
 #include <functiondiscoverykeys_devpkey.h>
 #include <propvarutil.h>
 #pragma comment(lib, "propsys.lib")
@@ -32,17 +33,25 @@ AudioPipeline::~AudioPipeline()
     closeAll();
 }
 
-bool AudioPipeline::open(const std::wstring& path)
+bool AudioPipeline::open(const std::wstring& path,const std::atomic<bool>* cancelled)
 {
     const int length=WideCharToMultiByte(CP_UTF8,0,path.data(),static_cast<int>(path.size()),nullptr,0,nullptr,nullptr);
     std::string narrow(length,'\0');
     WideCharToMultiByte(CP_UTF8,0,path.data(),static_cast<int>(path.size()),narrow.data(),length,nullptr,nullptr);
     fmt_=avformat_alloc_context();
     if(!fmt_)return false;
-    // Lets stopThread() abort a read that waits on slow storage.
-    fmt_->interrupt_callback={[](void* self)->int{return static_cast<AudioPipeline*>(self)->stopFlag_.load()?1:0;},this};
-    if (avformat_open_input(&fmt_, narrow.c_str(), nullptr, nullptr) != 0) return false;
-    if (avformat_find_stream_info(fmt_, nullptr) < 0) return false;
+    inputInterrupt_.configure(media::networkMediaInput(path),cancelled,&stopFlag_);
+    fmt_->interrupt_callback={media::InputInterrupt::callback,&inputInterrupt_};
+    AVDictionary* options=nullptr;
+    if(media::networkMediaInput(path))media::networkMediaOptions(&options);
+    inputInterrupt_.arm();
+    const int opened=avformat_open_input(&fmt_,narrow.c_str(),nullptr,&options);
+    av_dict_free(&options);
+    if(opened<0)return false;
+    inputInterrupt_.arm();
+    const int found=avformat_find_stream_info(fmt_,nullptr);
+    inputInterrupt_.disarm();
+    if(found<0)return false;
     tracks_.clear();
     for(unsigned i=0;i<fmt_->nb_streams;++i){
         const auto* stream=fmt_->streams[i];const auto* p=stream->codecpar;
@@ -159,7 +168,9 @@ bool AudioPipeline::readPacket(AVPacket* packet)
         if(nextReadStall_!=std::chrono::steady_clock::time_point{})std::this_thread::sleep_for(std::chrono::duration<double,std::milli>(readStallMs_));
         nextReadStall_=std::chrono::steady_clock::now()+std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double,std::milli>(readStallEveryMs_));
     }
+    inputInterrupt_.arm();
     const int result=av_read_frame(fmt_,packet);
+    inputInterrupt_.disarm();
     const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
     for(double seen=maxReadMs_.load();ms>seen&&!maxReadMs_.compare_exchange_weak(seen,ms);){}
     return result>=0;

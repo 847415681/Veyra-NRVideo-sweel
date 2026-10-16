@@ -554,6 +554,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                  snapshot_.sourceRotationDegrees=0;}
             }else{
                 source::SourceOpenDesc od;od.path=path;
+                od.cancelled=&stop_;
+                od.deinterlace=options.deinterlace;
                 // Files use the same shared D3D12 device as the graph-> Capture
                 // uses it for the compressed-payload decoder (H.264/HEVC/AV1/
                 // VP9 through D3D12VA; MJPEG stays on the software path inside
@@ -671,7 +673,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                  if(posterSource&&makePosterFrame(posterSource,320,180,poster,pw,ph)){
                      snapshot_.posterRgba=std::move(poster);snapshot_.posterWidth=pw;snapshot_.posterHeight=ph;
                  }else{snapshot_.posterRgba.clear();snapshot_.posterWidth=snapshot_.posterHeight=0;}}
-                {std::lock_guard lock(mutex_);snapshot_.sourceNotice=activeSource->info().dolbyVision.description();}
+                {std::lock_guard lock(mutex_);snapshot_.sourceNotice=activeSource->info().dolbyVision.description();
+                 const auto& si=activeSource->info();if(si.deinterlaced)snapshot_.sourceNotice+=std::format(L"{}去隔行：{} · {:.3f}i → {:.3f}p",snapshot_.sourceNotice.empty()?L"":L" · ",si.deinterlacePath=="d3d12-video-processor"?L"GPU":L"兼容软解",si.averageFps,si.averageFps);}
             }
             if(!pipeline::Extent{width,height}.valid()){status(L"图像尺寸超出单张GPU纹理能力，需要分块处理",true);break;}
             HdrDisplayState displayHdrState;
@@ -904,7 +907,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             uint64_t seekDecoded=0;
             bool fileAwaitingVideo=true,fileAudioAlignPending=true,fileInputEnded=false;double lastFilePresentedMs=0,lastFilePresentLateness=0;
             TimingWindow presentEntryDeviation,presentReturnDeviation;
-            if(!isImage&&!isCapture&&audioPipe.open(path)){
+            if(!isImage&&!isCapture&&audioPipe.open(path,&stop_)){
                 {std::lock_guard lock(mutex_);snapshot_.audioTracks=audioPipe.tracks();snapshot_.selectedAudioTrack=audioPipe.selectedTrack();}
                 audioPipe.holdForVideo();audioPipe.startThread(&audio,true);audioStarted=true;
                 std::lock_guard lock(mutex_);snapshot_.audioAvailable=true;

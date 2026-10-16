@@ -37,9 +37,29 @@ int thunkReplacementFunction(int value) { ++thunkHookCalls; return thunkOriginal
 #include "veyra/engine/Subtitles.h"
 #include "veyra/engine/PresentationSettings.h"
 #include "veyra/engine/PresentationGeometry.h"
+#include "veyra/gfx/NvidiaVrr.h"
 int main(){
     using namespace veyra;int failures=0,checks=0;
     auto check=[&](bool ok,const char* name){++checks;if(!ok)++failures;std::cout<<(ok?"PASS ":"FAIL ")<<name<<'\n';};
+    {
+        gfx::VrrState state;state.known=state.capsKnown=true;
+        state.supportsVrr=state.currentlyCapable=true;
+        check(!state.trueGsync&&!state.possible&&!state.requested&&gfx::vrrLevel(state)==3,
+            "issue45 adaptive-sync applied mode can request VRR before driver activity flags appear");
+        check(!state.enabled&&!state.inVrrMode,
+            "VRR presentation eligibility does not fabricate active driver flags");
+        state.currentlyCapable=false;
+        check(gfx::vrrLevel(state)==2&&!gfx::vrrPresentationAvailable(state),
+            "VRR panel in incompatible display mode does not opt into VRR presentation");
+        state.supportsVrr=false;
+        check(gfx::vrrLevel(state)==1,"non-VRR display remains unsupported");
+        state.possible=true;
+        check(gfx::vrrLevel(state)==3,"driver VRR possibility remains sufficient without generic caps");
+        state.enabled=true;
+        check(gfx::vrrLevel(state)==4,"only real activity flags report VRR active");
+        state={};
+        check(gfx::vrrLevel(state)==0,"unanswered VRR query remains unknown");
+    }
     {
         engine::PreviewView v;v.displayAspect=16.0/9;
         auto [w,h]=v.renderedSize(1000,1000,1440,1080);

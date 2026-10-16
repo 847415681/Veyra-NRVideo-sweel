@@ -478,7 +478,7 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
         effective.outputRate=OutputRateMode::Off;
         capNotice=L" · 此补帧提供方暂不支持独立输出限帧；已保留设置";
     }
-    // 可变刷新: with VRR possible on this monitor, Automatic presents like
+    // 可变刷新: when the applied monitor mode can request VRR, Automatic presents like
     // explicit Vsync - the G-SYNC/FreeSync + V-SYNC combination. Inside the
     // VRR range the panel starts a refresh when the frame arrives, so the
     // VSync wait is about zero and nothing tears; above the range the

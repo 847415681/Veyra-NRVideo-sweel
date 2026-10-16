@@ -64,9 +64,10 @@ bool MediaFileSource::fallbackToSoftware(std::string_view reason)
     const int64_t resumeUs = lastPtsUs_;
     veyra::log::warn("source-file", std::format(
         "D3D12VA {} fallback to software reason={} path=redacted resumeUs={}", midStream ? "mid-stream" : "first-frame", reason, resumeUs));
+    deinterlacer_.close();filterDraining_=false;
     decoder_.close();
     demuxer_.close();
-    if (!demuxer_.open(path_)) {
+    if (!demuxer_.open(path_,cancelled_)) {
         veyra::log::error("source-file", "software fallback could not reopen demuxer");
         return false;
     }
@@ -160,9 +161,11 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
 {
     close();
     path_ = desc.path;
+    cancelled_ = desc.cancelled;
+    deinterlaceEnabled_=desc.deinterlace;filterDraining_=false;
     preferHardwareDecode_ = desc.preferHardwareDecode && desc.d3d12Device != nullptr && desc.d3d12Queue != nullptr;
     requireHardwareDecode_ = desc.requireHardwareDecode;
-    if (!demuxer_.open(desc.path)) {
+    if (!demuxer_.open(desc.path,cancelled_)) {
         veyra::log::error("source-file", "demuxer open failed");
         return false;
     }
@@ -293,9 +296,40 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
 
     const AVFrame* frame = nullptr;
     for (;;) {
+        if(deinterlacer_.active()){
+            const int result=deinterlacer_.receive(&frame);
+            if(result>=0)break;
+            if(result==AVERROR_EOF)return SourceReadStatus::Eos;
+            if(result!=AVERROR(EAGAIN)||filterDraining_){errorMessage_=L"去隔行输出失败，请查看诊断";return SourceReadStatus::Error;}
+        }
         frame = decoder_.receiveFrame();
-        if (frame != nullptr) { break; }
+        if(frame){
+            if(deinterlaceEnabled_&&((frame->flags&AV_FRAME_FLAG_INTERLACED)||deinterlacer_.active())){
+                if(frame->width!=int(info_.width)||frame->height!=int(info_.height)||frame->decode_error_flags||(frame->flags&AV_FRAME_FLAG_CORRUPT)){
+                    errorMessage_=L"隔行视频画面损坏或尺寸改变，已停止处理";return SourceReadStatus::Error;
+                }
+                const auto* surface=decoder_.usingD3D11Frames()?&decoder_.hardwareSurface():nullptr;
+                if(!deinterlacer_.active()){
+                    AVRational rate{demuxer_.nominalRateNum(),demuxer_.nominalRateDen()};
+                    if(demuxer_.averageFps()>0)rate=av_d2q(demuxer_.averageFps(),1000000);
+                    if(frame->duration>0)av_reduce(&rate.num,&rate.den,decoder_.frameTimeBaseDen(),frame->duration*decoder_.frameTimeBaseNum(),INT_MAX);
+                    if(!deinterlacer_.open(frame,surface,decoder_.frameTimeBaseNum(),decoder_.frameTimeBaseDen(),rate.num,rate.den)){
+                        errorMessage_=L"去隔行组件不可用或不支持当前格式；请关闭去隔行或改用软解";return SourceReadStatus::Error;
+                    }
+                    info_.deinterlaced=true;info_.deinterlacePath=deinterlacer_.path();
+                    info_.averageFps=av_q2d(rate)*2;info_.nominalRateNum=rate.num*2;info_.nominalRateDen=rate.den;
+                }
+                const int result=deinterlacer_.push(frame,surface);
+                if(result<0){log::error("deinterlace",std::format("filter push failed code={}",result));errorMessage_=L"去隔行处理失败，请查看诊断";return SourceReadStatus::Error;}
+                continue;
+            }
+            break;
+        }
         if (decoder_.receiveStatus() == media::DecodeReceiveStatus::EndOfStream) {
+            if(deinterlacer_.active()){
+                if(deinterlacer_.push(nullptr)<0){errorMessage_=L"去隔行尾帧输出失败";return SourceReadStatus::Error;}
+                filterDraining_=true;continue;
+            }
             return SourceReadStatus::Eos;
         }
         if (decoder_.receiveStatus() == media::DecodeReceiveStatus::Error) {
@@ -354,8 +388,8 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
 
     ++sequence_;
     out.sequence = sequence_;
-    const int tbNum = decoder_.frameTimeBaseNum();
-    const int tbDen = decoder_.frameTimeBaseDen();
+    const int tbNum = deinterlacer_.active()?deinterlacer_.timeBaseNum():decoder_.frameTimeBaseNum();
+    const int tbDen = deinterlacer_.active()?deinterlacer_.timeBaseDen():decoder_.frameTimeBaseDen();
     // Prefer the container PTS; fall back to FFmpeg's best-effort estimate and
     // finally the packet DTS. Raw elementary streams and some TS/AVI muxes
     // leave pts unset on individual frames, which used to stop playback
@@ -449,7 +483,7 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
     // Hardware surfaces that do not travel inside the AVFrame (D3D11VA) are
     // published per frame; every other path clears the field so the ingress
     // never sees a stale texture from an earlier frame.
-    if (decoder_.usingD3D11Frames()) {
+    if (decoder_.usingD3D11Frames()&&frame->format==AV_PIX_FMT_D3D11) {
         const auto& view = decoder_.hardwareSurface();
         out.hardwareSurface.texture = view.texture;
         out.hardwareSurface.subresourceIndex = view.subresourceIndex;
@@ -469,12 +503,14 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
 bool MediaFileSource::seek(const pipeline::Rational& targetSeconds)
 {
     if (!info_.opened) { return false; }
+    if(media::networkMediaInput(path_)&&!demuxer_.seekable())return false;
     if (targetSeconds.isUnknown() || targetSeconds.den == 0 || targetSeconds.isNegative()) {
         veyra::log::error("source-file", "seek target must be a known non-negative rational");
         return false;
     }
     const int64_t targetUs = rationalToUs(targetSeconds);
     if (!demuxer_.seekToUs(targetUs)) { return false; }
+    deinterlacer_.close();filterDraining_=false;
     decoder_.flushBuffers();
     errorMessage_.clear();
     draining_ = false;
@@ -490,12 +526,14 @@ bool MediaFileSource::seek(const pipeline::Rational& targetSeconds)
 void MediaFileSource::close() noexcept
 {
     errorMessage_.clear();
+    deinterlacer_.close();filterDraining_=false;
     decoder_.close();
     demuxer_.close();
     info_ = SourceInfo{};
     path_.clear();
     preferHardwareDecode_ = false;
     requireHardwareDecode_ = false;
+    cancelled_ = nullptr;
 }
 
 } // namespace veyra::source

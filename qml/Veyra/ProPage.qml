@@ -282,9 +282,9 @@ VPage {
     }
     // The status light: 1.4.4's 当前状态 (正常 / 补帧调度降档 / 输出未达标 /
     // 输入帧率不足 …) as a glowing strip with the detail beside it.
-    component StatusLight: RowLayout {
+    component StatusLight: ColumnLayout {
         id: light
-        spacing: 8
+        spacing: 6
         readonly property color tone: veyra.runStatusLevel === "ok" ? Theme.ok
                                     : veyra.runStatusLevel === "warn" ? "#F2B941"
                                     : veyra.runStatusLevel === "err" ? Theme.err : Qt.rgba(1, 1, 1, 0.3)
@@ -313,8 +313,7 @@ VPage {
         }
         Text {
             objectName: "run-status"
-            Layout.maximumWidth: Math.max(0, light.width - 40)
-            Layout.preferredWidth: Math.min(implicitWidth, light.width * 0.75)
+            Layout.fillWidth: true
             text: veyra.runStatus + (veyra.runStatusDetail.length > 0 ? " · " + veyra.runStatusDetail : "")
             color: light.tone
             font.family: Theme.fontUi
@@ -322,8 +321,6 @@ VPage {
             font.weight: Font.Medium
             horizontalAlignment: Text.AlignRight
             wrapMode: Text.Wrap
-            maximumLineCount: 2
-            elide: Text.ElideRight
             HoverHandler { id: statusHover }
             ToolTip.visible: statusHover.hovered
             ToolTip.delay: 400
@@ -342,8 +339,6 @@ VPage {
             font.family: Theme.fontUi
             font.pixelSize: 11
             wrapMode: Text.Wrap
-            maximumLineCount: 3
-            elide: Text.ElideRight
             HoverHandler { id: optionsHover }
             ToolTip.visible: optionsHover.hovered
             ToolTip.delay: 400
@@ -2260,6 +2255,7 @@ VPage {
                 ? [{ label: (veyra.isCapture ? qsTr("采集卡 · ") : "") + veyra.sourceName, note: veyra.sourceSummary,
                      checked: true, icon: "video", act: "" }] : [])
             .concat([{ label: qsTr("打开文件…"), icon: "folder", act: "file" },
+                { label: qsTr("播放地址…"), icon: "cast", act: "network" },
                      { label: qsTr("PS5 串流…"), icon: "gamepad", act: "ps5" },
                      { label: qsTr("PC 串流…"), icon: "cast", act: "moonlight" },
                      { label: qsTr("Xbox 串流…"), icon: "gamepad", act: "xbox" },
@@ -2268,6 +2264,7 @@ VPage {
                      { label: qsTr("采集卡设置…"), icon: "settings", act: "capture" }])
         onPicked: (i, o) => {
             if (o.act === "file") veyra.openFileDialog()
+            else if (o.act === "network") veyra.openNetworkDialog()
             else if (o.act === "ps5") veyra.openPs5Dialog()
             else if (o.act === "moonlight") veyra.openMoonlightDialog()
             else if (o.act === "xbox") veyra.openXboxDialog()

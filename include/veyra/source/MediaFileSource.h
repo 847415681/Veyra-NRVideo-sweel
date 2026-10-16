@@ -12,6 +12,7 @@
 
 #include "veyra/media/FFmpegDemuxer.h"
 #include "veyra/media/FFmpegVideoDecoder.h"
+#include "veyra/media/FFmpegDeinterlacer.h"
 #include "veyra/source/IFrameSource.h"
 
 namespace veyra::source {
@@ -41,6 +42,8 @@ private:
 
     media::FFmpegDemuxer demuxer_;
     media::FFmpegVideoDecoder decoder_;
+    media::FFmpegDeinterlacer deinterlacer_;
+    bool deinterlaceEnabled_=true,filterDraining_=false;
     SourceInfo info_{};
     uint64_t sequence_ = 0;
     uint64_t epoch_ = 1;
@@ -55,6 +58,7 @@ private:
     std::wstring path_;
     bool preferHardwareDecode_ = false;
     bool requireHardwareDecode_ = false; // "强制硬解": never fall back to software
+    const std::atomic<bool>* cancelled_ = nullptr;
 };
 
 } // namespace veyra::source

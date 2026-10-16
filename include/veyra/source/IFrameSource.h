@@ -6,6 +6,7 @@
 // linear RGBA16F working texture (Product Spec 7).
 #include <cstdint>
 #include <string>
+#include <atomic>
 
 #include "veyra/pipeline/FramePacket.h"
 #include "veyra/source/DolbyVision.h"
@@ -28,6 +29,8 @@ struct SourceOpenDesc {
     // D3D11 device on the same adapter so decoded surfaces can be shared.
     uint64_t d3d12AdapterLuid = 0;
     bool legacyCaptureRgbForDiagnostic = false; // explicit A/B only; never set by the player
+    const std::atomic<bool>* cancelled = nullptr;
+    bool deinterlace = false; // playback opt-in; unchanged default for offline consumers
 };
 
 struct SourceInfo {
@@ -47,6 +50,8 @@ struct SourceInfo {
     int nominalRateNum = 0, nominalRateDen = 0; // candidate, not proof of CFR
     double timestampQuantum = 0.0;
     bool hardwareDecodeActive = false;
+    bool deinterlaced = false;
+    std::string deinterlacePath;
     // Which decode path actually produced the frames: "d3d12va", "d3d11va" or
     // "software". Descriptive only; the UI/telemetry must not claim a path the
     // session is not using.

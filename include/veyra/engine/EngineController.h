@@ -43,6 +43,7 @@ struct PlayerOptions { bool nr=false,sr=false,fg=false,realtime=true; uint32_t f
     bool captureReplayForTest=false; // file-backed live scheduler test; never enabled by UI
     bool captureCpuUnpack=false; // N1 diagnostic: legacy per-pixel CPU unpack
     bool softwareDecode=false; // user setting: files skip D3D12VA and decode on the CPU
+    bool deinterlace=true; // automatic file deinterlace, preserves progressive bypass
     bool hardwareDecodeOnly=false; // user setting "强制硬解": files fail instead of falling back to software
     EnhancementSettings snapshot()const{auto s=settings;s.nr=nr;s.sr=sr;s.multiplier=fg?fgMultiplier:1;s.nrPolicy=realtime?(settings.nrPolicy==pipeline::NrSizePolicy::Native?pipeline::NrSizePolicy::Realtime:settings.nrPolicy):pipeline::NrSizePolicy::Native;return s;}
     static PlayerOptions from(EnhancementSettings s,std::optional<ChainRuntimeOrder> order=std::nullopt){PlayerOptions o;o.nr=s.nr;o.sr=s.sr;o.fg=s.multiplier>1;o.fgMultiplier=std::max(2u,s.multiplier);o.realtime=s.nrPolicy!=pipeline::NrSizePolicy::Native;o.settings=s;o.nodeOrder=order;return o;}

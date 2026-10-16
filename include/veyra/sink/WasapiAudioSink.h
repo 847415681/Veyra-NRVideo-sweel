@@ -1,4 +1,5 @@
 #pragma once
+#include "veyra/media/NetworkInput.h"
 
 // AudioPipeline: FFmpeg audio demux/decode + watermarked bounded ring
 // (low 250ms / prefill 500ms / high 1000ms, 2s hard bound).
@@ -71,7 +72,7 @@ public:
     AudioPipeline();
     ~AudioPipeline();
 
-    bool open(const std::wstring& path);
+    bool open(const std::wstring& path,const std::atomic<bool>* cancelled=nullptr);
     const std::vector<media::AudioTrack>& tracks() const { return tracks_; }
     int selectedTrack() const { return streamIndex_; }
     // Owner thread only, after stopThread(). Failure preserves the old decoder.
@@ -159,6 +160,7 @@ private:
     AudioFormat pcmFormat_;
     std::vector<media::AudioTrack> tracks_;
     AVFormatContext* fmt_ = nullptr;
+    media::InputInterrupt inputInterrupt_;
     AVCodecContext* codecCtx_ = nullptr;
     AVStream* stream_ = nullptr;
     AVPacket* packet_ = nullptr;

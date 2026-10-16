@@ -1742,6 +1742,7 @@ VPage {
         items: (veyra.sourceTitle.length > 0
                 ? [{ label: veyra.sourceTitle, note: veyra.sourceFormatText, checked: true, icon: "video", act: "" }] : [])
             .concat([{ label: qsTr("打开文件…"), icon: "folder", act: "file" },
+                { label: qsTr("播放地址…"), icon: "cast", act: "network" },
                      { label: qsTr("PS5 串流…"), icon: "gamepad", act: "ps5" },
                      { label: qsTr("PC 串流…"), icon: "cast", act: "moonlight" },
                      { label: qsTr("Xbox 串流…"), icon: "gamepad", act: "xbox" },
@@ -1750,6 +1751,7 @@ VPage {
                      { label: qsTr("采集卡设置…"), icon: "settings", act: "capture" }])
         onPicked: (i, o) => {
             if (o.act === "file") veyra.openFileDialog()
+            else if (o.act === "network") veyra.openNetworkDialog()
             else if (o.act === "ps5") veyra.openPs5Dialog()
             else if (o.act === "moonlight") veyra.openMoonlightDialog()
             else if (o.act === "xbox") veyra.openXboxDialog()

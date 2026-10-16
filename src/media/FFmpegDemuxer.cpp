@@ -22,7 +22,7 @@ FFmpegDemuxer::~FFmpegDemuxer()
     close();
 }
 
-bool FFmpegDemuxer::open(const std::wstring& path)
+bool FFmpegDemuxer::open(const std::wstring& path,const std::atomic<bool>* cancelled)
 {
     if (context_ != nullptr) {
         close();
@@ -35,8 +35,16 @@ bool FFmpegDemuxer::open(const std::wstring& path)
         utf8Path.resize(static_cast<size_t>(size));
         WideCharToMultiByte(CP_UTF8, 0, path.c_str(), static_cast<int>(path.size()), utf8Path.data(), size, nullptr, nullptr);
     }
-    AVFormatContext* raw = nullptr;
-    const int openResult = avformat_open_input(&raw, utf8Path.c_str(), nullptr, nullptr);
+    AVFormatContext* raw = avformat_alloc_context();
+    if(!raw)return false;
+    const bool network=networkMediaInput(path);
+    interrupt_.configure(network,cancelled);
+    raw->interrupt_callback={InputInterrupt::callback,&interrupt_};
+    AVDictionary* options=nullptr;
+    if(network)networkMediaOptions(&options);
+    interrupt_.arm();
+    const int openResult = avformat_open_input(&raw, utf8Path.c_str(), nullptr, &options);
+    av_dict_free(&options);
     if (openResult < 0) {
         char errorText[AV_ERROR_MAX_STRING_SIZE]{};
         av_strerror(openResult, errorText, sizeof(errorText));
@@ -44,7 +52,10 @@ bool FFmpegDemuxer::open(const std::wstring& path)
         return false;
     }
 
-    if (avformat_find_stream_info(raw, nullptr) < 0) {
+    interrupt_.arm();
+    const int infoResult=avformat_find_stream_info(raw, nullptr);
+    interrupt_.disarm();
+    if (infoResult < 0) {
         log::error("media", "demuxer: avformat_find_stream_info failed");
         avformat_close_input(&raw);
         return false;
@@ -96,6 +107,10 @@ int64_t FFmpegDemuxer::durationUs() const
         return av_rescale_q(stream->duration, stream->time_base, { 1, 1000000 });
     }
     return context_->duration; // AV_TIME_BASE units == microseconds
+}
+
+bool FFmpegDemuxer::seekable() const {
+    return context_&&context_->pb&&(context_->pb->seekable&AVIO_SEEKABLE_NORMAL);
 }
 
 double FFmpegDemuxer::averageFps() const
@@ -199,7 +214,9 @@ bool FFmpegDemuxer::readVideoPacket(bool& endOfFile)
         // observable here (Playbook: every path frees exactly once - the
         // EOF/error paths below receive a blank packet either way).
         av_packet_unref(packet_);
+        interrupt_.arm();
         const int result = av_read_frame(context_, packet_);
+        interrupt_.disarm();
         if (result == AVERROR_EOF) {
             endOfFile = true;
             return false;
@@ -235,7 +252,9 @@ bool FFmpegDemuxer::seekToUs(int64_t targetUs)
     }
     const int64_t target = av_rescale_q(targetUs, { 1, 1000000 },
         context_->streams[videoStreamIndex_]->time_base);
+    interrupt_.arm();
     const int result = av_seek_frame(context_, videoStreamIndex_, target, AVSEEK_FLAG_BACKWARD);
+    interrupt_.disarm();
     if (result < 0) {
         char errorText[AV_ERROR_MAX_STRING_SIZE]{};
         av_strerror(result, errorText, sizeof(errorText));
