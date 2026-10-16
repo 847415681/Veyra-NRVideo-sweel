@@ -28,6 +28,7 @@ struct FilterApi {
 #define FILTER_API(name) decltype(&::name) name=nullptr
     FILTER_API(avfilter_graph_alloc);FILTER_API(avfilter_graph_free);
     FILTER_API(avfilter_get_by_name);FILTER_API(avfilter_graph_create_filter);
+    FILTER_API(avfilter_graph_alloc_filter);FILTER_API(avfilter_init_str);
     FILTER_API(avfilter_link);FILTER_API(avfilter_graph_config);
     FILTER_API(av_buffersrc_add_frame_flags);FILTER_API(av_buffersink_get_frame);
     FILTER_API(av_buffersink_get_time_base);FILTER_API(av_buffersrc_parameters_alloc);
@@ -43,6 +44,7 @@ struct FilterApi {
 #define FILTER_API(name) name=reinterpret_cast<decltype(name)>(GetProcAddress(module,#name));if(!name)return
         FILTER_API(avfilter_graph_alloc);FILTER_API(avfilter_graph_free);
         FILTER_API(avfilter_get_by_name);FILTER_API(avfilter_graph_create_filter);
+        FILTER_API(avfilter_graph_alloc_filter);FILTER_API(avfilter_init_str);
         FILTER_API(avfilter_link);FILTER_API(avfilter_graph_config);
         FILTER_API(av_buffersrc_add_frame_flags);FILTER_API(av_buffersink_get_frame);
         FILTER_API(av_buffersink_get_time_base);FILTER_API(av_buffersrc_parameters_alloc);
@@ -115,18 +117,20 @@ bool FFmpegDeinterlacer::open(const AVFrame* frame,const HardwareSurfaceView* su
     i.graph=a.avfilter_graph_alloc();
     if(!i.graph){av_frame_free(&input);return false;}
     const auto sar=input->sample_aspect_ratio.num>0&&input->sample_aspect_ratio.den>0?input->sample_aspect_ratio:AVRational{1,1};
-    const auto args=std::format("video_size={}x{}:pix_fmt={}:time_base={}/{}:pixel_aspect={}/{}:frame_rate={}/{}",
-        input->width,input->height,input->format,num,den,sar.num,sar.den,std::max(1,fpsNum),std::max(1,fpsDen));
-    int result=a.avfilter_graph_create_filter(&i.source,a.avfilter_get_by_name("buffer"),"in",args.c_str(),nullptr,i.graph);
+    i.source=a.avfilter_graph_alloc_filter(i.graph,a.avfilter_get_by_name("buffer"),"in");
+    int result=i.source?0:AVERROR(ENOMEM);
     if(result>=0){
         auto* parameters=a.av_buffersrc_parameters_alloc();
         if(!parameters)result=AVERROR(ENOMEM);
         else{
+            parameters->format=input->format;parameters->width=input->width;parameters->height=input->height;
+            parameters->time_base={num,den};parameters->sample_aspect_ratio=sar;parameters->frame_rate={std::max(1,fpsNum),std::max(1,fpsDen)};
             if(input->hw_frames_ctx)parameters->hw_frames_ctx=av_buffer_ref(input->hw_frames_ctx);
             parameters->color_space=input->colorspace;parameters->color_range=input->color_range;
             result=a.av_buffersrc_parameters_set(i.source,parameters);av_buffer_unref(&parameters->hw_frames_ctx);av_free(parameters);
         }
     }
+    if(result>=0)result=a.avfilter_init_str(i.source,nullptr);
     const bool hardware=input->format==AV_PIX_FMT_D3D12;
     const char* name=hardware?"deinterlace_d3d12":"bwdif";
     const char* options=hardware?"method=default:mode=field:deint=interlaced":"mode=send_field:parity=auto:deint=interlaced";

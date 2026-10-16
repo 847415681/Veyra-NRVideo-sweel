@@ -1,6 +1,7 @@
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/Log.h"
+#include "veyra/engine/EngineController.h"
 #include <chrono>
 #include <thread>
 #include <filesystem>
@@ -11,8 +12,36 @@ extern "C" {
 #include <libavutil/hwcontext.h>
 }
 using namespace veyra;
+int enginePlayback(const wchar_t* path,const wchar_t* directory,const wchar_t* effects){
+    CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+    const std::filesystem::path out=directory;std::filesystem::create_directories(out);
+    Logger::instance().openFile((out/L"player.log").wstring());Logger::instance().setConsoleEnabled(false);
+    HWND window=CreateWindowExW(0,L"STATIC",L"Network and deinterlace playback regression",WS_POPUP,0,0,960,540,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
+    if(!window)return 2;ShowWindow(window,SW_SHOWNOACTIVATE);
+    engine::EngineController player;player.setVolume(0,true);
+    engine::PlayerOptions options;options.nr=std::wstring_view(effects)==L"nr-xess";options.fg=options.nr;options.fgMultiplier=2;
+    options.settings.nrRuntime=engine::NrRuntime::NvidiaOriginal;options.settings.nrPolicy=pipeline::NrSizePolicy::P1080;
+    options.settings.frameGenerationBackend=engine::FrameGenerationBackend::Xess;
+    player.open(window,path,options);
+    auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(35);
+    uint64_t frames=0,generated=0;bool audio=false,failed=false,nr=false,fg=false,playing=false;
+    while(std::chrono::steady_clock::now()<deadline){
+        MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}
+        const auto s=player.snapshot();failed|=s.failed;audio|=s.audioAvailable;nr|=s.nrActive;fg|=s.fgActive;
+        frames=std::max(frames,s.metrics.flow.counters.realPresented);generated=std::max(generated,s.metrics.flow.counters.generatedPresented);
+        playing|=s.transport==engine::TransportState::Playing;
+        if(failed||s.transport==engine::TransportState::Ended||frames>=100)break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    const auto stopAt=std::chrono::steady_clock::now();player.stop();
+    const auto stopMs=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-stopAt).count();
+    DestroyWindow(window);
+    std::cout<<"ENGINE frames="<<frames<<" generated="<<generated<<" audio="<<audio<<" nr="<<nr<<" fg="<<fg<<" failed="<<failed<<" playing="<<playing<<" stopMs="<<stopMs<<std::endl;
+    return !failed&&playing&&frames>10&&stopMs<2500&&(!options.nr||(nr&&fg&&generated>0))?0:1;
+}
 int wmain(int argc,wchar_t** argv){
     if(argc<3)return 2;
+    if(std::wstring_view(argv[2])==L"engine")return argc>=4?enginePlayback(argv[1],argv[3],argc>=5?argv[4]:L"off"):2;
     std::atomic<bool> cancel=false;
     source::SourceOpenDesc desc;desc.path=argv[1];desc.cancelled=&cancel;
     if(std::wstring_view(argv[2])==L"cancel"){
