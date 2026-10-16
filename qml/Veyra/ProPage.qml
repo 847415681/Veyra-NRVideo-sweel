@@ -2657,19 +2657,24 @@ VPage {
 
             // .insp-foot
             RowLayout {
+                objectName: "pro-inspector-footer"
                 Layout.fillWidth: true
                 Layout.margins: 10
                 spacing: 8
-                VDot { off: !veyra.running; warn: veyra.captureRecovering; err: veyra.failed }
+                VDot { Layout.alignment: Qt.AlignTop; Layout.topMargin: 5; off: !veyra.running; warn: veyra.captureRecovering; err: veyra.failed }
                 Text {
+                    objectName: "pro-inspector-status"
                     Layout.fillWidth: true
+                    Layout.minimumWidth: 0
                     text: veyra.statusText
                     color: Theme.t2
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsSmall
-                    elide: Text.ElideRight
+                    wrapMode: Text.Wrap
                 }
                 VButton {
+                    objectName: "pro-reset-current-page"
+                    Layout.alignment: Qt.AlignTop
                     ghost: true
                     text: qsTr("重置本页")
                     onClicked: veyra.resetCurrentPage()
@@ -2724,6 +2729,7 @@ VPage {
                 ? [{ label: (veyra.isCapture ? qsTr("采集卡 · ") : "") + veyra.sourceName, note: veyra.sourceSummary,
                      checked: true, icon: "video", act: "" }] : [])
             .concat([{ label: qsTr("打开文件…"), icon: "folder", act: "file" },
+                { label: qsTr("播放地址…"), icon: "cast", act: "network" },
                      { label: qsTr("PS5 串流…"), icon: "gamepad", act: "ps5" },
                      { label: qsTr("PC 串流…"), icon: "cast", act: "moonlight" },
                      { label: qsTr("Xbox 串流…"), icon: "gamepad", act: "xbox" },
@@ -2732,6 +2738,7 @@ VPage {
                      { label: qsTr("采集卡设置…"), icon: "settings", act: "capture" }])
         onPicked: (i, o) => {
             if (o.act === "file") veyra.openFileDialog()
+            else if (o.act === "network") veyra.openNetworkDialog()
             else if (o.act === "ps5") veyra.openPs5Dialog()
             else if (o.act === "moonlight") veyra.openMoonlightDialog()
             else if (o.act === "xbox") veyra.openXboxDialog()

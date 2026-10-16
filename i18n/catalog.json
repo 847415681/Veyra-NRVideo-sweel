@@ -2346,6 +2346,13 @@
    "ja": "{}×{} · 分割 NR（画像全体の文脈なし）· 保存は元のサイズ"
   },
   {
+   "zh": "{}去隔行：{} · {:.3f}i → {:.3f}p",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "{}去交錯：{} · {:.3f}i → {:.3f}p",
+   "en": "{}Deinterlacing: {} · {:.3f}i → {:.3f}p",
+   "ja": "{}インターレース解除：{} · {:.3f}i → {:.3f}p"
+  },
+  {
    "zh": "{}失败（错误 {}）",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "{}失敗（錯誤 {}）",
@@ -3719,6 +3726,13 @@
    "ja": "コンテンツの輝度がディスプレイの能力を大幅に上回ります"
   },
   {
+   "zh": "兼容软解",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "相容軟解",
+   "en": "software compatibility",
+   "ja": "互換ソフトウェア"
+  },
+  {
    "zh": "内容节奏",
    "src": "qml/NodePage.qml",
    "zh-TW": "內容節奏",
@@ -4468,6 +4482,41 @@
    "ja": "ペアリングへ"
   },
   {
+   "zh": "去隔行处理失败，请查看诊断",
+   "src": "src/source/MediaFileSource.cpp",
+   "zh-TW": "去交錯處理失敗，請查看診斷",
+   "en": "Deinterlacing failed. See diagnostics.",
+   "ja": "インターレース解除に失敗しました。診断を確認してください。"
+  },
+  {
+   "zh": "去隔行尾帧输出失败",
+   "src": "src/source/MediaFileSource.cpp",
+   "zh-TW": "去交錯尾幀輸出失敗",
+   "en": "Could not drain the final deinterlaced frames.",
+   "ja": "末尾フレームのインターレース解除に失敗しました。"
+  },
+  {
+   "zh": "去隔行组件不可用或不支持当前格式；请关闭去隔行或改用软解",
+   "src": "src/source/MediaFileSource.cpp",
+   "zh-TW": "去交錯元件不可用或不支援目前格式；請關閉去交錯或改用軟解",
+   "en": "The deinterlacing component is missing or this format is unsupported. Disable deinterlacing or select software decoding.",
+   "ja": "インターレース解除コンポーネントがないか形式が非対応です。解除をオフにするかソフトウェアデコードを選択してください。"
+  },
+  {
+   "zh": "去隔行输出失败，请查看诊断",
+   "src": "src/source/MediaFileSource.cpp",
+   "zh-TW": "去交錯輸出失敗，請查看診斷",
+   "en": "Deinterlaced output failed. See diagnostics.",
+   "ja": "インターレース解除の出力に失敗しました。診断を確認してください。"
+  },
+  {
+   "zh": "去隔行输出格式无法导入，已停止处理",
+   "src": "src/source/MediaFileSource.cpp",
+   "zh-TW": "去隔行輸出格式無法匯入，已停止處理",
+   "en": "Cannot import the deinterlaced output format; processing stopped",
+   "ja": "インターレース解除の出力形式を取り込めないため、処理を停止しました"
+  },
+  {
    "zh": "参数化亮调",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "參數化亮調",
@@ -4671,6 +4720,13 @@
    "ja": "この輝度以下の暗部にのみ効く"
   },
   {
+   "zh": "只处理标记为隔行的视频，优先使用 GPU；软解使用兼容算法。下次打开视频生效。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "只處理標記為隔行的影片，優先使用 GPU；軟解使用相容演算法。下次開啟影片生效。",
+   "en": "Processes only video marked as interlaced, using the GPU when decoding on hardware. Software decoding uses a compatible filter. Applies when you next open a video.",
+   "ja": "インターレースと記録された動画のみ処理します。ハードウェアデコード時は GPU、ソフトウェアデコード時は互換フィルターを使用します。次に動画を開くと適用されます。"
+  },
+  {
    "zh": "只有节点模式使用编辑连接",
    "src": "src/engine/EffectChain.cpp",
    "zh-TW": "只有節點模式使用編輯連接",
@@ -4741,18 +4797,18 @@
    "ja": "可変リフレッシュ · このディスプレイでは使用不可"
   },
   {
-   "zh": "可变刷新 · 未生效",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "可變更新 · 未生效",
-   "en": "Variable refresh · not active",
-   "ja": "可変リフレッシュ · 未動作"
-  },
-  {
    "zh": "可变刷新 · 生效中",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "可變更新 · 生效中",
    "en": "Variable refresh · active",
    "ja": "可変リフレッシュ · 動作中"
+  },
+  {
+   "zh": "可变刷新 · 等待驱动确认",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "可變更新率 · 等待驅動確認",
+   "en": "Variable refresh · awaiting driver confirmation",
+   "ja": "可変リフレッシュ · ドライバーの確認待ち"
   },
   {
    "zh": "可变刷新：超过屏幕最高刷新时只排 1 帧 · ",
@@ -6463,11 +6519,11 @@
    "ja": "画面キャプチャー…"
   },
   {
-   "zh": "屏幕支持，但驱动未开启：NVIDIA 控制面板 → 设置 G-SYNC",
+   "zh": "屏幕支持可变刷新，但当前显示模式不可用；请检查连接、刷新率及驱动设置",
    "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "螢幕支援，但驅動程式未開啟：NVIDIA 控制面板 → 設定 G-SYNC",
-   "en": "The display supports it, but the driver has it off: NVIDIA Control Panel → Set up G-SYNC",
-   "ja": "ディスプレイは対応していますが、ドライバーで無効です：NVIDIA コントロールパネル → G-SYNC の設定"
+   "zh-TW": "螢幕支援可變更新率，但目前顯示模式不可用；請檢查連接、更新率及驅動設定",
+   "en": "The display supports VRR, but it is unavailable in the current display mode. Check the connection, refresh rate and driver settings.",
+   "ja": "画面は VRR 対応ですが現在の表示モードでは使用できません。接続、リフレッシュレート、ドライバー設定を確認してください。"
   },
   {
    "zh": "屏幕正处于可变刷新（驱动已开启）",
@@ -6855,18 +6911,11 @@
    "ja": "オン · 強度 "
   },
   {
-   "zh": "已开启，屏幕还没进入可变刷新：全屏并隐藏控制栏，或在 NVIDIA 控制面板为窗口模式开启 G-SYNC",
+   "zh": "已开启，将在播放时请求可变刷新；是否生效以驱动报告为准",
    "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "已開啟，螢幕還沒進入可變更新：全螢幕並隱藏控制列，或在 NVIDIA 控制面板為視窗模式開啟 G-SYNC",
-   "en": "On, but the display is not in variable refresh yet: go fullscreen with the controls hidden, or enable G-SYNC for windowed mode in the NVIDIA Control Panel",
-   "ja": "オンですが、まだ可変リフレッシュになっていません：全画面でコントロールバーを隠すか、NVIDIA コントロールパネルでウィンドウモードの G-SYNC を有効にしてください"
-  },
-  {
-   "zh": "已开启，播放时生效",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "已開啟，播放時生效",
-   "en": "On; applies during playback",
-   "ja": "オン（再生中に有効）"
+   "zh-TW": "已開啟，將在播放時請求可變更新率；是否生效以驅動回報為準",
+   "en": "Enabled. VRR will be requested during playback; activation is confirmed by the driver.",
+   "ja": "有効です。再生時に VRR を要求します。動作状態はドライバーの報告で確認します。"
   },
   {
    "zh": "已开启：%1",
@@ -7056,6 +7105,13 @@
    "zh-TW": "已請求主機退出遊戲。",
    "en": "Asked the host to quit the game.",
    "ja": "ホストにゲームの終了を要求しました。"
+  },
+  {
+   "zh": "已请求可变刷新，驱动尚未确认生效；可检查窗口/全屏 G-SYNC 设置，当前状态不代表驱动已关闭",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已請求可變更新率，驅動尚未確認生效；可檢查視窗/全螢幕 G-SYNC 設定，目前狀態不代表驅動已關閉",
+   "en": "VRR presentation requested; the driver has not confirmed activation. Check windowed/fullscreen G-SYNC settings. This does not mean the driver setting is off.",
+   "ja": "VRR 表示を要求しましたが、ドライバーはまだ動作を確認していません。ウィンドウ/全画面の G-SYNC 設定を確認できます。この状態は設定がオフという意味ではありません。"
   },
   {
    "zh": "已达到导入上限（最多10000项），其余文件未添加",
@@ -7667,6 +7723,13 @@
    "ja": "このデバイスでは選択した NR を実行できません。この GPU に対応する NR ランタイムを選択してください。"
   },
   {
+   "zh": "当前软件包未包含去隔行组件",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "目前軟體包未包含去隔行元件",
+   "en": "This package does not include the deinterlacing module",
+   "ja": "このパッケージにはインターレース解除モジュールが含まれていません"
+  },
+  {
    "zh": "当前配置未启用自动 NR，保留固定 1080p 档",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "目前設定未啟用自動 NR，保留固定 1080p 檔",
@@ -7955,7 +8018,7 @@
   },
   {
    "zh": "打开",
-   "src": "qml/SettingsPage.qml",
+   "src": "qml/DialogHost.qml",
    "zh-TW": "開啟",
    "en": "Open",
    "ja": "開く"
@@ -8450,6 +8513,20 @@
    "zh-TW": "播放清單檔案無法讀取，已使用空清單",
    "en": "Could not read playlist; using an empty list.",
    "ja": "プレイリストを読み込めないため、空のリストを使用します。"
+  },
+  {
+   "zh": "播放地址",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "播放位址",
+   "en": "Open media URL",
+   "ja": "URL を開く"
+  },
+  {
+   "zh": "播放地址…",
+   "src": "qml/CineBar.qml",
+   "zh-TW": "播放位址…",
+   "en": "Open media URL…",
+   "ja": "URL を開く…"
   },
   {
    "zh": "播放失败",
@@ -9255,6 +9332,13 @@
    "zh-TW": "顯示同步：自動 + 可變更新 · 螢幕跟著畫面更新，不撕裂",
    "en": "Display sync: auto + variable refresh · the display refreshes with each frame, no tearing",
    "ja": "表示の同期：自動 + 可変リフレッシュ · 画面がフレームに合わせて更新、ティアリングなし"
+  },
+  {
+   "zh": "显示同步：自动 + 可变刷新 · 已请求，等待驱动确认",
+   "src": "src/engine/VideoPresenter.cpp",
+   "zh-TW": "顯示同步：自動 + 可變更新率 · 已請求，等待驅動確認",
+   "en": "Display sync: Auto + variable refresh · requested, awaiting driver confirmation",
+   "ja": "表示同期：自動 + 可変リフレッシュ · 要求済み、ドライバーの確認待ち"
   },
   {
    "zh": "显示同步：自动 · 不撕裂，也不等待垂直同步（延迟最低）",
@@ -11623,6 +11707,13 @@
    "ja": "入力より大きい目標解像度が必要です。入力が目標以上の場合は超解像処理を行いません。"
   },
   {
+   "zh": "直接打开 HTTP、HTTPS 或 RTSP 视频流，例如 IPTV 或摄像机地址",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "直接開啟 HTTP、HTTPS 或 RTSP 影片串流，例如 IPTV 或攝影機位址",
+   "en": "Open an HTTP, HTTPS or RTSP media stream, such as IPTV or a camera feed.",
+   "ja": "IPTV やカメラなどの HTTP、HTTPS、RTSP メディアストリームを開きます。"
+  },
+  {
    "zh": "直播兼容模式未能启用，已恢复",
    "src": "src/engine/EngineControllerImage.cpp",
    "zh-TW": "直播相容模式未能啟用，已恢復",
@@ -12141,6 +12232,13 @@
    "ja": "この字幕形式のデコーダーがありません"
   },
   {
+   "zh": "网络视频 · %1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "網路影片 · %1",
+   "en": "Network video · %1",
+   "ja": "ネットワーク動画 · %1"
+  },
+  {
    "zh": "美乐威低延迟模式",
    "src": "qml/DialogHost.qml",
    "zh-TW": "美樂威低延遲模式",
@@ -12286,6 +12384,13 @@
    "zh-TW": "自動估算：擷取卡 / PS5 即時輸入時生效",
    "en": "Auto estimate: applies to live capture card / PS5 input",
    "ja": "自動推定：キャプチャーカード / PS5 のライブ入力時に有効"
+  },
+  {
+   "zh": "自动去隔行",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "自動去交錯",
+   "en": "Automatic deinterlacing",
+   "ja": "自動インターレース解除"
   },
   {
    "zh": "自动参数分别适配风格 0／1／2。手动可独立保留颜色、亮度和暗部；保护会降低对应变化量。时域稳定复用光流，切换方式保留手动数值。",
@@ -13595,6 +13700,13 @@
    "zh-TW": "請輸入 0.25～4.00 之間的倍速",
    "en": "Enter a speed between 0.25 and 4.00",
    "ja": "0.25～4.00 の速度を入力してください"
+  },
+  {
+   "zh": "请输入有效的 HTTP、HTTPS 或 RTSP 视频地址",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "請輸入有效的 HTTP、HTTPS 或 RTSP 影片位址",
+   "en": "Enter a valid HTTP, HTTPS or RTSP media URL.",
+   "ja": "有効な HTTP、HTTPS、RTSP メディア URL を入力してください。"
   },
   {
    "zh": "请选择",
@@ -15417,6 +15529,13 @@
    "ja": "インターレース"
   },
   {
+   "zh": "隔行视频画面损坏或尺寸改变，已停止处理",
+   "src": "src/source/MediaFileSource.cpp",
+   "zh-TW": "隔行影片畫面損毀或尺寸變更，已停止處理",
+   "en": "The interlaced frame is corrupt or its dimensions changed. Processing stopped.",
+   "ja": "インターレース動画のフレームが破損しているか寸法が変化したため、処理を停止しました。"
+  },
+  {
    "zh": "隔行（{:.2f} 场/秒）",
    "src": "src/source/CaptureCardSource.cpp",
    "zh-TW": "隔行（{:.2f} 場/秒）",
@@ -15534,6 +15653,13 @@
    "zh-TW": "需要支援 DirectX 12 的硬體顯示卡",
    "en": "Requires a hardware GPU with DirectX 12 support",
    "ja": "DirectX 12 対応のハードウェア GPU が必要です"
+  },
+  {
+   "zh": "需要直接媒体地址，普通网页或需要网页登录的页面不能直接播放。直播流通常无法拖动进度。",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "需要直接媒體位址，一般網頁或需要網頁登入的頁面無法直接播放。直播串流通常無法拖曳進度。",
+   "en": "Use a direct media URL. Ordinary web pages and pages requiring browser sign-in cannot be played directly. Live streams usually do not support seeking.",
+   "ja": "メディアの直接 URL が必要です。通常の Web ページやブラウザーでのログインが必要なページは直接再生できません。ライブ配信では通常シークできません。"
   },
   {
    "zh": "需要系统显示事件才能测得真实值；取不到时显示未测",

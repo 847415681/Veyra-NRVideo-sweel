@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <string>
+#include "veyra/media/NetworkInput.h"
 
 struct AVFormatContext;
 struct AVCodecParameters;
@@ -27,12 +28,13 @@ public:
     FFmpegDemuxer(const FFmpegDemuxer&) = delete;
     FFmpegDemuxer& operator=(const FFmpegDemuxer&) = delete;
 
-    bool open(const std::wstring& path);
+    bool open(const std::wstring& path,const std::atomic<bool>* cancelled=nullptr);
     void close();
 
     bool opened() const { return context_ != nullptr; }
     int videoStreamIndex() const { return videoStreamIndex_; }
     int64_t durationUs() const;
+    bool seekable() const;
     double averageFps() const; // informational only; the pipeline is PTS-driven
     int nominalRateNum() const;
     int nominalRateDen() const;
@@ -64,6 +66,7 @@ private:
     int videoStreamIndex_ = -1;
     DemuxerStats stats_{};
     bool havePendingPacket_ = false;
+    InputInterrupt interrupt_;
 };
 
 } // namespace veyra::media

@@ -9622,3 +9622,18 @@ preferences.py最终preferences-224017三次启动的保存/无效组合拒绝/�
 失败如实保留：同进程NOLEGACY夹具5项断言失败，唤醒/发键线程猜测无改善且相关猜测撤回；最后按产品分进程架构建立外部Raw Input目标并实测通过，同进程差异底层原因未进一步解释、不冒称修复，临时按键跟踪已删除。ui-223056暴露Qt全屏切换中的requestActivate与no-focus时序ERROR，产品排队一次接管后ui-224204严格无ERROR。没有拿模拟WM_HOTKEY代替实际键盘，也没用QML抓图黑区域冒充黑屏。未测独占/反作弊/提权游戏、跨屏混合DPI、物理键盘，不承诺封锁所有Raw Input物理按键或任何性能百分比。
 
 final-audit.py pre已通过：81旧树/93原分支/509脏文件、原附件/存档SHA、739构建输入/12EXE/1544共享运行文件保持，QA Main.qml原字节恢复，main仍b571a44，NR独立修复分支原样。后续只提交报告/本日志，post写最终final.json并创建verify通过的增量source-after.bundle；代码/证据保存后按本次授权正常关机（后台延迟后shutdown /s /t 0，无/f），实际PID/安排记录reports/.../shutdown.json。无合main/push/Release/用户包/代发/子Agent。
+## 2026-10-16 Issues45/43/42/41 开工
+
+用户指定四项修复，43为英文专业模式。实际通过GitHub connector读取四正文和45/41已有评论，原件存archives/issues41-45-20261016/issues.json。main8d8eb09干净；先记录77旧树/509脏文件逐文件SHA，checkpoint/pre-issues41-45-20261016及before.bundle，再建立E盘独立codex/issues41-45-20261016。计划docs/ISSUES_41_45_PLAN_2026-10-16.md；仅必要VRR/状态布局/网络文件输入/去隔行及共享接点，保留33ms/250ms、运行库模型/驱动/真实配置，不派Agent。无本轮main合并/push/Release/打包/关闭issue/代发/关机。
+
+### Issues45/43/42/41 本地修复与回归完成
+
+分支codex/issues41-45-20261016，产品构建61cc02e，main8d8eb09保持。45修正VRR可请求/驱动真活动判定，用户Compatible flags不再被误判未开；43核对实际截图后只修右侧参数栏底栏换行，误改性能卡片的内容已恢复main；42增加Ctrl+U/来源菜单HTTP、HTTPS、RTSP输入，复用FFmpeg/共享处理图/音频、可取消5秒网络操作、直播重连继续、主机标题与隐私；41增加可保存且明确组件可用性的自动去隔行，逐行旁路、硬解GPU视频处理器/软解bwdif双场、seek/EOF/reset。采集/离线导出未扩展，旧专有组件/五FFmpeg DLL/dav1d原字节保持。
+
+实际命令：python -X utf8 -B -I E:/项目/Veyra/tmp/issues41-45-20261016/build.py --label 2.0.8-issues41-45 --extra-target veyra_network_interlace_tests（36目标/683输入；最后build-20261016-121655，33.6秒）；python -X utf8 -B -I scripts/ffmpeg/build-deinterlace-module.py --compile-only（固定n9.0.1提交bf1b838f、新LGPL模块248832字节SHA a1b1db7d…，原依赖逐文件SHA不变）。新模块前缀deps/ffmpeg-filter-issues41-45-20261016，对应源码archives/issues41-45-20261016/FFmpeg-9.0.1-deinterlace-module-source.zip，许可证/清单/发布校验接入但未打包。
+
+run-source-tests.py最终12组软/硬解×两轮seek全通过：50i100场、59.94i120场、1080i40场、PTS5秒单帧2场、逐行旁路与关闭；GPU错误0，CPU/GPU逐行样本实际像素一致。network-tests.py最终HTTP/RTSP音视频与120帧、取消246ms、隔行普通/NR+XeSS（SDK37生成帧）通过；HTTPS W3C样例120帧通过。ui-network-probe.py真实UI地址/拒绝/暂停恢复拖动/去隔行设置落盘和测试凭据不入该场配置日志通过；layout-probe.py英文6场D3D12/OBS软件默认/窄/宽参数栏无截断越界。regression-tests.py修正私有测试依赖/参数后通过，显式Qt Quick文本76通过0失败，四语言/数据迁移/几何/266契约通过；原GTA4K实际普通播放100原帧+音频，无播放失败。i18n extract.py --check：2325项三语缺失0/占位符错误0。源码构建输入SHA与QA EXE身份核对通过，私有Main恢复无测试注入。
+
+失败/纠正：FFmpeg工具链接/中文banner/资源编码修复；测试枚举拼写构建失败，误用旧QA的source-tests-112236排除，此后stage强制HEAD+EXE身份核验；GPU滤镜尺寸/输出fence/参考帧生命周期修复。尾场实际是decoder EOF后误用空当前帧做验证，改验滤镜输出；测试回读使用上游COPY helper报布局错，改独立DIRECT诊断回读，产品无CPU像素回读。RTSP校时真实PTS不应强制CFR，测试要求倒退标记并记录clockChanges；HTTP旧测试端未支持Range导致seek失败，正确Range点播端通过。UI补出deinterlace未进保存白名单并修正。Qt Quick旧mock有PlaybackRate字段缺失警告；GTA取消退出有一条不完整NAL警告，均明确记录，不宣传所有日志零警告。
+
+完整报告docs/ISSUES_41_45_REPORT_2026-10-16.md；回执reports/issues41-45-20261016，原日志logs/issues41-45-20261016，测试/构建/临时目录同任务E盘子目录。5090/该VRR显示器、用户电视原片和真实公网IPTV鉴权/连接限制/绝对音画同步未现场验收；音视频沿用原独立读取架构，只证明本轮实测源出画出声。没有提高UI刷新/性能百分比或屏幕延迟主张。最终旧77树/509脏文件/所有旧分支/main保护、源码bundle和source-only检查另写final.json；没有main合并/push/Release/交付包/评论/issue关闭/代发/子Agent/关机。

@@ -1,0 +1,205 @@
+--- a/libavfilter/vf_deinterlace_d3d12.c
++++ b/libavfilter/vf_deinterlace_d3d12.c
+@@ -57,7 +57,11 @@
+     ID3D12VideoProcessor *video_processor;
+     ID3D12CommandQueue *command_queue;
+     ID3D12VideoProcessCommandList *command_list;
+-    ID3D12CommandAllocator *command_allocator;
++    ID3D12CommandAllocator *command_allocator; /* borrowed current slot */
++    ID3D12VideoProcessCommandList *command_lists[8];
++    ID3D12CommandAllocator *command_allocators[8];
++    UINT64 slot_fences[8];
++    AVFrame *slot_inputs[8][MAX_REFERENCES + 1];
+ 
+     /* Synchronization */
+     ID3D12Fence *fence;
+@@ -120,7 +124,7 @@
+             if (completed < fence_value) {
+                 hr = ID3D12Fence_SetEventOnCompletion(s->fence, fence_value, s->fence_event);
+                 if (SUCCEEDED(hr)) {
+-                    WaitForSingleObject(s->fence_event, INFINITE);
++                    WaitForSingleObject(s->fence_event, 5000);
+                 }
+             }
+         }
+@@ -136,15 +140,17 @@
+         s->fence = NULL;
+     }
+ 
+-    if (s->command_list) {
+-        ID3D12VideoProcessCommandList_Release(s->command_list);
+-        s->command_list = NULL;
+-    }
+-
+-    if (s->command_allocator) {
+-        ID3D12CommandAllocator_Release(s->command_allocator);
+-        s->command_allocator = NULL;
+-    }
++    for (int slot = 0; slot < 8; ++slot) {
++        for (int ref = 0; ref < MAX_REFERENCES + 1; ++ref)
++            av_frame_free(&s->slot_inputs[slot][ref]);
++        if (s->command_lists[slot]) ID3D12VideoProcessCommandList_Release(s->command_lists[slot]);
++        if (s->command_allocators[slot]) ID3D12CommandAllocator_Release(s->command_allocators[slot]);
++        s->command_lists[slot] = NULL;
++        s->command_allocators[slot] = NULL;
++        s->slot_fences[slot] = 0;
++    }
++    s->command_list = NULL;
++    s->command_allocator = NULL;
+ 
+     if (s->video_processor) {
+         ID3D12VideoProcessor_Release(s->video_processor);
+@@ -204,7 +210,9 @@
+ {
+     AVRational framerate = {0, 0};
+ 
+-    if (in->duration > 0 && inlink->time_base.num > 0 && inlink->time_base.den > 0) {
++    if (ff_filter_link(inlink)->frame_rate.num > 0 && ff_filter_link(inlink)->frame_rate.den > 0) {
++        framerate = ff_filter_link(inlink)->frame_rate;
++    } else if (in->duration > 0 && inlink->time_base.num > 0 && inlink->time_base.den > 0) {
+         av_reduce(&framerate.num, &framerate.den,
+                   inlink->time_base.den, in->duration * inlink->time_base.num,
+                   INT_MAX);
+@@ -458,11 +466,12 @@
+         return AVERROR_EXTERNAL;
+     }
+ 
++    for (int slot = 0; slot < 8; ++slot) {
+     hr = ID3D12Device_CreateCommandAllocator(
+         s->device,
+         D3D12_COMMAND_LIST_TYPE_VIDEO_PROCESS,
+         &IID_ID3D12CommandAllocator,
+-        (void **)&s->command_allocator
++        (void **)&s->command_allocators[slot]
+     );
+ 
+     if (FAILED(hr)) {
+@@ -474,10 +483,10 @@
+         s->device,
+         0,
+         D3D12_COMMAND_LIST_TYPE_VIDEO_PROCESS,
+-        s->command_allocator,
++        s->command_allocators[slot],
+         NULL,
+         &IID_ID3D12VideoProcessCommandList,
+-        (void **)&s->command_list
++        (void **)&s->command_lists[slot]
+     );
+ 
+     if (FAILED(hr)) {
+@@ -485,7 +494,8 @@
+         return AVERROR_EXTERNAL;
+     }
+ 
+-    ID3D12VideoProcessCommandList_Close(s->command_list);
++    ID3D12VideoProcessCommandList_Close(s->command_lists[slot]);
++    }
+ 
+     hr = ID3D12Device_CreateFence(s->device, 0, D3D12_FENCE_FLAG_NONE, &IID_ID3D12Fence, (void **)&s->fence);
+     if (FAILED(hr)) {
+@@ -536,6 +546,31 @@
+     HRESULT hr;
+ 
+     AVD3D12VAFrame *in_d3d12_frame = (AVD3D12VAFrame *)input_frame->data[0];
++
++    /* Veyra: only reuse an allocator after its submission completes. Keep
++     * decoder/reference frames alive until that same fence. No per-pass wait. */
++    const unsigned slot = (unsigned)((s->fence_value - 1) % 8);
++    if (s->slot_fences[slot] && ID3D12Fence_GetCompletedValue(s->fence) < s->slot_fences[slot]) {
++        hr = ID3D12Fence_SetEventOnCompletion(s->fence, s->slot_fences[slot], s->fence_event);
++        if (FAILED(hr) || WaitForSingleObject(s->fence_event, 5000) != WAIT_OBJECT_0)
++            return AVERROR_EXTERNAL;
++    }
++    for (int ref = 0; ref < MAX_REFERENCES + 1; ++ref)
++        av_frame_free(&s->slot_inputs[slot][ref]);
++    s->slot_inputs[slot][0] = av_frame_clone(input_frame);
++    if (!s->slot_inputs[slot][0]) return AVERROR(ENOMEM);
++    if (queue_idx >= 0) {
++        int count = 1;
++        for (int q = FFMAX(0, queue_idx - s->num_past_frames);
++             q <= FFMIN(s->queue_count - 1, queue_idx + s->num_future_frames); ++q) {
++            if (q == queue_idx || !s->frame_queue[q]) continue;
++            if (count >= MAX_REFERENCES + 1) return AVERROR(EINVAL);
++            s->slot_inputs[slot][count] = av_frame_clone(s->frame_queue[q]);
++            if (!s->slot_inputs[slot][count++]) return AVERROR(ENOMEM);
++        }
++    }
++    s->command_allocator = s->command_allocators[slot];
++    s->command_list = s->command_lists[slot];
+ 
+     out = av_frame_alloc();
+     if (!out) {
+@@ -738,9 +773,12 @@
+         goto fail;
+     }
+ 
+-    out_d3d12_frame->sync_ctx.fence = s->fence;
++    s->slot_fences[slot] = s->fence_value;
++    /* Retain the output pool's own fence. Replacing it leaked one fence
++     * reference on every field and broke the pool's synchronization contract. */
++    hr = ID3D12CommandQueue_Signal(s->command_queue, out_d3d12_frame->sync_ctx.fence, s->fence_value);
++    if (FAILED(hr)) { ret = AVERROR_EXTERNAL; goto fail; }
+     out_d3d12_frame->sync_ctx.fence_value = s->fence_value;
+-    ID3D12Fence_AddRef(s->fence);
+ 
+     s->fence_value++;
+ 
+@@ -750,23 +788,22 @@
+         goto fail;
+     }
+ 
+-    out->width  = s->width;
+-    out->height = s->height;
++    out->width  = input_frame->width;
++    out->height = input_frame->height;
+     out->format = AV_PIX_FMT_D3D12;
+     out->flags &= ~AV_FRAME_FLAG_INTERLACED;
+ 
+-    /* Calculate output PTS for field rate output */
+-    if (s->mode && queue_idx >= 0) {
+-        AVFrame *next_frame = (queue_idx + 1 < s->queue_count) ?
+-                              s->frame_queue[queue_idx + 1] : NULL;
+-
+-        if (field == 0) {
+-            out->pts = 2 * input_frame->pts;
+-        } else if (s->eof || !next_frame) {
+-            out->pts = 3 * input_frame->pts - s->prev_pts;
+-        } else {
+-            out->pts = input_frame->pts + next_frame->pts;
+-        }
++    /* Field time base is half the input base, including short-stream EOF.
++     * Never extrapolate the first frame against an uninitialized prev_pts. */
++    if (s->mode && input_frame->pts != AV_NOPTS_VALUE) {
++        AVFrame *next_frame = queue_idx >= 0 && queue_idx + 1 < s->queue_count ? s->frame_queue[queue_idx + 1] : NULL;
++        int64_t step = input_frame->duration;
++        if (next_frame && next_frame->pts != AV_NOPTS_VALUE && next_frame->pts > input_frame->pts)
++            step = next_frame->pts - input_frame->pts;
++        if (step <= 0) step = av_rescale_q(1, av_inv_q(s->input_framerate), ctx->inputs[0]->time_base);
++        step = FFMAX(step, 1);
++        out->pts = 2 * input_frame->pts + (field ? step : 0);
++        out->duration = step * ((input_frame->flags & AV_FRAME_FLAG_INTERLACED) ? 1 : 2);
+     }
+ 
+     av_log(ctx, AV_LOG_DEBUG, "Deinterlace output: %dx%d, pts=%"PRId64", field=%d\n",
+@@ -825,7 +862,8 @@
+                 }
+                 flush_idx++;
+             }
+-            return AVERROR_EOF;
++            /* Deliver the fields just queued before propagating EOF. */
++            return 0;
+         }
+         return AVERROR_EOF;
+     }
+@@ -845,8 +883,9 @@
+         AVHWFramesContext *frames_ctx = (AVHWFramesContext *)in->hw_frames_ctx->data;
+         AVD3D12VAFramesContext *input_hwctx = (AVD3D12VAFramesContext *)frames_ctx->hwctx;
+ 
+-        s->width = frames_ctx->width;
+-        s->height = frames_ctx->height;
++        /* Visible frame extent differs from padded decoder allocations. */
++        s->width = in->width;
++        s->height = in->height;
+         s->input_format = input_hwctx->format;
+ 
+         if (s->input_format == DXGI_FORMAT_UNKNOWN) {

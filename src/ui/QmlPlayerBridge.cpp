@@ -1,6 +1,8 @@
+#include "veyra/media/FFmpegDeinterlacer.h"
 #include "veyra/ui/QmlPlayerBridge.h"
 #include "veyra/gfx/PresentSink.h"
 #include "veyra/gfx/NvidiaVrr.h"
+#include "veyra/media/NetworkInput.h"
 #include "veyra/ngx/DlssgLite.h"
 #include "veyra/RuntimePaths.h"
 #include "veyra/ui/GamePassthrough.h"
@@ -4561,6 +4563,7 @@ QString QmlPlayerBridge::durationText() const { return mmss(impl_->snapshot.dura
 // --- source -----------------------------------------------------------------
 QString QmlPlayerBridge::sourceName() const {
     if (impl_->sourceLabel.empty()) return QString();
+    if(impl_->liveKind==QLatin1String("url"))return tr("网络视频 · %1").arg(impl_->liveLabel);
     return QFileInfo(utf8Of(impl_->sourceLabel)).fileName();
 }
 QString QmlPlayerBridge::sourceSummary() const {
@@ -6000,6 +6003,7 @@ void QmlPlayerBridge::openDroppedUrls(const QList<QUrl>& urls) {
     // append to the playlist; dropping inside PlaylistWindow always appends.
     if (urls.size() == 1) {
         const QUrl url = urls.front();
+        if(!url.isLocalFile()){openUrl(url);return;}
         if (url.isLocalFile() && !QFileInfo(url.toLocalFile()).isDir()) { openUrl(url); return; }
     }
     impl_->playlist->addUrls(urls);
@@ -6040,10 +6044,11 @@ void QmlPlayerBridge::tickPlaylist() {
 void QmlPlayerBridge::openPath(const QString& path) {
     if (path.isEmpty()) return;
     flushHdrMemory();impl_->hdrTitleApplied.clear();
+    const bool network=media::networkMediaInput(wideOf(path));
     if (QFileInfo(path).isDir()) {
         impl_->playlist->addPaths({path}); emit playlistRequested(); return;
     }
-    if (PlaylistModel::supported(path) && !impl_->playlist->containsPath(path)) impl_->playlist->addPaths({path});
+    if (!network&&PlaylistModel::supported(path) && !impl_->playlist->containsPath(path)) impl_->playlist->addPaths({path});
     impl_->playlistPath = path;
     impl_->playlist->setPlayback(path, QStringLiteral("opening"));
     rememberPosition(true);
@@ -6058,10 +6063,11 @@ void QmlPlayerBridge::openPath(const QString& path) {
     impl_->sourceLabel = wide;
     impl_->liveKind.clear();
     impl_->liveLabel.clear();
+    if(network){impl_->liveKind=QStringLiteral("url");impl_->liveLabel=QUrl(path).host();}
     ++impl_->thumbnailGeneration;
-    emit thumbnailSourceChanged(path);
+    emit thumbnailSourceChanged(network?QString():path);
     emit thumbnailGenerationChanged();
-    impl_->facade.noteRecentFile(wide);
+    if(!network)impl_->facade.noteRecentFile(wide);
     emit recentFilesChanged();
     // Switch to a page with a video area, then settle the native window's
     // geometry, and only then open. The presenter samples the window's client
@@ -6072,20 +6078,31 @@ void QmlPlayerBridge::openPath(const QString& path) {
     // design's source menu implies.
     if (impl_->currentPage.isEmpty() || impl_->currentPage == QLatin1String("home"))
         emit navigate(QStringLiteral("min"));
-    rememberSource(QStringLiteral("file"), path);
+    if(!network)rememberSource(QStringLiteral("file"), path);
     if (impl_->preOpen) impl_->preOpen();
     auto options = impl_->options;
     options.softwareDecode = impl_->prefString("decode") == QLatin1String("software");
     options.hardwareDecodeOnly = impl_->prefString("decode") == QLatin1String("hardware");
+    options.deinterlace=deinterlaceAvailable()&&impl_->prefBool("deinterlace",true);
     impl_->engine.open(impl_->videoWindow, wide, options);
     impl_->openingSessionId = impl_->engine.snapshot().sessionId;
-    impl_->playlistSession = impl_->openingSessionId;
+    impl_->playlistSession = network?0:impl_->openingSessionId;
     impl_->resumeSession = 0;
     if ((impl_->prefBool("rememberPosition", true)||impl_->prefBool("autoResume",false))) {
         const auto saved = impl_->prefs.value("positions").toMap().value(path).toMap();
         if (!saved.isEmpty()) { impl_->resumeSession = impl_->openingSessionId; impl_->resumeAt = saved.value("at").toDouble(); }
     }
-    refreshSubtitles(wide);
+    refreshSubtitles(network?std::wstring():wide);
+}
+
+bool QmlPlayerBridge::deinterlaceAvailable() const { return media::FFmpegDeinterlacer::available(); }
+void QmlPlayerBridge::openNetworkDialog(){emit navigate(QStringLiteral("network"));}
+bool QmlPlayerBridge::openNetworkAddress(const QString& address){
+    const QUrl url(address.trimmed(),QUrl::StrictMode);
+    if(!url.isValid()||url.host().isEmpty()||!media::networkMediaInput(wideOf(url.scheme()+QStringLiteral(":")))){
+        emit notice(tr("请输入有效的 HTTP、HTTPS 或 RTSP 视频地址"),true);return false;
+    }
+    openPath(url.adjusted(QUrl::RemoveFragment).toString(QUrl::FullyEncoded));return true;
 }
 
 void QmlPlayerBridge::togglePlayPause() {
@@ -6094,6 +6111,9 @@ void QmlPlayerBridge::togglePlayPause() {
     const auto& s = impl_->snapshot;
     using T = engine::TransportState;
     if (s.image || s.transport == T::Opening || s.transport == T::Stopping) return;
+    if(impl_->liveKind==QLatin1String("url")&&(s.transport==T::Ended||(s.transport==T::Paused&&s.duration<=0))){
+        openNetworkAddress(QString::fromStdWString(impl_->sourceLabel));return;
+    }
     // Capture cards and streams pause too (field request 2026-10-02): the engine stops
     // reading and enhancing, keeps the last picture and resets the source's queue, so
     // play resumes with the newest frame rather than a backlog. The connection stays up.
@@ -6130,6 +6150,7 @@ void QmlPlayerBridge::seekBy(double seconds) {
     impl_->engine.seek(std::max(0.0, impl_->snapshot.position + seconds));
 }
 void QmlPlayerBridge::openUrl(const QUrl& url) {
+    if(!url.isLocalFile()){openNetworkAddress(url.toString(QUrl::FullyEncoded));return;}
     if (!url.isLocalFile()) {
         emit notice(tr("只能打开本地文件"), true);
         return;
@@ -6231,7 +6252,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"listInspectorWidth", {376, 4000}}};
     static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
-                                   "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu"};
+                                   "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -7528,7 +7549,7 @@ void QmlPlayerBridge::updateRunStatus() {
     }
     if(i.presentation.variableRefresh){
         if(vrrLevel>=4)options<<tr("可变刷新 · 生效中");
-        else if(vrrLevel==3)options<<tr("可变刷新 · 未生效");
+        else if(vrrLevel==3)options<<tr("可变刷新 · 等待驱动确认");
         else options<<tr("可变刷新 · 当前屏幕不可用");
     }else if(s.running&&vrrLevel>=4)options<<tr("屏幕可变刷新生效中");
     if(i.presentation.outputRate!=engine::OutputRateMode::Off){
@@ -7881,11 +7902,11 @@ QString QmlPlayerBridge::vrrHint() const {
     switch (impl_->vrrState) {
     case 0: return tr("无法检测屏幕是否支持（目前只支持 NVIDIA 显卡）");
     case 1: return tr("当前屏幕不支持可变刷新");
-    case 2: return tr("屏幕支持，但驱动未开启：NVIDIA 控制面板 → 设置 G-SYNC");
+    case 2: return tr("屏幕支持可变刷新，但当前显示模式不可用；请检查连接、刷新率及驱动设置");
     case 3:
         if (!on) return tr("屏幕跟着画面刷新：不撕裂，也几乎不用等刷新");
-        return running ? tr("已开启，屏幕还没进入可变刷新：全屏并隐藏控制栏，或在 NVIDIA 控制面板为窗口模式开启 G-SYNC")
-                       : tr("已开启，播放时生效");
+        return running ? tr("已请求可变刷新，驱动尚未确认生效；可检查窗口/全屏 G-SYNC 设置，当前状态不代表驱动已关闭")
+                       : tr("已开启，将在播放时请求可变刷新；是否生效以驱动报告为准");
     default: return on ? tr("生效中：屏幕跟着画面刷新") : tr("屏幕正处于可变刷新（驱动已开启）");
     }
 }
@@ -8153,6 +8174,7 @@ QString QmlPlayerBridge::sourceKind() const {
 QString QmlPlayerBridge::sourceTitle() const {
     const QString kind = sourceKind();
     if (kind.isEmpty()) return {};
+    if(kind==QLatin1String("url"))return tr("网络视频 · %1").arg(impl_->liveLabel);
     if (kind == QLatin1String("file") || kind == QLatin1String("image")) return sourceName();
     if (kind == QLatin1String("capture")) {
         const QString name = impl_->prefString("captureDeviceName");

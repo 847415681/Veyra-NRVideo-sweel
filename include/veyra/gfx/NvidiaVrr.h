@@ -31,13 +31,21 @@ struct VrrState {
     int status=0;          // last NvAPI status (0 = OK)
     bool operator==(const VrrState&)const=default;
 };
-// 0 unknown (no NVIDIA driver answer), 1 the monitor cannot do VRR, 2 it can
-// but VRR is not possible now (driver setting off, mode or connection),
-// 3 VRR possible/requested but not active, 4 VRR active on the display.
+// A display may be capable before an application's VRR presentation starts.
+// In particular G-SYNC Compatible can report all GetVRRInfo flags clear while
+// generic monitor capabilities say that the applied mode supports VRR (#45).
+// Permit the user's presentation request then, without inventing active flags
+// or assuming that the NVIDIA Control Panel setting is off.
+constexpr bool vrrPresentationAvailable(const VrrState& s){
+    return s.enabled||s.inVrrMode||s.possible||s.requested
+        ||(s.capsKnown&&s.supportsVrr&&s.currentlyCapable);
+}
+// 0 unknown, 1 unsupported, 2 supported but unavailable in the applied mode,
+// 3 presentation may request VRR (activation unconfirmed), 4 driver reports active.
 constexpr unsigned vrrLevel(const VrrState& s){
     if(!s.known)return 0;
     if(s.enabled||s.inVrrMode)return 4;
-    if(s.possible||s.requested)return 3;
+    if(vrrPresentationAvailable(s))return 3;
     if(s.supportsVrr||s.currentlyCapable)return 2;
     return 1;
 }
@@ -47,7 +55,7 @@ inline VrrState queryVrr(HWND window){
     static const int testLevel=[]{wchar_t v[4]{};return GetEnvironmentVariableW(L"VEYRA_TEST_VRR_LEVEL",v,4)?std::clamp(_wtoi(v),0,4):-1;}();
     if(testLevel>=0){
         VrrState s;s.simulated=true;s.known=testLevel>0;s.capsKnown=s.known;
-        s.supportsVrr=s.currentlyCapable=testLevel>=2;s.possible=s.requested=testLevel>=3;s.enabled=s.inVrrMode=testLevel>=4;
+        s.supportsVrr=testLevel>=2;s.currentlyCapable=testLevel>=3;s.possible=s.requested=testLevel>=3;s.enabled=s.inVrrMode=testLevel>=4;
         return s;
     }
     struct Info {uint32_t version;uint32_t flags;uint32_t reservedEx[4];};

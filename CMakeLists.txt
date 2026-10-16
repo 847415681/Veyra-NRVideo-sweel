@@ -44,6 +44,7 @@ if(NOT VEYRA_NVOF_SDK_ROOT)
 endif()
 set(VEYRA_RUNTIME_ROOT "" CACHE PATH "Local NVIDIA runtime root")
 set(VEYRA_FFMPEG_ROOT "" CACHE PATH "vcpkg-installed x64-windows root with FFmpeg (player deps)")
+option(VEYRA_ENABLE_DEINTERLACE "Enable optional LGPL FFmpeg deinterlacing module" ON)
 set(VEYRA_CLIP_TOOLS_ROOT "" CACHE PATH "vcpkg-installed x64-windows root with openh264-enabled FFmpeg (clip tooling only)")
 
 option(VEYRA_ENABLE_EXPERIMENTAL_DLSSNR
@@ -497,6 +498,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   add_library(veyra_media STATIC
     src/media/FFmpegDemuxer.cpp
     src/media/FFmpegVideoDecoder.cpp
+    src/media/FFmpegDeinterlacer.cpp
   )
   veyra_apply_warnings(veyra_media)
   # FFmpeg headers are third-party; /WX stays off for this target
@@ -506,6 +508,12 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   # d3d11: the HEVC hardware path decodes on a private D3D11VA device and shares
   # the surfaces with the D3D12 graph as NT handles.
   target_link_libraries(veyra_media PUBLIC veyra_base veyra_gfx d3d11)
+  if(VEYRA_ENABLE_DEINTERLACE)
+    if(NOT EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavfilter/avfilter.h")
+      message(FATAL_ERROR "Deinterlacing requires the filter prefix; run scripts/ffmpeg/build-deinterlace-module.py and set VEYRA_FFMPEG_ROOT to its prefix (or explicitly disable VEYRA_ENABLE_DEINTERLACE).")
+    endif()
+    target_compile_definitions(veyra_media PRIVATE VEYRA_ENABLE_DEINTERLACE=1)
+  endif()
   target_include_directories(veyra_media PUBLIC ${FFMPEG_INCLUDE_DIRS})
   target_link_directories(veyra_media PUBLIC ${FFMPEG_LIBRARY_DIRS})
   target_link_libraries(veyra_media PUBLIC ${FFMPEG_LIBRARIES})
@@ -657,6 +665,10 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_link_libraries(veyra_source_tests PRIVATE veyra_sources)
 
   add_executable(veyra_capture_tests tests/integration/CaptureSourceTests.cpp)
+  add_executable(veyra_network_interlace_tests tests/integration/NetworkInterlaceTests.cpp)
+  target_compile_features(veyra_network_interlace_tests PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_network_interlace_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+  target_link_libraries(veyra_network_interlace_tests PRIVATE veyra_engine)
   add_executable(veyra_decklink_tests tests/unit/DeckLinkCaptureTests.cpp)
   target_compile_features(veyra_decklink_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_decklink_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)

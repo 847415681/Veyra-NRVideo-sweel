@@ -212,6 +212,14 @@ VPage {
             }
         }
 
+        VButton {
+            objectName: "home-network"
+            Layout.alignment: Qt.AlignHCenter
+            text: qsTr("播放地址…")
+            iconName: "cast"
+            onClicked: veyra.openNetworkDialog()
+        }
+
         // .resume: 692 wide, an accent-tinted gradient plate, shown only when a
         // capture session was actually used before. Nothing invented: the text is
         // the recorded session, and the row is absent when there is none.
