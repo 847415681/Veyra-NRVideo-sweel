@@ -247,6 +247,7 @@ def main():
             raise ValueError('Patched FFmpeg binary mismatch: ' + record['name'])
         copy(source, record['name'])
     if 'filterModule' in ffbuild:
+        copy(ROOT / 'docs/BUILD_DEINTERLACE_2026-10-16.md','docs/BUILD_DEINTERLACE_2026-10-16.md')
         for source, target in [('veyra-filter-build.json','FFMPEG-DEINTERLACE-BUILD.json'),
                                ('filter-COPYING.LGPLv2.1','FFMPEG-DEINTERLACE-LICENSE.txt'),('filter-LICENSE.md','FFMPEG-DEINTERLACE-NOTICE.md')]:
             copy(ffmpeg / 'share/ffmpeg' / source,'licenses/' + target)

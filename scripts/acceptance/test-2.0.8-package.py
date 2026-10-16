@@ -110,7 +110,7 @@ def refresh(flavor):
     docs={r['path'] for r in json.loads((DONORS[flavor]/'package-manifest.json').read_text('utf8'))['files'] if r['path'].startswith('docs/')}
     docs|={'docs/'+n for n in ('BUILD_2.0.8_TEST.md','AUDIT_2.0.8_2026-10-15.md','FIELD_FIXES_2026-10-15.md','FG_GPU_HOME_2026-10-14.md','PC_GAME_MODE_2026-10-14.md',
         'PS5_CAPTURE_CONTROL_2026-10-14.md','ISSUES_36_37_BMD_REPORT_2026-10-13.md','UPDATE_CHECK_PLAN_2026-10-13.md','LATENCY_MIN_PLAN_2026-10-13.md','LATENCY_CHAIN_AUDIT_REPORT_2026-10-13.md')}
-    docs|={VALIDATION}
+    docs|={VALIDATION,'docs/BUILD_DEINTERLACE_2026-10-16.md','docs/ISSUES_41_45_REPORT_2026-10-16.md'}
     for n in docs:
         if (ROOT/n).is_file():atomic(ROOT/n,app/n)
     ff=pkg.audit_ffmpeg(FF)
@@ -155,7 +155,7 @@ def manifest(flavor,source=False):
         knownIssues=['AMD/Intel enhancement, GC550 and Blackmagic field validation require affected hardware','Douyin live companion compatibility not reproduced locally (not installed); process-name simulation only; field confirmation needed','VFG synthetic async validation failed 22 checks once, then 2425 checks passed in an isolated rerun; cause unresolved; see validation record'],
         correspondingSource=dict(application='../'+SOURCE.name,applicationSha256=sha(SOURCE) if source else None,
             dependencies='../'+DEPSOURCE.name,dependencySha256=DEPSHA,ffmpeg='../'+FFSOURCE.name,ffmpegSha256=FFSHA,
-            deinterlaceModule=dict(archive='../'+Path(pkg.audit_ffmpeg(FF)['filterModule']['correspondingSource']['archive']).name,
+            deinterlaceModule=dict(archive='../'+Path(pkg.audit_ffmpeg(FF)['filterModule']['correspondingSource']['archive']).name,instructions='docs/BUILD_DEINTERLACE_2026-10-16.md',
                 sha256=pkg.audit_ffmpeg(FF)['filterModule']['correspondingSource']['sha256']),
             instructions='docs/BUILD_2.0.8_TEST.md',displayVersionOverride='-DVEYRA_DISPLAY_VERSION='+LABEL),files=payload(app))
     document(app/'package-manifest.json',data);return data
