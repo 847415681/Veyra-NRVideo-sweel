@@ -25,6 +25,7 @@
 #include <QCursor>
 #include <QScreen>
 #include <QWindow>
+#include <QPointer>
 
 #include <QDateTime>
 #include <QDir>
@@ -524,6 +525,8 @@ struct QmlPlayerBridge::Impl {
     uint64_t gameModeSessionId = 0;    // its engine session once the open ran
     bool gameModeLive = false, gamePanelOpen = false, gameRefused = false;
     bool gameModeShown = false, passthroughShown = false;
+    QRectF gameVideoRect;
+    QPointer<QWindow> gameWindow;
     HMONITOR gameMonitor = nullptr;
     // The monitored GPU also computes when 设置 -> "同时用这块显卡运算" is on
     // and a specific GPU (not 自动) is chosen; otherwise the default order.
@@ -1184,6 +1187,9 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     // The compute GPU decides which effects exist, so it is settled before
     // anything below samples the capabilities or restores the saved chain.
     impl_->loadPrefs();
+    const auto gameKeys=shortcuts();
+    impl_->game.setHotkeys(ui::gameKey(QKeySequence(gameKeys.value("gamePanel").toString(),QKeySequence::PortableText)),
+                          ui::gameKey(QKeySequence(gameKeys.value("gameExit").toString(),QKeySequence::PortableText)));
     impl_->enumerateGpuAdapters();
     impl_->resolveGpuMonitor();
     impl_->applyComputeGpu();
@@ -1220,10 +1226,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         switch (event) {
         case E::PanelHotkey: emit gameHotkey(0); break;
         case E::ExitHotkey: emit gameHotkey(1); break;
-        case E::HomeUnavailable:
-            emit notice(tr("Home 已被其它软件占用：游戏模式里不能用 Home 呼出调整面板，按 Ctrl+Alt+Home 退出后再调整"), true); break;
         case E::ExitUnavailable:
-            emit notice(tr("Ctrl+Alt+Home 已被其它软件占用，游戏模式不能穿透操作；关闭占用它的软件后重新全屏"), true); break;
+            emit notice(tr("游戏模式键盘监听启动失败，未开启鼠标穿透；请退出全屏后重试"), true); break;
         case E::HangReleased:
             // Publish Off before the foreground goes back to Veyra; stay out of
             // click-through until fullscreen is left.
@@ -1234,7 +1238,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         }
     };
     auto* gameBeat = new QTimer(this);
-    connect(gameBeat, &QTimer::timeout, this, [this] { impl_->game.heartbeat(); });
+    connect(gameBeat, &QTimer::timeout, this, [this] {
+        impl_->game.heartbeat();
+        updateGameGeometry();
+    });
     gameBeat->start(250);
 #ifdef VEYRA_ENABLE_MOONLIGHT
     setupMoonlight();
@@ -2777,30 +2784,37 @@ bool QmlPlayerBridge::startScreenCapture() {
         impl_->gameMonitor = window ? MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST) : reinterpret_cast<HMONITOR>(value.target);
         impl_->game.setTarget(window, impl_->gameMonitor, !window);
         impl_->gameModeUri = value.uri();
-        // Two cases the picture cannot cover well, said up front.
+        // Exclusive fullscreen still cannot be covered by another process.
         QUERY_USER_NOTIFICATION_STATE state{};
         if (SUCCEEDED(SHQueryUserNotificationState(&state)) && state == QUNS_RUNNING_D3D_FULL_SCREEN)
             emit notice(tr("检测到独占全屏的游戏：Windows 不允许其它窗口盖在它上面，请把游戏改成无边框窗口或窗口化"), true);
-        MONITORINFO monitor{}; monitor.cbSize = sizeof(monitor);
-        RECT client{}; POINT origin{};
-        if (window && GetMonitorInfoW(impl_->gameMonitor, &monitor) && GetClientRect(window, &client) && ClientToScreen(window, &origin) &&
-            (origin.x != monitor.rcMonitor.left || origin.y != monitor.rcMonitor.top ||
-             client.right != monitor.rcMonitor.right - monitor.rcMonitor.left || client.bottom != monitor.rcMonitor.bottom - monitor.rcMonitor.top)) {
-            veyra::log::info("game-mode", std::format("captured window does not fill its monitor: client={}x{} at {},{}", client.right, client.bottom, origin.x, origin.y));
-            emit notice(tr("游戏窗口没有铺满屏幕：画面会放大显示，鼠标点到的位置可能和看到的不一致；建议把游戏设为无边框全屏"), false);
-        }
     } else impl_->gameModeUri.clear();
     veyra::log::info("screen-ui", std::format("start kind={} method={} fps={} cursor={} crop={},{},{},{} fill={} gameMode={}", int(value.kind), int(value.method),
         value.fps, value.cursor, value.left, value.top, value.right, value.bottom, o.value("fill").toBool(), game));
     openSourceUri(value.uri(), wideOf(screenTargetLabel()));
-    impl_->screenFillActive = o.value("fill").toBool();
+    impl_->screenFillActive = !game && o.value("fill").toBool();
     impl_->screenFitClient = impl_->screenFitImage = QSize();
     rememberSource(QStringLiteral("screen"), screenTargetLabel());
     return true;
 }
 bool QmlPlayerBridge::gameMode() const { return impl_->gameModeSessionId != 0; }
 bool QmlPlayerBridge::passthroughActive() const { return impl_->passthroughShown; }
-void QmlPlayerBridge::attachMainWindow(qulonglong nativeHandle) { impl_->game.attach(reinterpret_cast<HWND>(nativeHandle)); }
+QRectF QmlPlayerBridge::gameVideoRect() const { return impl_->gameVideoRect; }
+void QmlPlayerBridge::attachMainWindow(qulonglong nativeHandle) {
+    impl_->game.attach(reinterpret_cast<HWND>(nativeHandle));
+    for (auto* window:QGuiApplication::allWindows())
+        if (qulonglong(window->winId())==nativeHandle) { impl_->gameWindow=window; break; }
+}
+void QmlPlayerBridge::updateGameGeometry() {
+    if (!gameMode() || !impl_->presentation.fullscreen || !impl_->gameWindow) return;
+    const RECT r=impl_->game.pictureBounds();
+    const qreal scale=impl_->gameWindow->devicePixelRatio();
+    if (scale<=0) return;
+    const QRectF rect(r.left/scale,r.top/scale,(r.right-r.left)/scale,(r.bottom-r.top)/scale);
+    if (!rect.isEmpty() && rect!=impl_->gameVideoRect) {
+        impl_->gameVideoRect=rect; emit gameModeChanged();
+    }
+}
 void QmlPlayerBridge::setGamePanelOpen(bool open) {
     if (impl_->gamePanelOpen == open) return;
     impl_->gamePanelOpen = open;
@@ -2846,7 +2860,8 @@ void QmlPlayerBridge::updateGameMode() {
     Mode want = Mode::Off;
     if (i.gameModeSessionId && i.gameModeLive && i.presentation.fullscreen && !i.gameRefused)
         want = i.gamePanelOpen ? Mode::Panel : Mode::Through;
-    // A refusal (the exit hotkey is taken) holds until fullscreen is left.
+    if (want!=Mode::Off && i.gameVideoRect.isEmpty()) updateGameGeometry();
+    // A listener failure holds until fullscreen is left.
     if (want != Mode::Off && i.game.mode() == Mode::Off && !i.game.arm()) { i.gameRefused = true; want = Mode::Off; }
     if (want != i.game.mode()) {
         // QML binds the window's click-through flags to passthroughActive: publish
@@ -2856,6 +2871,9 @@ void QmlPlayerBridge::updateGameMode() {
         i.game.apply(want);
     }
     const bool mode = i.gameModeSessionId != 0;
+    if ((!mode || !i.presentation.fullscreen) && !i.gameVideoRect.isEmpty()) {
+        i.gameVideoRect={}; emit gameModeChanged();
+    }
     if (mode != i.gameModeShown) { i.gameModeShown = mode; emit gameModeChanged(); }
 }
 QString QmlPlayerBridge::screenTargetId() const { return impl_->screenTarget; }
@@ -6452,7 +6470,8 @@ void QmlPlayerBridge::refreshAudioDevices() {
 namespace {
 const QVariantMap& shortcutDefaults() {
     static const QVariantMap d{{"playPause", "Space"}, {"fullscreen", "F"}, {"lock", "Ctrl+L"},
-                               {"hold", "V"}, {"screenshot", "Ctrl+S"}, {"toggleMode", "Tab"}};
+                               {"hold", "V"}, {"screenshot", "Ctrl+S"}, {"toggleMode", "Tab"},
+                               {"gamePanel", "Home"}, {"gameExit", "Ctrl+Alt+Home"}};
     return d;
 }
 }
@@ -6460,7 +6479,10 @@ QVariantMap QmlPlayerBridge::shortcuts() const {
     QVariantMap out = shortcutDefaults();
     const auto custom = impl_->prefs.value("shortcuts").toMap();
     for (auto it = custom.begin(); it != custom.end(); ++it)
-        if (out.contains(it.key())) out[it.key()] = it.value();
+        if (out.contains(it.key())) {
+            if ((it.key()=="gamePanel"||it.key()=="gameExit") && !ui::gameKey(QKeySequence(it.value().toString(),QKeySequence::PortableText)).vk) continue;
+            out[it.key()] = it.value();
+        }
     return out;
 }
 bool QmlPlayerBridge::setShortcut(const QString& action, const QString& sequence) {
@@ -6468,6 +6490,13 @@ bool QmlPlayerBridge::setShortcut(const QString& action, const QString& sequence
     const QKeySequence seq(sequence, QKeySequence::PortableText);
     if (seq.isEmpty() || seq.count() != 1) { emit notice(tr("无效的按键"), true); return false; }
     const QString text = seq.toString(QKeySequence::PortableText);
+    if ((action=="gamePanel"||action=="gameExit") && !ui::gameKey(seq).vk) {
+        emit notice(tr("无效的按键"),true); return false;
+    }
+    if ((action=="gamePanel"||action=="gameExit") &&
+        (text=="Ctrl+Alt+Del"||text=="Alt+Tab"||text=="Alt+F4"||text=="Ctrl+Shift+Esc"||text=="Alt+Enter")) {
+        emit notice(tr("%1 已被固定功能占用").arg(text),true); return false;
+    }
     // Keys the shell already owns cannot be taken over.
     static const QStringList reserved{"Esc", "F11", "Left", "Right", "Up", "Down", "Ctrl+O", "Ctrl+E",
                                       "B", "Z", "X", "T", "Y", "Shift+Z", "Shift+X", "Alt+Return"};
@@ -6483,6 +6512,9 @@ bool QmlPlayerBridge::setShortcut(const QString& action, const QString& sequence
     impl_->prefs["shortcuts"] = custom;
     if (!impl_->savePrefs()) { impl_->prefs = previous; emit notice(tr("快捷键保存失败"), true); return false; }
     veyra::log::info("ui-prefs", std::format("shortcut {}={}", action.toStdString(), text.toStdString()));
+    const auto keys=shortcuts();
+    impl_->game.setHotkeys(ui::gameKey(QKeySequence(keys.value("gamePanel").toString(),QKeySequence::PortableText)),
+                          ui::gameKey(QKeySequence(keys.value("gameExit").toString(),QKeySequence::PortableText)));
     emit preferencesChanged();
     return true;
 }
@@ -6490,6 +6522,7 @@ void QmlPlayerBridge::resetShortcuts() {
     const auto previous = impl_->prefs;
     impl_->prefs.remove("shortcuts");
     if (!impl_->savePrefs()) { impl_->prefs = previous; return; }
+    impl_->game.setHotkeys(ui::gameKey(QKeySequence("Home")),ui::gameKey(QKeySequence("Ctrl+Alt+Home")));
     emit preferencesChanged();
 }
 bool QmlPlayerBridge::obsGameCaptureActive() const { return qApp && qApp->property("veyraObsGameCapture").toBool(); }
@@ -7810,10 +7843,17 @@ void QmlPlayerBridge::setPresentationFullscreen(bool value) {
     impl_->presentation.fullscreen=value;
     impl_->engine.requestPresentation(impl_->presentation);
     emit presentationChanged();
-    updateGameMode();
+    // QML's visibility notification runs inside Qt's fullscreen transition.
+    // Let Qt finish its activation request before applying no-focus/through
+    // flags and handing the foreground to the game. One queued transition,
+    // without changing polling or presentation cadence.
+    if(value&&gameMode()) QMetaObject::invokeMethod(this,[this]{
+        if(impl_->presentation.fullscreen)updateGameMode();
+    },Qt::QueuedConnection);
+    else updateGameMode();
 }
 double QmlPlayerBridge::previewAspect() const {
-    const int mode=impl_->screenFillActive?2:impl_->aspectMode;
+    const int mode=gameMode()&&impl_->presentation.fullscreen?0:impl_->screenFillActive?2:impl_->aspectMode;
     if(mode==4)return 16.0/9;if(mode==5)return 4.0/3;if(mode==6)return 21.0/9;
     const auto e=impl_->snapshot.metrics.resolution.output;
     if(mode==1&&e.height){
@@ -7928,14 +7968,15 @@ void QmlPlayerBridge::setAspectMode(int value) {
 }
 void QmlPlayerBridge::applyAspect(bool force) {
     auto& i = *impl_;
-    const int mode = i.screenFillActive ? 2 : i.aspectMode;
+    const bool aligned=gameMode()&&i.presentation.fullscreen;
+    const int mode = aligned ? 0 : i.screenFillActive ? 2 : i.aspectMode;
     if (!i.videoWindow) return;
     RECT r{}; GetClientRect(i.videoWindow, &r);
     const auto e = i.snapshot.metrics.resolution.output;
     const QSize client(r.right, r.bottom), image(int(e.width), int(e.height));
     if (!force && mode == i.aspectApplied && client == i.screenFitClient && image == i.screenFitImage) return;
     i.screenFitClient = client; i.screenFitImage = image; i.aspectApplied = mode;
-    auto view=force?engine::PreviewView{}:i.engine.previewView();
+    auto view=force||aligned?engine::PreviewView{}:i.engine.previewView();
     view.mode=mode;
     const double dar=sourceAspect();
     view.displayAspect=dar>0&&image.height()>0&&std::abs(dar-double(image.width())/image.height())>.001?dar:0;

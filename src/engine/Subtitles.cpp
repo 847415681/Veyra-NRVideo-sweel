@@ -1,4 +1,6 @@
 #include "veyra/engine/Subtitles.h"
+#include "veyra/engine/SubtitleCacheBudget.h"
+#include <cstdlib>
 #include "veyra/Log.h"
 
 #include <windows.h>
@@ -504,9 +506,11 @@ static std::vector<SubtitleTrack> loadDemuxedSubtitleTracks(const std::wstring& 
     if(std::none_of(decoders.begin(),decoders.end(),[](const auto& decoder){return bool(decoder);}))return tracks;
     AVPacket* packet=av_packet_alloc();
     struct PacketCleanup {AVPacket*& packet;~PacketCleanup(){av_packet_free(&packet);}} packetCleanup{packet};
-    constexpr size_t maxCacheBytes=64u*1024u*1024u;
+    const char* cacheSetting=std::getenv("VEYRA_SUBTITLE_CACHE_MB");
+    const size_t maxCacheBytes=size_t(subtitleCacheBudgetBytes(cacheSetting?std::string_view(cacheSetting):std::string_view{}));
+    log::info("subtitle",std::format("compressed cue cache budgetBytes={} (on demand, not preallocated)",maxCacheBytes));
     size_t cacheBytes=0,totalCues=0;uint64_t packets=0;
-    struct DecodeStats {uint64_t packets=0,displays=0,errors=0;int lastError=0;};
+    struct DecodeStats {uint64_t packets=0,displays=0,errors=0,rejected=0;int lastError=0;};
     std::vector<DecodeStats> stats(tracks.size());
     int videoWidth=1920,videoHeight=1080;
     for(unsigned i=0;i<input->nb_streams;++i)if(input->streams[i]->codecpar->codec_type==AVMEDIA_TYPE_VIDEO){
@@ -583,7 +587,8 @@ static std::vector<SubtitleTrack> loadDemuxedSubtitleTracks(const std::wstring& 
                     cue.bitmap=std::move(frame);
                     if(totalCues<kMaxCues&&bytes<=maxCacheBytes-cacheBytes){cacheBytes+=bytes;++totalCues;track.cues.push_back(std::move(cue));}
                     else track.note=L"字幕缓存已达上限，后续字幕未加载";
-                }else if(!valid){track.note=L"图形字幕数据无效或超出缓存上限";log::warn("subtitle","bitmap display rejected: invalid rectangle or cache budget");}
+                }else if(!valid){track.note=L"图形字幕数据无效或超出缓存上限";
+                    if(++stat.rejected<=3)log::warn("subtitle",std::format("bitmap display rejected stream={} cachedBytes={} budgetBytes={}: invalid rectangle or cache budget",track.streamIndex,cacheBytes,maxCacheBytes));}
             }
             for(unsigned rect=0;rect<subtitle.num_rects;++rect){
                 const auto* entry=subtitle.rects[rect];
@@ -633,8 +638,8 @@ static std::vector<SubtitleTrack> loadDemuxedSubtitleTracks(const std::wstring& 
             else track.note=L"未解码出可显示的字幕";
         }
         track.rebuildIndex();
-        log::info("subtitle",std::format("track stream={} codec={} packets={} displays={} errors={} lastRet={} cues={} note={}",
-            track.streamIndex,utf8(track.codec),stat.packets,stat.displays,stat.errors,stat.lastError,track.cues.size(),utf8(track.note)));
+        log::info("subtitle",std::format("track stream={} codec={} packets={} displays={} errors={} rejected={} lastRet={} cues={} note={}",
+            track.streamIndex,utf8(track.codec),stat.packets,stat.displays,stat.errors,stat.rejected,stat.lastError,track.cues.size(),utf8(track.note)));
     }
     log::info("subtitle",std::format("single-pass complete tracks={} packets={} cues={} cacheBytes={} elapsedMs={:.3f}",tracks.size(),packets,totalCues,cacheBytes,std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count()));
     return tracks;

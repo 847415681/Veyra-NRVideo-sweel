@@ -16815,6 +16815,69 @@
    "zh-TW": "啟用失敗",
    "en": "Failed to enable",
    "ja": "有効化に失敗"
+  },
+  {
+   "zh": "游戏模式键盘监听启动失败，未开启鼠标穿透；请退出全屏后重试",
+   "src": "fan-subtitle-passthrough-20261016",
+   "zh-TW": "遊戲模式鍵盤監聽啟動失敗，未開啟滑鼠穿透；請退出全螢幕後重試",
+   "en": "Game mode keyboard listener could not start. Mouse passthrough is off; leave fullscreen and try again.",
+   "ja": "ゲームモードのキー監視を開始できません。マウス透過はオフです。全画面を解除して再試行してください。"
+  },
+  {
+   "zh": "游戏模式：调整画面",
+   "src": "fan-subtitle-passthrough-20261016",
+   "zh-TW": "遊戲模式：調整畫面",
+   "en": "Game mode: adjust picture",
+   "ja": "ゲームモード：画面調整"
+  },
+  {
+   "zh": "仅在游戏模式中接管按键；支持 Ctrl、Alt、Shift 组合",
+   "src": "fan-subtitle-passthrough-20261016",
+   "zh-TW": "僅在遊戲模式中接管按鍵；支援 Ctrl、Alt、Shift 組合",
+   "en": "Keys are captured only in game mode; Ctrl, Alt and Shift combinations are supported",
+   "ja": "ゲームモード中のみキーを使用します。Ctrl、Alt、Shift の組み合わせに対応"
+  },
+  {
+   "zh": "游戏模式：退出鼠标穿透",
+   "src": "fan-subtitle-passthrough-20261016",
+   "zh-TW": "遊戲模式：退出滑鼠穿透",
+   "en": "Game mode: exit mouse passthrough",
+   "ja": "ゲームモード：マウス透過を解除"
+  },
+  {
+   "zh": "退出全屏，恢复普通窗口操作",
+   "src": "fan-subtitle-passthrough-20261016",
+   "zh-TW": "退出全螢幕，恢復一般視窗操作",
+   "en": "Leave fullscreen and restore normal window controls",
+   "ja": "全画面を解除して通常のウィンドウ操作に戻る"
+  },
+  {
+   "zh": "开始后 Veyra 在这块屏幕上全屏，键鼠和手柄直接操作屏幕上的程序；%1 调整画面，%2 退出",
+   "src": "fan-subtitle-passthrough-20261016",
+   "zh-TW": "開始後 Veyra 在此螢幕全螢幕顯示，鍵鼠與手把直接操作螢幕上的程式；%1 調整畫面，%2 退出",
+   "en": "Veyra opens fullscreen on this display. Keyboard, mouse and controller operate its programs; %1 adjusts the picture and %2 exits.",
+   "ja": "この画面で全画面表示し、キーボード・マウス・コントローラーで背後のアプリを操作します。%1 で画面調整、%2 で解除。"
+  },
+  {
+   "zh": "画面贴合游戏窗口的位置，键鼠和手柄照常操作游戏；%1 调整画面，%2 退出。独占全屏请改为无边框窗口",
+   "src": "fan-subtitle-passthrough-20261016",
+   "zh-TW": "畫面貼合遊戲視窗位置，鍵鼠與手把照常操作遊戲；%1 調整畫面，%2 退出。獨佔全螢幕請改為無邊框視窗",
+   "en": "The picture follows the game window position. Use the keyboard, mouse and controller normally; %1 adjusts the picture and %2 exits. Use borderless mode instead of exclusive fullscreen.",
+   "ja": "ゲームウィンドウの位置に画面を合わせます。通常どおり操作し、%1 で画面調整、%2 で解除。排他全画面ではなくボーダーレスにしてください。"
+  },
+  {
+   "zh": "全屏（双击画面 / F11）· 全屏后按 %1 打开快速调节",
+   "src": "fan-subtitle-passthrough-20261016",
+   "zh-TW": "全螢幕（雙擊畫面 / F11）· 全螢幕後按 %1 開啟快速調整",
+   "en": "Fullscreen (double-click / F11) · Press %1 for quick adjustments",
+   "ja": "全画面（ダブルクリック / F11）· %1 でクイック調整"
+  },
+  {
+   "zh": "%1 关闭",
+   "src": "fan-subtitle-passthrough-20261016",
+   "zh-TW": "%1 關閉",
+   "en": "%1 to close",
+   "ja": "%1 で閉じる"
   }
  ]
 }
