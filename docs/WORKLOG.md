@@ -9637,3 +9637,21 @@ run-source-tests.py最终12组软/硬解×两轮seek全通过：50i100场、59.9
 失败/纠正：FFmpeg工具链接/中文banner/资源编码修复；测试枚举拼写构建失败，误用旧QA的source-tests-112236排除，此后stage强制HEAD+EXE身份核验；GPU滤镜尺寸/输出fence/参考帧生命周期修复。尾场实际是decoder EOF后误用空当前帧做验证，改验滤镜输出；测试回读使用上游COPY helper报布局错，改独立DIRECT诊断回读，产品无CPU像素回读。RTSP校时真实PTS不应强制CFR，测试要求倒退标记并记录clockChanges；HTTP旧测试端未支持Range导致seek失败，正确Range点播端通过。UI补出deinterlace未进保存白名单并修正。Qt Quick旧mock有PlaybackRate字段缺失警告；GTA取消退出有一条不完整NAL警告，均明确记录，不宣传所有日志零警告。
 
 完整报告docs/ISSUES_41_45_REPORT_2026-10-16.md；回执reports/issues41-45-20261016，原日志logs/issues41-45-20261016，测试/构建/临时目录同任务E盘子目录。5090/该VRR显示器、用户电视原片和真实公网IPTV鉴权/连接限制/绝对音画同步未现场验收；音视频沿用原独立读取架构，只证明本轮实测源出画出声。没有提高UI刷新/性能百分比或屏幕延迟主张。最终旧77树/509脏文件/所有旧分支/main保护、源码bundle和source-only检查另写final.json；没有main合并/push/Release/交付包/评论/issue关闭/代发/子Agent/关机。
+
+## 2026-10-17 新SF NR与2.0.9本地测试包
+
+用户提供桌面nvngx_dlssnr.dll，先授权开分支直接替换SF-v2；随后要求新包删除Lecram/旧SF-v2、增加默认开的性能模型开关、原版置灰、RTX20–50默认新版、AMD保持，构建2.0.9供测试后发布。当前只本地候选，无main合并/push/Release/关机/子Agent。先存档82旧树/94分支/509脏文件、用户DLL、旧SF、全引用source-before.bundle（74444218bytes，a4616b85…，verify通过），checkpoint/pre-nr-sf-310916-20261017指向main b571a44；追加开关前另存checkpoint/pre-nr-model-toggle-2.0.9-20261017。所有新产物E:/项目/Veyra/{archives,worktrees,tmp,build,tests,logs,reports,test-packages,verify}/nr-sf-310916-20261017；历史包/其它树/真实用户配置保留。
+
+分支codex/nr-sf-310916-20261017；在此合入NR2060（merge2029a80）、粉丝字幕/鼠标穿透（26e2e93）、issues41–45（0fa1706），来源分支原样。main本身已含PR44显示HDR。候选310.9.16.0/276162560bytes/NotSigned/SHA256 CDFA6C1EC784867182164C7836F324F087B5C9F374D0C9FE46F54999FEABF3ED，与作者17日00:07 compat-fp16-310.9.16-cuda13.4.3 RAR解出的文件完整一致；只复制原件，不改签名/模型/驱动，不进源码Git。来源回执reports/.../source-receipt.json。
+
+实测I32 DLSSNR.Hint.Render.Preset：hint1旧A、2新B，0自动在本机同B；10预热+20计时、0/1/2/2/1共150Evaluate有效输出/无GPU错误。产品明确传1或2，原版/AMD仍0。NR性能标记默认true，贯穿列表/节点共享编辑器、复制/复位、预设32/库13/会话8与.nr-model旁档、导出协议9；旧0/1迁移SF2、原版3/AMD4保留。模型创建期切换触发重建，关闭NR/旁路层/原版/AMD无效标记不重建。预热/近期缓存/自动尺寸池适配SF，缓存键含实际路径与模型；旧特定Lecram双层+DLSS自动COMPUTE准入不扩展。UI33ms/250ms与其它补帧算法保持。
+
+实际命令均用py -3.11 -X utf8 -B -I，任务tmp目录中的build209.py（52目标/745输入/52EXE，最终build-20261017-052737，22.7s）、restage209.py、checks209.py、ui209.py、restart209.py、reuse209.py、export209.py、verify-exports.py和visual209.py。最终产品0ac9d39，EXE SHA7add56b9651d6b629433419fb0d2d9d077057d9a77595ebeabbf4d5fb3b80f80。checks209-053535共17进程通过、Qt Quick77/77、2424翻译三语缺失/占位符0；真实运行库B→A→原版→B、模型保存/重建、384布局/266修复/322字幕契约、HDR/事务/几何/真实发键/PGS五轨后段通过。ui209-053723真实GTA4K/1080NR九张4K非黑图覆盖两模型/原版/两层/节点风格2强度5调控/XeSS2X/DLSS2X，关闭全NR后无Create；restart209-053951独立重开列表/节点/预设保存恢复通过。visual209-070802英文窄窗原版置灰截图目视通过，所有QA Main字节已还原。
+
+reuse209-052933八组顺序回归：预热开关逐帧相同；50次切换缓存24命中且与每次重建逐帧SHA相同；自动NR90帧5尺寸/reset一致；1080i软bwdif/硬解GPU各40场含尾场/seek全部通过。此处首次真实复测发现复用CMake缓存旧FFMPEG_INCLUDE_DIRS优先，去隔行被__has_include静默stub；0ac9d39改已核验前缀头文件置前、去掉静默缺头回退后才通过，未换旧五FFmpeg DLL。export209-053333的两个独立worker分别hint2/1，以原生4K导出各6帧；verify-exports.py独立ffprobe解码确认3840×2160/30fps/6帧/颜色，输出SHA不同、无错误。
+
+RTX5070/616.56，以同一2.0.8 EXE和GTA4K源旧/新/新/旧短测，相同8–21s/单层NR/强度1/其它增强关：修正后1080内部旧5.87296→新3.20118ms，NR GPU耗时下降45.49%，增强链7.1681→4.4958ms。首轮fixture误用policy1实际原生4K，单列约21.29→11.79ms（44.6%），不混称1080。direct1080/model-hints指针绑定实际命令/图片/计时，不宣称FPS/画质/屏幕延迟或20/30/40实卡均通过。
+
+失败原件保留：早期黑场截图、节点未建/未切页超时、测试错用私有预设API/启用未声明层、Qt未展开卡片、请求未构建目标均已纠正再测；UI只关一层和异步抓图提前退出亦修夹具。导出夹具误写不可invokable/JS路径导致文件框重入及重试残留重复id，已只终止本轮QA父子进程、还原私有Main并改既有--export-out/先推进phase，全新两模型导出成功。离屏D3D12 QML抓图无效，不当作产品黑屏，最终软件窗口显式背景截图复核。详细内容与回执见NR_SF_310916_REPORT_2026-10-17.md；所有单测≤300秒、构建≤900秒，无GPU竞争造压。
+
+final-audit.py pre已通过82旧树/94旧分支/509脏文件与main b571a44不变，745构建输入/52EXE/1522共享运行文件匹配，用户候选SHA保持、QA Main还原、无遗留进程。后续package209.py seal/cold生成本轮NVIDIA/AMD ZIP、应用源与三依赖源并核对ZIP逐文件/两后端四次冷启；实际结果记同级DELIVERY.json、cold-start.json及reports/.../package.json。最终post再审旧状态并创建verify通过的source-after.bundle。仅NVIDIA新包移除旧Lecram/SF-v2，保留NVIDIA原版；AMD运行库行/文件逐字节沿用。2060/其它20–40和AMD实卡及长期显存/光学延迟仍待实测，未宣称NV显存问题已根治。
