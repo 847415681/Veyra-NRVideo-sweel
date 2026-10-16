@@ -393,7 +393,8 @@ VPage {
         // This layer's own GPU time (list mode keys a node by its index + 2).
         readonly property var timing: veyra.nodeTimings[String(layerData.index + 2)] || ({})
         readonly property string timingText: timing.state === "measured" ? timing.ms.toFixed(2) + " ms"
-                                           : timing.state === "pending" ? qsTr("等待样本") : ""
+                                           : timing.state === "pending" ? qsTr("等待样本")
+                                           : timing.state === "failed" ? qsTr("启用失败") : ""
         summary: nrEditor.sizeLabel + qsTr(" · 强度 ") + layerData.intensity.toFixed(2)
                  + (layerData.enabled ? (timingText.length > 0 ? " · " + timingText : "") : qsTr(" · 已旁路"))
         on: layerData.enabled

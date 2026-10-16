@@ -75,6 +75,9 @@ public:
     // All four resources are validated via GetDesc before registration; any
     // registration failure unregisters everything already registered in
     // reverse order and returns false.
+    // Registration supplies explicit fence points and completes on a separate
+    // initialization-only fence before success or partial-failure rollback.
+    // It does not publish a flow result or add waits to execute().
     bool initialize(ID3D12Device* device,
                     ID3D12Resource* inputA,
                     ID3D12Resource* inputB,

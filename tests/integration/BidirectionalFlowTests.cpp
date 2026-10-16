@@ -40,6 +40,7 @@ int run(unsigned w,unsigned h,bool both,bool occlusion){
         session.shutdown();
     }
     if(!session.initialize(ctx.device(),tex[0].Get(),tex[1].Get(),tex[2].Get(),tex[3].Get(),desc,st))return 2;
+    if(session.nextOutValue()!=1||ready->GetCompletedValue()!=0)return 2;
     // A malformed paired call must preserve the initialized session.
     auto malformed=desc;malformed.reverseFlow=tex[4].Get();malformed.reverseCost=nullptr;
     if(session.initialize(ctx.device(),tex[0].Get(),tex[1].Get(),tex[2].Get(),tex[3].Get(),malformed,st)||!session.initialized())return 2;
@@ -101,5 +102,38 @@ int run(unsigned w,unsigned h,bool both,bool occlusion){
     std::cout<<"BIDIRECTIONAL width="<<w<<" height="<<h<<" both="<<both<<" occlusion="<<occlusion<<" meanBatchMs="<<ms<<" reverseAllocationBytes="<<reverseBytes<<" medianEpe="<<median(errors)<<" reverseMedianEpe="<<(both?median(reverseErrors):-1)<<" novel="<<novelTotal<<" novelBaseAccepted="<<novelBase<<" novelConsistent="<<novelConsistent<<" good="<<goodTotal<<" goodBaseAccepted="<<goodBase<<" goodConsistent="<<goodConsistent<<" debugErrors="<<debugErrors<<" pass="<<(ok&&!debugErrors)<<std::endl;
     return ok&&!debugErrors?0:1;
 }
+int registrationLifecycle(bool both,unsigned rejectAt){
+    gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status st;gfx::DeviceContextDesc dd;dd.enableDebugLayer=true;
+    if(!ctx.initialize(dd,st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,st))return 2;
+    std::array<ComPtr<ID3D12Resource>,6> tex;
+    for(unsigned i=0;i<6;++i)tex[i]=makeTexture(ctx.device(),i<2?640:160,i<2?360:90,
+        i<2?DXGI_FORMAT_B8G8R8A8_UNORM:i%2==0?DXGI_FORMAT_R16G16_SINT:DXGI_FORMAT_R8_UINT,false);
+    for(auto& t:tex)if(!t)return 2;
+    ComPtr<ID3D12Fence> ready;if(FAILED(ctx.device()->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&ready))))return 2;
+    ngx::NvOfSession session;bool cleaned=false,cleanupOk=true;
+    Cleanup cleanup{[&]{if(cleaned)return;cleaned=true;cleanupOk=ring.drainQueue();
+        if(session.initialized())cleanupOk=session.unregisterAll(st)&&cleanupOk;
+        for(auto& t:tex)t.Reset();session.shutdown();}};
+    ngx::NvOfSession::Desc desc;desc.width=640;desc.height=360;desc.inFence=ctx.fence();desc.outFence=ready.Get();
+    if(both){desc.reverseFlow=tex[4].Get();desc.reverseCost=tex[5].Get();}
+    const auto reject=std::to_wstring(rejectAt);
+    SetEnvironmentVariableW(L"VEYRA_TEST_NVOF_REGISTER_FAILURE",rejectAt?reject.c_str():nullptr);
+    const bool initialized=session.initialize(ctx.device(),tex[0].Get(),tex[1].Get(),tex[2].Get(),tex[3].Get(),desc,st);
+    SetEnvironmentVariableW(L"VEYRA_TEST_NVOF_REGISTER_FAILURE",nullptr);
+    // Registration-only setup/rollback must not advertise completed flow.
+    bool ok=ready->GetCompletedValue()==0&&session.nextOutValue()==1&&session.executeCount()==0;
+    ok=ok&&(rejectAt?(!initialized&&!session.initialized()&&st==Status::DeviceFailure):(initialized&&session.initialized()));
+    cleanup.fn();ok=ok&&cleanupOk;
+    ComPtr<ID3D12InfoQueue> iq;if(FAILED(ctx.device()->QueryInterface(IID_PPV_ARGS(&iq))))return 2;unsigned errors=0;
+    for(UINT64 i=0;i<iq->GetNumStoredMessages();++i){SIZE_T n=0;if(FAILED(iq->GetMessage(i,nullptr,&n)))return 2;
+        std::vector<uint8_t>b(n);auto* m=reinterpret_cast<D3D12_MESSAGE*>(b.data());if(FAILED(iq->GetMessage(i,m,&n)))return 2;
+        if(m->Severity<=D3D12_MESSAGE_SEVERITY_ERROR){++errors;std::cerr<<m->pDescription<<std::endl;}}
+    std::cout<<"REGISTRATION_LIFECYCLE both="<<both<<" rejectAt="<<rejectAt<<" debugErrors="<<errors
+        <<" noFlowPublished="<<(ready->GetCompletedValue()==0)<<" pass="<<(ok&&!errors)<<std::endl;
+    return ok&&!errors?0:1;
 }
-int main(int argc,char** argv){unsigned w=argc>1?unsigned(std::stoi(argv[1])):640,h=argc>2?unsigned(std::stoi(argv[2])):360;if(w<128||h<128||w>3840||h>2160)return 2;for(bool occlusion:{false,true})for(bool both:{false,true}){int r=run(w,h,both,occlusion);if(r)return r;}return 0;}
+}
+int main(int argc,char** argv){unsigned w=argc>1?unsigned(std::stoi(argv[1])):640,h=argc>2?unsigned(std::stoi(argv[2])):360;if(w<128||h<128||w>3840||h>2160)return 2;
+    for(bool both:{false,true})for(unsigned rejected:{0u,2u,4u}){int r=registrationLifecycle(both,rejected);if(r)return r;}
+    if(int r=registrationLifecycle(true,6))return r;
+    for(bool occlusion:{false,true})for(bool both:{false,true}){int r=run(w,h,both,occlusion);if(r)return r;}return 0;}

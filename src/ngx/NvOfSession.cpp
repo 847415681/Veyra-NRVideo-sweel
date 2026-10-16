@@ -2,12 +2,14 @@
 
 #include <windows.h>
 #include <d3d12.h>
+#include <wrl/client.h>
 
 // NVOF SDK headers
 #include <nvOpticalFlowCommon.h>
 #include <nvOpticalFlowD3D12.h>
 
 #include <format>
+#include <memory>
 
 #include "veyra/Log.h"
 
@@ -268,6 +270,61 @@ bool NvOfSession::initialize(ID3D12Device* device,
         return false;
     }
 
+    // Registration has its own GPU work and requires valid fence points too.
+    // Do not signal outFence_ here: that fence advertises completed optical
+    // flow to the caller, whose first execute must still signal value 1.
+    Microsoft::WRL::ComPtr<ID3D12Fence> registrationFence;
+    const HRESULT fenceHr = device->CreateFence(0, D3D12_FENCE_FLAG_NONE,
+        IID_PPV_ARGS(&registrationFence));
+    if (FAILED(fenceHr)) {
+        log::error("nvof-session", std::format("registration fence creation hr=0x{:X}", unsigned(fenceHr)));
+        status = Status::DeviceFailure;
+        return false;
+    }
+    std::unique_ptr<void, decltype(&CloseHandle)> registrationEvent(
+        CreateEventW(nullptr, FALSE, FALSE, nullptr), &CloseHandle);
+    if (!registrationEvent) {
+        log::error("nvof-session", std::format("registration event creation error={}", GetLastError()));
+        status = Status::DeviceFailure;
+        return false;
+    }
+    const uint64_t inputReady = inFence_->GetCompletedValue();
+    if (inputReady == UINT64_MAX) {
+        log::error("nvof-session", "registration input fence reports device removal");
+        status = Status::DeviceFailure;
+        return false;
+    }
+    uint64_t registered = 0;
+    auto finishRegistration = [&]() {
+        if (!registered) return true;
+        uint64_t completed = registrationFence->GetCompletedValue();
+        if (completed != UINT64_MAX && completed >= registered) return true;
+        if (completed == UINT64_MAX) {
+            log::error("nvof-session", "registration completion fence reports device removal");
+            return false;
+        }
+        const HRESULT hr = registrationFence->SetEventOnCompletion(registered, registrationEvent.get());
+        if (FAILED(hr)) {
+            log::error("nvof-session", std::format("registration completion event hr=0x{:X}", unsigned(hr)));
+            return false;
+        }
+        // One bounded initialization/rollback wait, never a per-frame wait.
+        const DWORD waited = WaitForSingleObject(registrationEvent.get(), 5000);
+        completed = registrationFence->GetCompletedValue();
+        if (waited != WAIT_OBJECT_0 || completed == UINT64_MAX || completed < registered) {
+            log::error("nvof-session", std::format(
+                "registration completion failed wait={} requested={} completed={} deviceHr=0x{:X}",
+                waited, registered, completed, unsigned(device->GetDeviceRemovedReason())));
+            return false;
+        }
+        return true;
+    };
+    // Default-inert diagnostic: exercise partial registration rollback without
+    // changing a driver DLL or creating an artificial GPU load.
+    wchar_t rejectText[16]{};
+    const DWORD rejectLength = GetEnvironmentVariableW(L"VEYRA_TEST_NVOF_REGISTER_FAILURE", rejectText, 16);
+    const unsigned rejectAt = rejectLength > 0 && rejectLength < 16 ? unsigned(_wtoi(rejectText)) : 0;
+
     // Unified registration with rollback: whichever of inputA/inputB/flowOut/
     // costOut fails, every already-registered resource is unregistered in
     // REVERSE order (logged) before returning false. No reliance on later
@@ -294,14 +351,34 @@ bool NvOfSession::initialize(ID3D12Device* device,
         NV_OF_REGISTER_RESOURCE_PARAMS_D3D12 reg{};
         reg.resource = resource;
         reg.hOFGpuBuffer = &handle;
-        const NV_OF_STATUS rst = fn_->list.nvOFRegisterResourceD3D12(ofHandle, &reg);
+        reg.inputFencePoint = registered
+            ? NV_OF_FENCE_POINT{registrationFence.Get(), registered}
+            : NV_OF_FENCE_POINT{inFence_, inputReady};
+        reg.outputFencePoint = {registrationFence.Get(), registered + 1};
+        const bool injected = rejectAt == registered + 1;
+        if (injected) log::warn("nvof-session", std::format(
+            "test-only registration rejection resource={}; not a hardware failure", name));
+        const NV_OF_STATUS rst = injected ? NV_OF_ERR_INVALID_PTR
+            : fn_->list.nvOFRegisterResourceD3D12(ofHandle, &reg);
         handleOpaque = handle;
-        log::info("nvof-session", std::format("register {} status={}", name, static_cast<int>(rst)));
+        log::info("nvof-session", std::format(
+            "register {} status={} inputSync={} outputSync={} completion={}", name, static_cast<int>(rst),
+            reg.inputFencePoint.fence != nullptr, reg.outputFencePoint.fence != nullptr, registered + 1));
         if (rst != NV_OF_SUCCESS) {
             log::error("nvof-session", std::format(
                 "register {} failed st={}; rolling back all registered resources", name, (int)rst));
+            if (!injected && fn_->list.nvOFGetLastError) {
+                char detail[512]{}; uint32_t size = sizeof(detail);
+                const auto errorStatus = fn_->list.nvOFGetLastError(ofHandle, detail, &size);
+                detail[sizeof(detail) - 1] = '\0';
+                log::error("nvof-session", std::format(
+                    "register {} SDK detail status={} message={}", name, int(errorStatus), detail));
+            }
+            // Earlier registrations may still be queued even though this one
+            // failed. Observe their completion before unregister/release.
+            if (!finishRegistration()) log::error("nvof-session", "partial registration did not complete before rollback");
             rollbackAll();
-        }
+        } else ++registered;
         return rst == NV_OF_SUCCESS;
     };
     if (!registerResource(inputA, hInputA_, "inputA") ||
@@ -313,6 +390,13 @@ bool NvOfSession::initialize(ID3D12Device* device,
         status = Status::DeviceFailure;
         return false;
     }
+    if (!finishRegistration()) {
+        rollbackAll();
+        status = Status::DeviceFailure;
+        return false;
+    }
+    log::info("nvof-session", std::format(
+        "registration completed resources={} firstFlowValue={} (initialization only)", registered, nextOutValue_));
 
     initialized_ = true;
     status = Status::Ok;
