@@ -45,8 +45,9 @@ int wmain(){
         HWND window=CreateWindowExW(0,L"STATIC",L"PR19 HDR output diagnostic",WS_POPUP,0,0,64,16,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
         engine::VideoPresenter presenter;
         ready=ready&&window&&presenter.open(ctx,window,graph);
+        uint64_t epoch=1;
         const auto present=[&](int comparison=0,bool retain=false){
-            bool ok=presenter.present(ctx,ring,graph,output.videoSlot,false,true,comparison,false,.5f,{1,1,1},{},-1,retain);
+            bool ok=presenter.present(ctx,ring,graph,output.videoSlot,false,true,comparison,false,.5f,{epoch,1,1},{},-1,retain);
             auto buffer=presenter.presentedResourceForTest();
             ok=ok&&hdrRoundTrip::read(ctx,ring,buffer.Get(),shown);buffer.Reset();return ok;
         };
@@ -65,6 +66,18 @@ int wmain(){
         const auto coverage=presenter.liveCurveCoverage();
         check(coverage.valid&&coverage.samples==2304&&coverage.inRollOff>0,"HDR10/scRGB statistics report a completed sparse sample");
         check(coverage.aboveCeiling==0,"soft highlight knee is not misreported as hard clipping");
+        // A true black frame must be a valid zero reading, not a copy error.
+        auto savedOutput=std::move(output);AVFrame* black=av_frame_clone(frame);
+        if(black&&av_frame_make_writable(black)>=0){
+            for(int y=0;y<black->height;++y)for(int x=0;x<black->width;++x)reinterpret_cast<uint16_t*>(black->data[0]+y*black->linesize[0])[x]=64;
+            check(graph.process(black,10,false,output,2),"black HDR source enters the real graph");
+            std::this_thread::sleep_for(std::chrono::milliseconds(260));
+            check(present()&&present(),"black HDR probe completes");
+            const auto zero=presenter.liveCurveCoverage();
+            check(zero.valid&&zero.samples==2304&&zero.aboveCeiling==0&&zero.inRollOff==0&&zero.inLift==0,"black HDR image reports valid zero statistics");
+            ++epoch;check(present()&&!presenter.liveCurveCoverage().valid,"source epoch invalidates old HDR statistics");
+        }else check(false,"allocate black diagnostic frame");
+        av_frame_free(&black);output=std::move(savedOutput);epoch=1;
         presenter.observeHdrCoverage(false);check(!presenter.liveCurveCoverage().valid,"hiding HDR panel clears its statistics");
         double maxRelative=0;bool monotonic=true;double previous=0;
         if(ready)for(unsigned i=0;i<patches.size();++i){

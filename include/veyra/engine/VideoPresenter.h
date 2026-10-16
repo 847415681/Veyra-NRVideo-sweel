@@ -126,6 +126,7 @@ private:
     unsigned inc_=0;
     static constexpr unsigned kProbeWidth=64,kProbeHeight=36,kProbeStatsBytes=5*sizeof(uint32_t);
     pipeline::ComputePass probePass_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> probeCpuViews_;
     Microsoft::WRL::ComPtr<ID3D12Resource> probeStats_,probeReadback_;
     uint64_t probeFenceValue_=0;
     bool probePending_=false,probeObserved_=false,probeFailed_=false;

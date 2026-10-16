@@ -289,15 +289,14 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     if(observe&&!probePending_&&probeNow>=probeNext_&&!probeFailed_&&ensureCoverageProbe(ctx.device())){
         probeNext_=probeNow+std::chrono::milliseconds(250);
         // One descriptor per outstanding probe; never rewrite it while in flight.
-        ctx.device()->CopyDescriptorsSimple(1,probePass_.heap->GetCPUDescriptorHandleForHeapStart(),
-            {pass_.heap->GetCPUDescriptorHandleForHeapStart().ptr+size_t(slot+(generated?2:0))*pass_.increment},D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        pipeline::makeSrv(ctx.device(),source,graph.outputFormat(),probePass_.heap->GetCPUDescriptorHandleForHeapStart());
         pipeline::StateTracker state;state.set(source,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
         state.transition(list,source,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         state.transition(list,probeStats_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         const auto gpu=probePass_.heap->GetGPUDescriptorHandleForHeapStart();
-        const auto cpu=probePass_.heap->GetCPUDescriptorHandleForHeapStart();
+        const auto cpu=probeCpuViews_->GetCPUDescriptorHandleForHeapStart();
         probePass_.bind(list,dims,gpu.ptr,gpu.ptr+probePass_.increment);
-        const UINT zero[4]{};list->ClearUnorderedAccessViewUint({gpu.ptr+probePass_.increment},{cpu.ptr+probePass_.increment},probeStats_.Get(),zero,0,nullptr);
+        const UINT zero[4]{};list->ClearUnorderedAccessViewUint({gpu.ptr+probePass_.increment},cpu,probeStats_.Get(),zero,0,nullptr);
         state.uavBarrier(list,probeStats_.Get());list->Dispatch(8,5,1);
         state.transition(list,probeStats_.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
         list->CopyBufferRegion(probeReadback_.Get(),0,probeStats_.Get(),0,kProbeStatsBytes);
@@ -412,7 +411,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     if(probeIssued){probePending_=true;probeFenceValue_=ring.lastSignaledValue();}
     // Custom: collect the previous probe as soon as the GPU reports it complete.
     // GetCompletedValue is a plain read, so presentation never waits here.
-    if(probePending_&&probeReadback_&&fence->GetCompletedValue()>=probeFenceValue_)
+    if(probePending_&&probeReadback_&&pipeline::fenceComplete(fence,probeFenceValue_))
         publishLiveCoverage(hdrCurve,identity);lastBuffer_=backBufferIndex;hasPresented_=true;
     if(presentationQueue_)graph.presentationSubmitted(slot,fence,ring.lastSignaledValue());
     const auto dxgiStart=std::chrono::steady_clock::now();
@@ -458,8 +457,12 @@ bool VideoPresenter::ensureCoverageProbe(ID3D12Device* device){
     HRESULT hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&probeStats_));
     if(SUCCEEDED(hr)){heap.Type=D3D12_HEAP_TYPE_READBACK;desc.Flags=D3D12_RESOURCE_FLAG_NONE;hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&probeReadback_));}
     if(FAILED(hr)){log::warn("present-probe",std::format("statistics unavailable hr=0x{:X}",unsigned(hr)));probeStats_.Reset();probeReadback_.Reset();probeFailed_=true;return false;}
-    D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};uav.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;uav.Buffer.NumElements=5;uav.Buffer.StructureByteStride=sizeof(uint32_t);
+    D3D12_DESCRIPTOR_HEAP_DESC views{};views.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;views.NumDescriptors=1;
+    hr=device->CreateDescriptorHeap(&views,IID_PPV_ARGS(&probeCpuViews_));
+    if(FAILED(hr)){log::warn("present-probe",std::format("statistics CPU descriptor failed hr=0x{:X}",unsigned(hr)));probeStats_.Reset();probeReadback_.Reset();probeFailed_=true;return false;}
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};uav.Format=DXGI_FORMAT_R32_UINT;uav.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;uav.Buffer.NumElements=5;
     device->CreateUnorderedAccessView(probeStats_.Get(),nullptr,&uav,{probePass_.heap->GetCPUDescriptorHandleForHeapStart().ptr+probePass_.increment});
+    device->CreateUnorderedAccessView(probeStats_.Get(),nullptr,&uav,probeCpuViews_->GetCPUDescriptorHandleForHeapStart());
     log::info("present-probe","GPU statistics 64x36; readback=20 bytes, interval>=250ms, pixelReadbacks=0, additionalSubmits=0");
     return true;
 }
@@ -483,7 +486,7 @@ void VideoPresenter::close(){
     reflex_.close();reflexFrame_=0;
     if(presentationRing_.initialized())presentationRing_.drainQueue();
     hasPresented_=false;gpuTimer_.close();compositeTarget_.Reset();copyBeforePresent_=copyEligible_=false;rtvs_.Reset();
-    probeStats_.Reset();probeReadback_.Reset();probePass_={};probePending_=false;probeFailed_=false;probeNext_={};probeCurve_={};probeIdentity_={};liveCoverage_={};pass_={};sink_.shutdown();
+    probeStats_.Reset();probeReadback_.Reset();probeCpuViews_.Reset();probePass_={};probePending_=false;probeFailed_=false;probeNext_={};probeCurve_={};probeIdentity_={};liveCoverage_={};pass_={};sink_.shutdown();
     presentMotionPass_={};presentMotion_={};previousXessWidth_=previousXessHeight_=0;
     presentationRing_.shutdown();presentationFence_.Reset();presentationQueue_.Reset();
     if(presentationEvent_){CloseHandle(presentationEvent_);presentationEvent_=nullptr;}

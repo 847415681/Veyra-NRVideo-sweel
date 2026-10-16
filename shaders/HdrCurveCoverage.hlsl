@@ -2,7 +2,7 @@
 #include "HdrColor.hlsli"
 #include "PresentationRotation.hlsli"
 Texture2D<float4> sourceTex : register(t0);
-RWStructuredBuffer<uint> stats : register(u0);
+RWBuffer<uint> stats : register(u0);
 cbuffer Params : register(b0) { float4 srcDims; float4 dstDims; float4 curve0; float4 curve1; };
 [numthreads(8,8,1)]
 void main(uint3 id : SV_DispatchThreadID) {
