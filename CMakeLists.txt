@@ -513,6 +513,9 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
       message(FATAL_ERROR "Deinterlacing requires the filter prefix; run scripts/ffmpeg/build-deinterlace-module.py and set VEYRA_FFMPEG_ROOT to its prefix (or explicitly disable VEYRA_ENABLE_DEINTERLACE).")
     endif()
     target_compile_definitions(veyra_media PRIVATE VEYRA_ENABLE_DEINTERLACE=1)
+    # A reused build tree may retain FFMPEG_INCLUDE_DIRS from the pre-filter
+    # prefix. Compile against the prefix whose filter headers we just checked.
+    target_include_directories(veyra_media BEFORE PRIVATE "${VEYRA_FFMPEG_ROOT}/include")
   endif()
   target_include_directories(veyra_media PUBLIC ${FFMPEG_INCLUDE_DIRS})
   target_link_directories(veyra_media PUBLIC ${FFMPEG_LIBRARY_DIRS})
