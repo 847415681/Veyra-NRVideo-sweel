@@ -64,7 +64,8 @@ void auditNrArchitectureRewriteScope()
 // Version policy: builds that lift the gate themselves must keep the real
 // architecture, because reporting Blackwell makes them choose kernels Ampere
 // cannot run. 310.8.0 / 310.8.1 (the NeuralScreen line) still need the rewrite;
-// 310.8.2+ and anything unknown do not.
+// 310.8.2+ and the known 310.9.16 compatibility build do not. Unknown builds
+// retain the historical rewrite policy.
 void auditAmpereRewriteVersionPolicy()
 {
     using namespace veyra::ngx;
@@ -78,6 +79,7 @@ void auditAmpereRewriteVersionPolicy()
     const auto [ms082, ls082] = version(310, 8, 2);
     const auto [ms083, ls083] = version(310, 8, 3);
     const auto [ms090, ls090] = version(310, 9, 0);
+    const auto [ms0916, ls0916] = version(310, 9, 16);
     const auto [ms070, ls070] = version(310, 7, 0);
     const auto [ms100, ls100] = version(311, 0, 0);
     const auto [msZero, lsZero] = version(0, 0, 0);
@@ -89,12 +91,16 @@ void auditAmpereRewriteVersionPolicy()
     check("310.8.1 needs ampere rewrite", nrRuntimeNeedsAmpereRewrite(ms081, ls081));
     check("310.8.2 keeps real architecture", !nrRuntimeNeedsAmpereRewrite(ms082, ls082));
     check("310.8.3 (Lecram) keeps real architecture", !nrRuntimeNeedsAmpereRewrite(ms083, ls083));
+    check("SF compat FP16 310.9.16 keeps real architecture", !nrRuntimeNeedsAmpereRewrite(ms0916, ls0916));
+    check("unknown 310.9.16 revision retains policy", nrRuntimeNeedsAmpereRewrite(ms0916, ls0916|1u));
+    const auto [ms0917, ls0917] = version(310, 9, 17);
+    check("unknown next 310.9 build retains policy", nrRuntimeNeedsAmpereRewrite(ms0917, ls0917));
     // Everything else is deliberately conservative, including versions newer
     // than the ones we have tested: an unrecognised build gets the rewrite
     // rather than the benefit of the doubt. This is the documented policy in
     // NrArchitecturePolicy.h ("unknown new versions default to rewrite"); the
-    // trade-off is recorded in the WORKLOG as a known limitation, because a
-    // future self-lifting build outside the 310.8 line would be mis-handled.
+    // The explicitly audited 310.9.16 compatibility build above is the only
+    // new-minor exemption. Future self-lifting builds still need review.
     check("310.7 unverified build still rewrites", nrRuntimeNeedsAmpereRewrite(ms070, ls070));
     check("310.9 unknown build still rewrites", nrRuntimeNeedsAmpereRewrite(ms090, ls090));
     check("311.0 unknown build still rewrites", nrRuntimeNeedsAmpereRewrite(ms100, ls100));

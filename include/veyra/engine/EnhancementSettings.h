@@ -96,15 +96,15 @@ constexpr bool validNrRuntime(NrRuntime runtime) {
            runtime == NrRuntime::Ampere || runtime == NrRuntime::NvidiaOriginal || runtime == NrRuntime::LmxxfAmd;
 }
 // Persisted value 1 selected the retired RTX40 DLL. Never load that DLL in
-// current builds; preserve 0 (Lecram) and 2 (SF-v2) as explicit user choices.
+// current builds; preserve 0 (Lecram) and 2 (SF compatible) as explicit user choices.
 constexpr NrRuntime currentNrRuntime(NrRuntime runtime) {
     return runtime == NrRuntime::Community ? NrRuntime::Ampere : runtime;
 }
 constexpr std::string_view nrRuntimeName(NrRuntime runtime) {
     switch(runtime) {
     case NrRuntime::Original:return "community-Lecram-RTX50";
-    case NrRuntime::Community:return "community-SF-v2-RTX20-RTX50-legacy40";
-    case NrRuntime::Ampere:return "community-SF-v2-RTX20-RTX50";
+    case NrRuntime::Community:return "community-SF-RTX20-RTX50-legacy40";
+    case NrRuntime::Ampere:return "community-SF-RTX20-RTX50";
     case NrRuntime::NvidiaOriginal:return "NVIDIA-original-RTX50-310.8.0";
     case NrRuntime::LmxxfAmd:return "lmxxf-AMD-RDNA4";
     }

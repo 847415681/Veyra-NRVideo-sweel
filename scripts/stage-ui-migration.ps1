@@ -92,6 +92,18 @@ $nrSlots = @(
      Sha = '6EB209E764F39872625DEBD6ABAF45E2BB6322F6F270F781F70C059AE30B3927'; Size = 165830144; Sig = 'NotSigned'
      Class = 'user-approved-community-SF-v2-310.8.2-RTX20-RTX50-compatible-runtime'; Source = 'community SF-v2 310.8.2 (RankFTW/rhi-repo dlssnr-310.8.SF-v2)' }
 ) | Where-Object { $_.Given }
+# The 2026-10-17 user-provided compatibility build replaces the same saved
+# slot; keep SF-v2 accepted for older protected packages. This is publisher
+# staging audit only, never an application DLL-loading hash lock.
+$sf310916Hash = 'CDFA6C1EC784867182164C7836F324F087B5C9F374D0C9FE46F54999FEABF3ED'
+if ($NrAmpereRuntime -and (Get-FileHash -LiteralPath $NrAmpereRuntime -Algorithm SHA256).Hash -eq $sf310916Hash) {
+  $sfSlot = @($nrSlots | Where-Object { $_.Path -eq 'runtime/experimental/nr-ampere/nvngx_dlssnr.dll' })[0]
+  $sfSlot.Sha = $sf310916Hash
+  $sfSlot.Size = 276162560
+  $sfSlot.Sig = 'NotSigned'
+  $sfSlot.Class = 'user-approved-community-SF-compat-fp16-310.9.16-RTX20-RTX50-local-runtime'
+  $sfSlot.Source = 'ShortFuse compat-fp16-310.9.16-cuda13.4.3; https://discord.com/channels/1408098019194310818/1543976771920330884/1560685677816057856'
+}
 if ($nrSlots) {
   # A copied runtime keeps the release untouched while one slot is replaced.
   $runtimeCopy = Join-Path $appPath 'runtime'

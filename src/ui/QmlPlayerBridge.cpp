@@ -1149,7 +1149,7 @@ QVariantMap QmlPlayerBridge::effectAvailability(const QString& id) const {
 QVariantList QmlPlayerBridge::nrRuntimeChoices() const {
     QVariantList choices;
     const auto caps = effectCapabilities();
-    for (const auto& entry : std::initializer_list<std::pair<int, QString>>{{0, "RTX 50 · Lecram"}, {2, "RTX 20–50 · SF-v2"}, {3, tr("RTX 50 · NVIDIA 原版")}, {4, tr("RX 9000 · lmxxf（实验）")}}) {
+    for (const auto& entry : std::initializer_list<std::pair<int, QString>>{{0, "RTX 50 · Lecram"}, {2, "RTX 20–50 · SF"}, {3, tr("RTX 50 · NVIDIA 原版")}, {4, tr("RX 9000 · lmxxf（实验）")}}) {
         const auto cap = caps.value("nr" + QString::number(entry.first)).toMap();
         choices << QVariantMap{{"id", QString::number(entry.first)}, {"label", entry.second}, {"disabled", !cap.value("available").toBool()}, {"note", cap.value("reason")}};
     }

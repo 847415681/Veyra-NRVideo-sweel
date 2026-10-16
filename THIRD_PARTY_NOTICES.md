@@ -1,5 +1,27 @@
 # Third-party dependencies
 
+## User-provided ShortFuse NR 310.9.16 (2026-10-17, local testing)
+
+The user supplied `nvngx_dlssnr.dll` and authorized replacement of the SF-v2
+compatibility slot in a separate local branch. It exactly matches the DLL in
+ShortFuse's RenoDX announcement, tag `compat-fp16-310.9.16-cuda13.4.3`:
+https://discord.com/channels/1408098019194310818/1543976771920330884/1560685677816057856
+
+Identity: 310.9.16.0, 276162560 bytes, SHA256
+`CDFA6C1EC784867182164C7836F324F087B5C9F374D0C9FE46F54999FEABF3ED`,
+Authenticode `NotSigned`. This is a community-modified NVIDIA NR runtime,
+not a validly NVIDIA-signed original, open-source model, or certification of
+all RTX hardware. ShortFuse describes SM75/86/89 compatibility kernels;
+Veyra preserves the actual architecture for this explicitly selected profile.
+Source-archive SHA256 is
+`623C9B12755B58E6F84C1FD131AA6C57F11565D8EF3F831665358CB6132976AB`.
+
+No DLL, CUDA kernel, model, SDK, or ReShade add-on enters source Git. Veyra
+copies the supplied DLL without modifying its disk bytes; existing NVIDIA
+licenses/notices are retained, and this local authorization grants no new
+public redistribution permission. See `docs/NR_SF_310916_PLAN_2026-10-17.md`
+and the corresponding report for measured conditions and untested hardware.
+
 ## Compressed Matroska subtitles (2026-10-09)
 
 The subtitle candidate rebuilds the existing LGPL FFmpeg n9.0.1 with zlib
