@@ -229,6 +229,7 @@ public:
     void pause(bool p);
     bool setPlaybackRate(double rate);
     void setFullscreenMemoryProtection(bool enabled);
+    void observeHdrCoverage(bool on){hdrCoverageObserved_=on;}
     void previewView(PreviewView view){if(!std::isfinite(view.zoom)||!std::isfinite(view.centerX)||!std::isfinite(view.centerY)||!std::isfinite(view.displayAspect)||view.displayAspect<0||view.mode<0||view.mode>6)return;std::lock_guard lock(mutex_);view.zoom=std::clamp(view.zoom,.05f,64.0f);if(view.displayAspect==0)view.displayAspect=previewView_.displayAspect;view.rotationDegrees=previewView_.rotationDegrees;previewView_=view;}
     PreviewView previewView()const{std::lock_guard lock(mutex_);return previewView_;}
     void setVolume(float gain,bool mute);
@@ -284,6 +285,7 @@ private:
     std::atomic<double> seekSeconds_{-1};
     std::atomic<double> requestedPlaybackRate_{1};
     std::atomic<bool> fullscreenMemoryProtection_{false};
+    std::atomic<bool> hdrCoverageObserved_{false};
     int pendingAudioTrack_=-1;uint64_t pendingAudioSession_=0; // mutex_
     std::atomic<int> comparisonMode_{0};std::atomic<bool> comparisonBase_{false};std::atomic<float> comparisonSplit_{.5f};
     // Guarded by mutex_: DLSSG MultiFrameCountMax of the active session.

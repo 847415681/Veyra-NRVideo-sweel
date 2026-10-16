@@ -2491,6 +2491,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             const auto presentBeginHost=host100ns();
                             const auto begin=Clock::now();const auto before=presenter.submittedCount();
                             presenter.reflexFrame(watch->reflexFrame);
+                            presenter.observeHdrCoverage(hdrCoverageObserved_.load());
                             if(!presenter.present(ctx,ring,*graph,item.lease->slot,generated,item.lease->referencesValid,comparisonMode_,comparisonBase_,comparisonSplit_,item.identity,previewView(),item.pts100ns))return {State::Failed};
                             const auto presentEndHost=host100ns();
                             // Custom: publish the live curve coverage the presenter just collected.

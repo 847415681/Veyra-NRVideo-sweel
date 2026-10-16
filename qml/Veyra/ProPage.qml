@@ -25,6 +25,8 @@ VPage {
     // to the left of the picture, with the performance orbs beside it. Both are cut
     // out of the native video window like any other cover.
     property bool overlay: false
+    readonly property bool hdrMeterObserved: visible && tab === "display" && hdrCurveAccordion.open && hdrReadAccordion.open && veyra.hdrCurve
+    onHdrMeterObservedChanged: veyra.observeHdrCoverage(hdrMeterObserved)
     function overlayContains(x, y) {
         const hit = item => x >= item.x && x <= item.x + item.width && y >= item.y && y <= item.y + item.height
         return overlay && (hit(insp) || hit(quickOrbs))
@@ -2021,6 +2023,7 @@ VPage {
                         // HDR 亮度曲线: a static curve. Unlike a plain exposure the
                         // highlights are protected by construction.
                         VAccordion {
+                            id: hdrCurveAccordion
                             objectName: "list-hdr-curve"
                             Layout.fillWidth: true
                             glyph: "sun"
@@ -2033,6 +2036,7 @@ VPage {
                             // 虚线是"不做任何处理"的参考线，橙线是当前曲线。
 
                                 VAccordion {
+                                    id: hdrReadAccordion
                                     objectName: "list-hdr-readgroup"
                                     Layout.fillWidth: true
                                     glyph: "activity"
@@ -2047,9 +2051,9 @@ VPage {
                             VRow {
                                 hintBelow: true
                                 objectName: "list-hdrcurve-live"
-                                label: qsTr("实时裁剪")
+                                label: qsTr("画面抽样统计")
                                 hint: !veyra.hdrCurveCoverage.valid
-                                    ? qsTr("播放中且曲线开启时才会测量")
+                                    ? qsTr("展开本卡片并播放 HDR 输出时测量，每秒最多 4 次")
                                     : veyra.hdrPeakWarning.capNits === 0
                                         ? qsTr("曲线未设「峰值上限」，不会有像素被压平。滚降区 %1% · 暗部提升区 %2%")
                                             .arg(Number(veyra.hdrCurveCoverage.rollOff).toFixed(1))
@@ -2059,7 +2063,7 @@ VPage {
                                             .arg(veyra.hdrPeakWarning.capNits)
                                             .arg(Number(veyra.hdrCurveCoverage.rollOff).toFixed(1))
                                             .arg(Number(veyra.hdrCurveCoverage.lift).toFixed(1))
-                                    : qsTr("高光被压 %1% · 滚降区 %2% · 暗部提升区 %3%")
+                                    : qsTr("触及硬上限 %1% · 高光压缩区 %2% · 暗部提升区 %3%")
                                         .arg(Number(veyra.hdrCurveCoverage.aboveCeiling).toFixed(1))
                                         .arg(Number(veyra.hdrCurveCoverage.rollOff).toFixed(1))
                                         .arg(Number(veyra.hdrCurveCoverage.lift).toFixed(1))
@@ -2078,8 +2082,8 @@ VPage {
                                         .arg(veyra.hdrPeakWarning.sourcePeakNits)
                                         .arg(veyra.hdrPeakWarning.capNits)
                                         .arg(veyra.hdrPeakWarning.clipped
-                                             ? qsTr("上限以上的高光会被压平")
-                                             : qsTr("上限已覆盖片源峰值，不会裁剪"))
+                                             ? qsTr("超过上限的亮度需要压缩；是否触及硬上限以抽样读数为准")
+                                             : qsTr("上限覆盖片源标注峰值；处理后的画面以抽样读数为准"))
                                 value: veyra.hdrPeakWarning.clipped ? qsTr("会压缩") : qsTr("安全")
                             }
                             Canvas {
@@ -2124,7 +2128,7 @@ VPage {
                             // 决定档位与强度，界面只解释理由，不做测量。
                             Text {
                                 Layout.fillWidth: true
-                                text: qsTr("曲线只在 HDR 片源 + HDR10 输出下生效。SDR 片源不使用曲线：请改用「色彩」页的曝光 / 阴影 / 高光（作用于处理链前端），或开启 RTX Video HDR 做 SDR→HDR 转换。")
+                                text: qsTr("曲线作用于 HDR10 或 scRGB 输出，也适用于 RTX Video HDR 转换后的画面。低亮度画面可能不会触及高光阈值。")
                                 wrapMode: Text.WordWrap
                                 color: Theme.t3
                                 font.family: Theme.fontUi; font.pixelSize: 11
@@ -2148,7 +2152,7 @@ VPage {
                                 hint: {
                                     if (!veyra.hdrRecommendation.available)
                                         return veyra.sourceIsSdr
-                                            ? qsTr("SDR 片源不使用曲线，无需选档（请用「色彩」页的曝光/阴影，或 RTX Video HDR）")
+                                            ? qsTr("SDR 片源没有 HDR 亮度元数据；可手动选档，HDR 输出时生效。")
                                             : qsTr("片源没有携带亮度信息（抓屏 / 串流），无法自动选档");
                                     var r = veyra.hdrRecommendation.reason;
                                     var why = r === "dark-content" ? qsTr("整片偏暗、只有少量亮点")
@@ -2454,13 +2458,11 @@ VPage {
                                         Text {
                                             Layout.fillWidth: true
                                             visible: veyra.hdrDisplayInfo.valid
-                                            text: veyra.hdrDisplayInfo.plausible
-                                                ? qsTr("系统报告：峰值 %1、全屏 %2、黑位 %3 nit")
+                                            text: qsTr("系统报告：峰值 %1、全屏 %2、黑位 %3 nit")
                                                     .arg(veyra.hdrDisplayInfo.peakNits)
                                                     .arg(veyra.hdrDisplayInfo.fullFrameNits)
                                                     .arg(Number(veyra.hdrDisplayInfo.minNits).toFixed(3))
-                                                : qsTr("系统报告不可信（报 %1 nit 且黑位 0.000）：已按 1000 nit 参考值计算，可手动拖动或填真实值")
-                                                    .arg(veyra.hdrDisplayInfo.peakNits)
+                                                + " · " + qsTr("系统数值不是实测；不符时可手动填写峰值")
                                             wrapMode: Text.WordWrap
                                             color: Theme.t3
                                             font.family: Theme.fontUi; font.pixelSize: 11
@@ -2597,7 +2599,7 @@ VPage {
                             Text {
                                 Layout.fillWidth: true
                                 text: qsTr("HDR10 提示；系统或显示器可能忽略，让它的动态色调映射有依据。")
-                                    + qsTr("曲线生效时会按曲线后的输出上报（不会虚报更高的峰值）；SDR 片源不发送。")
+                                    + qsTr("曲线生效时会约束内容亮度提示；SDR 输入默认不发送，手动填写除外。")
                                 wrapMode: Text.WordWrap
                                 color: Theme.t3
                                 font.family: Theme.fontUi; font.pixelSize: 11

@@ -39,6 +39,7 @@ QtObject {
     function nrAutoSelectionReason(index) { return "Auto is unavailable in this four-layer UI fixture" }
     function resetNrLayer(index) {}
     function logUi(category, text) {}
+    function observeHdrCoverage(on) {}
 })qml", QUrl());
         auto* model = snapshot.create(engine->rootContext());
         if (!model) qFatal("Cannot create explicit component snapshot: %s", qPrintable(snapshot.errorString()));

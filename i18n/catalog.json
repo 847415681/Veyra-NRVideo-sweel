@@ -316,6 +316,13 @@
    "ja": " · ドライバーの既定値"
   },
   {
+   "zh": " → 建议 ",
+   "src": "qml/ProPage.qml",
+   "zh-TW": " → 建議 ",
+   "en": " → Suggested: ",
+   "ja": " → 推奨："
+  },
+  {
    "zh": " 严重级别=",
    "src": "src/base/Log.cpp",
    "zh-TW": " 嚴重級別=",
@@ -513,7 +520,7 @@
   },
   {
    "zh": "0 = 自动使用系统报告值",
-   "src": "qml/ProPage.qml",
+   "src": "qml/SettingsPage.qml",
    "zh-TW": "0 = 自動使用系統報告值",
    "en": "0 = use the value reported by the system",
    "ja": "0 = システムが報告する値を自動使用"
@@ -541,7 +548,7 @@
   },
   {
    "zh": "0% 关闭曲线；峰值保护与元数据独立",
-   "src": "qml/ProPage.qml",
+   "src": "qml/SettingsPage.qml",
    "zh-TW": "0% 關閉曲線；峰值保護與中繼資料獨立",
    "en": "0% disables the curve; peak protection and metadata are independent",
    "ja": "0% でカーブを無効化。ピーク保護とメタデータは独立しています"
@@ -552,6 +559,13 @@
    "zh-TW": "1080p · 預設",
    "en": "1080p · default",
    "ja": "1080p · 既定"
+  },
+  {
+   "zh": "2 项",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "2 項",
+   "en": "2 items",
+   "ja": "2 項目"
   },
   {
    "zh": "203 = 中性；调高整体变亮，峰值不变",
@@ -566,6 +580,27 @@
    "zh-TW": "2X 為原生路徑，3X / 4X 為實驗解鎖；失敗原因見診斷",
    "en": "2X is the native path; 3X / 4X are experimental unlocks. See diagnostics for failures",
    "ja": "2X はネイティブ動作、3X / 4X は実験的なアンロックです。失敗の理由は診断を参照してください"
+  },
+  {
+   "zh": "4 项",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "4 項",
+   "en": "4 items",
+   "ja": "4 項目"
+  },
+  {
+   "zh": "5 项",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "5 項",
+   "en": "5 items",
+   "ja": "5 項目"
+  },
+  {
+   "zh": "6 项",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "6 項",
+   "en": "6 items",
+   "ja": "6 項目"
   },
   {
    "zh": "8 位配对码",
@@ -1898,6 +1933,13 @@
    "ja": "SDR → SDR（HDR 表示オフ）"
   },
   {
+   "zh": "SDR 片源没有 HDR 亮度元数据；可手动选档，HDR 输出时生效。",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "SDR 片源沒有 HDR 亮度元資料；可手動選檔，HDR 輸出時生效。",
+   "en": "SDR sources have no HDR luminance metadata. Choose a preset manually; it applies to HDR output.",
+   "ja": "SDR ソースには HDR 輝度メタデータがありません。手動でプリセットを選ぶと HDR 出力に適用されます。"
+  },
+  {
    "zh": "SDR显示未转换",
    "src": "qml/NodePage.qml",
    "zh-TW": "SDR顯示未轉換",
@@ -2318,11 +2360,25 @@
    "ja": "{}GPU リセット {} 回、{} 分割で書き出し再エンコードなしで結合しました"
   },
   {
+   "zh": "一键推荐",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "一鍵推薦",
+   "en": "Recommend",
+   "ja": "おすすめ"
+  },
+  {
    "zh": "一键还原",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "一鍵還原",
    "en": "Reset all",
    "ja": "すべて元に戻す"
+  },
+  {
+   "zh": "一键选档",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "一鍵選檔",
+   "en": "Quick presets",
+   "ja": "簡単プリセット"
   },
   {
    "zh": "上一任务仍在回收，请等待取消完成",
@@ -2407,6 +2463,20 @@
    "zh-TW": "上次擷取裝置未連接。插回後刷新，或手動選擇其他裝置。",
    "en": "The last capture device is not connected. Plug it back in and refresh, or choose another device.",
    "ja": "前回のキャプチャーデバイスが接続されていません。差し直して更新するか、別のデバイスを選んでください。"
+  },
+  {
+   "zh": "上限 %1 nit 未被触及（滚降区 %2% · 暗部提升区 %3%）",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "上限 %1 nit 未被觸及（滾降區 %2% · 暗部提升區 %3%）",
+   "en": "Cap %1 nit not reached (highlight compression %2% · shadow lift %3%)",
+   "ja": "上限 %1 nit 未到達（ハイライト圧縮 %2% · 暗部持ち上げ %3%）"
+  },
+  {
+   "zh": "上限覆盖片源标注峰值；处理后的画面以抽样读数为准",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "上限覆蓋片源標注峰值；處理後的畫面以抽樣讀數為準",
+   "en": "The cap covers the declared source peak; check the sample reading for the processed image",
+   "ja": "上限はソースの公称ピーク以上です。処理後の映像はサンプル値で確認してください。"
   },
   {
    "zh": "上面选“自动”时仍用性能最强的显卡；选一块显卡后它也负责运算",
@@ -2507,6 +2577,13 @@
    "ja": "わからなければ「自動」を選んでください。HDR をキャプチャーする場合：フォーマットに P010 を選び、ここでは「HDR · PQ」を選択（ゲーム機や GPU の HDR10 は PQ）。「HDR · HLG」は放送信号用、「SDR · 709」は通常の映像です。変更には再接続が必要です"
   },
   {
+   "zh": "不补偿",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "不補償",
+   "en": "No compensation",
+   "ja": "補正なし"
+  },
+  {
    "zh": "不计时",
    "src": "qml/NodePage.qml",
    "zh-TW": "不計時",
@@ -2554,6 +2631,13 @@
    "zh-TW": "兩台電腦接在同一個區域網路，這裡會自動出現；也可以在下面手填它的 IP。首次使用需要配對。",
    "en": "With both PCs on the same LAN, the host appears here automatically; you can also enter its IP below. Pairing is needed the first time.",
    "ja": "2 台の PC が同じ LAN にあれば自動でここに表示されます。下で IP を手入力することもできます。初回はペアリングが必要です。"
+  },
+  {
+   "zh": "两头极端",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "兩頭極端",
+   "en": "Dark and bright",
+   "ja": "明暗が極端"
   },
   {
    "zh": "两种模式的设置、预设完全分开保存，切回列表时恢复列表原来的设置。",
@@ -3004,6 +3088,13 @@
    "ja": "明度を保持"
   },
   {
+   "zh": "亮度分布均衡",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "亮度分布均衡",
+   "en": "Balanced brightness",
+   "ja": "バランスのよい輝度分布"
+  },
+  {
    "zh": "仅清空列表，不删除硬盘文件",
    "src": "qml/PlaylistWindow.qml",
    "zh-TW": "僅清空清單，不刪除硬碟檔案",
@@ -3058,6 +3149,13 @@
    "zh-TW": "任務異常，已停止；請查看診斷",
    "en": "The job hit an error and stopped; see diagnostics",
    "ja": "ジョブで異常が発生し停止しました。診断を確認してください"
+  },
+  {
+   "zh": "会压缩",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "會壓縮",
+   "en": "Compression needed",
+   "ja": "圧縮が必要"
   },
   {
    "zh": "位流优先",
@@ -3326,6 +3424,13 @@
    "ja": "オフセット %1 ms"
   },
   {
+   "zh": "偏高",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "偏高",
+   "en": "High",
+   "ja": "高め"
+  },
+  {
    "zh": "像素格式",
    "src": "qml/DialogHost.qml",
    "zh-TW": "像素格式",
@@ -3494,6 +3599,13 @@
    "ja": "チェーン全体で共有。ちらつき防止がオンのときはオプティカルフローが必要です"
   },
   {
+   "zh": "关",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "關",
+   "en": "Off",
+   "ja": "オフ"
+  },
+  {
    "zh": "关于",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "關於",
@@ -3600,11 +3712,60 @@
    "ja": "互換モードではマウスポインターをオフにするか、Windows キャプチャーを使ってください"
   },
   {
+   "zh": "内容亮度远超显示设备能力",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "內容亮度遠超顯示裝置能力",
+   "en": "Content brightness far exceeds the display capability",
+   "ja": "コンテンツの輝度がディスプレイの能力を大幅に上回ります"
+  },
+  {
    "zh": "内容节奏",
    "src": "qml/NodePage.qml",
    "zh-TW": "內容節奏",
    "en": "Content pacing",
    "ja": "コンテンツのペーシング"
+  },
+  {
+   "zh": "内容：两头极端",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "內容：兩頭極端",
+   "en": "Content: dark and bright",
+   "ja": "内容：明暗が極端"
+  },
+  {
+   "zh": "内容：暗场多",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "內容：暗場多",
+   "en": "Content: mostly dark",
+   "ja": "内容：暗い場面が多い"
+  },
+  {
+   "zh": "内容：标准",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "內容：標準",
+   "en": "Content: standard",
+   "ja": "内容：標準"
+  },
+  {
+   "zh": "内容：老片平淡",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "內容：老片平淡",
+   "en": "Content: flat older transfer",
+   "ja": "内容：平坦な旧作"
+  },
+  {
+   "zh": "内容：这部片子属于哪一类",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "內容：這部片子屬於哪一類",
+   "en": "Content: what kind of film is this?",
+   "ja": "内容：この作品はどのタイプですか？"
+  },
+  {
+   "zh": "内容：高光强",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "內容：高光強",
+   "en": "Content: strong highlights",
+   "ja": "内容：強いハイライト"
   },
   {
    "zh": "内嵌",
@@ -4153,6 +4314,13 @@
    "ja": "半解像度"
   },
   {
+   "zh": "单位 0.01 EV：正值提亮暗部，负值压暗",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "單位 0.01 EV：正值提亮暗部，負值壓暗",
+   "en": "Units of 0.01 EV: positive lifts shadows, negative darkens them",
+   "ja": "単位は 0.01 EV。正の値で暗部を明るく、負の値で暗くします。"
+  },
+  {
    "zh": "单例节点或数量已达上限",
    "src": "qml/NodePage.qml",
    "zh-TW": "單例節點或數量已達上限",
@@ -4179,6 +4347,13 @@
    "zh-TW": "單擊畫面",
    "en": "Click the picture",
    "ja": "映像をクリック"
+  },
+  {
+   "zh": "压住高光",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "壓住高光",
+   "en": "Protect highlights",
+   "ja": "ハイライトを抑える"
   },
   {
    "zh": "压缩采集使用码流颜色信息；手动颜色和范围请选择原生采集格式。",
@@ -4501,6 +4676,13 @@
    "zh-TW": "只有節點模式使用編輯連接",
    "en": "Only node mode uses edit connections",
    "ja": "接続の編集はノードモードでのみ使います"
+  },
+  {
+   "zh": "只清影片记忆，不动显示设备记忆",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "只清影片記憶，不動顯示裝置記憶",
+   "en": "Clear film memory; keep display memory",
+   "ja": "作品の記憶だけを消去し、ディスプレイの記憶は保持します"
   },
   {
    "zh": "只用 DLSS / XeSS 补帧时：到 NVIDIA App 关闭 Smooth Motion。",
@@ -5084,6 +5266,13 @@
    "ja": "垂直同期：画面キュー制御は使用できません · "
   },
   {
+   "zh": "基础设置",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "基礎設定",
+   "en": "Basic controls",
+   "ja": "基本設定"
+  },
+  {
    "zh": "填充裁切",
    "src": "qml/ProPage.qml",
    "zh-TW": "填充裁切",
@@ -5649,6 +5838,13 @@
    "zh-TW": "字幕：開",
    "en": "Subtitles: on",
    "ja": "字幕：オン"
+  },
+  {
+   "zh": "安全",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "安全",
+   "en": "Within range",
+   "ja": "範囲内"
   },
   {
    "zh": "宋体",
@@ -6316,6 +6512,13 @@
    "ja": "画面キャプチャーのエラー 0x{:08X}：{}"
   },
   {
+   "zh": "展开本卡片并播放 HDR 输出时测量，每秒最多 4 次",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "展開本卡片並播放 HDR 輸出時測量，每秒最多 4 次",
+   "en": "Expand this card during HDR playback to sample, up to 4 times per second",
+   "ja": "このカードを開いて HDR 再生すると、毎秒最大 4 回サンプリングします"
+  },
+  {
    "zh": "峰值 ",
    "src": "qml/DialogHost.qml",
    "zh-TW": "峰值 ",
@@ -6541,7 +6744,7 @@
   },
   {
    "zh": "已启用",
-   "src": "src/ui/QmlPlayerBridge.cpp",
+   "src": "qml/ProPage.qml",
    "zh-TW": "已啟用",
    "en": "Enabled",
    "ja": "有効"
@@ -6573,6 +6776,20 @@
    "zh-TW": "已複製調色參數",
    "en": "Color settings copied",
    "ja": "カラー設定をコピーしました"
+  },
+  {
+   "zh": "已套用该显示设备的 HDR 曲线配置",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已套用該顯示裝置的 HDR 曲線設定",
+   "en": "Restored this display's HDR curve",
+   "ja": "このディスプレイの HDR カーブを復元しました"
+  },
+  {
+   "zh": "已套用这部影片上次的曲线设置",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已套用這部影片上次的曲線設定",
+   "en": "Restored this film's previous curve",
+   "ja": "この作品の前回のカーブを復元しました"
   },
   {
    "zh": "已存在同名颜色预设",
@@ -6659,6 +6876,13 @@
    "ja": "有効：%1"
   },
   {
+   "zh": "已按片源自动选档：%1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已按片源自動選檔：%1",
+   "en": "Selected from source metadata: %1",
+   "ja": "ソース情報から選択しました：%1"
+  },
+  {
    "zh": "已接入",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "已接入",
@@ -6713,6 +6937,20 @@
    "zh-TW": "已新增 %1 項 · 清單共 %2 項",
    "en": "Added %1 items · %2 total",
    "ja": "%1 件追加 · 合計 %2 件"
+  },
+  {
+   "zh": "已清除影片记忆",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已清除影片記憶",
+   "en": "Film memory cleared",
+   "ja": "作品の記憶を消去しました"
+  },
+  {
+   "zh": "已清除显示设备记忆",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "已清除顯示裝置記憶",
+   "en": "Display memory cleared",
+   "ja": "ディスプレイの記憶を消去しました"
   },
   {
    "zh": "已生效：%1",
@@ -6783,6 +7021,20 @@
    "zh-TW": "已解鎖全螢幕",
    "en": "Fullscreen unlocked",
    "ja": "全画面のロックを解除しました"
+  },
+  {
+   "zh": "已记住 %1 台显示设备的曲线配置，切换显示器时自动套用",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "已記住 %1 台顯示裝置的曲線設定，切換顯示器時自動套用",
+   "en": "Curves saved for %1 displays; restored when switching displays",
+   "ja": "%1 台のカーブを記憶済み。ディスプレイの切り替え時に復元します"
+  },
+  {
+   "zh": "已记住 %1 部影片，下次播放自动套用",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "已記住 %1 部影片，下次播放自動套用",
+   "en": "Curves saved for %1 films; restored on next playback",
+   "ja": "%1 本のカーブを記憶済み。次回再生時に復元します"
   },
   {
    "zh": "已设为“强制硬解”，这个文件无法用硬件解码打开；可在 设置 → 播放 改回“自动”",
@@ -7051,6 +7303,13 @@
    "ja": "キャプチャー開始"
   },
   {
+   "zh": "开播自动选档",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "開播自動選檔",
+   "en": "Auto-select on playback",
+   "ja": "再生時に自動選択"
+  },
+  {
    "zh": "开机",
    "src": "src/ui/XboxModel.cpp",
    "zh-TW": "開機",
@@ -7135,6 +7394,20 @@
    "ja": "エンジンが既定プリセットを受け付けなかったため、復元したセッションのままです"
   },
   {
+   "zh": "弱",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "弱",
+   "en": "Weak",
+   "ja": "弱"
+  },
+  {
+   "zh": "强",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "強",
+   "en": "Strong",
+   "ja": "強"
+  },
+  {
    "zh": "强制 PCM",
    "src": "qml/DialogHost.qml",
    "zh-TW": "強制 PCM",
@@ -7178,7 +7451,7 @@
   },
   {
    "zh": "强度",
-   "src": "qml/ProPage.qml",
+   "src": "qml/SettingsPage.qml",
    "zh-TW": "强度",
    "en": "Strength",
    "ja": "Strength"
@@ -7359,11 +7632,32 @@
    "ja": "このソースには字幕がありません"
   },
   {
+   "zh": "当前生效：整档预设「%1」",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "當前生效：整檔預設「%1」",
+   "en": "Active preset: %1",
+   "ja": "適用中のプリセット：%1"
+  },
+  {
+   "zh": "当前生效：自定义微调（未匹配任何整档预设）",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "當前生效：自定義微調（未匹配任何整檔預設）",
+   "en": "Active: custom adjustments (no matching preset)",
+   "ja": "適用中：カスタム調整（一致するプリセットなし）"
+  },
+  {
    "zh": "当前硬件或包不支持所选效果，请查看组件页",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "目前硬體或套件不支援所選效果，請查看元件頁",
    "en": "The hardware or package does not support this effect; check Components",
    "ja": "選択した効果は現在の GPU またはパッケージに対応していません。コンポーネントを確認してください"
+  },
+  {
+   "zh": "当前组合：内容 %1 · 环境 %2",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "當前組合：內容 %1 · 環境 %2",
+   "en": "Current combination: content %1 · environment %2",
+   "ja": "現在の組み合わせ：内容 %1 · 環境 %2"
   },
   {
    "zh": "当前设备不能执行所选 NR，请选择此显卡可用的 NR 运行库",
@@ -7450,6 +7744,13 @@
    "ja": "パフォーマンス"
   },
   {
+   "zh": "总体强度",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "總體強度",
+   "en": "Overall strength",
+   "ja": "全体の強度"
+  },
+  {
    "zh": "总变化强度",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "總變化強度",
@@ -7476,6 +7777,13 @@
    "zh-TW": "恢復預設",
    "en": "Reset to default",
    "ja": "既定に戻す"
+  },
+  {
+   "zh": "我的屏能到多少 nit；0 = 自动",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "我的屏能到多少 nit；0 = 自動",
+   "en": "Display peak in nits; 0 = automatic",
+   "ja": "ディスプレイのピーク輝度（nit）。0 = 自動"
   },
   {
    "zh": "截图",
@@ -7709,6 +8017,13 @@
    "ja": "ソーストラックを開く"
   },
   {
+   "zh": "打开片子时按片源自动选一次；有影片记忆时以记忆为准",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "開啟片子時按片源自動選一次；有影片記憶時以記憶為準",
+   "en": "Select once when a film opens; remembered film settings take priority",
+   "ja": "作品を開くときに一度選択します。作品の記憶がある場合はそちらを優先します。"
+  },
+  {
    "zh": "打开目录",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "開啟目錄",
@@ -7849,6 +8164,13 @@
    "ja": "持ち上げ範圍 (nit)"
   },
   {
+   "zh": "拉亮暗部",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "拉亮暗部",
+   "en": "Lift shadows",
+   "ja": "暗部を持ち上げる"
+  },
+  {
    "zh": "拉伸铺满",
    "src": "qml/ProPage.qml",
    "zh-TW": "拉伸鋪滿",
@@ -7910,6 +8232,20 @@
    "zh-TW": "按住看原圖",
    "en": "Hold for original",
    "ja": "押してオリジナル"
+  },
+  {
+   "zh": "按显示设备记忆",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "按顯示裝置記憶",
+   "en": "Remember per display",
+   "ja": "ディスプレイごとに記憶"
+  },
+  {
+   "zh": "按片源自动选档",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "按片源自動選檔",
+   "en": "Select from source",
+   "ja": "ソースから自動選択"
   },
   {
    "zh": "按键可在 设置 → 快捷键 里改",
@@ -8001,6 +8337,13 @@
    "zh-TW": "提亮暗部與中間調，保留高光峰值。",
    "en": "Lifts shadows and midtones while keeping the highlight peak.",
    "ja": "暗部と中間調を明るくし、ハイライトのピークを保ちます。"
+  },
+  {
+   "zh": "提亮补偿",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "提亮補償",
+   "en": "Bright-room compensation",
+   "ja": "明るい部屋向け補正"
   },
   {
    "zh": "提示音设置保存失败",
@@ -8193,6 +8536,20 @@
    "ja": "変更はここにリアルタイムで表示されます。"
   },
   {
+   "zh": "改动曲线后会按当前显示器记住，换设备时自动套用",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "改動曲線後會按當前顯示器記住，換裝置時自動套用",
+   "en": "Curve edits are saved for this display and restored when you switch back",
+   "ja": "カーブの変更を現在のディスプレイに保存し、戻したときに復元します"
+  },
+  {
+   "zh": "改动曲线后按影片记住，下次自动套用",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "改動曲線後按影片記住，下次自動套用",
+   "en": "Curve edits are saved for the film and restored next time",
+   "ja": "カーブの変更を作品ごとに保存し、次回復元します"
+  },
+  {
    "zh": "改名失败：名称不能为空、超过48字或与已有预设重复",
    "src": "qml/DialogHost.qml",
    "zh-TW": "改名失敗：名稱不能為空、超過48字或與已有預設重複",
@@ -8242,11 +8599,53 @@
    "ja": "値が範囲外です"
   },
   {
+   "zh": "数值越大，高光过渡越平缓",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "數值越大，高光過渡越平緩",
+   "en": "Higher values give a gentler highlight transition",
+   "ja": "値が大きいほどハイライトの変化が緩やかになります"
+  },
+  {
+   "zh": "整体亮暗",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "整體亮暗",
+   "en": "Overall brightness",
+   "ja": "全体の明るさ"
+  },
+  {
+   "zh": "整体观感",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "整體觀感",
+   "en": "Brightness balance",
+   "ja": "明るさのバランス"
+  },
+  {
    "zh": "整套设置无效，未应用任何字段",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "整套設定無效，未應用任何字段",
    "en": "The whole set of settings is invalid; nothing was applied",
    "ja": "設定一式が無効なため、何も適用していません"
+  },
+  {
+   "zh": "整档预设",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "整檔預設",
+   "en": "Full presets",
+   "ja": "全体プリセット"
+  },
+  {
+   "zh": "整片偏暗、只有少量亮点",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "整片偏暗、只有少量亮點",
+   "en": "Mostly dark with a few bright highlights",
+   "ja": "全体的に暗く、明るい部分が少ない作品"
+  },
+  {
+   "zh": "整片偏暗，且超出显示设备能力",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "整片偏暗，且超出顯示裝置能力",
+   "en": "Mostly dark with highlights beyond the display capability",
+   "ja": "全体的に暗く、ハイライトがディスプレイの能力を超える作品"
   },
   {
    "zh": "文件",
@@ -8893,6 +9292,13 @@
    "ja": "字幕を表示"
   },
   {
+   "zh": "显示峰值",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "顯示峰值",
+   "en": "Display peak",
+   "ja": "ディスプレイのピーク"
+  },
+  {
    "zh": "显示帧率",
    "src": "qml/ProPage.qml",
    "zh-TW": "顯示幀率",
@@ -8908,7 +9314,7 @@
   },
   {
    "zh": "显示设备峰值 (nit)",
-   "src": "qml/ProPage.qml",
+   "src": "qml/SettingsPage.qml",
    "zh-TW": "顯示設備峰值 (nit)",
    "en": "Display peak (nit)",
    "ja": "ディスプレイのピーク（nit）"
@@ -8998,6 +9404,13 @@
    "ja": "暗くなる変化"
   },
   {
+   "zh": "暗场多",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "暗場多",
+   "en": "Mostly dark",
+   "ja": "暗い場面が多い"
+  },
+  {
    "zh": "暗场很暗、亮场又很亮的片子：两头都照顾。",
    "src": "qml/ProPage.qml",
    "zh-TW": "暗場很暗、亮場又很亮的片子：兩頭都照顧。",
@@ -9026,11 +9439,25 @@
    "ja": "暗部保護"
   },
   {
-   "zh": "暗部抬升 (0.01 EV)",
+   "zh": "暗部抬升",
    "src": "qml/ProPage.qml",
+   "zh-TW": "暗部抬升",
+   "en": "Shadow lift",
+   "ja": "暗部持ち上げ"
+  },
+  {
+   "zh": "暗部抬升 (0.01 EV)",
+   "src": "qml/SettingsPage.qml",
    "zh-TW": "暗部抬升 (0.01 EV)",
    "en": "Shadow lift (0.01 EV)",
    "ja": "シャドウ持ち上げ (0.01 EV)"
+  },
+  {
+   "zh": "暗部提亮",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "暗部提亮",
+   "en": "Shadow brightness",
+   "ja": "暗部の明るさ"
   },
   {
    "zh": "曝光（EV）",
@@ -9047,11 +9474,53 @@
    "ja": "カーブ"
   },
   {
+   "zh": "曲线作用于 HDR10 或 scRGB 输出，也适用于 RTX Video HDR 转换后的画面。低亮度画面可能不会触及高光阈值。",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "曲線作用於 HDR10 或 scRGB 輸出，也適用於 RTX Video HDR 轉換後的畫面。低亮度畫面可能不會觸及高光閾值。",
+   "en": "Applies to HDR10 or scRGB output, including RTX Video HDR conversion. Dim images may not reach the highlight thresholds.",
+   "ja": "HDR10／scRGB 出力と RTX Video HDR の変換結果に適用されます。暗い映像ではハイライトのしきい値に届かない場合があります。"
+  },
+  {
    "zh": "曲线保持原样，HDR10 元数据跟随片源。",
    "src": "qml/ProPage.qml",
    "zh-TW": "曲線保持原樣，HDR10 中繼資料跟隨片源。",
    "en": "Keeps the original curve and follows source HDR10 metadata.",
    "ja": "カーブは元のまま、HDR10 メタデータはソースに追従します。"
+  },
+  {
+   "zh": "曲线图、读数与提示",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "曲線圖、讀數與提示",
+   "en": "Curve, readings and guidance",
+   "ja": "カーブ・測定値・案内"
+  },
+  {
+   "zh": "曲线未开启",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "曲線未開啟",
+   "en": "Curve is off",
+   "ja": "カーブはオフです"
+  },
+  {
+   "zh": "曲线未设「峰值上限」，不会有像素被压平。滚降区 %1% · 暗部提升区 %2%",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "曲線未設「峰值上限」，不會有像素被壓平。滾降區 %1% · 暗部提升區 %2%",
+   "en": "No peak cap; no hard clipping. Highlight compression %1% · shadow lift %2%",
+   "ja": "ピーク上限なし。ハードクリップなし。ハイライト圧縮 %1% · 暗部持ち上げ %2%"
+  },
+  {
+   "zh": "曲线没有设硬上限，不会裁剪片源峰值",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "曲線沒有設硬上限，不會裁剪片源峰值",
+   "en": "No hard cap is set on the curve",
+   "ja": "カーブにハード上限が設定されていません"
+  },
+  {
+   "zh": "曲线生效时会约束内容亮度提示；SDR 输入默认不发送，手动填写除外。",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "曲線生效時會約束內容亮度提示；SDR 輸入預設不發送，手動填寫除外。",
+   "en": "The curve bounds content-light hints. SDR input sends none by default, unless entered manually.",
+   "ja": "カーブに応じてコンテンツ輝度のヒントを制限します。SDR 入力では手動指定がない限り送信しません。"
   },
   {
    "zh": "更改…",
@@ -9367,6 +9836,20 @@
    "zh-TW": "未解碼出可顯示的字幕",
    "en": "No displayable subtitles decoded",
    "ja": "表示できる字幕がありません"
+  },
+  {
+   "zh": "未触及",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "未觸及",
+   "en": "Not reached",
+   "ja": "未到達"
+  },
+  {
+   "zh": "未设上限",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "未設上限",
+   "en": "No cap",
+   "ja": "上限なし"
   },
   {
    "zh": "未读到设备上报的采集格式，或设备正被其他应用占用。",
@@ -10202,6 +10685,13 @@
    "ja": "マスタリングピーク (nit)"
   },
   {
+   "zh": "母版峰值偏低（老片 / 转制片）",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "母版峰值偏低（老片 / 轉制片）",
+   "en": "Low mastering peak (older or converted title)",
+   "ja": "マスタリングのピークが低い作品（旧作・変換版）"
+  },
+  {
    "zh": "比较源画面与上一帧：没有明显变化的像素沿用上一帧输出，明显变化的位置直接用新结果。",
    "src": "qml/ProPage.qml",
    "zh-TW": "比較源畫面與上一幀：沒有明顯變化的像素沿用上一幀輸出，明顯變化的位置直接用新結果。",
@@ -10454,6 +10944,20 @@
    "ja": "消去"
   },
   {
+   "zh": "清除影片记忆",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "清除影片記憶",
+   "en": "Clear film memory",
+   "ja": "作品の記憶を消去"
+  },
+  {
+   "zh": "清除记忆",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "清除記憶",
+   "en": "Clear memory",
+   "ja": "記憶を消去"
+  },
+  {
    "zh": "游戏",
    "src": "qml/DialogHost.qml",
    "zh-TW": "遊戲",
@@ -10650,6 +11154,27 @@
    "ja": "ソース"
   },
   {
+   "zh": "片源最亮 %1 nit，曲线硬上限 %2 nit：%3",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "片源最亮 %1 nit，曲線硬上限 %2 nit：%3",
+   "en": "Declared source peak %1 nit, curve cap %2 nit: %3",
+   "ja": "ソースの公称ピーク %1 nit、カーブ上限 %2 nit：%3"
+  },
+  {
+   "zh": "片源没有携带亮度信息",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "片源沒有攜帶亮度資訊",
+   "en": "No luminance metadata in the source",
+   "ja": "ソースに輝度情報がありません"
+  },
+  {
+   "zh": "片源没有携带亮度信息（抓屏 / 串流），无法自动选档",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "片源沒有攜帶亮度資訊（抓屏 / 串流），無法自動選檔",
+   "en": "No luminance metadata (capture/stream); automatic selection is unavailable",
+   "ja": "輝度情報がないため（キャプチャー／配信）、自動選択はできません"
+  },
+  {
    "zh": "片源没有音轨或尚未打开",
    "src": "qml/CineBar.qml",
    "zh-TW": "片源沒有音軌或尚未開啟",
@@ -10676,6 +11201,13 @@
    "zh-TW": "獨立擷取音訊設定失敗；BMD 原生視訊繼續執行",
    "en": "Separate capture audio configuration failed; native BMD video continues.",
    "ja": "独立したキャプチャ音声の設定に失敗しました。BMD ネイティブ映像は継続します。"
+  },
+  {
+   "zh": "环境光补偿：屋里亮（开灯/白天）就补偿一点，屋里暗（关灯）就不补偿",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "環境光補償：屋裡亮（開燈/白天）就補償一點，屋裡暗（關燈）就不補償",
+   "en": "Ambient compensation: add some in a bright room; use none in a dark room",
+   "ja": "環境光補正：明るい部屋では補正し、暗い部屋では補正しません"
   },
   {
    "zh": "生效中：NVIDIA DLSS 帧生成性能模式（测试版）",
@@ -10816,6 +11348,13 @@
    "zh-TW": "畫面引擎無回應，已記錄診斷資訊；如畫面未恢復，請關閉軟體後重新開啟",
    "en": "The picture engine stopped responding; diagnostics were recorded. If the picture does not recover, close and reopen Veyra.",
    "ja": "映像エンジンが応答しません。診断情報を記録しました。映像が回復しない場合は、ソフトを閉じて開き直してください。"
+  },
+  {
+   "zh": "画面抽样统计",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "畫面抽樣統計",
+   "en": "Image sample statistics",
+   "ja": "映像のサンプル統計"
   },
   {
    "zh": "画面比例",
@@ -11399,6 +11938,13 @@
    "ja": "システム報告：ピーク %1、全画面 %2、黒 %3 nit"
   },
   {
+   "zh": "系统数值不是实测；不符时可手动填写峰值",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "系統數值不是實測；不符時可手動填寫峰值",
+   "en": "System values are not measurements; enter a peak manually if needed",
+   "ja": "システム値は実測値ではありません。必要に応じてピークを手動入力してください"
+  },
+  {
    "zh": "系统未接受设置，当前：%1",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "系統未接受設定，目前：%1",
@@ -11614,6 +12160,13 @@
    "zh-TW": "羽化像素",
    "en": "Feather (pixels)",
    "ja": "ぼかし（ピクセル）"
+  },
+  {
+   "zh": "老片平淡",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "老片平淡",
+   "en": "Flat older transfer",
+   "ja": "平坦な旧作"
   },
   {
    "zh": "肤质 · 未证实",
@@ -11929,6 +12482,13 @@
    "zh-TW": "自由排列節點，按連線順序執行",
    "en": "Arrange nodes freely; they run in link order",
    "ja": "ノードを自由に配置し、接続順に実行"
+  },
+  {
+   "zh": "自由组合",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "自由組合",
+   "en": "Combine content and room",
+   "ja": "内容と環境を組み合わせる"
   },
   {
    "zh": "至少选择一项内容",
@@ -12575,6 +13135,13 @@
    "ja": "字幕のデコード"
   },
   {
+   "zh": "触及硬上限 %1% · 高光压缩区 %2% · 暗部提升区 %3%",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "觸及硬上限 %1% · 高光壓縮區 %2% · 暗部提升區 %3%",
+   "en": "At hard cap %1% · highlight compression %2% · shadow lift %3%",
+   "ja": "ハード上限 %1% · ハイライト圧縮 %2% · 暗部持ち上げ %3%"
+  },
+  {
    "zh": "让主机切换到串流分辨率",
    "src": "qml/DialogHost.qml",
    "zh-TW": "讓主機切換到串流解析度",
@@ -12594,6 +13161,20 @@
    "zh-TW": "記住播放位置",
    "en": "Remember playback position",
    "ja": "再生位置を記憶"
+  },
+  {
+   "zh": "记住每部影片",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "記住每部影片",
+   "en": "Remember each film",
+   "ja": "作品ごとに記憶"
+  },
+  {
+   "zh": "记忆与自动化",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "記憶與自動化",
+   "en": "Memory and automation",
+   "ja": "記憶と自動化"
   },
   {
    "zh": "设为启动默认",
@@ -13156,6 +13737,13 @@
    "ja": "調整中"
   },
   {
+   "zh": "调整力度；0% 关闭曲线",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "調整力度；0% 關閉曲線",
+   "en": "Adjustment amount; 0% disables the curve",
+   "ja": "調整の強さ。0% でカーブを無効にします"
+  },
+  {
    "zh": "调色",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "調色",
@@ -13294,6 +13882,13 @@
    "zh-TW": "超解析運動來源",
    "en": "Super resolution motion source",
    "ja": "超解像のモーション入力"
+  },
+  {
+   "zh": "超过上限的亮度需要压缩；是否触及硬上限以抽样读数为准",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "超過上限的亮度需要壓縮；是否觸及硬上限以抽樣讀數為準",
+   "en": "Brightness beyond the cap needs compression; use the sample reading to check hard clipping",
+   "ja": "上限を超える輝度は圧縮が必要です。実際のクリップはサンプル値で確認してください。"
   },
   {
    "zh": "越小越敏感，越大稳得越多",
@@ -13476,6 +14071,13 @@
    "zh-TW": "輕",
    "en": "Light",
    "ja": "弱"
+  },
+  {
+   "zh": "轻微",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "輕微",
+   "en": "Slight",
+   "ja": "わずか"
   },
   {
    "zh": "载入片源",
@@ -13989,11 +14591,25 @@
    "ja": "これは字幕のプレビューです。"
   },
   {
+   "zh": "这条曲线目前也等同于整档预设「%1」",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "這條曲線目前也等同於整檔預設「%1」",
+   "en": "This curve also matches the full preset %1",
+   "ja": "このカーブは全体プリセット %1 とも一致します"
+  },
+  {
    "zh": "这里和 PS5 串流窗口是同一份设置，下次连接时一起保存到该主机的配对档案。",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "這裡和 PS5 串流視窗是同一份設定，下次連接時一起儲存到該主機的配對檔案。",
    "en": "These are the same settings as in the PS5 streaming window; they are saved to the host's pairing profile at the next connection.",
    "ja": "PS5 ストリーミングのウィンドウと同じ設定です。次回接続時にそのホストのペアリング情報にまとめて保存されます。"
+  },
+  {
+   "zh": "这里是「基础设置」里 暗部提亮、整体观感、高光保护 这三项的精确数值版（强度与显示峰值不在此列，它们本身就是直接调节）。",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "這裡是「基礎設定」裡 暗部提亮、整體觀感、高光保護 這三項的精確數值版（強度與顯示峰值不在此列，它們本身就是直接調節）。",
+   "en": "Exact values for the three basic controls: shadows, brightness balance and highlight protection. Overall strength and display peak are already direct controls.",
+   "ja": "基本設定の暗部・明るさのバランス・ハイライト保護を数値で調整します。全体の強度とディスプレイのピークは直接調整する項目のため、ここには含まれません。"
   },
   {
    "zh": "进程内待呈现",
@@ -14197,6 +14813,13 @@
    "zh-TW": "選擇軌道",
    "en": "Choose tracks",
    "ja": "トラックを選択"
+  },
+  {
+   "zh": "选档方式：两种选法写的是同一条曲线，切换只影响界面上怎么叫它",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "選檔方式：兩種選法寫的是同一條曲線，切換只影響介面上怎麼叫它",
+   "en": "Both selection modes edit the same curve; switching changes only how it is shown",
+   "ja": "どちらの選択方法も同じカーブを編集します。切り替えても表示方法が変わるだけです。"
   },
   {
    "zh": "选项",
@@ -15823,6 +16446,20 @@
    "ja": "ハイライト保護"
   },
   {
+   "zh": "高光又亮又多",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "高光又亮又多",
+   "en": "Many strong highlights",
+   "ja": "明るいハイライトが多い"
+  },
+  {
+   "zh": "高光强",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "高光強",
+   "en": "Strong highlights",
+   "ja": "強いハイライト"
+  },
+  {
    "zh": "高光很亮的片子（雪景/爆炸/演唱会）：压住顶部，暗部不动。",
    "src": "qml/ProPage.qml",
    "zh-TW": "高光很亮的片子（雪景/爆炸/演唱会）：压住顶部，暗部不动。",
@@ -15837,11 +16474,25 @@
    "ja": "ハイライト開始點 (nit)"
   },
   {
+   "zh": "高光预警",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "高光預警",
+   "en": "Highlight guidance",
+   "ja": "ハイライトの案内"
+  },
+  {
    "zh": "高延迟·需 CPU 拆包",
    "src": "include/veyra/source/CaptureFormatRank.h",
    "zh-TW": "高延遲·需 CPU 拆包",
    "en": "high latency · needs CPU unpacking",
    "ja": "高遅延 · CPU での展開が必要"
+  },
+  {
+   "zh": "高级设置：技术参数",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "高級設定：技術參數",
+   "en": "Advanced: precise parameters",
+   "ja": "詳細設定：数値パラメーター"
   },
   {
    "zh": "高质量更耗时；混合档：每对原帧的中间帧用前一档，其余用后一档",
@@ -16047,6 +16698,13 @@
    "ja": "（最大 4 層）"
   },
   {
+   "zh": "（片源最亮 %1 nit、最亮帧平均 %2 nit）",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "（片源最亮 %1 nit、最亮幀平均 %2 nit）",
+   "en": "(Source peak %1 nit, maximum frame average %2 nit)",
+   "ja": "（ソースの最大輝度 %1 nit、最大フレーム平均 %2 nit）"
+  },
+  {
    "zh": "（终止码 {} / 错误 {}）",
    "src": "src/source/RemotePlaySessionSource.cpp",
    "zh-TW": "（終止碼 {} / 錯誤 {}）",
@@ -16150,503 +16808,6 @@
    "zh-TW": "；預設“即時”，同時執行遊戲或其他重負載程式變慢時可改為“高”或“普通”",
    "en": "; Realtime by default. If a game or other heavy program running alongside slows down, choose High or Normal",
    "ja": "；既定は「リアルタイム」。同時に動かすゲームや重い処理が遅くなる場合は「高」か「通常」に変更してください"
-  },
-  {
-   "zh": " · 输出上限 {:.3f} FPS",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": " · 輸出上限 {:.3f} FPS",
-   "en": " · output cap {:.3f} FPS",
-   "ja": " · 出力上限 {:.3f} FPS"
-  },
-  {
-   "zh": "AMD NR 导出只支持 1080p 以内的片源，本次导出关闭 NR",
-   "src": "src/engine/VideoExportJob.cpp",
-   "zh-TW": "AMD NR 匯出只支援 1080p 以內的片源，本次匯出關閉 NR",
-   "en": "AMD NR export supports sources up to 1080p only; NR is off for this export",
-   "ja": "AMD NR の書き出しは 1080p 以下のソースのみ対応のため、今回の書き出しでは NR をオフにします"
-  },
-  {
-   "zh": "DLSS {}X 补帧初始化失败，未降低倍率；请查看任务诊断日志",
-   "src": "src/engine/VideoExportJob.cpp",
-   "zh-TW": "DLSS {}X 補幀初始化失敗，未降低倍率；請查看任務診斷日誌",
-   "en": "DLSS {}X frame generation failed to initialize; the multiplier was not lowered. See the job's diagnostic log",
-   "ja": "DLSS {}X フレーム生成の初期化に失敗しました。倍率は下げていません。ジョブの診断ログを確認してください"
-  },
-  {
-   "zh": "DXGI 为显示器兼容方式，无鼠标指针",
-   "src": "qml/DialogHost.qml",
-   "zh-TW": "DXGI 為顯示器相容方式，無滑鼠指標",
-   "en": "DXGI is the display-compatible mode, without the mouse pointer",
-   "ja": "DXGI はディスプレイ互換モードで、マウスポインターは映りません"
-  },
-  {
-   "zh": "GitHub · Likely7/Veyra-NRVideo · 发布页",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "GitHub · Likely7/Veyra-NRVideo · 發佈頁",
-   "en": "GitHub · Likely7/Veyra-NRVideo · releases",
-   "ja": "GitHub · Likely7/Veyra-NRVideo · リリース"
-  },
-  {
-   "zh": "MaxCLL (nit)",
-   "src": "qml/Veyra/ProPage.qml",
-   "zh-TW": "MaxCLL (nit)",
-   "en": "MaxCLL (nit)",
-   "ja": "MaxCLL (nit)"
-  },
-  {
-   "zh": "MaxFALL (nit)",
-   "src": "qml/Veyra/ProPage.qml",
-   "zh-TW": "MaxFALL (nit)",
-   "en": "MaxFALL (nit)",
-   "ja": "MaxFALL (nit)"
-  },
-  {
-   "zh": "{} 补帧导出尚未验收；本次导出改用 DLSS 补帧 {}X",
-   "src": "src/engine/VideoExportJob.cpp",
-   "zh-TW": "{} 補幀匯出尚未驗收；本次匯出改用 DLSS 補幀 {}X",
-   "en": "{} frame generation export is not validated yet; this export uses DLSS frame generation {}X",
-   "ja": "{} フレーム生成での書き出しは未検証です。今回の書き出しは DLSS フレーム生成 {}X を使用します"
-  },
-  {
-   "zh": "上次格式已不可用，请重新选择格式。",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "上次格式已不可用，請重新選擇格式。",
-   "en": "The last format is no longer available; choose a format again.",
-   "ja": "前回のフォーマットは使用できません。もう一度選んでください。"
-  },
-  {
-   "zh": "与 OBS、监控软件（小飞机 / RTSS）同时使用时的设置；修改后需要重启。",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "與 OBS、監控軟體（小飛機 / RTSS）同時使用時的設定；修改後需要重新啟動。",
-   "en": "Settings for running alongside OBS and monitoring tools (Afterburner / RTSS); changes need a restart.",
-   "ja": "OBS や監視ソフト（Afterburner / RTSS）と同時に使うときの設定です。変更後は再起動が必要です。"
-  },
-  {
-   "zh": "与帧率和像素格式一起决定采集媒体类型",
-   "src": "qml/DialogHost.qml",
-   "zh-TW": "與幀率和像素格式一起決定採集媒體類型",
-   "en": "Together with frame rate and pixel format, this selects the capture media type",
-   "ja": "フレームレートとピクセルフォーマットと合わせて、キャプチャのメディアタイプを決めます"
-  },
-  {
-   "zh": "仅向 HDR10 交换链提交提示；系统或显示器可能忽略。亮度曲线直接调整画面。",
-   "src": "qml/Veyra/ProPage.qml",
-   "zh-TW": "僅向 HDR10 交換鏈提交提示；系統或顯示器可能忽略。亮度曲線直接調整畫面。",
-   "en": "Submits an HDR10 swap-chain hint; Windows or the display may ignore it. The brightness curve directly adjusts the image.",
-   "ja": "HDR10 スワップチェーンへヒントを送ります。OS やディスプレイが無視する場合があります。輝度カーブは映像を直接調整します。"
-  },
-  {
-   "zh": "低延迟队列已关闭 · ",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "低延遲佇列已關閉 · ",
-   "en": "Low-latency queue off · ",
-   "ja": "低遅延キューはオフ · "
-  },
-  {
-   "zh": "低延迟队列恢复失败 · ",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "低延遲佇列恢復失敗 · ",
-   "en": "Could not restore the low-latency queue · ",
-   "ja": "低遅延キューを復元できませんでした · "
-  },
-  {
-   "zh": "低延迟队列：队列深度 1",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "低延遲佇列：佇列深度 1",
-   "en": "Low-latency queue: depth 1",
-   "ja": "低遅延キュー：深さ 1"
-  },
-  {
-   "zh": "低延迟队列：队列深度 1 + NVIDIA Reflex（实验）",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "低延遲佇列：佇列深度 1 + NVIDIA Reflex（實驗）",
-   "en": "Low-latency queue: depth 1 + NVIDIA Reflex (experimental)",
-   "ja": "低遅延キュー：深さ 1 + NVIDIA Reflex（実験的）"
-  },
-  {
-   "zh": "保存的采集格式已不可用，请重新选择分辨率、帧率和像素格式。",
-   "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "儲存的擷取格式已不可用，請重新選擇解析度、幀率和像素格式。",
-   "en": "The saved capture format is no longer available; choose the resolution, frame rate and pixel format again.",
-   "ja": "保存したキャプチャーフォーマットは使用できません。解像度、フレームレート、ピクセル形式を選び直してください。"
-  },
-  {
-   "zh": "信号正常",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "信號正常",
-   "en": "Signal OK",
-   "ja": "信号正常"
-  },
-  {
-   "zh": "决定输出分辨率",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "決定輸出解析度",
-   "en": "Sets the output resolution",
-   "ja": "出力解像度を決めます"
-  },
-  {
-   "zh": "减少排队；不宣称延迟下降",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "減少排隊；不宣稱延遲下降",
-   "en": "Less queuing; no claim of lower latency",
-   "ja": "キューを減らします。遅延が下がるとは限りません"
-  },
-  {
-   "zh": "减少软件排队；屏幕延迟需要实测",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "減少軟體排隊；螢幕延遲需要實測",
-   "en": "Less queuing in the app; screen latency needs to be measured",
-   "ja": "アプリ内のキューを減らします。画面の遅延は実測が必要です"
-  },
-  {
-   "zh": "原生 HDR 输入；「HDR 片源转换」未开启",
-   "src": "src/engine/EngineController.cpp",
-   "zh-TW": "原生 HDR 輸入；「HDR 片源轉換」未開啟",
-   "en": "Native HDR input; \"Convert HDR sources too\" is off",
-   "ja": "ネイティブ HDR 入力；「HDR ソースも変換」はオフです"
-  },
-  {
-   "zh": "只清空这个列表，不会删除文件。",
-   "src": "qml/HomePage.qml",
-   "zh-TW": "只清空這個列表，不會刪除檔案。",
-   "en": "Only clears this list; no file is deleted.",
-   "ja": "このリストだけを消去します。ファイルは削除されません。"
-  },
-  {
-   "zh": "固定亮度曲线：抬暗部、定中灰、压高光；不做逐场景曝光调整。",
-   "src": "qml/Veyra/ProPage.qml",
-   "zh-TW": "固定亮度曲線：抬暗部、定中灰、壓高光；不做逐場景曝光調整。",
-   "en": "A fixed brightness curve for shadows, midtones and highlights; no per-scene exposure adjustment.",
-   "ja": "暗部・中間調・ハイライトの固定輝度カーブ。シーンごとの露出調整は行いません。"
-  },
-  {
-   "zh": "垂直同步 · 队列深度 1 · ",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "垂直同步 · 佇列深度 1 · ",
-   "en": "VSync · queue depth 1 · ",
-   "ja": "垂直同期 · キュー深さ 1 · "
-  },
-  {
-   "zh": "外挂 · {}",
-   "src": "src/engine/Subtitles.cpp",
-   "zh-TW": "外掛 · {}",
-   "en": "External · {}",
-   "ja": "外部 · {}"
-  },
-  {
-   "zh": "字幕文件 (*.srt *.ass *.ssa *.vtt);;所有文件 (*.*)",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "字幕檔案 (*.srt *.ass *.ssa *.vtt);;所有檔案 (*.*)",
-   "en": "Subtitle files (*.srt *.ass *.ssa *.vtt);;All files (*.*)",
-   "ja": "字幕ファイル (*.srt *.ass *.ssa *.vtt);;すべてのファイル (*.*)"
-  },
-  {
-   "zh": "字幕文件无法读取或没有字幕内容：%1",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "字幕檔案無法讀取或沒有字幕內容：%1",
-   "en": "The subtitle file cannot be read or has no subtitles: %1",
-   "ja": "字幕ファイルを読み込めないか、字幕がありません：%1"
-  },
-  {
-   "zh": "对比中",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "對比中",
-   "en": "Comparing",
-   "ja": "比較中"
-  },
-  {
-   "zh": "当前导出设备不能执行所请求的 DLSS 补帧，未降低倍率",
-   "src": "src/engine/VideoExportJob.cpp",
-   "zh-TW": "當前匯出裝置不能執行所請求的 DLSS 補幀，未降低倍率",
-   "en": "The export device cannot run the requested DLSS frame generation; the multiplier was not lowered",
-   "ja": "書き出し用デバイスでは要求された DLSS フレーム生成を実行できません。倍率は下げていません"
-  },
-  {
-   "zh": "当前显卡不能使用 DLSS NR，本次导出自动关闭 NR",
-   "src": "src/engine/VideoExportJob.cpp",
-   "zh-TW": "當前顯示卡不能使用 DLSS NR，本次匯出自動關閉 NR",
-   "en": "This GPU cannot use DLSS NR; NR is turned off for this export",
-   "ja": "この GPU では DLSS NR を使えないため、今回の書き出しでは NR をオフにします"
-  },
-  {
-   "zh": "快速调节只在专业模式的列表视图可用",
-   "src": "qml/Main.qml",
-   "zh-TW": "快速調節只在專業模式的列表視圖可用",
-   "en": "Quick settings are available only in Pro mode's list view",
-   "ja": "クイック設定はプロモードのリスト表示でのみ使えます"
-  },
-  {
-   "zh": "显示同步：自动 · 与屏幕同步防撕裂",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "顯示同步：自動 · 與螢幕同步防撕裂",
-   "en": "Display sync: auto · synchronize with the display to prevent tearing",
-   "ja": "表示の同期：自動 · 画面と同期してティアリングを防止"
-  },
-  {
-   "zh": "显示队列控制不可用 · ",
-   "src": "src/engine/VideoPresenter.cpp",
-   "zh-TW": "顯示佇列控制不可用 · ",
-   "en": "Display queue control unavailable · ",
-   "ja": "表示キューの制御を使用できません · "
-  },
-  {
-   "zh": "显示队列等待失败；",
-   "src": "src/engine/EngineController.cpp",
-   "zh-TW": "顯示佇列等待失敗；",
-   "en": "Display queue wait failed; ",
-   "ja": "表示キューの待機に失敗しました。"
-  },
-  {
-   "zh": "未读到有效的 4K 以内采集格式，或设备正被其他应用占用。",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "未讀到有效的 4K 以內擷取格式，或裝置正被其他應用占用。",
-   "en": "No valid capture format up to 4K was read, or the device is being used by another app.",
-   "ja": "4K 以下の有効なキャプチャーフォーマットを読み取れないか、デバイスが他のアプリで使用中です。"
-  },
-  {
-   "zh": "正在查询设备…",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "正在查詢裝置…",
-   "en": "Looking up devices…",
-   "ja": "デバイスを確認中…"
-  },
-  {
-   "zh": "清空最近播放记录？",
-   "src": "qml/HomePage.qml",
-   "zh-TW": "清空最近播放記錄？",
-   "en": "Clear the recent list?",
-   "ja": "最近再生した記録を消去しますか？"
-  },
-  {
-   "zh": "自动：与屏幕同步防撕裂 · 提交帧率受屏幕刷新率限制 · 想再降延迟可选“允许撕裂”（可能撕裂）或在显卡驱动开启 G-SYNC/FreeSync，最多少等一次刷新（60Hz 约 8 ms）",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "自動：與螢幕同步防撕裂 · 提交幀率受螢幕更新率限制 · 想再降延遲可選「允許撕裂」（可能撕裂）或在顯示卡驅動開啟 G-SYNC/FreeSync，最多少等一次更新（60Hz 約 8 ms）",
-   "en": "Auto: synchronize with the display to prevent tearing; submitted FPS is limited by the refresh rate. For lower latency choose \"Allow tearing\" (may tear) or enable G-SYNC/FreeSync in the GPU driver to wait up to one refresh less (about 8 ms at 60 Hz)",
-   "ja": "自動：画面と同期してティアリングを防止 · 送信 FPS はリフレッシュレートが上限 · さらに遅延を減らすには「ティアリングを許可」（ティアリングの可能性あり）を選ぶか、GPU ドライバーで G-SYNC/FreeSync を有効にすると、待ち時間が最大 1 リフレッシュ分短くなります（60Hz で約 8 ms）"
-  },
-  {
-   "zh": "设备查询还没有完成",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "裝置查詢還沒有完成",
-   "en": "The device query has not finished yet",
-   "ja": "デバイスの確認がまだ完了していません"
-  },
-  {
-   "zh": "采集卡拒绝 {:.3f} FPS（0x{:08X}）；请改用设备支持的帧率，或填 0 恢复默认。",
-   "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "擷取卡拒絕 {:.3f} FPS（0x{:08X}）；請改用裝置支援的幀率，或填 0 恢復預設。",
-   "en": "The capture card refused {:.3f} FPS (0x{:08X}); use a frame rate the device supports, or enter 0 for the default.",
-   "ja": "キャプチャーカードが {:.3f} FPS を拒否しました（0x{:08X}）。デバイスが対応するフレームレートにするか、0 を入力して既定に戻してください。"
-  },
-  {
-   "zh": "高质量需要更多处理时间",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "高品質需要更多處理時間",
-   "en": "High quality takes more processing time.",
-   "ja": "高品質にはより多くの処理時間が必要です。"
-  },
-  {
-   "zh": "原生采集跟随 Desktop Video Setup 的 HDMI/SDI 输入。支持自动检测的卡建议选择自动；信号未锁定时会明确提示。",
-   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "原生擷取沿用 Desktop Video Setup 的 HDMI/SDI 輸入。支援自動偵測的卡建議選擇自動；訊號未鎖定時會明確提示。",
-   "en": "Native capture follows the HDMI/SDI input selected in Desktop Video Setup. Choose automatic detection when supported. An unlocked signal is reported explicitly.",
-   "ja": "Desktop Video Setup で選んだ HDMI/SDI 入力を使用します。対応カードは自動検出を推奨します。信号がロックされていない場合は明示します。"
-  },
-  {
-   "zh": "原生采集先确认有效信号；支持自动检测的卡建议选择自动。HDMI/SDI 跟随 Desktop Video Setup。",
-   "src": "qml/Veyra/DialogHost.qml;src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "原生擷取先確認有效訊號；支援自動偵測的卡建議選擇自動。HDMI/SDI 沿用 Desktop Video Setup。",
-   "en": "Native capture first verifies a valid signal. Use automatic detection when supported. HDMI/SDI follows Desktop Video Setup.",
-   "ja": "有効な信号を確認してからキャプチャします。対応カードは自動検出を使用してください。HDMI/SDI は Desktop Video Setup に従います。"
-  },
-  {
-   "zh": "BMD 原生入口跟随 Desktop Video Setup 的 HDMI/SDI 输入设置；请在该程序选择输入口，再使用自动检测或手动制式。",
-   "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "BMD 原生入口沿用 Desktop Video Setup 的 HDMI/SDI 輸入設定；請在該程式選擇輸入埠，再使用自動偵測或手動制式。",
-   "en": "Native BMD capture uses the HDMI/SDI input selected in Desktop Video Setup. Select the input there, then use automatic detection or a manual format.",
-   "ja": "BMD ネイティブ入力は Desktop Video Setup の HDMI/SDI 設定に従います。同アプリで入力を選び、自動検出または手動形式を使用してください。"
-  },
-  {
-   "zh": "BMD 未检测到有效输入。请关闭占用采集卡的应用，并在 Desktop Video Setup 核对 HDMI/SDI 和制式；也可选择手动制式",
-   "src": "src/source/DeckLinkCapture.cpp",
-   "zh-TW": "BMD 未偵測到有效輸入。請關閉占用擷取卡的應用程式，並在 Desktop Video Setup 核對 HDMI/SDI 與制式；也可選擇手動制式",
-   "en": "BMD found no valid input. Close other capture apps and check HDMI/SDI and format in Desktop Video Setup. A matching manual format can also be selected.",
-   "ja": "BMD の有効な入力が見つかりません。他のキャプチャアプリを終了し、Desktop Video Setup の HDMI/SDI と形式を確認してください。対応する手動形式も選択できます。"
-  },
-  {
-   "zh": "保存的 BMD 制式已不可用，请刷新并重新选择",
-   "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "儲存的 BMD 制式已無法使用，請重新整理並選擇",
-   "en": "Saved BMD format is no longer available. Refresh and select a format again.",
-   "ja": "保存された BMD 形式は利用できなくなりました。更新して選び直してください。"
-  },
-  {
-   "zh": "未找到该 BMD 原生设备，请安装 Desktop Video 驱动并刷新设备列表",
-   "src": "src/source/DeckLinkDriver.cpp",
-   "zh-TW": "找不到該 BMD 原生裝置，請安裝 Desktop Video 驅動並重新整理裝置清單",
-   "en": "Native BMD device not found. Install Desktop Video and refresh the device list.",
-   "ja": "BMD ネイティブデバイスが見つかりません。Desktop Video をインストールし、デバイス一覧を更新してください。"
-  },
-  {
-   "zh": "放大时重建细节；原尺寸时修复压缩伪影。效果取决于片源。",
-   "src": "qml/Veyra/ProPage.qml",
-   "zh-TW": "放大時重建細節；原尺寸時修復壓縮瑕疵。效果取決於片源。",
-   "en": "Reconstructs detail when upscaling and reduces compression artifacts at native size. Results depend on the source.",
-   "ja": "拡大時は細部を再構成し、元の解像度では圧縮ノイズを低減します。効果は映像により異なります。"
-  },
-  {
-   "zh": "当前播放器不支持",
-   "src": "include/veyra/source/CaptureFormatSelection.h",
-   "zh-TW": "目前播放器不支援",
-   "en": "Unsupported by this player",
-   "ja": "このプレイヤーでは非対応"
-  },
-  {
-   "zh": "设备实际支持的格式",
-   "src": "qml/DialogHost.qml",
-   "zh-TW": "裝置實際支援的格式",
-   "en": "Formats the device actually supports",
-   "ja": "デバイスが実際に対応するフォーマット"
-  },
-  {
-   "zh": "请选择格式",
-   "src": "qml/DialogHost.qml",
-   "zh-TW": "請選擇格式",
-   "en": "Choose a format",
-   "ja": "フォーマットを選んでください"
-  },
-  {
-   "zh": "0 = 跟随片源；报低通常整体变亮",
-   "src": "qml/Veyra/ProPage.qml",
-   "zh-TW": "0 = 跟隨片源；報低通常整體變亮",
-   "en": "0 = follow the source; a lower value usually brightens the picture",
-   "ja": "0 = ソースに追従。低く申告すると通常は全體が明るくなる"
-  },
-  {
-   "zh": "不做任何改动，交给显示器和片源本身。",
-   "src": "qml/Veyra/ProPage.qml",
-   "zh-TW": "不做任何改动，交给显示器和片源本身。",
-   "en": "Changes nothing; the display and the source decide.",
-   "ja": "Changes nothing; the display and the source decide."
-  },
-  {
-   "zh": "启动时检测到小飞机（RTSS）就改用软件绘制界面，OSD 只显示在视频上",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "啟動時偵測到小飛機（RTSS）就改用軟體繪製介面，OSD 只顯示在影片上",
-   "en": "When RivaTuner (RTSS) is running at start, the interface is drawn in software and the OSD shows on the video only",
-   "ja": "起動時に RivaTuner（RTSS）を検出するとインターフェースをソフトウェア描画にし、OSD は映像にだけ表示します"
-  },
-  {
-   "zh": "小飞机在 Veyra 之后启动。为避免画面卡住，它的 OSD 暂不在 Veyra 里显示。重启后界面改用兼容绘制，OSD 只显示在视频上。现在重启吗？当前播放或串流将停止。",
-   "src": "qml/Main.qml",
-   "zh-TW": "小飛機在 Veyra 之後啟動。為避免畫面卡住，它的 OSD 暫不在 Veyra 中顯示。重新啟動後介面改用相容繪製，OSD 只顯示在影片上。現在重新啟動嗎？目前的播放或串流將停止。",
-   "en": "RivaTuner started after Veyra. To keep the picture from freezing, its OSD is not shown in Veyra for now. After a restart the interface uses compatible drawing and the OSD shows on the video only. Restart now? Current playback or streaming will stop.",
-   "ja": "RivaTuner が Veyra の後に起動しました。映像が止まらないよう、今は Veyra に OSD を表示しません。再起動するとインターフェースが互換描画になり、OSD は映像にだけ表示されます。今すぐ再起動しますか？再生中の映像やストリーミングは停止します。"
-  },
-  {
-   "zh": "已发送给显示器",
-   "src": "qml/Veyra/ProPage.qml",
-   "zh-TW": "已傳送給顯示器",
-   "en": "Sent to the display",
-   "ja": "表示機器へ送信中"
-  },
-  {
-   "zh": "已检测到小飞机（RTSS）：界面软件绘制，OSD 只显示在视频上；部分阴影与模糊简化",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "已偵測到小飛機（RTSS）：介面軟體繪製，OSD 只顯示在影片上；部分陰影與模糊簡化",
-   "en": "RivaTuner (RTSS) detected: the interface is drawn in software and the OSD shows on the video only; some shadows and blur are simplified",
-   "ja": "RivaTuner（RTSS）を検出：インターフェースはソフトウェア描画、OSD は映像にだけ表示。一部の影とぼかしは簡略化されます"
-  },
-  {
-   "zh": "把内容峰值告诉显示器",
-   "src": "qml/Veyra/ProPage.qml",
-   "zh-TW": "把內容峰值告訴顯示器",
-   "en": "Tells the display the content peak",
-   "ja": "コンテンツのピークを表示機器に傳える"
-  },
-  {
-   "zh": "把内容峰值告诉显示器，让它的动态色调映射有依据。",
-   "src": "qml/Veyra/ProPage.qml",
-   "zh-TW": "把內容峰值告訴顯示器，讓它的動態色調映射有依據。",
-   "en": "Tells the display what the content peak is, so its dynamic tone mapping has something to work from.",
-   "ja": "コンテンツのピークを表示機器に傳え、動的トーンマッピングの判斷材料にする。"
-  },
-  {
-   "zh": "文件播放与字幕的默认行为。",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "檔案播放與字幕的預設行為。",
-   "en": "Default behavior for file playback and subtitles.",
-   "ja": "ファイル再生と字幕の既定の動作。"
-  },
-  {
-   "zh": "暗调片、夜景多的剧集：只抬暗部，亮部不受影响。",
-   "src": "qml/Veyra/ProPage.qml",
-   "zh-TW": "暗调片、夜景多的剧集：只抬暗部，亮部不受影响。",
-   "en": "Dark films and night-heavy series: lifts the shadows only; the highlights are untouched.",
-   "ja": "Dark films and night-heavy series: lifts the shadows only; the highlights are untouched."
-  },
-  {
-   "zh": "检测到小飞机（RTSS）",
-   "src": "qml/Main.qml",
-   "zh-TW": "偵測到小飛機（RTSS）",
-   "en": "RivaTuner (RTSS) detected",
-   "ja": "RivaTuner（RTSS）を検出"
-  },
-  {
-   "zh": "游戏 30 帧、采集卡输出 60 帧时选“采集 60→30”",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "遊戲 30 幀、擷取卡輸出 60 幀時選“擷取 60→30”",
-   "en": "Choose \"Capture 60→30\" when the game runs at 30 fps and the capture card outputs 60",
-   "ja": "ゲームが 30 fps でキャプチャーカードが 60 fps を出力する場合は「キャプチャー 60→30」を選択"
-  },
-  {
-   "zh": "源 ",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "源 ",
-   "en": "Source ",
-   "ja": "ソース "
-  },
-  {
-   "zh": "界面始终用显卡绘制；为避免冲突，小飞机 OSD 不在 Veyra 里显示",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "介面始終用顯示卡繪製；為避免衝突，小飛機 OSD 不在 Veyra 中顯示",
-   "en": "The interface always draws on the GPU; to avoid a conflict the RTSS OSD is not shown in Veyra",
-   "ja": "インターフェースは常に GPU で描画します。競合を避けるため RTSS の OSD は Veyra に表示しません"
-  },
-  {
-   "zh": "等比例缩放这一档的效果；100% = 档位原值",
-   "src": "qml/Veyra/ProPage.qml",
-   "zh-TW": "等比例缩放这一档的效果；100% = 档位原值",
-   "en": "Scales the whole preset; 100% = the preset as written",
-   "ja": "Scales the whole preset; 100% = the preset as written"
-  },
-  {
-   "zh": "自动：与屏幕同步防撕裂 · 提交帧率受屏幕刷新率限制",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "自動：與螢幕同步防撕裂 · 提交幀率受螢幕更新率限制",
-   "en": "Auto: synchronize with the display to prevent tearing; submitted FPS is limited by the refresh rate",
-   "ja": "自動：画面と同期してティアリングを防止 · 送信 FPS はリフレッシュレートが上限"
-  },
-  {
-   "zh": "通用与外观",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "通用與外觀",
-   "en": "General and appearance",
-   "ja": "全般と外観"
-  },
-  {
-   "zh": "静态曲线：抬暗部、定中灰、压高光。不随场景变化，不会呼吸。",
-   "src": "qml/Veyra/ProPage.qml",
-   "zh-TW": "靜態曲線：抬暗部、定中灰、壓高光。不隨場景變化，不會呼吸。",
-   "en": "Static curve: lifts the shadows, sets the mid-gray, rolls off the highlights. It never follows the scene, so the picture cannot breathe.",
-   "ja": "靜的曲線：暗部を持ち上げ、中間調を決め、ハイライトを壓縮。シーンに追従しない。"
-  },
-  {
-   "zh": "；当前显卡不能使用 DLSS NR，本次导出自动关闭 NR",
-   "src": "src/engine/VideoExportJob.cpp",
-   "zh-TW": "；當前顯示卡不能使用 DLSS NR，本次匯出自動關閉 NR",
-   "en": "; this GPU cannot use DLSS NR, NR is turned off for this export",
-   "ja": "；この GPU では DLSS NR を使えないため、今回の書き出しでは NR をオフにします"
   }
  ]
 }

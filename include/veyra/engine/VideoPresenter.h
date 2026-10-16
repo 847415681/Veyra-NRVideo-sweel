@@ -53,10 +53,8 @@ public:
     uint64_t generation()const{return generation_;}
     // Explicit integration-test capture only; never called by playback/export.
     bool readPresentedFrameForTest(gfx::D3D12DeviceContext&,gfx::CommandSlotRing&,sink::RgbaImage&);
-    // Custom: how the curve currently treats the frame (see HdrOutputTuning.h). The
-    // presenter measures it with one extra tiny draw of the present blit plus a
-    // non-blocking readback, so the value is at most one probe behind and the GPU is
-    // never waited for.
+    // A visible HDR panel can request sparse GPU statistics. No pixel readback.
+    void observeHdrCoverage(bool on){probeObserved_=on;if(!on)liveCoverage_={};}
     const HdrCurveCoverage& liveCurveCoverage() const { return liveCoverage_; }
     // Test-only buffer reference for lossless HDR readback. Drains the private
     // queue; caller drains the shared queue and releases before resize/close.
@@ -96,7 +94,7 @@ void recordGpuTimings(){gpuTimer_.recordCompleted();}
 private:
     // Custom: HDR10 static metadata for the display (MaxCLL / MaxFALL / mastering
     // peak). Sent only when it changes, and cleared when the HDR10 path stops.
-    void applyHdrMetadata(pipeline::EnhanceGraph& graph,const HdrMetadataSettings& metadata,pipeline::FrameIdentity identity);
+    void applyHdrMetadata(pipeline::EnhanceGraph& graph,const HdrMetadataSettings& metadata,const HdrCurveSettings& resolvedCurve,pipeline::FrameIdentity identity);
     bool metadataSent_=false,metadataDirty_=false;
     // The source's mastering/CLL values are absent on many frames; holding the last
     // real value keeps the reported metadata steady instead of flapping to the
@@ -126,16 +124,17 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> compositeTarget_;
     bool copyBeforePresent_=false,copyEligible_=false;
     unsigned inc_=0;
-    // Custom: the live coverage probe. The target uses the swapchain's own format so
-    // the existing present PSO can render into it; only the 10-bit HDR10 format is
-    // decoded (the scRGB half-float case is skipped rather than guessed at).
-    static constexpr unsigned kProbeWidth=64,kProbeHeight=36,kProbeIntervalFrames=15;
-    Microsoft::WRL::ComPtr<ID3D12Resource> probeTarget_,probeReadback_;
+    static constexpr unsigned kProbeWidth=64,kProbeHeight=36,kProbeStatsBytes=5*sizeof(uint32_t);
+    pipeline::ComputePass probePass_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> probeStats_,probeReadback_;
     uint64_t probeFenceValue_=0;
-    bool probePending_=false,probeEnabled_=false;
-    unsigned probeFrame_=0,probeBytesPerPixel_=0;
+    bool probePending_=false,probeObserved_=false,probeFailed_=false;
+    HdrCurveSettings probeCurve_{};
+    pipeline::FrameIdentity probeIdentity_{};
+    std::chrono::steady_clock::time_point probeNext_{};
     HdrCurveCoverage liveCoverage_{};
-    void publishLiveCoverage(const HdrCurveSettings& curve);
+    bool ensureCoverageProbe(ID3D12Device*);
+    void publishLiveCoverage(const HdrCurveSettings&,pipeline::FrameIdentity);
     unsigned lastBuffer_=0;bool hasPresented_=false;
     struct RetainedFrame {
         ID3D12Fence* producer=nullptr;

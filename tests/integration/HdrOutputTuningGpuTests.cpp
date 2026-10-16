@@ -8,6 +8,8 @@
 #include <DirectXPackedVector.h>
 #include <iostream>
 #include <array>
+#include <thread>
+#include <d3d12sdklayers.h>
 #include <cmath>
 extern "C" {
 #include <libavutil/frame.h>
@@ -56,6 +58,14 @@ int wmain(){
         settings.hdrCurve.highlightStartNits=200;settings.hdrCurve.peakCapNits=400;
         ready=ready&&graph.applySettings(settings)&&present(0,true);
         check(ready&&presenter.submittedCount()>idleCount,"HDR uniform edits invalidate the paused display cache");
+        check(!presenter.liveCurveCoverage().valid,"HDR coverage is silent before a panel requests it");
+        presenter.observeHdrCoverage(true);
+        check(present(),"visible HDR panel records a statistics probe");
+        check(present(),"statistics collect without a CPU fence wait");
+        const auto coverage=presenter.liveCurveCoverage();
+        check(coverage.valid&&coverage.samples==2304&&coverage.inRollOff>0,"HDR10/scRGB statistics report a completed sparse sample");
+        check(coverage.aboveCeiling==0,"soft highlight knee is not misreported as hard clipping");
+        presenter.observeHdrCoverage(false);check(!presenter.liveCurveCoverage().valid,"hiding HDR panel clears its statistics");
         double maxRelative=0;bool monotonic=true;double previous=0;
         if(ready)for(unsigned i=0;i<patches.size();++i){
             const auto at=size_t(i*4+2)*3;
@@ -138,6 +148,10 @@ int wmain(){
         }
     }
     av_frame_free(&frame);ring.drainQueue();
+    Microsoft::WRL::ComPtr<ID3D12InfoQueue> messages;
+    if(SUCCEEDED(ctx.device()->QueryInterface(IID_PPV_ARGS(&messages)))){
+        for(UINT64 i=0;i<messages->GetNumStoredMessages();++i){SIZE_T bytes=0;messages->GetMessage(i,nullptr,&bytes);std::vector<uint8_t> storage(bytes);auto* message=reinterpret_cast<D3D12_MESSAGE*>(storage.data());if(SUCCEEDED(messages->GetMessage(i,message,&bytes))&&message->Severity<=D3D12_MESSAGE_SEVERITY_ERROR){++failures;std::cout<<"GPU_VALIDATION "<<message->pDescription<<std::endl;}}
+    }
     std::cout<<"HDR output integration failures="<<failures<<" (GPU/DXGI pixels only; physical monitor unmeasured)"<<std::endl;
     return failures?1:0;
 }

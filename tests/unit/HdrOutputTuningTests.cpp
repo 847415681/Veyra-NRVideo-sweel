@@ -340,7 +340,7 @@ int main() {
         // The live meter's numbers must be defined by tests, not by the render loop.
         {
             HdrCurveSettings curve;curve.enabled=true;curve.peakCapNits=1000;
-            curve.highlightStartNits=450;curve.shadowRangeNits=35;
+            curve.highlightStartNits=450;curve.shadowRangeNits=35;curve.shadowLiftEv100=50;
             const double frame[]={10.0,20.0,30.0,100.0,500.0,900.0,2000.0};
             const auto coverage=hdrCurveCoverage(frame,7,curve);
             check(coverage.valid&&coverage.samples==7,
@@ -362,10 +362,10 @@ int main() {
             }
             check(rising,"pq: the decode is monotonic");
         }
-            check(coverage.aboveCeiling==1&&std::abs(coverage.aboveCeilingPercent()-100.0/7.0)<1e-9,
-                  "coverage: only the sample above the ceiling is reported as crushed");
-            check(coverage.inRollOff==2,
-                  "coverage: samples between the highlight start and the ceiling are roll-off");
+            check(coverage.aboveCeiling==0&&coverage.aboveCeilingPercent()==0,
+                  "coverage: the soft knee prevents false hard-clipping reports");
+            check(coverage.inRollOff==3,
+                  "coverage: every value entering the highlight knee is counted");
             check(coverage.inLift==3,
                   "coverage: samples below the lift range are counted as being raised");
             const auto disabled=hdrCurveCoverage(frame,7,HdrCurveSettings{});

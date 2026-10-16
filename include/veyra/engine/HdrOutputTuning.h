@@ -562,9 +562,17 @@ inline HdrCurveCoverage hdrCurveCoverage(const double* nits, unsigned count, con
     for (unsigned i = 0; i < count; ++i) {
         const double value = nits[i];
         if (!std::isfinite(value) || value <= 0.0) continue;
-        if (cap > 0.0 && value > cap) ++coverage.aboveCeiling;
-        else if (start > 0.0 && value > start) ++coverage.inRollOff;
-        if (range > 0.0 && value < range) ++coverage.inLift;
+        if (curve.shadowLiftEv100 != 0 && range > 0.0 && value < range) ++coverage.inLift;
+        // Reproduce each stage before the final hard cap. A soft knee may
+        // already bring values below the cap, so raw input > cap is not clipping.
+        double mapped=value;
+        const double w=range>0?std::clamp(1-value/range,0.0,1.0):0.0;
+        mapped*=1+w*w*(std::exp2(double(curve.shadowLiftEv100)/100)-1);
+        const double peak=cap>0?cap:1000;
+        if(curve.midGrayNits>0&&std::abs(double(curve.midGrayNits)-203)>.5&&peak>curve.midGrayNits+1)
+            mapped=peak*std::pow(std::max(mapped/peak,0.0),std::log(curve.midGrayNits/peak)/std::log(203/peak));
+        if(start>0&&mapped>start){++coverage.inRollOff;const double scale=hdrCurveRollOffScaleNits(curve);mapped=start+(mapped-start)/(1+(mapped-start)/scale);}
+        if(cap>0&&mapped>cap)++coverage.aboveCeiling;
     }
     return coverage;
 }
