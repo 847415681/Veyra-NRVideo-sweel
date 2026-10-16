@@ -181,3 +181,25 @@
      }
  
      av_log(ctx, AV_LOG_DEBUG, "Deinterlace output: %dx%d, pts=%"PRId64", field=%d\n",
+@@ -825,7 +862,8 @@
+                 }
+                 flush_idx++;
+             }
+-            return AVERROR_EOF;
++            /* Deliver the fields just queued before propagating EOF. */
++            return 0;
+         }
+         return AVERROR_EOF;
+     }
+@@ -845,8 +883,9 @@
+         AVHWFramesContext *frames_ctx = (AVHWFramesContext *)in->hw_frames_ctx->data;
+         AVD3D12VAFramesContext *input_hwctx = (AVD3D12VAFramesContext *)frames_ctx->hwctx;
+ 
+-        s->width = frames_ctx->width;
+-        s->height = frames_ctx->height;
++        /* Visible frame extent differs from padded decoder allocations. */
++        s->width = in->width;
++        s->height = in->height;
+         s->input_format = input_hwctx->format;
+ 
+         if (s->input_format == DXGI_FORMAT_UNKNOWN) {
