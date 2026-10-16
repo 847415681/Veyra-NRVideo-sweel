@@ -1064,7 +1064,8 @@ VPage {
                         if (!n || !n.enabled) continue
                         const t = timings[String(id)] || {}
                         out.push({ id: id, label: n.label, color: hues[n.type] || Theme.accent,
-                                   measured: t.state === "measured", ms: t.state === "measured" ? t.ms : 0, state: t.state || "" })
+                                   measured: t.state === "measured", ms: t.state === "measured" ? t.ms : 0,
+                                   state: t.state || "", reason: t.reason || "" })
                     }
                     return out
                 }
@@ -1102,6 +1103,7 @@ VPage {
                                 horizontalAlignment: Text.AlignHCenter
                                 elide: Text.ElideRight
                                 text: modelData.label + " " + (modelData.measured ? modelData.ms.toFixed(1) + " ms"
+                                      : modelData.state === "failed" ? qsTr("启用失败")
                                       : modelData.state === "sdk" ? qsTr("SDK内部") : modelData.state === "fused" ? qsTr("并入输入") : qsTr("等待样本"))
                                 color: modelData.measured ? Qt.rgba(0, 0, 0, 0.8) : Theme.t3
                                 font.family: Theme.fontUi
@@ -1110,7 +1112,7 @@ VPage {
                             }
                             HoverHandler { id: segHover; cursorShape: Qt.PointingHandCursor }
                             ToolTip.visible: segHover.hovered
-                            ToolTip.text: modelData.label + "：" + (modelData.measured ? modelData.ms.toFixed(2) + qsTr(" ms（GPU 最近一秒平均）") : qsTr("暂无本节点计时"))
+                            ToolTip.text: modelData.label + "：" + (modelData.measured ? modelData.ms.toFixed(2) + qsTr(" ms（GPU 最近一秒平均）") : modelData.reason || qsTr("暂无本节点计时"))
                             TapHandler {
                                 gesturePolicy: TapHandler.WithinBounds
                                 onTapped: root.focusNode(modelData.id)
@@ -1399,6 +1401,10 @@ VPage {
                         implicitHeight: 18
                         radius: 5
                         color: Qt.rgba(0, 0, 0, 0.35)
+                        HoverHandler { id: timingHover }
+                        ToolTip.visible: timingHover.hovered && !!msText.timing.reason
+                        ToolTip.text: msText.timing.reason || ""
+                        ToolTip.delay: 400
                         Text {
                             id: msText
                             objectName: "node-ms-" + card.node.id
@@ -1413,6 +1419,7 @@ VPage {
                                 case "idle": return qsTr("未连接")
                                 case "draft": return qsTr("草稿未运行")
                                 case "pending": return qsTr("等待样本")
+                                case "failed": return qsTr("启用失败")
                                 case "stopped": return qsTr("未播放")
                                 case "hdr-sdr": return qsTr("SDR显示未转换")
                                 case "fg-skipped": return qsTr("预算拒绝")

@@ -9590,3 +9590,8 @@ PR44最终产品输入26db779；37目标构建通过（命令python -X utf8 -B -
 实际python .../checks.py --retry、ui-cards.py、ui-hdr.py与scripts/i18n/extract.py --check：HDR/链/预设/事务/颜色/几何/数据迁移通过，Qt Quick 76/76；2401翻译缺译/占位符0。真实HDR10/scRGB曲线/黑帧/统计/resize/metadata/符号RGB/强度0恒等通过，D3D12 ERROR/CORRUPTION0；另--video-hdr真实SDR→已核验TrueHDR→显示曲线sourceHdr0/videoHdrActive1通过。英日繁中五卡窄窗及OBS软件渲染、非法参数不变、A/B影片记忆37恢复、关闭清除后0条、19/60/900重开保持通过。最新完整命令/输入SHA/EXE SHA/截图在E:/项目/Veyra/{logs,reports,tests}/pr44-hdr-display-20261016；build.json/checks.json/ui.json/cards.json为指针。首轮统计描述符/ClearUAV6项GPU错误与黑帧夹具未恢复灰阶2项失败已修后重测，漏传测试目录/未建截图目录的环境失败也已修后重跑，旧失败证据保留。未测实体投影仪/AMD/Intel/跨屏/光学延迟，不宣称无开销或性能百分比。
 
 来源及边界详见THIRD_PARTY_NOTICES与PR44_HDR_DISPLAY_REPORT_2026-10-16.md。按用户授权检查后正常推进main/nrvideo并核对PR状态，使用final-audit.py --stage pre/post保护78原树/90原分支/509脏文件（只允许main推进），复核产品输入与验收EXE一致，增量bundle/远端回执写E盘archives/reports/...；最终实际SHA、PR合并状态和保护结果以final.json为准。上一轮issues41–45分支与其它旧树原样保留，本轮无Release/打用户包/代发/子Agent/关机。
+## 2026-10-16 RTX2060 光流注册修复开工
+
+用户明确先存档再补同步。已运行 python -X utf8 -B -I E:/项目/Veyra/tmp/nr2060-sync-20261016/archive.py：80旧树/92原分支/509脏文件状态与内容完整保存，dirty-files.zip、logs(19).zip与诊断原件备份，checkpoint/pre-nr2060-sync-20261016 指向 main b571a44，source-before.bundle 74948191字节且 git bundle verify 成功；归档后原状态复核一致。回执 E:/项目/Veyra/archives/nr2060-sync-20261016/archive-receipt.json。其后 git worktree add -b codex/nr2060-sync-20261016 E:/项目/Veyra/worktrees/nr2060-sync-20261016 main；原 main 未推进。
+
+方案 docs/NR2060_SYNC_PLAN_2026-10-16.md。只补 NVOF 初始化注册同步与 NR 失败状态的必要接点；不改模型/默认设置/逐帧调度或 UI 刷新频率，不派Agent，不改驱动/用户配置/专有运行库，不造压，无本轮合并/发布/用户包/关机。54次现场无效指针与 NR 全零是诊断证据，尚不能宣称同步缺口是唯一根因；2060最终效果待用户实卡复测。后续构建/回归与失败另记，产物统一 E:/项目/Veyra/{用途}/nr2060-sync-20261016。

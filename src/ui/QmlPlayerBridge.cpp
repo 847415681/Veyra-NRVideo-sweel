@@ -1815,10 +1815,18 @@ QVariantMap QmlPlayerBridge::nodeTimings() const {
         if (draft) path.clear();
     }
     const bool live = queuedFramesKnown();
+    const auto& snapshot = impl_->snapshot;
+    // A failed optical-flow/NR backend can leave the requested editor layer
+    // enabled while the engine has deliberately resumed playback without NR.
+    // Show that confirmed recovery, not an endless timing warmup or stale ms.
+    const bool nrRejected = live && !snapshot.applying && snapshot.rejectedRevision != 0 &&
+        snapshot.desired.revision == snapshot.applied.revision &&
+        !snapshot.desired.nr && !snapshot.applied.nr && !snapshot.backendWarning.empty();
     const bool xess = fgBackendName() == QLatin1String("xess");
     QVariantMap out;
     auto publish = [&](uint32_t i, const QString& state, std::optional<Stage> stage) {
         QVariantMap item{{"state", state}, {"ms", 0.0}, {"samples", QVariant::fromValue<qulonglong>(0)}};
+        if (state == QLatin1String("failed")) item["reason"] = uiText(snapshot.backendWarning);
         if (stage) {
             const auto& sample = flow.gpuTiming[size_t(*stage)];
             if (live && sample.samples > 0 && sample.mean && std::isfinite(*sample.mean) && *sample.mean >= 0.0) {
@@ -1842,7 +1850,8 @@ QVariantMap QmlPlayerBridge::nodeTimings() const {
         QString waiting = live ? QStringLiteral("pending") : QStringLiteral("stopped");
         switch (n.type) {
         case engine::EffectType::NrEnhance:
-            if (n.enabled && enabledNr < diagnostics::kTimedNrLayers) stage = diagnostics::nrLayerStage(enabledNr);
+            if (nrRejected) waiting = QStringLiteral("failed");
+            else if (n.enabled && enabledNr < diagnostics::kTimedNrLayers) stage = diagnostics::nrLayerStage(enabledNr);
             if (n.enabled) ++enabledNr;
             break;
         case engine::EffectType::Color:
