@@ -9571,3 +9571,11 @@ BMD日志53：5次进入原生协商的尝试均SDI连接0x1、locked0/noInput�
 用户批准原包仅改外名发布已完成。主https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.8 ID413665238 published_at2026-10-15T10:17:26Z，latest/non-prerelease；源码https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.8-sources ID413665184非latest。普通atomic推送main+v2.0.8/v2.0.8-sources到33b22b9；先草稿上传、校验服务器digest/size/body后发布，旧2.0.7/源资产不改。主两包、源归档一个应用源，未变FFmpeg和依赖源只链接，不重复上传。公开链接/双图width220/知识库检查通过；原包SHA/内部test标志/组件/679输入不变，无重编译重打包。完整报告RELEASE_2.0.8_REPORT_2026-10-15.md；reports/.../remote-final.json/assets.json/public-links-final.json记录证据。此次收尾只追加报告和日志、不移动发布标签。原75非当前树/509脏文件和五原归档保护，最终再核对；全部产物E盘，无子Agent/代发/关机。
 
 发布最终辅助检查首次失败：校验器误将main另一个工作树的原始字节与构建树输入SHA比较。五个ColorDetail头/源/着色器仅LF/CRLF差异；逐文件归一化内容和Git hash-object完全相同，实际构建树679输入仍逐字节匹配。只修外部final-audit使用实际构建树并加两树同HEAD/归一化/Git对象证据，不修改任何产品文件或包。记录reports/release-2.0.8-20261015/checkout-eol-difference.json，原失败保留。服务器发布/下载已验证正常，标签及资产保持。
+
+## 2026-10-16 当前各分支归并核对
+
+用户要求整理各分支（包括Claude）合本地main。读取最新Claude主会话15638198/283ff08e，检查89个本地分支、77个工作树及历史停止/替代记录。基线main0cfa8a8；84个分支tip（含18个Claude分支）已在main祖先链内。其余5个：RTSS分支独有NR计划在main逐字一致；圆刚方案已由用户结束；beta延迟探针为旧版A/B对照；源码存档为独立历史；Smooth Motion强制互斥实验已被用户后续决定替代。没有发现新的已完成产品修复漏合并，不制造重复代码合并。详细归属见docs/BRANCH_INTEGRATION_2026-10-16.md。
+
+实际命令包括git branch --no-merged main、git log main..<branch>、git cherry、git merge-base --is-ancestor、git diff以及python -X utf8 -B -I E:/项目/Veyra/tmp/branch-integration-20261016/audit.py audit。84个tip祖先检查通过，NR计划diff为空；GitHub只读git ls-remote --heads nrvideo只返回main0cfa8a8。5旧树509个未提交文件的status/SHA全部与10-15发布开工快照一致，其它历史树HEAD保持。start/audit回执位于archives/reports/branch-integration-20261016。
+
+本轮只将分支归属记录和本WORKLOG提交本地main，产品代码/着色器/QML/构建配置/运行组件不变，因此没有重新构建或GPU/采集/播放测试，没有新的性能或实卡通过结论。提交后的diff检查、main干净及76其它树/88其它分支/509脏文件保护由audit.py verify记录到reports/branch-integration-20261016/final.json。无push/Release/打包/子Agent/关机，各分支与旧稿原样保留。
