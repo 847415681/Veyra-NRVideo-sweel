@@ -5,12 +5,14 @@
 #include "veyra/engine/EnhancementSettings.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
+#include "veyra/RuntimePaths.h"
 #include <DirectXPackedVector.h>
 #include <iostream>
 #include <array>
 #include <thread>
 #include <d3d12sdklayers.h>
 #include <cmath>
+#include <string_view>
 extern "C" {
 #include <libavutil/frame.h>
 }
@@ -18,11 +20,56 @@ extern "C" {
 #include "HdrNativeRoundTripCases.h"
 
 using namespace veyra;
-int wmain(){
+// Optional runtime-backed regression: an SDR source converted by TrueHDR must
+// keep the display curve, even though graph.hdrInput() is false. The regular
+// native HDR suite below remains independent of proprietary runtimes.
+static int videoHdrPreview(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring){
+    pipeline::EnhanceGraph graph(ctx,ring);pipeline::EnhanceGraphDesc gd;
+    gd.sourceWidth=gd.workWidth=gd.nrWidth=1280;gd.sourceHeight=gd.workHeight=gd.nrHeight=720;
+    gd.rgbInput=true;gd.enableNr=gd.enableSr=gd.enableFg=gd.enableNvofStandalone=false;
+    gd.videoHdr.enabled=true;gd.hdrOutput=true;gd.hdrOutputMode=engine::HdrOutputMode::ScRgb;
+    gd.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
+    AVFrame* frame=av_frame_alloc();if(!frame)return 2;
+    frame->format=AV_PIX_FMT_BGRA;frame->width=1280;frame->height=720;
+    frame->color_range=AVCOL_RANGE_JPEG;frame->color_primaries=AVCOL_PRI_BT709;frame->color_trc=AVCOL_TRC_IEC61966_2_1;
+    bool ok=av_frame_get_buffer(frame,32)>=0;
+    if(ok)for(int y=0;y<720;++y)for(int x=0;x<1280;++x){auto* p=frame->data[0]+y*frame->linesize[0]+x*4;p[0]=p[1]=p[2]=uint8_t(x*255/1279);p[3]=255;}
+    pipeline::EnhanceGraph::FrameOutputs out;std::vector<float> raw,shown;
+    ok=ok&&graph.initialize(gd)&&graph.createViews()&&graph.videoHdrActive()&&!graph.hdrInput()&&
+        graph.process(frame,0,true,out,1)&&hdrRoundTrip::read(ctx,ring,graph.videoFrameResource(out.videoSlot),raw);
+    HWND window=CreateWindowExW(0,L"STATIC",L"SDR to HDR display curve regression",WS_POPUP,0,0,1280,720,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
+    engine::VideoPresenter presenter;
+    const auto present=[&](){
+        bool pass=presenter.present(ctx,ring,graph,out.videoSlot,false,true,0,false,.5f,{1,1,1});
+        auto buffer=presenter.presentedResourceForTest();return pass&&hdrRoundTrip::read(ctx,ring,buffer.Get(),shown);
+    };
+    ok=ok&&window&&presenter.open(ctx,window,graph)&&present()&&shown==raw;
+    engine::EnhancementSettings settings;settings.nr=settings.sr=false;settings.multiplier=1;
+    settings.videoHdr=gd.videoHdr;settings.hdrOutputMode=gd.hdrOutputMode;settings.hdrCurve.enabled=true;
+    settings.hdrCurve.highlightStartNits=200;settings.hdrCurve.peakCapNits=400;settings.hdrCurve.displayPeakNits=1000;
+    ok=ok&&graph.applySettings(settings)&&present()&&shown.size()==raw.size();
+    double maxError=0,meanChange=0;
+    if(ok)for(size_t i=0;i<raw.size();++i){
+        const double before=raw[i]*80,after=shown[i]*80;
+        const double expected=before<=200?before:200+200*(before-200)/(200+before-200);
+        if(expected>=1)maxError=std::max(maxError,std::abs(after-expected)/expected);
+        meanChange+=std::abs(after-before);
+    }
+    if(ok){meanChange/=raw.size();ok=maxError<.015&&meanChange>1;}
+    presenter.observeHdrCoverage(true);ok=ok&&present()&&present()&&presenter.liveCurveCoverage().valid;
+    settings.hdrCurve.strengthPercent=0;
+    ok=ok&&graph.applySettings(settings)&&present()&&shown==raw;
+    std::cout<<"VIDEO_HDR_DISPLAY_CURVE pass="<<ok<<" maxRelative="<<maxError<<" meanChangeNits="<<meanChange
+        <<" sourceHdr="<<graph.hdrInput()<<" videoHdrActive="<<graph.videoHdrActive()<<std::endl;
+    ring.drainQueue();presenter.close();out={};graph.shutdown();av_frame_free(&frame);if(window)DestroyWindow(window);
+    return ok?0:1;
+}
+int wmain(int argc,wchar_t** argv){
     CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
     gfx::DeviceContextDesc dd;dd.enableDebugLayer=true;
     if(!ctx.initialize(dd,status)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status))return 2;
+    if(argc==2&&std::wstring_view(argv[1])==L"--video-hdr")return videoHdrPreview(ctx,ring);
     int failures=0;
     const auto check=[&](bool ok,const char* label){std::cout<<(ok?"PASS ":"FAIL ")<<label<<std::endl;failures+=!ok;};
     constexpr std::array<double,16> patches={0,.005,.05,.5,1,2,5,10,20,50,100,203,400,1000,4000,10000};
