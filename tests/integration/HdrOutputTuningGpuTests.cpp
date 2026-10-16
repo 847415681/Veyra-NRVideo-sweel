@@ -79,6 +79,7 @@ int wmain(){
         }else check(false,"allocate black diagnostic frame");
         av_frame_free(&black);output=std::move(savedOutput);epoch=1;
         presenter.observeHdrCoverage(false);check(!presenter.liveCurveCoverage().valid,"hiding HDR panel clears its statistics");
+        check(present(),"restore grayscale presentation after black-frame fixture");
         double maxRelative=0;bool monotonic=true;double previous=0;
         if(ready)for(unsigned i=0;i<patches.size();++i){
             const auto at=size_t(i*4+2)*3;
