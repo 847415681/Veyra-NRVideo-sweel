@@ -336,6 +336,12 @@ struct QmlPlayerBridge::Impl {
     // Declared after everything the worker touches, so it is joined first.
     std::jthread subAlignWorker;
     QVariantMap prefs;
+  // Custom: the display whose HDR curve is currently applied (see syncHdrDisplayProfile).
+  QString hdrProfileDisplay;
+  // Custom: the title whose curve is currently applied (see syncHdrTitleProfile).
+  QString hdrTitleApplied;
+  // Custom: how many remembered titles survive; the oldest fall off first.
+  int kHdrTitleProfileLimit = 60;
     QString lastScreenshot;
     bool holdKeyDown = false;
     int positionTicks = 0;
@@ -1406,6 +1412,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         const auto wasTransport = impl_->snapshot.transport;
         const uint64_t wasSession = impl_->snapshot.sessionId;
         if(impl_->poll()){emit settingsChanged();emitChainChanged();}
+  // Custom: a display change re-applies that device's HDR curve. The id check is
+  // a few Win32 calls, so this is safe on the polling path.
+  syncHdrDisplayProfile();
+  syncHdrTitleProfile();
         if (impl_->snapshot.vramRunawayMiB && (impl_->vramNoticeSession != impl_->snapshot.sessionId ||
             (!wasFullscreenUnsafe && impl_->snapshot.vramFullscreenUnsafe))) {
             impl_->vramNoticeSession = impl_->snapshot.sessionId;
@@ -4693,7 +4703,7 @@ QVariantMap QmlPlayerBridge::hdrDisplayInfo()const{
         cached=gfx::PresentSink::queryDisplayPeak(window);cachedMonitor=monitor;
         cacheTimer.restart();
     }
-    return {{"valid",cached.valid},{"peakNits",int(cached.peakNits)},
+    return {{"valid",cached.valid},{"plausible",cached.valid&&!(cached.peakNits>=4000u&&cached.minNits<=0.001)},{"peakNits",int(cached.peakNits)},
             {"fullFrameNits",int(cached.fullFrameNits)},{"minNits",cached.minNits}};
 }
 bool QmlPlayerBridge::hdrCurve()const{return settings().hdrCurve.enabled;}
@@ -4746,7 +4756,387 @@ QString QmlPlayerBridge::hdrTuningPreset() const {
         if(engine::hdrPresetMatches(s.hdrCurve,s.hdrMetadata,p))return QString::fromLatin1(p.id);
     return QStringLiteral("custom");
 }
+QString QmlPlayerBridge::hdrAppliedFrom() const {
+  return impl_->prefString("hdrAppliedFrom")==QLatin1String("axes")?QStringLiteral("axes")
+      :QStringLiteral("legacy");
+}
+
+void QmlPlayerBridge::setHdrAppliedFrom(const QString& from){
+  const QString wanted=from==QLatin1String("axes")?QStringLiteral("axes"):QStringLiteral("legacy");
+  if(impl_->prefString("hdrAppliedFrom")==wanted)return;
+  impl_->prefs[QStringLiteral("hdrAppliedFrom")]=wanted;
+  impl_->savePrefs();
+  emit preferencesChanged();
+}
+
+QString QmlPlayerBridge::hdrPresetMode() const {
+  return impl_->prefString("hdrPresetMode")==QLatin1String("axes")?QStringLiteral("axes")
+                                                                :QStringLiteral("legacy");
+}
+
+void QmlPlayerBridge::setHdrPresetMode(const QString& mode){
+  const QString wanted=mode==QLatin1String("axes")?QStringLiteral("axes"):QStringLiteral("legacy");
+  if(impl_->prefString("hdrPresetMode")==wanted)return;
+  impl_->prefs[QStringLiteral("hdrPresetMode")]=wanted;
+  if(!impl_->savePrefs())veyra::log::warn("ui-prefs","hdr preset mode not saved");
+  emit preferencesChanged();
+}
+
+QVariantMap QmlPlayerBridge::hdrAxes() const {
+  return {{"content",impl_->prefString("hdrAxesContent")},
+          {"environment",impl_->prefString("hdrAxesEnvironment")}};
+}
+
+QVariantMap QmlPlayerBridge::hdrAxesMatch() const {
+  // Which combination the curve currently equals. Strength and the display peak are
+  // ignored, exactly like hdrPresetMatches: they only scale the baseline.
+  const auto& c=settings().hdrCurve;
+  for(const auto& content:engine::kHdrContentPresets)
+    for(const auto* environment:engine::kHdrEnvironmentIds){
+      const auto candidate=engine::hdrAxesCurve(content.id,environment);
+      if(c.enabled==candidate.enabled&&c.shadowLiftEv100==candidate.shadowLiftEv100&&
+         c.shadowRangeNits==candidate.shadowRangeNits&&c.midGrayNits==candidate.midGrayNits&&
+         c.highlightStartNits==candidate.highlightStartNits&&c.rollOffPercent==candidate.rollOffPercent&&
+         c.peakCapNits==candidate.peakCapNits)
+        return {{"content",QString::fromLatin1(content.id)},{"environment",QString::fromLatin1(environment)}};
+    }
+  return {{"content",QString()},{"environment",QString()}};
+}
+
+QVariantMap QmlPlayerBridge::hdrCurveCoverage() const {
+  const auto& snap=impl_->snapshot;
+  return {{"valid",snap.hdrCoverageValid},
+          {"aboveCeiling",snap.hdrAboveCeilingPercent},
+          {"rollOff",snap.hdrInRollOffPercent},
+          {"lift",snap.hdrInLiftPercent}};
+}
+
+QVariantMap QmlPlayerBridge::hdrCurveGraph() const {
+  const auto& c=settings().hdrCurve;
+  QVariantList inputs,outputs;
+  for(unsigned i=0;i<engine::kHdrCurveGraphPoints;++i){
+    const double x=engine::hdrCurveGraphInputNits(i);
+    inputs.append(x);
+    outputs.append(engine::hdrCurveLuminance(c,x));
+  }
+  return {{"inputs",inputs},{"outputs",outputs},
+          {"minNits",engine::kHdrCurveGraphMinNits},{"maxNits",engine::kHdrCurveGraphMaxNits},
+          {"enabled",c.enabled}};
+}
+
+QVariantMap QmlPlayerBridge::hdrDials() const {
+  const auto& c=settings().hdrCurve;
+  return {{"shadowLift",int(engine::hdrShadowLiftLevel(c))},
+          {"brightness",int(engine::hdrBrightnessLevel(c))},
+          {"highlight",int(engine::hdrHighlightLevel(c))}};
+}
+
+bool QmlPlayerBridge::setHdrDial(const QString& key,int level){
+  if(level<0)return false;
+  auto s=settings();
+  const unsigned value=unsigned(level);
+  if(key==QLatin1String("shadowLift"))engine::setHdrShadowLiftLevel(s.hdrCurve,value);
+  else if(key==QLatin1String("brightness"))engine::setHdrBrightnessLevel(s.hdrCurve,value);
+  else if(key==QLatin1String("highlight"))engine::setHdrHighlightLevel(s.hdrCurve,value);
+  else return false;
+  commitHdrTuning(std::move(s));
+  return true;
+}
+
+bool QmlPlayerBridge::applyHdrAxesPreset(const QString& content,const QString& environment){
+  setHdrAppliedFrom(QStringLiteral("axes"));
+  const QByteArray contentId=content.toUtf8();
+  const QByteArray environmentId=environment.toUtf8();
+  const auto curve=engine::hdrAxesCurve(contentId.constData(),environmentId.constData());
+  auto s=settings();
+  // The strength dial and the display peak belong to the user, not to the preset.
+  const auto strength=s.hdrCurve.strengthPercent;
+  const auto displayPeak=s.hdrCurve.displayPeakNits;
+  s.hdrCurve=curve;
+  s.hdrCurve.strengthPercent=strength;
+  s.hdrCurve.displayPeakNits=displayPeak;
+  commitHdrTuning(std::move(s));
+  impl_->prefs[QStringLiteral("hdrAxesContent")]=content;
+  impl_->prefs[QStringLiteral("hdrAxesEnvironment")]=environment;
+  if(!impl_->savePrefs())veyra::log::warn("ui-prefs","hdr axes choice not saved");
+  emit preferencesChanged();
+  return true;
+}
+
+bool QmlPlayerBridge::hdrTitleMemory() const { return impl_->prefBool("hdrTitleMemory",true); }
+bool QmlPlayerBridge::hdrAutoRecommend() const { return impl_->prefBool("hdrAutoRecommend",true); }
+int QmlPlayerBridge::hdrTitleCount() const {
+  return impl_->prefs.value(QStringLiteral("hdrTitles")).toList().size();
+}
+
+void QmlPlayerBridge::setHdrTitleMemory(bool on){
+  if(impl_->prefBool("hdrTitleMemory",true)==on)return;
+  impl_->prefs[QStringLiteral("hdrTitleMemory")]=on;
+  if(!impl_->savePrefs())veyra::log::warn("ui-prefs","hdr title memory flag not saved");
+  emit preferencesChanged();
+}
+
+void QmlPlayerBridge::setHdrAutoRecommend(bool on){
+  if(impl_->prefBool("hdrAutoRecommend",true)==on)return;
+  impl_->prefs[QStringLiteral("hdrAutoRecommend")]=on;
+  if(!impl_->savePrefs())veyra::log::warn("ui-prefs","hdr auto recommend flag not saved");
+  emit preferencesChanged();
+}
+
+void QmlPlayerBridge::forgetHdrTitles(){
+  impl_->prefs[QStringLiteral("hdrTitles")]=QVariantList{};
+  impl_->hdrTitleApplied=QString();
+  if(!impl_->savePrefs())veyra::log::warn("ui-prefs","hdr title profiles not cleared");
+  emit preferencesChanged();
+  emit notice(tr("已清除影片记忆"),false);
+}
+
+void QmlPlayerBridge::syncHdrTitleProfile(){
+  auto& i=*impl_;
+  // A playlist advancing to the next episode changes the label, which is exactly the
+  // moment a new title starts.
+  const QString title=QString::fromStdWString(i.sourceLabel);
+  if(title.isEmpty()||title==i.hdrTitleApplied)return;
+  // Leaving a title: remember the curve the user ended up with on it.
+  if(!i.hdrTitleApplied.isEmpty())storeHdrTitleProfile(i.hdrTitleApplied);
+  i.hdrTitleApplied=title;
+  if(!i.snapshot.running)return;   // an opened but never started source has nothing to apply
+  if(hdrTitleMemory()&&loadHdrTitleProfile(title)){
+    emit notice(tr("已套用这部影片上次的曲线设置"),false);
+    return;
+  }
+  // Never switch the feature on by itself, and never overrule a remembered choice.
+  if(hdrAutoRecommend()&&settings().hdrCurve.enabled)applyRecommendedHdrTuning();
+}
+
+bool QmlPlayerBridge::loadHdrTitleProfile(const QString& title){
+  const auto list=impl_->prefs.value(QStringLiteral("hdrTitles")).toList();
+  for(const auto& item:list){
+    const auto stored=item.toMap();
+    if(stored.value(QStringLiteral("key")).toString()!=title)continue;
+    auto s=settings();
+    const auto number=[&](const char* key,int fallback){
+      return stored.contains(QLatin1String(key))?stored.value(QLatin1String(key)).toInt():fallback;};
+    s.hdrCurve.enabled=stored.value(QStringLiteral("enabled"),s.hdrCurve.enabled).toBool();
+    s.hdrCurve.shadowLiftEv100=number("shadowLiftEv100",int(s.hdrCurve.shadowLiftEv100));
+    s.hdrCurve.shadowRangeNits=unsigned(std::clamp(number("shadowRangeNits",int(s.hdrCurve.shadowRangeNits)),1,100));
+    s.hdrCurve.midGrayNits=unsigned(std::clamp(number("midGrayNits",int(s.hdrCurve.midGrayNits)),100,500));
+    s.hdrCurve.highlightStartNits=unsigned(std::clamp(number("highlightStartNits",int(s.hdrCurve.highlightStartNits)),0,2000));
+    s.hdrCurve.rollOffPercent=unsigned(std::clamp(number("rollOffPercent",int(s.hdrCurve.rollOffPercent)),10,200));
+    s.hdrCurve.peakCapNits=unsigned(std::clamp(number("peakCapNits",int(s.hdrCurve.peakCapNits)),0,4000));
+    s.hdrCurve.strengthPercent=unsigned(std::clamp(number("strengthPercent",int(s.hdrCurve.strengthPercent)),0,200));
+    commitHdrTuning(std::move(s));
+    return true;
+  }
+  return false;
+}
+
+bool QmlPlayerBridge::storeHdrTitleProfile(const QString& title){
+  if(title.isEmpty())return false;
+  auto& i=*impl_;
+  const auto& c=settings().hdrCurve;
+  QVariantMap entry;
+  entry[QStringLiteral("key")]=title;
+  entry[QStringLiteral("enabled")]=c.enabled;
+  entry[QStringLiteral("shadowLiftEv100")]=int(c.shadowLiftEv100);
+  entry[QStringLiteral("shadowRangeNits")]=int(c.shadowRangeNits);
+  entry[QStringLiteral("midGrayNits")]=int(c.midGrayNits);
+  entry[QStringLiteral("highlightStartNits")]=int(c.highlightStartNits);
+  entry[QStringLiteral("rollOffPercent")]=int(c.rollOffPercent);
+  entry[QStringLiteral("peakCapNits")]=int(c.peakCapNits);
+  entry[QStringLiteral("strengthPercent")]=int(c.strengthPercent);
+  auto list=i.prefs.value(QStringLiteral("hdrTitles")).toList();
+  for(int n=list.size()-1;n>=0;--n)
+    if(list[n].toMap().value(QStringLiteral("key")).toString()==title)list.removeAt(n);
+  list.append(entry);
+  // Bounded list: the oldest titles fall off the front.
+  while(list.size()>i.kHdrTitleProfileLimit)list.removeFirst();
+  i.prefs[QStringLiteral("hdrTitles")]=list;
+  if(!i.savePrefs())veyra::log::warn("ui-prefs","hdr title profile not saved");
+  return true;
+}
+
+int QmlPlayerBridge::hdrDisplayProfileCount() const {
+  return impl_->prefs.value(QStringLiteral("hdrProfiles")).toMap().size();
+}
+
+QString QmlPlayerBridge::hdrDisplayProfileId() const {
+  // The EDID-based device id survives cable and port changes; the GDI device name
+  // is the fallback for monitors that report none. Both are cheap Win32 calls -
+  // no DXGI enumeration, so this stays safe on the snapshot cadence.
+  HWND window=impl_->videoWindow;
+  if(!IsWindow(window)){
+    if(auto* focused=QGuiApplication::focusWindow())window=reinterpret_cast<HWND>(focused->winId());
+    else window=nullptr;
+  }
+  const HMONITOR monitor=window?MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST)
+                               :MonitorFromPoint(POINT{0,0},MONITOR_DEFAULTTOPRIMARY);
+  if(!monitor)return QString();
+  MONITORINFOEXW info{};info.cbSize=sizeof(info);
+  if(!GetMonitorInfoW(monitor,reinterpret_cast<MONITORINFO*>(&info)))return QString();
+  DISPLAY_DEVICEW device{};device.cb=sizeof(device);
+  if(EnumDisplayDevicesW(info.szDevice,0,&device,0)&&device.DeviceID[0])
+    return QString::fromWCharArray(device.DeviceID);
+  return QString::fromWCharArray(info.szDevice);
+}
+
+void QmlPlayerBridge::forgetHdrDisplayProfiles(){
+  auto& i=*impl_;
+  i.prefs[QStringLiteral("hdrProfiles")]=QVariantMap{};
+  i.hdrProfileDisplay=QString();
+  if(!i.savePrefs())veyra::log::warn("ui-prefs","hdr display profiles not cleared");
+  emit preferencesChanged();
+  emit notice(tr("已清除显示设备记忆"),false);
+  syncHdrDisplayProfile();
+}
+
+void QmlPlayerBridge::syncHdrDisplayProfile(){
+  auto& i=*impl_;
+  const QString id=hdrDisplayProfileId();
+  if(id.isEmpty()||id==i.hdrProfileDisplay)return;   // the common path: nothing changed
+  // Leaving a display: remember what the curve looks like on it.
+  if(!i.hdrProfileDisplay.isEmpty())storeHdrProfile(i.hdrProfileDisplay);
+  i.hdrProfileDisplay=id;
+  if(loadHdrProfile(id)){
+    emit preferencesChanged();
+    emit notice(tr("已套用该显示设备的 HDR 曲线配置"),false);
+  }
+}
+
+bool QmlPlayerBridge::loadHdrProfile(const QString& id){
+  auto& i=*impl_;
+  const auto profiles=i.prefs.value(QStringLiteral("hdrProfiles")).toMap();
+  const auto stored=profiles.value(id).toMap();
+  if(stored.isEmpty())return false;
+  auto s=settings();
+  const auto number=[&](const char* key,int fallback){
+    return stored.contains(QLatin1String(key))?stored.value(QLatin1String(key)).toInt():fallback;};
+  s.hdrCurve.enabled=stored.value(QStringLiteral("enabled"),s.hdrCurve.enabled).toBool();
+  s.hdrCurve.shadowLiftEv100=number("shadowLiftEv100",int(s.hdrCurve.shadowLiftEv100));
+  s.hdrCurve.shadowRangeNits=unsigned(std::clamp(number("shadowRangeNits",int(s.hdrCurve.shadowRangeNits)),1,100));
+  s.hdrCurve.midGrayNits=unsigned(std::clamp(number("midGrayNits",int(s.hdrCurve.midGrayNits)),100,500));
+  s.hdrCurve.highlightStartNits=unsigned(std::clamp(number("highlightStartNits",int(s.hdrCurve.highlightStartNits)),0,2000));
+  s.hdrCurve.rollOffPercent=unsigned(std::clamp(number("rollOffPercent",int(s.hdrCurve.rollOffPercent)),10,200));
+  s.hdrCurve.peakCapNits=unsigned(std::clamp(number("peakCapNits",int(s.hdrCurve.peakCapNits)),0,4000));
+  s.hdrCurve.strengthPercent=unsigned(std::clamp(number("strengthPercent",int(s.hdrCurve.strengthPercent)),0,200));
+  s.hdrCurve.displayPeakNits=unsigned(std::clamp(number("displayPeakNits",int(s.hdrCurve.displayPeakNits)),0,10000));
+  commitHdrTuning(std::move(s));
+  return true;
+}
+
+bool QmlPlayerBridge::storeHdrProfile(const QString& id){
+  auto& i=*impl_;
+  const auto& c=settings().hdrCurve;
+  QVariantMap entry;
+  entry[QStringLiteral("enabled")]=c.enabled;
+  entry[QStringLiteral("shadowLiftEv100")]=int(c.shadowLiftEv100);
+  entry[QStringLiteral("shadowRangeNits")]=int(c.shadowRangeNits);
+  entry[QStringLiteral("midGrayNits")]=int(c.midGrayNits);
+  entry[QStringLiteral("highlightStartNits")]=int(c.highlightStartNits);
+  entry[QStringLiteral("rollOffPercent")]=int(c.rollOffPercent);
+  entry[QStringLiteral("peakCapNits")]=int(c.peakCapNits);
+  entry[QStringLiteral("strengthPercent")]=int(c.strengthPercent);
+  entry[QStringLiteral("displayPeakNits")]=int(c.displayPeakNits);
+  auto profiles=i.prefs.value(QStringLiteral("hdrProfiles")).toMap();
+  if(profiles.value(id).toMap()==entry)return false;   // nothing new to remember
+  profiles[id]=entry;
+  i.prefs[QStringLiteral("hdrProfiles")]=profiles;
+  if(!i.savePrefs())veyra::log::warn("ui-prefs","hdr display profile not saved");
+  return true;
+}
+
+QVariantMap QmlPlayerBridge::hdrSourceInfo() const {
+  const auto& snap=impl_->snapshot;
+  const unsigned mastering=snap.sourceMasteringPeakNits;
+  const unsigned cll=snap.sourceMaxCllNits,fall=snap.sourceMaxFallNits;
+  const bool valid=snap.sourceHdr&&(mastering||cll||fall);
+  return {{"valid",valid},{"masteringPeakNits",int(mastering)},
+          {"maxCllNits",int(cll)},{"maxFallNits",int(fall)}};
+}
+
+bool QmlPlayerBridge::sourceIsSdr() const {
+  const auto& snap=impl_->snapshot;
+  return snap.running&&!snap.sourceHdr;
+}
+
+unsigned QmlPlayerBridge::effectiveHdrDisplayPeakNits() const {
+  // The ceiling the panel is actually held to: the user's own value when set, else the
+  // system report - but only when that report is plausible (a projector answering
+  // 10000 nit with a 0.000 black is its EDID ceiling, not a measurement; the presenter
+  // applies the same rule). 0 means unknown and the recommendation skips that branch.
+  const unsigned setting=unsigned(std::max(0,hdrDisplayPeakNits()));
+  if(setting)return setting;
+  const auto info=hdrDisplayInfo();
+  if(!info.value("valid").toBool()||!info.value("plausible").toBool())return 0;
+  return unsigned(std::max(0,info.value("peakNits").toInt()));
+}
+
+QVariantMap QmlPlayerBridge::hdrRecommendation() const {
+  const auto& snap=impl_->snapshot;
+  const auto rec=engine::recommendHdrTuning(snap.sourceMasteringPeakNits,snap.sourceMaxCllNits,
+      snap.sourceMaxFallNits,effectiveHdrDisplayPeakNits());
+  return {{"available",rec.available},{"presetId",QString::fromLatin1(rec.presetId)},
+          {"axesContent",QString::fromLatin1(engine::hdrAxesContentForPreset(rec.presetId))},
+          {"reason",QString::fromLatin1(rec.reasonKey)},{"strengthPercent",int(rec.strengthPercent)},
+          {"cllNits",int(rec.cllNits)},{"fallNits",int(rec.fallNits)}};
+}
+
+QVariantMap QmlPlayerBridge::hdrPeakWarning() const {
+  const auto& snap=impl_->snapshot;
+  const auto& s=settings();
+  // The arithmetic (including the divide-by-zero guard) lives in the header so the
+  // unit tests cover it; this only marshals it to QML.
+  const unsigned sourcePeak=snap.sourceMaxCllNits?snap.sourceMaxCllNits:snap.sourceMasteringPeakNits;
+  const auto w=engine::hdrPeakWarning(sourcePeak,snap.sourceHdr,s.hdrCurve.enabled,s.hdrCurve,s.hdrMetadata);
+  return {{"valid",w.valid},{"sourcePeakNits",int(w.sourcePeakNits)},{"capNits",int(w.capNits)},
+          {"keptPercent",int(w.keptPercent)},{"clipped",w.clipped}};
+}
+
+bool QmlPlayerBridge::applyRecommendedHdrTuning(){
+  // The recommendation applies within the view the user is in, so that view owns it.
+  setHdrAppliedFrom(hdrPresetMode());
+  const auto& snap=impl_->snapshot;
+  const auto rec=engine::recommendHdrTuning(snap.sourceMasteringPeakNits,snap.sourceMaxCllNits,
+      snap.sourceMaxFallNits,effectiveHdrDisplayPeakNits());
+  if(!rec.available)return false;
+  // The finding is the same in both modes; only the thing it names differs. In the
+  // axes mode the content comes from the source and the environment stays the user's
+  // choice, exactly like a manual pick there.
+  if(hdrPresetMode()==QLatin1String("axes")){
+    QString environment=impl_->prefString("hdrAxesEnvironment");
+    if(environment.isEmpty())environment=QStringLiteral("compensate");
+    const QString content=QString::fromLatin1(engine::hdrAxesContentForPreset(rec.presetId));
+    applyHdrAxesPreset(content,environment);
+    emit notice(tr("已按片源自动选档：%1").arg(content),false);
+    return true;
+  }
+  const auto* preset=engine::findHdrTuningPreset(rec.presetId);
+  if(!preset)return false;
+  auto s=settings();
+  // The strength dial and the display peak belong to the user: the axes pick
+  // preserves them, so a recommendation must not reset them either.
+  const auto strength=s.hdrCurve.strengthPercent;
+  const auto displayPeak=s.hdrCurve.displayPeakNits;
+  s.hdrCurve=preset->curve;s.hdrMetadata=preset->metadata;
+  s.hdrCurve.strengthPercent=strength;
+  s.hdrCurve.displayPeakNits=displayPeak;
+  commitHdrTuning(std::move(s));
+  // One line per application, for diagnostics: it records what the recommendation decided
+
+  // and on which numbers, so an odd suggestion can be explained afterwards. Per-user
+
+  // calibration was considered and dropped - thresholds tuned on one person film library
+
+  // would be shipped to everyone else.
+  veyra::log::info("hdr-recommend",std::format("applied preset={} reason={} cll={} fall={} mastering={} displayPeak={} mode={}",
+      rec.presetId,rec.reasonKey,rec.cllNits,rec.fallNits,snap.sourceMasteringPeakNits,
+      effectiveHdrDisplayPeakNits(),hdrPresetMode().toStdString()));
+  emit notice(tr("已按片源自动选档：%1").arg(QString::fromLatin1(rec.presetId)),false);
+  return true;
+}
+
 bool QmlPlayerBridge::applyHdrTuningPreset(const QString& id){
+  setHdrAppliedFrom(QStringLiteral("legacy"));
     for(const auto& p:engine::kHdrTuningPresets){
         if(id!=QLatin1String(p.id))continue;
         auto s=settings();

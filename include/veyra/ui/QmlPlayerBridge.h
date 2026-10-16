@@ -320,6 +320,38 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int hdrDisplayPeakNits READ hdrDisplayPeakNits WRITE setHdrDisplayPeakNits NOTIFY settingsChanged)
     // What the system reports about the display, for the peak field's reset button.
     Q_PROPERTY(QVariantMap hdrDisplayInfo READ hdrDisplayInfo NOTIFY snapshotChanged)
+    // Custom: the source's own HDR numbers (container metadata), the one-click
+    // recommendation derived from them, and the warning that compares the film's
+    // peak with what the curve will actually cap.
+    Q_PROPERTY(QVariantMap hdrSourceInfo READ hdrSourceInfo NOTIFY snapshotChanged)
+    Q_PROPERTY(QVariantMap hdrRecommendation READ hdrRecommendation NOTIFY snapshotChanged)
+    // Custom: whether the running source is SDR. Used only to word the recommendation
+    // row (an SDR source has no HDR metadata, so "no metadata" would be misleading).
+    Q_PROPERTY(bool sourceIsSdr READ sourceIsSdr NOTIFY snapshotChanged)
+    Q_PROPERTY(QVariantMap hdrPeakWarning READ hdrPeakWarning NOTIFY snapshotChanged)
+    // Custom: one remembered curve per display device, so moving the window to the
+    // projector or the TV applies the settings tuned on that device.
+    Q_PROPERTY(int hdrDisplayProfileCount READ hdrDisplayProfileCount NOTIFY preferencesChanged)
+    // Custom: which preset system the panel shows. "legacy" is the original seven
+    // presets, "axes" is content x environment. A UI choice kept in preferences:
+    // both modes write the very same curve, so the saved session is unaffected.
+    Q_PROPERTY(QString hdrPresetMode READ hdrPresetMode WRITE setHdrPresetMode NOTIFY preferencesChanged)
+    // Which preset system established the curve in force. Kept apart from hdrPresetMode
+    // on purpose: switching the panel view must not let the other system claim the curve,
+    // so only an actual apply moves this.
+    Q_PROPERTY(QString hdrAppliedFrom READ hdrAppliedFrom WRITE setHdrAppliedFrom NOTIFY preferencesChanged)
+    Q_PROPERTY(QVariantMap hdrAxes READ hdrAxes NOTIFY preferencesChanged)
+    Q_PROPERTY(QVariantMap hdrAxesMatch READ hdrAxesMatch NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantMap hdrDials READ hdrDials NOTIFY settingsChanged)
+    // Custom: the curve sampled by the same function the shader runs, for the panel
+    // graph (see hdrCurveLuminance).
+    Q_PROPERTY(QVariantMap hdrCurveGraph READ hdrCurveGraph NOTIFY settingsChanged)
+    // Custom: the live coverage measured by the presenter's probe (see the panel's
+    // live meter). Invalid until a probe has completed.
+    Q_PROPERTY(QVariantMap hdrCurveCoverage READ hdrCurveCoverage NOTIFY snapshotChanged)
+    Q_PROPERTY(bool hdrTitleMemory READ hdrTitleMemory WRITE setHdrTitleMemory NOTIFY preferencesChanged)
+    Q_PROPERTY(bool hdrAutoRecommend READ hdrAutoRecommend WRITE setHdrAutoRecommend NOTIFY preferencesChanged)
+    Q_PROPERTY(int hdrTitleCount READ hdrTitleCount NOTIFY preferencesChanged)
     Q_PROPERTY(int nrStyle READ nrStyle WRITE setNrStyle NOTIFY settingsChanged)
     Q_PROPERTY(double nrIntensity READ nrIntensity WRITE setNrIntensity NOTIFY settingsChanged)
     Q_PROPERTY(double nrTone READ nrTone WRITE setNrTone NOTIFY settingsChanged)
@@ -856,12 +888,48 @@ public:
     bool commitHdrTuning(engine::EnhancementSettings settings);
     QString hdrTuningPreset() const;
     Q_INVOKABLE bool applyHdrTuningPreset(const QString& id);
+    // Custom: apply the recommendation above in one click.
+    Q_INVOKABLE bool applyRecommendedHdrTuning();
+    // Custom: forget every remembered display profile (the current device is kept
+    // and re-learned from the settings in use).
+    Q_INVOKABLE void forgetHdrDisplayProfiles();
+    Q_INVOKABLE bool applyHdrAxesPreset(const QString& content, const QString& environment);
+    Q_INVOKABLE bool setHdrDial(const QString& key, int level);
+    Q_INVOKABLE void forgetHdrTitles();
     // The strength dial and the display peak (stored next to the baseline).
     int hdrCurveStrength() const;
     void setHdrCurveStrength(int percent);
     int hdrDisplayPeakNits() const;
     void setHdrDisplayPeakNits(int nits);
     QVariantMap hdrDisplayInfo() const;
+    // Custom: see the hdrSourceInfo/hdrRecommendation/hdrPeakWarning properties.
+    QVariantMap hdrSourceInfo() const;
+    QVariantMap hdrRecommendation() const;
+    bool sourceIsSdr() const;
+    unsigned effectiveHdrDisplayPeakNits() const;
+    QVariantMap hdrPeakWarning() const;
+    int hdrDisplayProfileCount() const;
+    QString hdrPresetMode() const;
+    QString hdrAppliedFrom() const;
+    void setHdrAppliedFrom(const QString& from);
+    void setHdrPresetMode(const QString& mode);
+    QVariantMap hdrAxes() const;
+    QVariantMap hdrAxesMatch() const;
+    QVariantMap hdrDials() const;
+    QVariantMap hdrCurveGraph() const;
+    QVariantMap hdrCurveCoverage() const;
+    bool hdrTitleMemory() const;
+    void setHdrTitleMemory(bool on);
+    bool hdrAutoRecommend() const;
+    void setHdrAutoRecommend(bool on);
+    int hdrTitleCount() const;
+    void syncHdrTitleProfile();
+    bool loadHdrTitleProfile(const QString& title);
+    bool storeHdrTitleProfile(const QString& title);
+    bool loadHdrProfile(const QString& id);
+    bool storeHdrProfile(const QString& id);
+    QString hdrDisplayProfileId() const;
+    void syncHdrDisplayProfile();
     QVariantMap videoHdrParams() const;
     Q_INVOKABLE bool setVideoHdrParameter(const QString& key, double value);
     int nrStyle() const;

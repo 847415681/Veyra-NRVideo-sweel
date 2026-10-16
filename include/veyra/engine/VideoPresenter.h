@@ -53,6 +53,11 @@ public:
     uint64_t generation()const{return generation_;}
     // Explicit integration-test capture only; never called by playback/export.
     bool readPresentedFrameForTest(gfx::D3D12DeviceContext&,gfx::CommandSlotRing&,sink::RgbaImage&);
+    // Custom: how the curve currently treats the frame (see HdrOutputTuning.h). The
+    // presenter measures it with one extra tiny draw of the present blit plus a
+    // non-blocking readback, so the value is at most one probe behind and the GPU is
+    // never waited for.
+    const HdrCurveCoverage& liveCurveCoverage() const { return liveCoverage_; }
     // Test-only buffer reference for lossless HDR readback. Drains the private
     // queue; caller drains the shared queue and releases before resize/close.
     Microsoft::WRL::ComPtr<ID3D12Resource> presentedResourceForTest();
@@ -121,6 +126,16 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> compositeTarget_;
     bool copyBeforePresent_=false,copyEligible_=false;
     unsigned inc_=0;
+    // Custom: the live coverage probe. The target uses the swapchain's own format so
+    // the existing present PSO can render into it; only the 10-bit HDR10 format is
+    // decoded (the scRGB half-float case is skipped rather than guessed at).
+    static constexpr unsigned kProbeWidth=64,kProbeHeight=36,kProbeIntervalFrames=15;
+    Microsoft::WRL::ComPtr<ID3D12Resource> probeTarget_,probeReadback_;
+    uint64_t probeFenceValue_=0;
+    bool probePending_=false,probeEnabled_=false;
+    unsigned probeFrame_=0,probeBytesPerPixel_=0;
+    HdrCurveCoverage liveCoverage_{};
+    void publishLiveCoverage(const HdrCurveSettings& curve);
     unsigned lastBuffer_=0;bool hasPresented_=false;
     struct RetainedFrame {
         ID3D12Fence* producer=nullptr;

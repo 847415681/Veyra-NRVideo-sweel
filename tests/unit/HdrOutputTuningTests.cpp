@@ -225,9 +225,249 @@ int main() {
         check(resolveHdrMetadataLuminance({},source).fall==800,"metadata: MaxFALL never exceeds MaxCLL");
         source.observe(11,false,4000,2000,800);
         check(resolveHdrMetadataLuminance({},source)==HdrMetadataLuminance{},"metadata: SDR clears HDR source values");
+        // ③: an SDR clip must not be described by the generic HDR10 fallback, and the
+        // clamp must leave values alone while the curve is inactive.
+        const auto fallback=resolveHdrMetadataLuminance({},HdrSourceMetadata{});
+        {
+            HdrCurveSettings offCurve;
+            check(fallback.peak==1000&&fallback.cll==1000,
+                  "metadata: an SDR clip resolves to the generic 1000-nit fallback (hence 3 gates it out)");
+            check(clampMetadataToCurve(fallback,offCurve,{})==fallback,
+                  "metadata: an inactive curve leaves the reported values untouched");
+        }
+        // ①: with a cap the reported content light levels must not exceed what the
+        // present shader really outputs, and MaxFALL must stay under MaxCLL.
+        {
+            HdrCurveSettings capped;capped.enabled=true;capped.peakCapNits=300;capped.strengthPercent=100;
+            const auto bounded=clampMetadataToCurve(fallback,capped,{});
+            check(bounded.cll==300,"metadata: a 300-nit cap bounds MaxCLL");
+            check(bounded.fall<=bounded.cll,"metadata: MaxFALL stays within MaxCLL after clamping");
+            check(bounded.peak==fallback.peak,"metadata: the mastering peak keeps describing the master");
+            HdrCurveSettings zeroStrength=capped;zeroStrength.strengthPercent=0;
+            check(clampMetadataToCurve(fallback,zeroStrength,{})==fallback,
+                  "metadata: a curve at zero strength does not rewrite the hint");
+        }
         HdrMetadataSettings manual{true,700,800,900,50};
         const auto light=resolveHdrMetadataLuminance(manual,source);
         check(light.peak==700&&light.minX10000==50&&light.fall==800,"metadata: whole-nit maximum, 0.0001-nit minimum and bounded FALL");
+    // Custom: the one-click recommendation is a pure function, so the table the UI
+    // shows and the tests below cannot drift apart.
+    {
+        const auto dark=recommendHdrTuning(1000,1000,150,1000);
+        check(dark.available&&std::string(dark.presetId)=="darkLift"&&std::string(dark.reasonKey)=="dark-content",
+              "recommend: a dark film with few bright frames maps to darkLift");
+        const auto narrow=recommendHdrTuning(400,600,320,1000);
+        check(std::string(narrow.presetId)=="punch"&&std::string(narrow.reasonKey)=="narrow-range",
+              "recommend: a low mastering ceiling maps to punch before highlight protection");
+        const auto bright=recommendHdrTuning(4000,9978,4800,1000);
+        check(std::string(bright.presetId)=="highlightGuard"&&std::string(bright.reasonKey)=="beyond-display",
+              "recommend: an extremely bright film on a 1000-nit display is named as beyond it");
+        const auto extremeBright=recommendHdrTuning(4000,4000,2400,10000);
+        check(std::string(extremeBright.presetId)=="highlightGuard"&&std::string(extremeBright.reasonKey)=="bright-content",
+              "recommend: extreme content on a display that can show it keeps the bright-content reason");
+        const auto balanced=recommendHdrTuning(1000,1000,380,1000);
+        check(std::string(balanced.presetId)=="standard"&&std::string(balanced.reasonKey)=="balanced",
+              "recommend: a balanced film keeps the standard curve");
+        // The display's ceiling must take part in the decision: content far beyond the
+        // panel needs the highlight ceiling even when its average is ordinary, and a dark
+        // film on a dim display needs both ends at once. displayPeak 0 means "unknown".
+        {
+            const auto dimDark=recommendHdrTuning(1000,1000,150,300);
+            check(std::string(dimDark.presetId)=="darkAndBright"&&std::string(dimDark.reasonKey)=="dark-and-bright",
+                  "recommend: a dark film on a dim display gets both ends");
+            const auto dimBright=recommendHdrTuning(4000,2000,800,300);
+            check(std::string(dimBright.presetId)=="highlightGuard"&&std::string(dimBright.reasonKey)=="beyond-display",
+                  "recommend: content beyond the panel maps to highlight protection, named as such");
+            const auto unknownDisplay=recommendHdrTuning(1000,1000,150,0);
+            check(std::string(unknownDisplay.presetId)=="darkLift",
+                  "recommend: an unknown display peak skips the beyond-display branch");
+            const auto brightDisplay=recommendHdrTuning(1000,1000,150,2000);
+            check(std::string(brightDisplay.presetId)=="darkLift"&&std::string(brightDisplay.reasonKey)=="dark-content",
+                  "recommend: a display above the content peak needs no extra protection");
+        }
+        const auto missing=recommendHdrTuning(0,0,0,1000);
+        check(!missing.available&&std::string(missing.reasonKey)=="no-metadata",
+              "recommend: a source without metadata is reported instead of guessed");
+        check(recommendHdrTuning(1000,3000,150,1000).fallNits==150&&recommendHdrTuning(1000,3000,150,1000).cllNits==3000,
+              "recommend: MaxCLL and MaxFALL are carried through for the hint text");
+        // The renamed environment ids state the action; the old ones must keep working.
+        {
+            const auto plain=hdrAxesCurve("standard","plain");
+            const auto compensate=hdrAxesCurve("standard","compensate");
+            check(plain.midGrayNits==203&&plain.shadowLiftEv100==0,
+                  "environment: plain leaves the neutral content untouched (203 nit, no lift)");
+            check(compensate.midGrayNits==203+kHdrEnvironmentBrightShift&&compensate.shadowLiftEv100>0,
+                  "environment: compensate raises the mid-gray and the shadows");
+            const auto legacyDark=hdrAxesCurve("standard","dark");
+            const auto legacyBright=hdrAxesCurve("standard","bright");
+            check(legacyDark.midGrayNits==plain.midGrayNits&&legacyDark.shadowLiftEv100==plain.shadowLiftEv100,
+                  "environment: the legacy dark id still means plain");
+            check(legacyBright.midGrayNits==compensate.midGrayNits,
+                  "environment: the legacy bright id still means compensate");
+        }
+        // The two preset systems must agree on what a finding means.
+        check(std::string(hdrAxesContentForPreset("darkLift"))=="dark"&&
+              std::string(hdrAxesContentForPreset("highlightGuard"))=="highlight"&&
+              std::string(hdrAxesContentForPreset("punch"))=="punch"&&
+              std::string(hdrAxesContentForPreset("standard"))=="standard",
+              "mapping: every recommended legacy preset names a content");
+        check(std::string(hdrAxesContentForPreset("brightRoom"))=="standard"&&
+              std::string(hdrAxesContentForPreset(nullptr))=="standard",
+              "mapping: environment-only presets and null fall back to the neutral content");
+        // The effective cap follows the display rescale and the strength dial: it is
+        // what the highlight warning compares the source peak against.
+        HdrCurveSettings curve;HdrMetadataSettings metadata;
+        curve.enabled=true;curve.peakCapNits=1000;curve.displayPeakNits=0;curve.strengthPercent=100;
+        check(hdrEffectivePeakCapNits(curve,metadata)==1000,"cap: 100% strength keeps the authored ceiling");
+        curve.displayPeakNits=500;
+        check(hdrEffectivePeakCapNits(curve,metadata)==500,"cap: a 500 nit display halves the authored ceiling");
+        curve.displayPeakNits=0;curve.enabled=false;
+        check(hdrEffectivePeakCapNits(curve,metadata)==0,"cap: a disabled curve caps nothing");
+        // The warning must survive a source with no metadata at all: an enabled
+        // curve with a cap and a peak of 0 divided by zero and crashed the UI thread.
+        HdrCurveSettings warnCurve;HdrMetadataSettings warnMetadata;
+        warnCurve.enabled=true;warnCurve.peakCapNits=1000;warnCurve.displayPeakNits=0;warnCurve.strengthPercent=100;
+        const auto noSource=hdrPeakWarning(0,false,true,warnCurve,warnMetadata);
+        check(!noSource.valid&&noSource.keptPercent==100&&!noSource.clipped&&noSource.capNits==1000,
+              "warning: a source without metadata is inert instead of dividing by zero");
+        // The graph is a port of the shader, so the defaults must be exact no-ops
+        // and the headline behaviours must match the HLSL branch for branch.
+        {
+            const HdrCurveSettings identity;   // lift 0, mid 203, start 0, cap 0
+            check(std::abs(hdrCurveLuminance(identity,100.0)-100.0)<1e-6&&
+                  std::abs(hdrCurveLuminance(identity,0.25)-0.25)<1e-6,
+                  "graph: the default curve is an exact identity");
+        // The live meter's numbers must be defined by tests, not by the render loop.
+        {
+            HdrCurveSettings curve;curve.enabled=true;curve.peakCapNits=1000;
+            curve.highlightStartNits=450;curve.shadowRangeNits=35;
+            const double frame[]={10.0,20.0,30.0,100.0,500.0,900.0,2000.0};
+            const auto coverage=hdrCurveCoverage(frame,7,curve);
+            check(coverage.valid&&coverage.samples==7,
+                  "coverage: a valid curve counts every finite sample");
+        // The probe carries PQ code values; the decode must land on the published
+        // reference points, otherwise every threshold comparison is meaningless.
+        {
+            check(pqCodeToNits(0.0)==0.0,"pq: code zero is zero nits");
+            check(std::abs(pqCodeToNits(0.5081)-100.0)<2.0,
+                  "pq: the published 100-nit code lands on 100 nits");
+            check(std::abs(pqCodeToNits(0.7518)-1000.0)<20.0,
+                  "pq: the published 1000-nit code lands on 1000 nits");
+            check(std::abs(pqCodeToNits(1.0)-10000.0)<1.0,"pq: full scale is 10000 nits");
+            double previous=-1.0;bool rising=true;
+            for(unsigned i=0;i<=100;++i){
+                const double value=pqCodeToNits(double(i)/100.0);
+                if(value<previous)rising=false;
+                previous=value;
+            }
+            check(rising,"pq: the decode is monotonic");
+        }
+            check(coverage.aboveCeiling==1&&std::abs(coverage.aboveCeilingPercent()-100.0/7.0)<1e-9,
+                  "coverage: only the sample above the ceiling is reported as crushed");
+            check(coverage.inRollOff==2,
+                  "coverage: samples between the highlight start and the ceiling are roll-off");
+            check(coverage.inLift==3,
+                  "coverage: samples below the lift range are counted as being raised");
+            const auto disabled=hdrCurveCoverage(frame,7,HdrCurveSettings{});
+            check(!disabled.valid&&disabled.samples==0&&disabled.aboveCeilingPercent()==0.0,
+                  "coverage: a disabled curve reports nothing instead of zeroes that look real");
+            const auto empty=hdrCurveCoverage(nullptr,0,curve);
+            check(!empty.valid,"coverage: no samples means no reading");
+            // 20 nit sits inside the 35-nit lift range; 50 would not.
+            const double garbage[]={0.0,-5.0,std::nan(""),20.0};
+            const auto filtered=hdrCurveCoverage(garbage,4,curve);
+            check(filtered.samples==4&&filtered.aboveCeiling==0&&filtered.inRollOff==0&&filtered.inLift==1,
+                  "coverage: zero, negative and non-finite samples are ignored by the buckets");
+        }
+            HdrCurveSettings lift;lift.shadowLiftEv100=50;lift.shadowRangeNits=35;
+            check(hdrCurveLuminance(lift,5.0)>5.0&&hdrCurveLuminance(lift,200.0)==200.0,
+                  "graph: the shadow lift raises dark values and leaves bright ones alone");
+            HdrCurveSettings capped;capped.peakCapNits=1000;capped.highlightStartNits=450;
+            capped.rollOffPercent=120;
+            check(hdrCurveLuminance(capped,8000.0)==1000.0,
+                  "graph: the hard cap is a hard cap");
+            check(hdrCurveLuminance(capped,600.0)<600.0,
+                  "graph: the roll-off already compresses above the highlight start");
+            HdrCurveSettings mid;mid.midGrayNits=250;
+            // By construction the mapping is the identity at the peak (1000 nit with no cap);
+            // a raised mid-gray lifts below it and pulls above it down.
+            check(hdrCurveLuminance(mid,250.0)>250.0&&hdrCurveLuminance(mid,1000.0)==1000.0&&
+                  hdrCurveLuminance(mid,2000.0)<2000.0,
+                  "graph: a raised mid-gray lifts the middle, pivots at the peak and pulls the top down");
+            double previous=0.0;bool monotonic=true;
+            HdrCurveSettings all;all.enabled=true;all.shadowLiftEv100=40;all.shadowRangeNits=35;
+            all.midGrayNits=225;all.highlightStartNits=450;all.rollOffPercent=120;all.peakCapNits=1000;
+            for (unsigned i=1;i<kHdrCurveGraphPoints;++i) {
+                const double value=hdrCurveLuminance(all,hdrCurveGraphInputNits(i));
+                if (value+1e-9<previous) monotonic=false;
+                previous=value;
+            }
+            check(monotonic,"graph: every sample of a full curve stays monotonic");
+            check(hdrCurveGraphInputNits(0)==kHdrCurveGraphMinNits&&
+                  std::abs(hdrCurveGraphInputNits(kHdrCurveGraphPoints-1)-kHdrCurveGraphMaxNits)<1e-6,
+                  "graph: the sweep spans the advertised input range");
+        }
+        const auto clipped=hdrPeakWarning(4000,true,true,warnCurve,warnMetadata);
+        check(clipped.valid&&clipped.clipped&&clipped.keptPercent==25,
+              "warning: a 4000 nit source under a 1000 nit ceiling keeps a quarter of its peak");
+        const auto covered=hdrPeakWarning(800,true,true,warnCurve,warnMetadata);
+        check(covered.valid&&!covered.clipped&&covered.keptPercent==100,
+              "warning: a source below the ceiling is reported as safe");
+        const auto noCap=hdrPeakWarning(4000,true,true,HdrCurveSettings{},warnMetadata);
+        check(!noCap.clipped&&noCap.capNits==0,
+              "warning: a curve without a ceiling never reports clipping");
+        // Custom: the content x environment axes and the three plain dials. Both are
+        // pure mappings, so the UI can show readable controls without a second
+        // interpretation of the same numbers living in QML.
+        {
+            const auto darkNight=hdrAxesCurve("dark","dark");
+            const auto darkDay=hdrAxesCurve("dark","bright");
+            check(darkNight.shadowLiftEv100==50&&darkNight.highlightStartNits==0,
+                  "axes: the dark content keeps its lift and adds no highlight ceiling");
+            check(darkDay.midGrayNits==225+kHdrEnvironmentBrightShift&&darkNight.midGrayNits==225-kHdrEnvironmentDarkShift,
+                  "axes: the environment axis moves only the mid-gray reference");
+            check(darkNight.highlightStartNits==darkDay.highlightStartNits&&
+                  darkNight.peakCapNits==darkDay.peakCapNits&&darkNight.rollOffPercent==darkDay.rollOffPercent,
+                  "axes: the environment axis never touches the highlight behaviour");
+            check(darkDay.shadowLiftEv100==darkNight.shadowLiftEv100+kHdrEnvironmentBrightLiftEv100,
+                  "axes: daylight lifts the shadows by the documented amount");
+            const auto standardDay=hdrAxesCurve("standard","bright");
+            check(standardDay.shadowLiftEv100>0&&standardDay.shadowRangeNits>=kHdrEnvironmentBrightLiftRangeNits,
+                  "axes: even the neutral content gets a usable daylight shadow lift");
+            const auto highlight=hdrAxesCurve("highlight","bright");
+            check(highlight.peakCapNits==1000&&highlight.rollOffPercent==120&&highlight.highlightStartNits==450,
+                  "axes: the highlight content carries its ceiling through both environments");
+            const auto unknown=hdrAxesCurve("does-not-exist","dark");
+            const auto standard=hdrAxesCurve("standard","dark");
+            check(unknown.shadowLiftEv100==standard.shadowLiftEv100&&unknown.midGrayNits==standard.midGrayNits,
+                  "axes: an unknown content id falls back to the neutral baseline");
+            for (const auto& preset : kHdrContentPresets) {
+                const auto day=hdrAxesCurve(preset.id,"bright");
+                const auto night=hdrAxesCurve(preset.id,"dark");
+                check(day.midGrayNits>=100&&day.midGrayNits<=500&&night.midGrayNits>=100&&night.midGrayNits<=500,
+                      "axes: every combination stays inside the valid mid-gray range");
+            }
+            HdrCurveSettings curve;
+            for (unsigned level=0;level<=10;++level) {
+                setHdrShadowLiftLevel(curve,level);
+                check(hdrShadowLiftLevel(curve)==level,"dials: the shadow-lift dial round-trips at every step");
+            }
+            for (unsigned level=0;level<=10;++level) {
+                setHdrBrightnessLevel(curve,level);
+                check(hdrBrightnessLevel(curve)==level,"dials: the brightness dial round-trips at every step");
+            }
+            for (unsigned level=0;level<kHdrHighlightStepCount;++level) {
+                setHdrHighlightLevel(curve,level);
+                check(hdrHighlightLevel(curve)==level,"dials: the highlight dial round-trips at every step");
+            }
+            check(hdrBrightnessLevel(hdrAxesCurve("standard","bright"))>=
+                  hdrBrightnessLevel(hdrAxesCurve("standard","dark")),
+                  "dials: the daylight curve reads brighter than the night one");
+            HdrCurveSettings edited;edited.shadowLiftEv100=31;edited.shadowRangeNits=29;
+            check(hdrShadowLiftLevel(edited)==3,"dials: an off-grid lift picks the nearest step");
+        }
+    }
+
     }
 
     // Real public persistence paths: old v10 Flow data is preserved and the new

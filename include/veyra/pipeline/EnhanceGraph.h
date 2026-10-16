@@ -540,6 +540,10 @@ public:
     bool nrEnabled() const { return nrEnabled_; }
     bool fgEnabled() const { return fgEnabled_; }
     bool hdrOutput() const { return desc_.hdrOutput; }
+    // Whether the *source* is HDR (PQ/HLG ingress). The brightness curve is restricted
+    // to real HDR sources: an SDR source has no true highlights, so the roll-off and
+    // the ceiling could never engage and the control would silently do nothing.
+    bool hdrInput() const { return desc_.hdrInput; }
     bool videoHdrActive() const {return desc_.convertVideoHdr();}
     // Custom: static HDR output tuning. The curve is read by the present blit,
     // the metadata is sent to the display.

@@ -686,7 +686,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 return active;
             };
             pipeline::EnhanceGraphDesc gd;gd.sourceWidth=width;gd.sourceHeight=height;gd.hdrInput=!isImage&&activeSource->info().color.isHdrPath();
-            {std::lock_guard lock(mutex_);snapshot_.sourceHdr=gd.hdrInput;}
+            {const auto& sourceColor=activeSource->info().color;
+    const unsigned sourceMastering=unsigned(std::max(0.0f,sourceColor.hdrMasteringPeakNits));
+    const unsigned sourceCll=unsigned(std::max(0.0f,sourceColor.hdrMaxCllNits));
+    const unsigned sourceFall=unsigned(std::max(0.0f,sourceColor.hdrMaxFallNits));
+    std::lock_guard lock(mutex_);snapshot_.sourceHdr=gd.hdrInput;
+    snapshot_.sourceMasteringPeakNits=sourceMastering;snapshot_.sourceMaxCllNits=sourceCll;
+    snapshot_.sourceMaxFallNits=sourceFall;}
             gd.highQualityPresentation=isRemote&&activeSource->info().color.reconstructChroma;
             gd.rgbInput=isImage||isScreen||(isCapture&&activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::Bgra8);
             auto ingressBitDepth=[](pipeline::SourcePixelFormat format){return format==pipeline::SourcePixelFormat::P010||format==pipeline::SourcePixelFormat::V210||format==pipeline::SourcePixelFormat::Rgb10xLE?10u:format==pipeline::SourcePixelFormat::P016?16u:8u;};
@@ -1851,10 +1857,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     width=uint32_t(frame->width);height=uint32_t(frame->height);
                     describeStages(stageRequest(options),options.snapshot(),gd);
                     gd.hdrInput=!isImage&&activeSource->info().color.isHdrPath();gd.hdrOutput=options.settings.useHdrPreview(gd.hdrInput,displayHdrActive());
+                    const auto resizeSourceColor=activeSource->info().color;
+                    const unsigned resizeMastering=unsigned(std::max(0.0f,resizeSourceColor.hdrMasteringPeakNits));
+                    const unsigned resizeCll=unsigned(std::max(0.0f,resizeSourceColor.hdrMaxCllNits));
+                    const unsigned resizeFall=unsigned(std::max(0.0f,resizeSourceColor.hdrMaxFallNits));
                     if(nativeCapture){
                         captureGraphColor=activeSource->info().color;gd.rgbInput=captureGraphColor.pixelFormat==pipeline::SourcePixelFormat::Bgra8;
                         gd.yuy2Input=false;gd.packedInput=pipeline::packedInputCode(captureGraphColor.pixelFormat);gd.captureBitDepth=ingressBitDepth(captureGraphColor.pixelFormat);
-                        std::lock_guard lock(mutex_);snapshot_.sourceWidth=width;snapshot_.sourceHeight=height;snapshot_.sourceHdr=gd.hdrInput;snapshot_.sourceDisplayAspect=activeSource->info().displayAspect;
+                        std::lock_guard lock(mutex_);snapshot_.sourceWidth=width;snapshot_.sourceHeight=height;snapshot_.sourceHdr=gd.hdrInput;snapshot_.sourceMasteringPeakNits=resizeMastering;snapshot_.sourceMaxCllNits=resizeCll;snapshot_.sourceMaxFallNits=resizeFall;snapshot_.sourceDisplayAspect=activeSource->info().displayAspect;
                     }
                     if(!presenter.prepareGraphChange()){status(L"输入尺寸切换呈现排空失败",true);break;}
                     graph->shutdown();recentGraphCache.evict("source-resize");
@@ -2483,6 +2493,15 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             presenter.reflexFrame(watch->reflexFrame);
                             if(!presenter.present(ctx,ring,*graph,item.lease->slot,generated,item.lease->referencesValid,comparisonMode_,comparisonBase_,comparisonSplit_,item.identity,previewView(),item.pts100ns))return {State::Failed};
                             const auto presentEndHost=host100ns();
+                            // Custom: publish the live curve coverage the presenter just collected.
+                            // Only a completed probe updates it, so the panel never shows a stale reading.
+                            {
+                                std::lock_guard lock(mutex_);
+                                snapshot_.hdrCoverageValid=presenter.liveCurveCoverage().valid;
+                                snapshot_.hdrAboveCeilingPercent=presenter.liveCurveCoverage().aboveCeilingPercent();
+                                snapshot_.hdrInRollOffPercent=presenter.liveCurveCoverage().inRollOffPercent();
+                                snapshot_.hdrInLiftPercent=presenter.liveCurveCoverage().inLiftPercent();
+                            }
                             const double returnDeviation=deviationValid?nowMs()-itemPtsMs:0;
                             item.lease->consumerFence=presenter.consumerFenceValue(ring.lastSignaledValue());const bool didPresent=presenter.submittedCount()>before;s.blit=presenter.blitTiming(ctx.fence());
                             const auto elapsed=elapsedMs(begin);s.presentMs+=elapsed;flow->cpu(diagnostics::CpuStage::Present,elapsed,host100ns());

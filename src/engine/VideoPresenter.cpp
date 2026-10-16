@@ -105,7 +105,7 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
     // Opening a source never opts the user in or allocates the copy surface.
     // configurePresentation applies the saved global choice on the GPU owner.
     copyBeforePresent_=false;
-    D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV;hd.NumDescriptors=4;
+    D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV;hd.NumDescriptors=5;
     if(FAILED(ctx.device()->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&rtvs_))))return false;
     inc_=ctx.device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);if(!refresh(ctx.device()))return false;
     veyra::log::info("present-copy",std::format("enabled={} format={} extent={}x{} (GPU-only final composition; no pixel readback)",copyBeforePresent_,unsigned(graph.outputFormat()),sink_.bufferWidth(),sink_.bufferHeight()));
@@ -153,6 +153,46 @@ bool VideoPresenter::refresh(ID3D12Device* device){
         }
         if(compositeTarget_)device->CreateRenderTargetView(compositeTarget_.Get(),nullptr,{rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(3)*inc_});
     }
+    // Custom: the coverage probe target. Its format follows the swapchain so the
+    // existing present PSO is valid for it. Created once; the readback buffer is
+    // sized for the widest case and never resized.
+    if(!probeTarget_){
+        const auto targetDesc=bb->GetDesc();
+        probeEnabled_=targetDesc.Format==DXGI_FORMAT_R10G10B10A2_UNORM;
+        probeBytesPerPixel_=4;
+        if(probeEnabled_){
+            D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
+            D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+            desc.Width=kProbeWidth;desc.Height=kProbeHeight;desc.DepthOrArraySize=1;desc.MipLevels=1;
+            desc.Format=targetDesc.Format;desc.SampleDesc.Count=1;
+            desc.Flags=D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+            D3D12_CLEAR_VALUE clear{};clear.Format=desc.Format;clear.Color[3]=1;
+            Microsoft::WRL::ComPtr<ID3D12Resource> probe;
+            if(SUCCEEDED(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,
+                                                         D3D12_RESOURCE_STATE_COMMON,&clear,IID_PPV_ARGS(&probe)))){
+                probe->SetName(L"Veyra curve coverage probe");probeTarget_=std::move(probe);
+                device->CreateRenderTargetView(probeTarget_.Get(),nullptr,
+                    {rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(4)*inc_});
+                D3D12_HEAP_PROPERTIES readHeap{};readHeap.Type=D3D12_HEAP_TYPE_READBACK;
+                D3D12_RESOURCE_DESC readDesc{};readDesc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
+                readDesc.Width=uint64_t(kProbeWidth)*kProbeHeight*8;readDesc.Height=1;
+                readDesc.DepthOrArraySize=1;readDesc.MipLevels=1;readDesc.SampleDesc.Count=1;
+                readDesc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+                if(SUCCEEDED(device->CreateCommittedResource(&readHeap,D3D12_HEAP_FLAG_NONE,&readDesc,
+                        D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&probeReadback_)))){
+                    probeReadback_->SetName(L"Veyra curve coverage readback");
+                    veyra::log::info("present-probe",std::format("coverage probe {}x{} format={} interval={} frames",
+                        kProbeWidth,kProbeHeight,unsigned(targetDesc.Format),kProbeIntervalFrames));
+                }else probeTarget_.Reset();
+            }
+        }
+        if(!probeTarget_)veyra::log::info("present-probe","coverage probe unavailable; the live meter stays silent");
+    }
+    // Audit fix: the RTV heap can be recreated without close() (a setup path resets
+    // rtvs_), so slot 4 must be rewritten on every refresh like slots 0..3 - otherwise
+    // the probe would bind a descriptor from the freed heap.
+    if(probeTarget_)device->CreateRenderTargetView(probeTarget_.Get(),nullptr,
+        {rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(4)*inc_});
     return true;
 }
 bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& sharedRing,pipeline::EnhanceGraph& graph,unsigned slot,bool generated,bool referencesValid,int comparison,bool baseReference,float split,pipeline::FrameIdentity identity,PreviewView view,int64_t sourcePts100ns,bool retainUnchanged) {
@@ -196,7 +236,13 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
             hdrPeakInfo_=gfx::PresentSink::queryDisplayPeak(window_);hdrPeakMonitor_=monitor;hdrPeakQuery_=now;
             if(previous.valid!=hdrPeakInfo_.valid||previous.peakNits!=hdrPeakInfo_.peakNits)retainedFrame_.reset();
         }
-        if(hdrPeakInfo_.valid)hdrBaseline.displayPeakNits=std::clamp(hdrPeakInfo_.peakNits,100u,10000u);
+        // Field report 2026-10-13: a projector reported peak=10000 and black=0.000.
+// That is the EDID ceiling, not a measurement, and feeding it to the preset
+// rescale multiplied every authored highlight number by ten - the highlight
+// protection silently did nothing. Only a plausible report is used; otherwise
+// the baseline stays untouched (0 = the presets' own 1000 nit reference).
+const bool implausiblePeak=hdrPeakInfo_.peakNits>=4000u&&hdrPeakInfo_.minNits<=0.001;
+if(hdrPeakInfo_.valid&&!implausiblePeak)hdrBaseline.displayPeakNits=std::clamp(hdrPeakInfo_.peakNits,100u,10000u);
     }
     HdrCurveSettings hdrCurve;HdrMetadataSettings hdrMetadata;
     resolveHdrTuning(hdrBaseline,graph.hdrMetadata(),hdrCurve,hdrMetadata);
@@ -261,7 +307,10 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     // before the PQ encode, so it never touches the exported or the graded frame.
     // Main HDR10/FG surfaces already contain PQ BT.2020. Decode only when
     // tuning, then encode back; disabled tuning keeps the original exact blit.
-    const float curveFlag=(hdrCurve.enabled&&graph.hdrOutput())?16.0f:0.0f;
+    // The curve is for HDR sources only (see EnhanceGraph::hdrInput): an SDR source's
+    // peak sits far below the roll-off start, so applying it there would only change
+    // the shadow/mid values while making the highlight controls look broken.
+    const float curveFlag=(hdrCurve.enabled&&graph.hdrInput()&&graph.hdrOutput())?16.0f:0.0f;
     const float mainFlags=samplingFlags+curveFlag+(curveFlag&&graph.hdr10Output()?36.0f:0.0f);
     float dims[16]={renderW,renderH,mainFlags,inverseFit,float(rc.right),float(rc.bottom),view.centerX,view.centerY};
     dims[8]=float(hdrCurve.shadowLiftEv100)/100.0f;
@@ -278,6 +327,51 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     list->SetGraphicsRoot32BitConstants(0,16,dims,0);
     list->SetGraphicsRootDescriptorTable(1,{pass_.heap->GetGPUDescriptorHandleForHeapStart().ptr+size_t(slot+(generated?2:0))*pass_.increment});
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);list->DrawInstanced(3,1,0,0);
+    // Custom: live coverage probe - the same blit drawn once more into a 64x36 target,
+    // with the curve and the re-encode off (the PQ decode stays on), so the result is
+    // linear where 1.0 = 80 nits. Every piece of state this changes is restored right
+    // after, and nothing here waits for the GPU.
+    bool probeIssued=false;
+    if(probeTarget_&&probeReadback_&&curveFlag!=0.0f&&!probePending_&&(++probeFrame_%kProbeIntervalFrames)==0){
+        float probeDims[16];std::memcpy(probeDims,dims,sizeof(probeDims));
+        // Keep the PQ encode: the 10-bit UNORM target can only carry PQ code values,
+        // so linear output would be clamped at 1.0 (= 80 nits) and every highlight
+        // bucket would read zero. Same flag combination as the main blit, minus the
+        // curve: decode (32) + encode (4).
+        probeDims[2]=samplingFlags+(graph.hdr10Output()?36.0f:0.0f);
+        D3D12_RESOURCE_BARRIER probe{};probe.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        probe.Transition.pResource=probeTarget_.Get();
+        probe.Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        probe.Transition.StateBefore=D3D12_RESOURCE_STATE_COMMON;
+        probe.Transition.StateAfter=D3D12_RESOURCE_STATE_RENDER_TARGET;list->ResourceBarrier(1,&probe);
+        D3D12_CPU_DESCRIPTOR_HANDLE probeRtv{rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(4)*inc_};
+        list->OMSetRenderTargets(1,&probeRtv,FALSE,nullptr);
+        D3D12_VIEWPORT probeViewport{0,0,float(kProbeWidth),float(kProbeHeight),0,1};
+        D3D12_RECT probeRect{0,0,LONG(kProbeWidth),LONG(kProbeHeight)};
+        list->RSSetViewports(1,&probeViewport);list->RSSetScissorRects(1,&probeRect);
+        list->SetGraphicsRoot32BitConstants(0,16,probeDims,0);
+        list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);list->DrawInstanced(3,1,0,0);
+        probe.Transition.StateBefore=D3D12_RESOURCE_STATE_RENDER_TARGET;
+        probe.Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_SOURCE;list->ResourceBarrier(1,&probe);
+        // A texture cannot be copied into a buffer with CopyResource (both sides must be the
+        // same type); the placed-footprint form is the legal one. RowPitch 64*4 = 256 is
+        // already D3D12_TEXTURE_DATA_PITCH_ALIGNMENT, so the CPU side stays tightly packed.
+        D3D12_TEXTURE_COPY_LOCATION probeSource{};probeSource.pResource=probeTarget_.Get();
+        probeSource.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;probeSource.SubresourceIndex=0;
+        D3D12_TEXTURE_COPY_LOCATION probeDestination{};probeDestination.pResource=probeReadback_.Get();
+        probeDestination.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        probeDestination.PlacedFootprint.Footprint.Format=DXGI_FORMAT_R10G10B10A2_UNORM;
+        probeDestination.PlacedFootprint.Footprint.Width=kProbeWidth;
+        probeDestination.PlacedFootprint.Footprint.Height=kProbeHeight;
+        probeDestination.PlacedFootprint.Footprint.Depth=1;
+        probeDestination.PlacedFootprint.Footprint.RowPitch=kProbeWidth*4;
+        list->CopyTextureRegion(&probeDestination,0,0,0,&probeSource,nullptr);
+        // put the main pass exactly back the way it was
+        list->OMSetRenderTargets(1,&rtv,FALSE,nullptr);
+        list->RSSetViewports(1,&viewport);list->RSSetScissorRects(1,&rect);
+        list->SetGraphicsRoot32BitConstants(0,16,dims,0);
+        probeIssued=true;
+    }
     if(comparison&&!generated&&referencesValid){
         auto* reference=baseReference?graph.baseReference(slot):graph.sourceReference(slot);
         D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition.pResource=reference;b.Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;b.Transition.StateBefore=D3D12_RESOURCE_STATE_COMMON;b.Transition.StateAfter=D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;list->ResourceBarrier(1,&b);
@@ -377,7 +471,12 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     }
 
     gpuTimer_.mark(list,diagnostics::GpuStage::Blit,true);gpuTimer_.resolve(list);
-    if(!ring.submitAndSignal(commandSlot))return false;gpuTimer_.submitted(ring.lastSignaledValue());lastBuffer_=backBufferIndex;hasPresented_=true;
+    if(!ring.submitAndSignal(commandSlot))return false;gpuTimer_.submitted(ring.lastSignaledValue());
+    if(probeIssued){probePending_=true;probeFenceValue_=ring.lastSignaledValue();}
+    // Custom: collect the previous probe as soon as the GPU reports it complete.
+    // GetCompletedValue is a plain read, so presentation never waits here.
+    if(probePending_&&probeReadback_&&fence->GetCompletedValue()>=probeFenceValue_)
+        publishLiveCoverage(hdrCurve);lastBuffer_=backBufferIndex;hasPresented_=true;
     if(presentationQueue_)graph.presentationSubmitted(slot,fence,ring.lastSignaledValue());
     const auto dxgiStart=std::chrono::steady_clock::now();
     reflex_.mark(reflexFrame_,3);reflex_.mark(reflexFrame_,4);
@@ -411,6 +510,48 @@ bool VideoPresenter::readPresentedFrameForTest(gfx::D3D12DeviceContext& ctx,gfx:
     Microsoft::WRL::ComPtr<ID3D12Resource> buffer;
     return SUCCEEDED(sink_.swapChain()->GetBuffer(lastBuffer_,IID_PPV_ARGS(&buffer)))&&sink::readRgba8(ctx,ring,buffer.Get(),image);
 }
+void VideoPresenter::publishLiveCoverage(const HdrCurveSettings& curve){
+    probePending_=false;
+    if(!probeReadback_||probeBytesPerPixel_!=4)return;
+    const uint64_t bytes=uint64_t(kProbeWidth)*kProbeHeight*probeBytesPerPixel_;
+    void* mapped=nullptr;
+    const D3D12_RANGE readRange{0,bytes};
+    if(FAILED(probeReadback_->Map(0,&readRange,&mapped))||!mapped)return;
+    const auto* pixels=static_cast<const uint32_t*>(mapped);
+    // The probe holds the frame before the curve, in the swapchain's 10-bit format:
+    // three 10-bit linear channels, 1.0 = 80 nits. One luminance per pixel, Rec.2020.
+    double nits[kProbeWidth*kProbeHeight];
+    unsigned count=0;
+    for(unsigned y=0;y<kProbeHeight;++y)for(unsigned x=0;x<kProbeWidth;++x){
+        const uint32_t value=pixels[y*kProbeWidth+x];
+        const double r=pqCodeToNits(double(value&0x3FFu)/1023.0);
+        const double g=pqCodeToNits(double((value>>10)&0x3FFu)/1023.0);
+        const double b=pqCodeToNits(double((value>>20)&0x3FFu)/1023.0);
+        nits[count++]=0.2627*r+0.6780*g+0.0593*b;
+    }
+    probeReadback_->Unmap(0,nullptr);
+    // A frame whose probe reads back as nothing but zero is a copy failure, not a black
+    // picture: say so instead of reporting honest-looking 0% coverage.
+    double brightest=0.0;
+    for(unsigned i=0;i<count;++i)brightest=std::max(brightest,nits[i]);
+    if(brightest<=0.0){
+        veyra::log::warn("present-probe","coverage probe read back all zeroes; the copy did not land");
+        liveCoverage_={};
+        return;
+    }
+    liveCoverage_=hdrCurveCoverage(nits,count,curve);
+    // Diagnostic (throttled): the brightest sample and the thresholds the
+    // buckets used, so "0% above the ceiling" can be told apart from "no ceiling
+    // set" and from a decode-scale mistake.
+    if(liveCoverage_.valid&&(probeFrame_/kProbeIntervalFrames)%5==0)
+        veyra::log::info("present-probe",std::format(
+            "coverage aboveCap={:.2f}%({}) rollOff={:.2f}%({}) lift={:.2f}%({}) samples={} brightestNits={:.1f} cap={} start={} range={}",
+            liveCoverage_.aboveCeilingPercent(),liveCoverage_.aboveCeiling,
+            liveCoverage_.inRollOffPercent(),liveCoverage_.inRollOff,
+            liveCoverage_.inLiftPercent(),liveCoverage_.inLift,liveCoverage_.samples,brightest,
+            curve.peakCapNits,curve.highlightStartNits,curve.shadowRangeNits));
+}
+
 void VideoPresenter::close(){
     metadataSent_=false;metadataDirty_=false;lastMetadata_={};sourceMetadata_={};metadataAttempt_={};
     hdrPeakMonitor_=nullptr;hdrPeakInfo_={};hdrPeakQuery_={};
@@ -419,7 +560,8 @@ void VideoPresenter::close(){
     xessInputId_=0;xessWork_={};xessWorkPosition_=0;
     reflex_.close();reflexFrame_=0;
     if(presentationRing_.initialized())presentationRing_.drainQueue();
-    hasPresented_=false;gpuTimer_.close();compositeTarget_.Reset();copyBeforePresent_=copyEligible_=false;rtvs_.Reset();pass_={};sink_.shutdown();
+    hasPresented_=false;gpuTimer_.close();compositeTarget_.Reset();copyBeforePresent_=copyEligible_=false;rtvs_.Reset();
+    probeTarget_.Reset();probeReadback_.Reset();probePending_=false;probeEnabled_=false;probeBytesPerPixel_=0;liveCoverage_={};pass_={};sink_.shutdown();
     presentMotionPass_={};presentMotion_={};previousXessWidth_=previousXessHeight_=0;
     presentationRing_.shutdown();presentationFence_.Reset();presentationQueue_.Reset();
     if(presentationEvent_){CloseHandle(presentationEvent_);presentationEvent_=nullptr;}
@@ -542,11 +684,16 @@ Microsoft::WRL::ComPtr<ID3D12Resource> VideoPresenter::presentedResourceForTest(
 void VideoPresenter::applyHdrMetadata(pipeline::EnhanceGraph& graph,const HdrMetadataSettings& m,pipeline::FrameIdentity identity) {
     const auto& src=graph.sourceColor();
     sourceMetadata_.observe(identity.epoch,src.isHdrPath(),src.hdrMasteringPeakNits,src.hdrMaxCllNits,src.hdrMaxFallNits);
-    if((!m.enabled||!graph.hdr10Output())&&!metadataSent_)return;
+    // An SDR clip carries no HDR metadata, so resolving it would report the generic
+    // HDR10 fallback (1000 nit) as if it were measured. Treat that as "no hint" and
+    // clear instead - unless the user forced values, which stays their explicit call.
+    const bool forced=m.masteringPeakNits||m.maxCllNits||m.maxFallNits;
+    const bool hint=m.enabled&&graph.hdr10Output()&&(src.isHdrPath()||forced);
+    if(!hint&&!metadataSent_)return;
     auto* chain=sink_.swapChain4();
     if(!chain)return;
     const auto now=std::chrono::steady_clock::now();
-    if(!m.enabled||!graph.hdr10Output()){
+    if(!hint){
         if(metadataSent_&&now-metadataAttempt_>=std::chrono::seconds(2)){
             metadataAttempt_=now;
             const HRESULT hr=chain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_NONE,0,nullptr);
@@ -561,7 +708,9 @@ void VideoPresenter::applyHdrMetadata(pipeline::EnhanceGraph& graph,const HdrMet
     md.GreenPrimary[0]=8500;md.GreenPrimary[1]=39850;
     md.BluePrimary[0]=6550;md.BluePrimary[1]=2300;
     md.WhitePoint[0]=15635;md.WhitePoint[1]=16450;
-    const auto light=resolveHdrMetadataLuminance(m,sourceMetadata_);
+    // ① Output-aware: describe what the curve actually produces, not the source.
+    const auto light=clampMetadataToCurve(resolveHdrMetadataLuminance(m,sourceMetadata_),
+                                          graph.hdrCurve(),graph.hdrMetadata());
     md.MaxMasteringLuminance=light.peak;md.MinMasteringLuminance=light.minX10000;
     md.MaxContentLightLevel=uint16_t(light.cll);md.MaxFrameAverageLightLevel=uint16_t(light.fall);
     if(metadataSent_&&!metadataDirty_&&std::memcmp(&lastMetadata_,&md,sizeof(md))==0)return;
