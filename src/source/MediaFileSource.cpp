@@ -14,6 +14,7 @@ extern "C" {
 #include <libavutil/pixdesc.h>
 #include <libavutil/dovi_meta.h>
 #include <libavutil/mastering_display_metadata.h>
+#include <libavutil/hwcontext_d3d12va.h>
 }
 
 #include <thread>
@@ -368,7 +369,19 @@ SourceReadStatus MediaFileSource::read(pipeline::FramePacket& out, const AVFrame
         }
     }
 
-    if (decoder_.hardwareActive() && !decoder_.hardwareFrameImportable()) {
+    // A drained filter owns its output independently of the decoder's latest
+    // frame, which is cleared at decoder EOF. Validate the actual output.
+    if (deinterlacer_.active() && frame->format == AV_PIX_FMT_D3D12) {
+        const auto* surface = reinterpret_cast<const AVD3D12VAFrame*>(frame->data[0]);
+        const auto desc = surface && surface->texture ? surface->texture->GetDesc() : D3D12_RESOURCE_DESC{};
+        if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || desc.MipLevels != 1 ||
+            desc.SampleDesc.Count != 1 || desc.DepthOrArraySize != 1 ||
+            (desc.Format != DXGI_FORMAT_NV12 && desc.Format != DXGI_FORMAT_P010) ||
+            desc.Width < UINT64(frame->width) || desc.Height < UINT(frame->height)) {
+            errorMessage_ = L"去隔行输出格式无法导入，已停止处理";
+            return SourceReadStatus::Error;
+        }
+    } else if (!deinterlacer_.active() && decoder_.hardwareActive() && !decoder_.hardwareFrameImportable()) {
         if (fallbackToSoftware("unsupported-d3d12-surface")) {
             return read(out, decodedFrame);
         }

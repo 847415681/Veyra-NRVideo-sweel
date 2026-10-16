@@ -29,7 +29,7 @@ int enginePlayback(const wchar_t* path,const wchar_t* directory,const wchar_t* e
     while(std::chrono::steady_clock::now()<deadline){
         MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}
         const auto s=player.snapshot();failed|=s.failed;audio|=s.audioAvailable;nr|=s.nrActive;fg|=s.fgActive;
-        frames=std::max(frames,s.metrics.flow.counters.realPresented);generated=std::max(generated,s.metrics.flow.counters.generatedPresented);
+        frames=std::max(frames,s.metrics.flow.counters.realPresented);generated=std::max({generated,s.metrics.flow.counters.generatedPresented,s.metrics.flow.counters.xessSdkGenerated});
         playing|=s.transport==engine::TransportState::Playing;
         if(failed||s.transport==engine::TransportState::Ended||frames>=100)break;
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
