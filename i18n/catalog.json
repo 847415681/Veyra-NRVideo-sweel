@@ -5889,6 +5889,13 @@
    "ja": "字幕本来のフォント"
   },
   {
+   "zh": "字幕将在视频缓冲好后读取",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "字幕將在影片緩衝好後讀取",
+   "en": "Subtitles will load once the video is buffered",
+   "ja": "動画のバッファーが整ってから字幕を読み込みます"
+  },
+  {
    "zh": "字幕延时 %1 ms",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "字幕延時 %1 ms",

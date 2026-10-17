@@ -3,6 +3,7 @@
 //   veyra_network_buffer_tests selftest
 //   veyra_network_buffer_tests source <path-or-url> <outdir> [key=value ...]
 //   veyra_network_buffer_tests engine <path-or-url> <outdir> [key=value ...]
+//   veyra_network_buffer_tests scan <file> <outdir> [key=value ...]   (subtitle scan of a server file)
 //
 // `source` drives MediaFileSource directly (blocking reads unless nonblocking=1) and writes a per-frame
 // CSV (pts, luma hash) for A/B comparisons; `engine` plays through EngineController on a hidden window
@@ -10,6 +11,7 @@
 // "RESULT {json}" line the orchestrator (tests/network/run_network_tests.py) parses.
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/engine/EngineController.h"
+#include "veyra/engine/Subtitles.h"
 #include "veyra/media/NetworkInput.h"
 #include "veyra/media/NetworkSettings.h"
 #include "veyra/Log.h"
@@ -335,16 +337,96 @@ int engineTest(const std::wstring& path, const std::filesystem::path& out, const
     return failed ? 1 : 0;
 }
 
+// ---------------------------------------------------------------------------------------------
+// scan: the embedded-subtitle scan of a file on a server (C5). Run with VEYRA_TEST_FORCE_REMOTE_PATH=1
+// (a local file stands in for the NAS) and, to pace it, VEYRA_TEST_SLOW_IO=<MB/s>.
+//   - gate closed: nothing may be read or published (closedSeconds, default 3)
+//   - gate open: the scan completes; bytes / seconds is the pace
+//   - toggle=1: the gate closes closeAfter seconds into the scan; reading must stop and then resume
+int scanTest(const std::wstring& path, const std::filesystem::path& out, const Options& o) {
+    std::filesystem::create_directories(out);
+    Logger::instance().openFile((out / L"scan.log").wstring());
+    Logger::instance().setConsoleEnabled(false);
+    engine::SubtitleLoader loader;
+    auto gate = std::make_shared<std::atomic<bool>>(false);
+    loader.setReadGate(gate);
+    const bool server = engine::subtitleServerFile(path);
+    const uint64_t bytesBefore = engine::subtitleServerScanBytes();
+    loader.request(path);
+    const auto begin = Clock::now();
+    auto since = [&] { return std::chrono::duration<double>(Clock::now() - begin).count(); };
+    uint64_t publishedWhileClosed = 0;
+    const double closedFor = num(o, "closedSeconds", 3);
+    bool complete = false;
+    double completeAt = -1;
+    std::vector<engine::SubtitleTrack> tracks;
+    while (since() < closedFor) {
+        // A local file is not gated: its scan finishes in this window (the control case).
+        if (auto r = loader.poll()) {
+            ++publishedWhileClosed;
+            tracks = std::move(r->tracks);
+            if (r->complete) { complete = true; completeAt = since(); break; }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    const uint64_t bytesWhileClosed = engine::subtitleServerScanBytes() - bytesBefore;
+    const double openAt = since();
+    gate->store(true);
+    const bool toggle = num(o, "toggle", 0) != 0;
+    const double closeAfter = num(o, "closeAfter", 1.0), closedAgainFor = num(o, "closedAgainSeconds", 2.0);
+    bool closedAgain = false, reopened = false;
+    double closeStart = 0;
+    uint64_t bytesAtClose = 0, bytesWhileClosedAgain = 0, partials = 0;
+    while (!complete && since() < openAt + num(o, "timeout", 120)) {
+        if (auto r = loader.poll()) {
+            tracks = std::move(r->tracks);
+            if (r->complete) { complete = true; completeAt = since(); break; }
+            ++partials;
+        }
+        if (toggle) {
+            if (!closedAgain && since() - openAt >= closeAfter) {
+                closedAgain = true;
+                gate->store(false);
+                std::this_thread::sleep_for(std::chrono::milliseconds(400));   // a read already in flight finishes
+                bytesAtClose = engine::subtitleServerScanBytes();
+                closeStart = since();
+            }
+            if (closedAgain && !reopened && since() - closeStart >= closedAgainFor) {
+                bytesWhileClosedAgain = engine::subtitleServerScanBytes() - bytesAtClose;
+                reopened = true;
+                gate->store(true);
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    const uint64_t bytesTotal = engine::subtitleServerScanBytes() - bytesBefore;
+    std::error_code ec;
+    const auto fileBytes = std::filesystem::file_size(std::filesystem::path(path), ec);
+    const double scanSeconds = complete ? std::max(0.0, completeAt - (publishedWhileClosed && !server ? 0.0 : openAt)) : -1;
+    std::ostringstream json;
+    json << "{\"serverFile\":" << (server ? "true" : "false") << ",\"publishedWhileClosed\":" << publishedWhileClosed
+         << ",\"bytesWhileClosed\":" << bytesWhileClosed << ",\"complete\":" << (complete ? "true" : "false")
+         << ",\"scanSeconds\":" << scanSeconds << ",\"partialPublishes\":" << partials << ",\"bytesRead\":" << bytesTotal
+         << ",\"fileBytes\":" << (ec ? 0 : fileBytes) << ",\"rateMBps\":" << (scanSeconds > 0 ? bytesTotal / 1048576.0 / scanSeconds : 0.0)
+         << ",\"toggled\":" << (toggle ? "true" : "false") << ",\"bytesWhileClosedAgain\":" << bytesWhileClosedAgain
+         << ",\"tracks\":" << tracks.size() << ",\"cues\":[";
+    for (size_t i = 0; i < tracks.size(); ++i) json << (i ? "," : "") << tracks[i].cues.size();
+    json << "]}";
+    std::cout << "RESULT " << json.str() << std::endl;
+    return complete ? 0 : 1;
+}
+
 }  // namespace
 
 int wmain(int argc, wchar_t** argv) {
     if (argc >= 2 && std::wstring_view(argv[1]) == L"selftest") return selfTest();
     if (argc < 4) {
-        std::cerr << "usage: selftest | source <path-or-url> <outdir> [k=v...] | engine <path-or-url> <outdir> [k=v...]" << std::endl;
+        std::cerr << "usage: selftest | source|engine|scan <path-or-url> <outdir> [k=v...]" << std::endl;
         return 2;
     }
     const Options options = parseOptions(argc, argv, 4);
     if (std::wstring_view(argv[1]) == L"source") return sourceTest(argv[2], argv[3], options);
     if (std::wstring_view(argv[1]) == L"engine") return engineTest(argv[2], argv[3], options);
+    if (std::wstring_view(argv[1]) == L"scan") return scanTest(argv[2], argv[3], options);
     return 2;
 }

@@ -5,6 +5,7 @@
                                    the "huge high-bitrate MKV" a slow server cannot keep up with
   av-720p30-60s.mp4 / .mkv         small A/V files (synthetic: running timer + one beep per second)
   av-720p30-10min.ts               10 minutes of MPEG-TS for the packet-loss runs
+  av-720p30-60s-subs.mkv           the 60 s MKV with two embedded SRT tracks (subtitle scan of a NAS-style file)
   live-src.ts                      20 s loop source for the real-time /live.ts relay
   hls/vod, hls/multi               HLS playlists + segments (single rendition and three renditions)
 
@@ -50,6 +51,14 @@ def main():
     for name, extra in (('av-720p30-60s.mp4', ['-movflags', '+faststart']), ('av-720p30-60s.mkv', [])):
         if not (out / name).exists():
             run(common + synthetic + ['-t', '60'] + encode + extra + [out / name])
+    subs = out / 'av-720p30-60s-subs.mkv'
+    if not subs.exists() and (out / 'av-720p30-60s.mkv').exists():
+        for tag, lang in (('a', 'eng'), ('b', 'chi')):
+            lines = [f'{n + 1}\n00:00:{n:02d},100 --> 00:00:{n:02d},900\nline {n + 1} ({lang})\n' for n in range(60)]
+            (out / f'subs-{tag}.srt').write_text('\n'.join(lines), encoding='utf-8')
+        run(common + ['-i', out / 'av-720p30-60s.mkv', '-i', out / 'subs-a.srt', '-i', out / 'subs-b.srt',
+                      '-map', '0', '-map', '1', '-map', '2', '-c', 'copy', '-c:s', 'srt',
+                      '-metadata:s:s:0', 'language=eng', '-metadata:s:s:1', 'language=chi', subs])
     if not (out / 'av-720p30-10min.ts').exists():
         run(common + synthetic + ['-t', '600'] + encode + ['-f', 'mpegts', out / 'av-720p30-10min.ts'])
     if not (out / 'live-src.ts').exists():

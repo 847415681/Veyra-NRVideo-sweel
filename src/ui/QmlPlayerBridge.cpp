@@ -318,6 +318,10 @@ struct QmlPlayerBridge::Impl {
     uint64_t playlistSession = 0, playlistCompletedSession = 0;
     // --- subtitles (ported from the Win32 shell, same semantics) ---
     std::unique_ptr<engine::SubtitleLoader> subLoader;
+    // Embedded-subtitle scan of a file on a server (#48): reads only while playback has its own
+    // buffer. The gate follows the engine's network statistics (tickSubtitles); null for local files.
+    std::shared_ptr<std::atomic<bool>> subScanGate;
+    bool subScanOpen = false;
     std::unique_ptr<engine::SubtitleLoader> subFileLoader;
     uint64_t subFileGeneration = 0;
     std::wstring subFilePath;
@@ -4351,12 +4355,34 @@ void QmlPlayerBridge::refreshSubtitles(const std::wstring& media) {
     if (i.subAlignWorker.joinable()) { i.subAlignWorker.request_stop(); i.subAlignWorker = {}; }
     i.subAligning = false; i.subAlignReady = false;
     if (!i.subLoader) i.subLoader = std::make_unique<engine::SubtitleLoader>();
+    // A file on a server is scanned only while playback has its buffer (#48): a second reader
+    // that takes the same share's bandwidth would starve the picture it is meant to subtitle.
+    const bool server = !media.empty() && engine::subtitleServerFile(media);
+    i.subScanGate = server ? std::make_shared<std::atomic<bool>>(false) : nullptr;
+    i.subScanOpen = false;
+    i.subLoader->setReadGate(i.subScanGate);
+    if (server) i.subStatus = tr("字幕将在视频缓冲好后读取");
     i.subGeneration = i.subLoader->request(media);
     emit subtitlesChanged();
 }
 void QmlPlayerBridge::tickSubtitles() {
     auto& i = *impl_;
     bool changed = false;
+    if (i.subScanGate) {
+        // Opens once playback holds a few seconds ahead (or has read the whole file), closes when
+        // it runs short, and never opens for a server too slow for the stream itself.
+        const auto& n = i.snapshot.network;
+        const bool ended = n.active && n.state == media::NetworkStats::State::Ended;
+        const bool healthy = n.active && !n.bandwidthLow && n.state == media::NetworkStats::State::Playing;
+        const bool open = i.subScanOpen ? (ended || (healthy && n.bufferedSeconds >= 1.0))
+                                        : (ended || (healthy && n.bufferedSeconds >= 3.0));
+        if (open != i.subScanOpen) {
+            i.subScanOpen = open;
+            i.subScanGate->store(open);
+            veyra::log::info("subtitle", std::format("server scan gate {} (buffer {:.1f}s)", open ? "open" : "closed", n.bufferedSeconds));
+            if (open && i.subStatus == tr("字幕将在视频缓冲好后读取")) { i.subStatus = tr("正在读取字幕"); changed = true; }
+        }
+    }
     if (i.subLoader) {
         if (auto result = i.subLoader->poll(); result && result->generation == i.subGeneration) {
             // Replace the loader's tracks, keep user-loaded files and per-track offsets.
@@ -4368,7 +4394,7 @@ void QmlPlayerBridge::tickSubtitles() {
             i.subTracks.insert(i.subTracks.begin() + std::ptrdiff_t(i.subExternal),
                                std::make_move_iterator(result->tracks.begin()), std::make_move_iterator(result->tracks.end()));
             i.subLoaded = count;
-            if(result->complete&&i.subStatus==tr("正在读取字幕"))i.subStatus.clear();
+            if(result->complete&&(i.subStatus==tr("正在读取字幕")||i.subStatus==tr("字幕将在视频缓冲好后读取")))i.subStatus.clear();
             int firstUsable = -1, firstChinese = -1;
             for (size_t k = 0; k < i.subTracks.size(); ++k) {
                 if (!i.subTracks[k].usable()) continue;
