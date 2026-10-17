@@ -2032,6 +2032,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         pipeline::FramePacket next;const AVFrame* raw=nullptr;
                         const auto rs=activeSource->read(next,&raw);
                         if(rs==source::SourceReadStatus::Eos)break; // final decoded candidate is kept
+                        if(rs==source::SourceReadStatus::Waiting)break; // network buffering: nothing newer yet, keep this candidate
                         if(rs!=source::SourceReadStatus::Frame||next.pts.isUnknown()){previewSourceFailed=true;break;}
                         const double nextPts=next.pts.toDouble()*1000;
                         if(nextPts+0.1<discardBefore)continue; // post-seek decode residue keeps dropping

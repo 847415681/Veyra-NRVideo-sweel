@@ -69,6 +69,16 @@ bool AudioPipeline::open(const std::wstring& path,const std::atomic<bool>* cance
     return selectTrack(si);
 }
 
+void AudioPipeline::noteDamagedAudio(int code)
+{
+    ++damagedAudioPackets_;
+    const auto now = std::chrono::steady_clock::now();
+    if (now - damagedAudioLogAt_ >= std::chrono::seconds(1)) {
+        damagedAudioLogAt_ = now;
+        log::warn("audio", std::format("damaged audio data from the network skipped (code={}, packets so far {})", code, damagedAudioPackets_));
+    }
+}
+
 bool AudioPipeline::open(std::shared_ptr<media::DemuxSession> session)
 {
     if(!session||thread_.joinable())return false;
@@ -497,6 +507,12 @@ void AudioPipeline::decodeBlock()
             break;
         }
         if (received != AVERROR(EAGAIN)) {
+            // A shared network session delivers packets from a link that loses data: one damaged
+            // audio packet is skipped, not the end of the sound (local files stay strict).
+            if (session_ && received == AVERROR_INVALIDDATA && ++damagedAudioRuns_ <= 8) {
+                noteDamagedAudio(received);
+                continue;
+            }
             log::error("audio", std::format("decode receive failed code={}", received));
             decodedEof_ = true;
             break;
@@ -540,7 +556,15 @@ void AudioPipeline::decodeBlock()
         if (sent == 0) {
             av_packet_unref(packet_);
             havePacket_ = false;
+            damagedAudioRuns_ = 0;
         } else if (sent != AVERROR(EAGAIN)) {
+            if (session_ && sent == AVERROR_INVALIDDATA) {
+                // Damaged network data (a live source re-joined mid-frame, lost packets): skip this packet.
+                noteDamagedAudio(sent);
+                av_packet_unref(packet_);
+                havePacket_ = false;
+                continue;
+            }
             log::error("audio", std::format("decode send failed code={}", sent));
             decodedEof_ = true;
             break;

@@ -53,6 +53,7 @@ private:
     bool fallbackToSoftware(std::string_view reason);
     void beginDiscontinuity();
     void resetCorruptionState();
+    void startKeyframeWait();
     bool tolerateDecoderError();
 
     media::FFmpegDemuxer demuxer_;
@@ -63,7 +64,7 @@ private:
     bool nonBlocking_=false,tolerant_=false,waitKeyframe_=false,pendingDiscontinuity_=false;
     media::CorruptPolicy corruptPolicy_=media::CorruptPolicy::Conceal;
     uint64_t corruptPacketsSeen_=0,corruptFramesSeen_=0,decoderErrorsSeen_=0;
-    std::chrono::steady_clock::time_point lastReadCall_{},noOutputSince_{},lastCorruptLog_{},lastForcedReconnect_{},errorWindowStart_{};
+    std::chrono::steady_clock::time_point lastReadCall_{},noOutputSince_{},lastCorruptLog_{},lastForcedReconnect_{},errorWindowStart_{},waitKeyframeSince_{};
     unsigned errorsInWindow_=0;
     SourceInfo info_{};
     uint64_t sequence_ = 0;

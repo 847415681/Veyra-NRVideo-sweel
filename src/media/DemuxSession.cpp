@@ -854,6 +854,9 @@ void DemuxSession::flushPendingAudio(int64_t anchorUs) {
     }
     const AVRational tb{streams_[size_t(audio)].timeBaseNum, streams_[size_t(audio)].timeBaseDen};
     const int64_t offsetTb = av_rescale_q(offsetUs_, AV_TIME_BASE_Q, tb);
+    if (!pendingAudio_.empty())
+        log::info("net-session", std::format("live reconnect: {} audio packets waited for the keyframe, raw {}..{} ms", pendingAudio_.size(),
+            pendingAudio_.front().startUs / 1000, pendingAudio_.back().startUs / 1000));
     for (auto& item : pendingAudio_) {
         if (item.startUs + 5000 < anchorUs) {
             av_packet_free(&item.packet);
@@ -916,7 +919,14 @@ void DemuxSession::onPacket(AVPacket* pkt) {
             gateKeyframe_ = false;
             videoDiscontinuityPending_ = true;
             audioDiscontinuityPending_ = true;
-            log::info("net-session", std::format("live reconnect: keyframe found, timeline offset {} ms", offsetUs_ / 1000));
+            int64_t videoEnd, audioEnd;
+            {
+                std::lock_guard lock(m_);
+                videoEnd = video_.lastEndUs;
+                audioEnd = audio_.lastEndUs;
+            }
+            log::info("net-session", std::format("live reconnect: keyframe at {} ms (raw), previous end video {} ms audio {} ms, timeline offset {} ms, pending audio {} packets",
+                startUs / 1000, videoEnd / 1000, audioEnd / 1000, offsetUs_ / 1000, pendingAudio_.size()));
             flushPendingAudio(startUs);
         } else {
             if (startUs == AV_NOPTS_VALUE || pendingAudioBytes_ > (8 << 20)) {

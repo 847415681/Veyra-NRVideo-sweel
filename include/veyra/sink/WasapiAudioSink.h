@@ -163,6 +163,7 @@ private:
     // Shared session: reposition the decoder and PCM ring at `target` without moving
     // the (shared) demuxer. The engine has already repositioned the session for a seek.
     bool rewindSession(double target);
+    void noteDamagedAudio(int code);
     void trimRingBefore(double targetMs);   // mutex_ held
 
     friend class AudioThread;
@@ -175,6 +176,9 @@ private:
     bool sessionDiscontinuity_ = false;              // next packet starts a new live connection: reset the decoder
     std::chrono::steady_clock::time_point prefillDeadline_{};
     bool prefillWait_ = false;                       // audio thread: wait for session packets (open / seek prefill)
+    uint64_t damagedAudioPackets_ = 0;               // network audio packets the decoder rejected and we skipped
+    unsigned damagedAudioRuns_ = 0;
+    std::chrono::steady_clock::time_point damagedAudioLogAt_{};
     media::InputInterrupt inputInterrupt_;
     AVCodecContext* codecCtx_ = nullptr;
     AVRational streamTimeBase_{1, 1000};

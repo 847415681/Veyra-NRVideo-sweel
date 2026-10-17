@@ -436,16 +436,17 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
                     corruptPolicy_ == media::CorruptPolicy::WaitKeyframe ? "wait-keyframe" : "conceal", corruptPacketsSeen_));
             }
             if (corruptPolicy_ == media::CorruptPolicy::WaitKeyframe) {
-                decoder_.recoverAtKeyframe();
-                waitKeyframe_ = true;
-                if (const auto& session = demuxer_.session()) session->addCorruptFrames(0, 0);
+                startKeyframeWait();
             }
         }
         if (waitKeyframe_) {
-            // A clean start after a damaged stretch is a keyframe that is not itself damaged.
-            if (!(packet->flags & AV_PKT_FLAG_KEY) || (packet->flags & AV_PKT_FLAG_CORRUPT)) {
+            // A clean start after a damaged stretch is a keyframe that is not itself damaged. A stream
+            // that never flags one must not freeze the picture: after 5 s decoding just continues.
+            const bool clean = (packet->flags & AV_PKT_FLAG_KEY) && !(packet->flags & AV_PKT_FLAG_CORRUPT);
+            if (!clean && std::chrono::steady_clock::now() - waitKeyframeSince_ < std::chrono::seconds(5)) {
                 continue;
             }
+            if (!clean) veyra::log::warn("source-file", "no clean keyframe within 5 s after damaged data; decoding continues without waiting");
             waitKeyframe_ = false;
         }
         if (!decoder_.sendPacket(packet)) {
@@ -498,8 +499,7 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
                 frame->flags, frame->decode_error_flags, drop ? "wait-keyframe" : "conceal", corruptFramesSeen_));
         }
         if (drop) {
-            decoder_.recoverAtKeyframe();
-            waitKeyframe_ = true;
+            startKeyframeWait();
             goto readAgain;
         }
     }
@@ -661,7 +661,7 @@ void MediaFileSource::beginDiscontinuity()
     veyra::log::info("source-file", "network source reconnected: resetting the decoder at the new keyframe");
     deinterlacer_.close();
     filterDraining_ = false;
-    decoder_.recoverAtKeyframe();
+    decoder_.flushBuffers();   // the session starts the new connection at a keyframe
     waitKeyframe_ = false;
     pendingDiscontinuity_ = true;
     lastPtsUs_ = INT64_MIN;
@@ -686,10 +686,18 @@ bool MediaFileSource::tolerateDecoderError()
     if (decoder_.lastError() != AVERROR_INVALIDDATA && decoderErrorsSeen_ > 3 && decoder_.hardwareActive()) {
         return false;   // not damaged data: let the hardware fallback decide
     }
-    if (const auto& session = demuxer_.session()) session->addCorruptFrames(0, 0);
-    decoder_.recoverAtKeyframe();
-    waitKeyframe_ = true;
+    startKeyframeWait();
     return true;
+}
+
+// Damaged data reached the decoder: drop what it holds and feed it again from the next clean keyframe.
+void MediaFileSource::startKeyframeWait()
+{
+    deinterlacer_.close();
+    filterDraining_ = false;
+    decoder_.flushBuffers();
+    waitKeyframe_ = true;
+    waitKeyframeSince_ = std::chrono::steady_clock::now();
 }
 
 bool MediaFileSource::seek(const pipeline::Rational& targetSeconds)
