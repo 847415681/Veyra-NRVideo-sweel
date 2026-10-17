@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.Basic as Basic
 import QtQuick.Layouts
 
 Popup {
@@ -45,7 +46,7 @@ Popup {
             text: qsTr("分辨率、帧率和像素格式合并显示；包含非常用帧率，与主界面共用同一个精确选择。范围候选将在连接时验证。")
             color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11; wrapMode: Text.WordWrap
         }
-        TextField {
+        Basic.TextField {
             id: search
             objectName: "capture-legacy-search"
             Layout.fillWidth: true
@@ -63,8 +64,8 @@ Popup {
             clip: true
             model: picker.filtered
             reuseItems: true
-            ScrollBar.vertical: ScrollBar {}
-            delegate: ItemDelegate {
+            ScrollBar.vertical: Basic.ScrollBar {}
+            delegate: Basic.ItemDelegate {
                 required property var modelData
                 width: list.width
                 height: 46

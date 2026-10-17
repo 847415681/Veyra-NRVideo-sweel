@@ -9699,3 +9699,10 @@ final-audit.py pre已通过82旧树/94旧分支/509脏文件与main b571a44不�
 ## 2026-10-17 PR57接手Windows验收
 
 用户要求合入云端Agent PR57并做好测试。已读PR正文/29文件清单/两提交/空评论，明确云端仅Linux/Wine/MinGW与Qt离屏，不能代替Windows验收。archive.py保护84旧树/96分支/509未提交文件、原PRJSON/patch、dirty备份和75114019字节source-before.bundle（verify通过）；main/远端d68d6be，head09ac54b固定。建立E盘codex/pr57-capture-window-20261017，no-ff合入原贡献，无冲突；main暂不推进。方案PR57_INTEGRATION_PLAN_2026-10-17.md，所有产物E:/项目/Veyra/{用途}/pr57-capture-window-20261017。不派Agent，不改运行库/驱动/真实配置/33ms或250ms；本轮不改2.0.9包/标签/Release或代发/关机，后续真实构建/测试/失败单独记录。
+
+
+### 2026-10-17 PR57 native follow-up: static WGC resize and Windows control style
+- Final native run `E:/项目/Veyra/logs/pr57-capture-window-20261017/native-20261017-215502` independently reproduced a static-source resize failure: pool Recreate completed at13:55:13Z, but no new frame arrived before timeout. This is an actual source defect, not the earlier QML observer timing assumption. Retain failing receipt.
+- Preserve300ms pool debounce and existing queue/PTS contracts. After a resized pool supplies no frame for another300ms, restart its WGC session once, preserving cursor/border settings. No target repaint, synthetic pixels/PTS, perpetual retry or change to UI cadence. Animated sources keep their session. Native regression must confirm the actual new-size frame and reset metadata.
+- Actual final GUI run `window-20261017-215528` passed aspect/input/rapid double-click/portrait/exit checks, but flagged the legacy search TextField's custom background as unsupported by the Windows native Controls style. Use explicitly scoped Qt Basic TextField/ItemDelegate/ScrollBar, consistent with existing custom controls; do not change the application's global style.
+- Related16-process run `checks-20261017-215403` passed, including82 Qt Quick cases. These predate the two follow-up changes and do not substitute their final regression.
