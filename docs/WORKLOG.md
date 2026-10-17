@@ -9672,3 +9672,8 @@ final-audit.py pre已通过82旧树/94旧分支/509脏文件与main b571a44不�
 已整理v2.0.8..bfce70b共57非merge提交/70产品构建测试路径，RELEASE_2.0.9_CHANGE_INDEX逐项保留，公开报告覆盖SF模型/性能、PR44、字幕/游戏快捷键、2060注册、四issues及集成去隔行修正。README当前新增区/下载/现行NR/快捷键/构建更新，原六群/微信赞助/Discord/Ko-fi/知识库footer逐字保持；两Release正文支持区两图各width220。本机NR GPU45.49%与画质/全机FPS/光学延迟/未验硬件边界区分，内部test标识原样说明。来源RAR匹配回执实际位于verify/nr-sf-310916-20261017/source-receipt.json，此前WORKLOG中的reports/...路径仅是误记，不影响原证据。后续原包审计/草稿上传/正式发布回执另记；产物全E:/项目/Veyra/{用途}/release-2.0.9-20261017。
 
 2.0.9原包逐文件审计与文档gate通过：NVIDIA1666/AMD2106payload、48/534运行组件、PE/EXE/CRC；应用源2044文件和新增去隔行源完整。实际旧构建树745输入SHA保持，发布新checkout仅LF/CRLF者归一化与Git对象一致（实际数量见assets.json），不把两者原始字节混称。四原ZIP冷启绑定原SHA；两用户包/两个新增源正式外名硬链接不重打包，旧两依赖服务器digest一致。57提交/70路径覆盖、README支持footer不变，Release/SOURCE两图width220和知识库保持。尚未上传/发布，后续回执另记。
+
+
+### 2.0.9正式发布完成
+
+主https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.9 ID415481126 published_at2026-10-17T00:18:11Z，latest/non-prerelease；源https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.9-sources ID415481099非latest。先普通atomic push main+两新标签到08832f6，再草稿上传/核对digest+size+正文后发布。主恰2运行资产、源2新增资产，旧FFmpeg/依赖源固定链接不重复上传，旧2.0.8主/源及资产保持。原包SHA/内部test标记/745实际构建输入不变，发布checkout2个EOL差异等价，未重编译重封包。57提交/70路径完整说明与两README支持footer保持，两个Release的两图width220/知识库实际链接检查通过。完整报告RELEASE_2.0.9_REPORT_2026-10-17.md，远端/链接/资产回执reports/...。仅追加记录后正常同步main，不移动已发标签；随后保护复核/source-final.bundle/final.json。群公告799字含两链接拟稿，未代发；无Agent/关机/改驱动或用户配置。
