@@ -189,7 +189,9 @@ struct ScreenCaptureSource::Impl {
         // obtain a real new-size frame. Never repaint the target or fabricate
         // pixels/timestamps; moving sources keep their existing session.
         resizeNeedsFrame=false;
-        session.Close();session=pool.CreateCaptureSession(item);
+        session.Close();pool.Close();
+        pool=Direct3D11CaptureFramePool::CreateFreeThreaded(wrapped,DirectXPixelFormat(format),2,poolSize);
+        session=pool.CreateCaptureSession(item);
         session.IsCursorCaptureEnabled(options.cursor);
         if(borderDisabled)session.IsBorderRequired(false);
         session.StartCapture();wasWaiting=true;
