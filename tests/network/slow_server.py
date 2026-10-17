@@ -14,6 +14,8 @@ It stands in for the slow / unreliable servers the user does not have:
   * --live NAME=FILE     /NAME is an endless real-time MPEG-TS stream relayed from ffmpeg looping FILE
                          (no Content-Length); --ts-drop RATIO removes that fraction of its TS packets
                          (IPTV-style packet loss, produces continuity errors);
+  * --ts-drop-file RATIO a *.ts file is served like a live stream (200, no Content-Length, no Range, closes at
+                         the end) from its start with RATIO of its TS packets removed, as fast as the link allows;
   * /__stats             JSON: connections, in-flight requests, bytes sent, per-request log.
 
 Everything is logged to --log (one JSON object per line) and summarised at /__stats.
@@ -199,10 +201,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *a):
         pass
 
+    def send_response(self, code, message=None):
+        log(dict(event='response', conn=getattr(self, 'conn_id', 0), code=code, path=self.path, range=self.headers.get('Range')))
+        super().send_response(code, message)
+
     def setup(self):
         super().setup()
         with STATS.lock:
             STATS.connections += 1
+            self.conn_id = STATS.connections
+        log(dict(event='connection-open', conn=self.conn_id, peer=self.client_address[1]))
         with ACTIVE_LOCK:
             ACTIVE.add(self.connection)
         if SHAPER.in_outage():
@@ -211,6 +219,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.reset()
 
     def finish(self):
+        log(dict(event='connection-close', conn=getattr(self, 'conn_id', 0)))
         with ACTIVE_LOCK:
             ACTIVE.discard(self.connection)
         try:
@@ -250,6 +259,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-Length', '0')
             self.end_headers()
             return
+        if ARGS.ts_drop_file > 0 and full.lower().endswith('.ts') and not head:
+            return self.serve_lossy_file(path, full)
         size = os.path.getsize(full)
         start, end, status = 0, size - 1, 200
         rng = self.headers.get('Range')
@@ -312,6 +323,37 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
             result = 'client-closed'
             self.close_connection = True
+        STATS.end(rec, result)
+
+    def serve_lossy_file(self, path, full):
+        """The file as a live-style stream with packet loss (no length, no ranges), at link speed."""
+        self.send_response(200)
+        self.send_header('Content-Type', 'video/mp2t')
+        self.send_header('Cache-Control', 'no-cache')
+        self.send_header('Connection', 'close')
+        self.end_headers()
+        self.close_connection = True
+        rec = STATS.begin(path, None, self.client_address[1])
+        rnd = random.Random(ARGS.seed + rec['id'])
+        result = 'done'
+        try:
+            with open(full, 'rb') as f:
+                while True:
+                    chunk = f.read(CHUNK - CHUNK % TS)
+                    if not chunk:
+                        break
+                    kept = bytearray()
+                    for off in range(0, len(chunk) - TS + 1, TS):
+                        if rnd.random() >= ARGS.ts_drop_file:
+                            kept += chunk[off:off + TS]
+                    if not SHAPER.wait(len(kept), STOP):
+                        result = 'reset'
+                        self.reset()
+                        break
+                    self.wfile.write(bytes(kept))
+                    STATS.add(rec, len(kept))
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
+            result = 'client-closed'
         STATS.end(rec, result)
 
     # ---- live MPEG-TS relay -------------------------------------------------------------
@@ -442,6 +484,7 @@ def main():
     p.add_argument('--drop-after-mb', type=float, default=0.0)
     p.add_argument('--ts-flip', type=float, default=0.0)
     p.add_argument('--ts-drop', type=float, default=0.0)
+    p.add_argument('--ts-drop-file', type=float, default=0.0)
     p.add_argument('--live', action='append', default=[])
     p.add_argument('--ffmpeg', default=os.environ.get('FFMPEG', 'ffmpeg'))
     p.add_argument('--seed', type=int, default=48)

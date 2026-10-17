@@ -31,6 +31,7 @@
 #include <vector>
 
 extern "C" {
+#include <libavutil/log.h>
 #include <libavutil/frame.h>
 #include <libavutil/pixfmt.h>
 }
@@ -247,7 +248,8 @@ int engineTest(const std::wstring& path, const std::filesystem::path& out, const
     HWND window = CreateWindowExW(0, L"STATIC", L"Network buffer playback test", WS_POPUP, 0, 0, 960, 540, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
     if (!window) return 2;
     ShowWindow(window, SW_SHOWNOACTIVATE);
-    engine::EngineController player;
+    auto playerOwner = std::make_unique<engine::EngineController>();
+    auto& player = *playerOwner;
     player.setVolume(0, true);
     engine::PlayerOptions options;
     options.settings.nrRuntime = engine::NrRuntime::NvidiaOriginal;
@@ -267,6 +269,16 @@ int engineTest(const std::wstring& path, const std::filesystem::path& out, const
     double firstFrameAt = -1, maxLate = 0, maxP95 = 0, lastPosition = -1, positionStall = 0, stallStart = -1, maxStall = 0;
     double bufferingSeconds = 0, reconnectingSeconds = 0, playingSeconds = 0, prebufferSeconds = 0;
     std::map<std::string, int> seen;
+    uint64_t maxBufferedBytes = 0, capBytes = 0;
+    std::vector<std::string> messages;   // distinct status messages with the numbers masked
+    auto masked = [](const std::string& text) {
+        std::string out;
+        for (const char c : text) {
+            if ((c >= '0' && c <= '9') || c == '.') { if (out.empty() || out.back() != '#') out += '#'; }
+            else out += c;
+        }
+        return out;
+    };
     bool failed = false, seekDone = false, pauseDone = false, resumed = false;
     std::wstring lastStatus, failure;
     double clockAtBufferingStart = -1, maxClockAdvanceWhileBuffering = 0;
@@ -285,6 +297,14 @@ int engineTest(const std::wstring& path, const std::filesystem::path& out, const
         const auto& n = s.network;
         const std::string state = n.active ? stateName(n.state) : "local";
         ++seen[state];
+        if (n.active) {
+            maxBufferedBytes = std::max(maxBufferedBytes, n.bufferedBytes);
+            capBytes = std::max(capBytes, n.capBytes);
+            if (!n.message.empty()) {
+                const auto m = masked(narrow(n.message));
+                if (messages.size() < 12 && std::find(messages.begin(), messages.end(), m) == messages.end()) messages.push_back(m);
+            }
+        }
         maxFrames = std::max(maxFrames, s.metrics.flow.counters.realPresented);
         if (firstFrameAt < 0 && s.metrics.flow.counters.realPresented > 0) firstFrameAt = t;
         if (n.active) {
@@ -301,7 +321,8 @@ int engineTest(const std::wstring& path, const std::filesystem::path& out, const
         if (s.position != lastPosition) { lastPosition = s.position; stallStart = -1; }
         else if (stallStart < 0) stallStart = t;
         if (stallStart >= 0) maxStall = std::max(maxStall, t - stallStart);
-        if (s.transport == engine::TransportState::Playing && firstFrameAt >= 0) { maxLate = std::max(maxLate, std::abs(s.lateMs)); maxP95 = std::max(maxP95, s.lateP95Ms); }
+        // The engine's lateness percentile needs a window: the first second of pictures is not judged.
+        if (s.transport == engine::TransportState::Playing && firstFrameAt >= 0 && s.metrics.flow.counters.realPresented >= 30) { maxLate = std::max(maxLate, std::abs(s.lateMs)); maxP95 = std::max(maxP95, s.lateP95Ms); }
         if (!seekDone && seekTarget >= 0 && t >= seekAt) { seekDone = true; player.seek(seekTarget); }
         if (!pauseDone && pauseFor > 0 && t >= pauseAt) { pauseDone = true; player.pause(true); }
         if (pauseDone && !resumed && t >= pauseAt + pauseFor) { resumed = true; player.pause(false); }
@@ -319,20 +340,28 @@ int engineTest(const std::wstring& path, const std::filesystem::path& out, const
     const auto finalNet = s.network;
     player.stop();
     const double stopMs = std::chrono::duration<double, std::milli>(Clock::now() - stopAt).count();
+    // stop() only posts the command; the engine thread (and the session under it) is joined here, so this is
+    // how long a user stop / source switch really takes to get out of a blocked connect, read or wait.
+    playerOwner.reset();
+    const double teardownMs = std::chrono::duration<double, std::milli>(Clock::now() - stopAt).count();
     DestroyWindow(window);
     std::ostringstream json;
     json << "{\"failed\":" << (failed ? "true" : "false") << ",\"failure\":\"" << jsonEscape(narrow(failure)) << "\",\"realPresented\":" << maxFrames
          << ",\"firstFrameSeconds\":" << firstFrameAt << ",\"finalPosition\":" << finalPosition << ",\"maxPositionStallSeconds\":" << maxStall
          << ",\"bufferingSeconds\":" << bufferingSeconds << ",\"reconnectingSeconds\":" << reconnectingSeconds << ",\"prebufferSeconds\":" << prebufferSeconds
          << ",\"playingSeconds\":" << playingSeconds << ",\"maxClockAdvanceWhileBuffering\":" << maxClockAdvanceWhileBuffering
-         << ",\"maxLateMs\":" << maxLate << ",\"maxLateP95Ms\":" << maxP95 << ",\"stopMs\":" << stopMs << ",\"states\":{";
+         << ",\"maxLateMs\":" << maxLate << ",\"maxLateP95Ms\":" << maxP95 << ",\"stopMs\":" << stopMs << ",\"teardownMs\":" << teardownMs
+         << ",\"endState\":\"" << (finalNet.active ? stateName(finalNet.state) : "local") << "\",\"states\":{";
     bool first = true;
     for (const auto& [name, count] : seen) { json << (first ? "" : ",") << "\"" << name << "\":" << count; first = false; }
     json << "},\"reconnects\":" << finalNet.reconnects << ",\"stalls\":" << finalNet.stalls << ",\"connections\":" << finalNet.connections
          << ",\"corruptPackets\":" << finalNet.corruptPackets << ",\"corruptFrames\":" << finalNet.corruptFrames << ",\"skippedFrames\":" << finalNet.skippedFrames
          << ",\"sessionBytes\":" << finalNet.sessionBytes << ",\"bandwidthLow\":" << (finalNet.bandwidthLow ? "true" : "false")
          << ",\"bitrateMBps\":" << finalNet.bitrateBytesPerSecond / 1048576.0 << ",\"serverMBps\":" << finalNet.serverBytesPerSecond / 1048576.0
-         << ",\"message\":\"" << jsonEscape(narrow(finalNet.message)) << "\"}";
+         << ",\"maxBufferedMiB\":" << maxBufferedBytes / 1048576.0 << ",\"capMiB\":" << capBytes / 1048576.0
+         << ",\"message\":\"" << jsonEscape(narrow(finalNet.message)) << "\",\"messages\":[";
+    for (size_t i = 0; i < messages.size(); ++i) json << (i ? "," : "") << "\"" << jsonEscape(messages[i]) << "\"";
+    json << "]}";
     std::cout << "RESULT " << json.str() << std::endl;
     return failed ? 1 : 0;
 }
@@ -425,6 +454,10 @@ int wmain(int argc, wchar_t** argv) {
         return 2;
     }
     const Options options = parseOptions(argc, argv, 4);
+    // ffmpeglog=<quiet|warning|verbose|debug|trace>: FFmpeg's own messages to stderr (a diagnosis aid; they
+    // include URLs, so runs against signed addresses must never use it).
+    if (const auto level = str(options, "ffmpeglog"); !level.empty())
+        av_log_set_level(level == "quiet" ? AV_LOG_QUIET : level == "verbose" ? AV_LOG_VERBOSE : level == "debug" ? AV_LOG_DEBUG : level == "trace" ? AV_LOG_TRACE : AV_LOG_WARNING);
     if (std::wstring_view(argv[1]) == L"source") return sourceTest(argv[2], argv[3], options);
     if (std::wstring_view(argv[1]) == L"engine") return engineTest(argv[2], argv[3], options);
     if (std::wstring_view(argv[1]) == L"scan") return scanTest(argv[2], argv[3], options);

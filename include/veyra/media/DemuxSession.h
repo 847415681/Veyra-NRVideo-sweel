@@ -116,6 +116,7 @@ private:
     struct Queue {
         std::deque<Item> items;
         size_t bytes = 0;
+        int64_t durationUs = 0;          // content waiting in the queue: the sum of the packets' durations (never their timestamps)
         int64_t firstUs = INT64_MIN;     // first content time since open / seek
         int64_t lastEndUs = INT64_MIN;   // end of the last packet queued (kept after pops)
         int64_t lastDtsUs = INT64_MIN;   // decode time of the last packet queued (resume de-duplication)
@@ -209,8 +210,11 @@ private:
 
     // demux thread only
     int64_t offsetUs_ = 0;                 // live reconnect: keeps the timeline continuous
-    bool gateKeyframe_ = false;            // live reconnect: wait for a video keyframe
+    bool gateKeyframe_ = false;            // live reconnect or restarted timeline: wait for a video keyframe
+    int64_t lastAnchorNs_ = 0;             // when the timeline was last re-anchored (late audio of the old one is dropped for a while)
     bool videoDiscontinuityPending_ = false, audioDiscontinuityPending_ = false;
+    bool videoStarved_ = false;            // the video consumer found its queue empty: reading more is always right
+    int timestampJumpLogs_ = 0;            // diagnostics: leaps in the stream's timestamps, logged a few times per session
     std::vector<Item> pendingAudio_;       // audio read before the live gate opened
     int64_t pendingAudioBytes_ = 0;
     int64_t reconnectBudgetMs_ = 60000;
