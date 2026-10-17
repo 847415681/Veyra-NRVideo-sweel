@@ -9695,3 +9695,7 @@ final-audit.py pre已通过82旧树/94旧分支/509脏文件与main b571a44不�
 ### 2.0.9正式发布完成
 
 主https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.9 ID415481126 published_at2026-10-17T00:18:11Z，latest/non-prerelease；源https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.9-sources ID415481099非latest。先普通atomic push main+两新标签到08832f6，再草稿上传/核对digest+size+正文后发布。主恰2运行资产、源2新增资产，旧FFmpeg/依赖源固定链接不重复上传，旧2.0.8主/源及资产保持。原包SHA/内部test标记/745实际构建输入不变，发布checkout2个EOL差异等价，未重编译重封包。57提交/70路径完整说明与两README支持footer保持，两个Release的两图width220/知识库实际链接检查通过。完整报告RELEASE_2.0.9_REPORT_2026-10-17.md，远端/链接/资产回执reports/...。仅追加记录后正常同步main，不移动已发标签；随后保护复核/source-final.bundle/final.json。群公告799字含两链接拟稿，未代发；无Agent/关机/改驱动或用户配置。
+
+## 2026-10-17 PR57接手Windows验收
+
+用户要求合入云端Agent PR57并做好测试。已读PR正文/29文件清单/两提交/空评论，明确云端仅Linux/Wine/MinGW与Qt离屏，不能代替Windows验收。archive.py保护84旧树/96分支/509未提交文件、原PRJSON/patch、dirty备份和75114019字节source-before.bundle（verify通过）；main/远端d68d6be，head09ac54b固定。建立E盘codex/pr57-capture-window-20261017，no-ff合入原贡献，无冲突；main暂不推进。方案PR57_INTEGRATION_PLAN_2026-10-17.md，所有产物E:/项目/Veyra/{用途}/pr57-capture-window-20261017。不派Agent，不改运行库/驱动/真实配置/33ms或250ms；本轮不改2.0.9包/标签/Release或代发/关机，后续真实构建/测试/失败单独记录。
