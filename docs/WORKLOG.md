@@ -1,5 +1,11 @@
 # WORKLOG
 
+## 2026-10-17 #48 网络稳定与服务器视频缓冲（Claude 子会话）
+
+- 授权与方案：AGENTS.md 顶部同日条目；docs/NETWORK_BUFFER_48_PLAN_2026-10-17.md。分支 claude/network-buffer-48-20261017（main 26c0d61），存档 checkpoint/pre-claude-network-buffer-48-20261017 与 archives/claude-network-buffer-48-20261017（bundle 已 verify，88 工作树 / 108 脏文件）。产物 {build,tests,logs,tmp,reports,archives}/claude-network-buffer-48-20261017。
+- 核对：计划所述“字幕加载器对网络地址再开连接”与代码不符（网络地址不扫描字幕）；实际问题是 NAS 路径整文件扫描与点播无内嵌字幕。设计改为一套共享解复用会话（含 HLS/RTSP/HTTP/NAS），理由见方案 §2。
+- 进度随实施追加在方案 §5。
+
 ## 2026-10-17 采集格式与旧版入口（Linux 源码候选）
 
 按用户“全部修复掉，再添加老版本采集格式选择入口”，在窗口修复 1295d6b 之上隔离实施 `codex/capture-format-fixes-20261017`。修复 DirectShow 能力回退、尺寸/帧率范围候选、±1 tick 显示分组漏掉像素项、精确媒体类型恢复与连接校验；增加可搜索虚拟化旧版组合列表、自定义尺寸检查和查询错误诊断。原低延迟回调/队列、BMD 原生、增强/音频/渲染/运行库与配置保持。详见 docs/CAPTURE_FORMAT_FIXES_2026-10-17.md。
