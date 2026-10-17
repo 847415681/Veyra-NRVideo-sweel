@@ -27,6 +27,7 @@
 #include <QCursor>
 #include <QScreen>
 #include <QWindow>
+#include <QPlatformSurfaceEvent>
 #include <QPointer>
 
 #include <QDateTime>
@@ -69,6 +70,7 @@
 #include "veyra/engine/PlaybackRate.h"
 #include "veyra/sink/WasapiAudioSink.h"
 #include "veyra/source/CaptureFormatSelection.h"
+#include "veyra/source/CaptureCapabilityRange.h"
 #include "veyra/source/CaptureFormatRank.h"
 #include "veyra/source/CaptureColorOverride.h"
 #include "veyra/source/CaptureFrameRate.h"
@@ -358,7 +360,7 @@ struct QmlPlayerBridge::Impl {
     double resumeAt = 0;
     std::vector<sink::RenderEndpoint> audioEndpoints;
     // --- capture connection (P4-e) ---
-    struct CaptureQuery { int kind = 0; std::wstring device; std::vector<source::CaptureDevice> video, audio; std::vector<source::CaptureFormat> formats; };
+    struct CaptureQuery { int kind = 0; std::wstring device,requestedResolution; std::vector<source::CaptureDevice> video, audio; std::vector<source::CaptureFormat> formats;source::CaptureFormatQueryInfo info; };
     std::future<CaptureQuery> captureQuery;
     std::optional<std::pair<int,std::wstring>> captureNextQuery;
     bool captureBusy = false, captureListed = false, captureResumePending = false;
@@ -397,6 +399,7 @@ struct QmlPlayerBridge::Impl {
     }
     std::wstring captureFormatKey;
     std::wstring captureResolutionChoice, captureRateChoice;
+    std::wstring captureRequestedResolution;
     int captureAudioChoice = source::kCaptureAudioDisabled;
     bool captureAudioMissing = false;
     unsigned captureColor = 0;
@@ -447,6 +450,7 @@ struct QmlPlayerBridge::Impl {
     std::vector<source::ScreenCaptureTarget> screenList;
     bool screenFillActive = false;
     QSize screenFitClient, screenFitImage;
+    double screenFitAspect = -1;
     // --- image batch ---
     QStringList imageFiles;
     QString imageFolder, imageTarget, imageStatus;
@@ -526,7 +530,7 @@ struct QmlPlayerBridge::Impl {
     std::wstring gameModeUri;          // the screen URI startScreenCapture opened in game mode
     uint64_t gameModeSessionId = 0;    // its engine session once the open ran
     bool gameModeLive = false, gamePanelOpen = false, gameRefused = false;
-    bool gameModeShown = false, passthroughShown = false;
+    bool gameModeShown = false, passthroughShown = false, gameInputShown = false;
     QRectF gameVideoRect;
     QPointer<QWindow> gameWindow;
     HMONITOR gameMonitor = nullptr;
@@ -1227,14 +1231,22 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         using E = ui::GamePassthrough::Event;
         switch (event) {
         case E::PanelHotkey: emit gameHotkey(0); break;
-        case E::ExitHotkey: emit gameHotkey(1); break;
+        case E::ExitHotkey:
         case E::ExitUnavailable:
-            emit notice(tr("游戏模式键盘监听启动失败，未开启鼠标穿透；请退出全屏后重试"), true); break;
+            // Restore input before QML processes its fullscreen notification.
+            impl_->gameRefused = true;
+            impl_->gameInputShown = impl_->passthroughShown = false;
+            emit gameModeChanged();
+            impl_->game.apply(ui::GamePassthrough::Mode::Off);
+            if (event == E::ExitHotkey) emit gameHotkey(1);
+            else emit notice(tr("游戏模式键盘监听不可用，已退出鼠标穿透；请退出全屏后重试"), true);
+            break;
         case E::HangReleased:
             // Publish Off before the foreground goes back to Veyra; stay out of
             // click-through until fullscreen is left.
             impl_->gameRefused = true;
-            if (impl_->passthroughShown) { impl_->passthroughShown = false; emit gameModeChanged(); }
+            impl_->gameInputShown = impl_->passthroughShown = false;
+            emit gameModeChanged();
             impl_->game.apply(ui::GamePassthrough::Mode::Off);
             emit gameModeStopped(tr("界面卡住超过 3 秒，已退出游戏模式")); break;
         }
@@ -2287,6 +2299,7 @@ void QmlPlayerBridge::setCaptureDeviceId(const QString& value) {
     impl_->captureDevice = wideOf(value);
     impl_->captureFormatList.clear();++impl_->captureFormatGeneration;
     impl_->captureResolutionChoice.clear();impl_->captureRateChoice.clear();
+    impl_->captureRequestedResolution.clear();
     impl_->captureFormatKey=impl_->captureDevice==impl_->capturePrefs.videoPath?impl_->capturePrefs.formatKey:std::wstring{};
     impl_->captureDriverFormatKey.clear();
     // Colour follows the device, as in 1.4.4; audio returns to "none" unless it
@@ -2315,7 +2328,7 @@ QVariantList QmlPlayerBridge::captureFormats() const {
             out << QVariantMap{{"id", utf8Of(f.key)}, {"label", captureFormatUiLabel(f, impl_->captureDevice)}, {"tier", f.tier},
                                {"costHint", source::captureFormatNeedsCostHint(static_cast<source::CaptureFormatTier>(f.tier))}, {"driverCurrent", f.driverCurrent},
                                {"width", int(f.width)}, {"height", int(f.height)}, {"fps", f.fps}, {"pixel", uiText(f.pixel)},
-                               {"scan", uiText(f.scan)}, {"interlaced", f.interlaced}};
+                               {"scan", uiText(f.scan)}, {"interlaced", f.interlaced}, {"disabled", !f.supported}, {"rangeCandidate", f.rangeCandidate}};
         }
         return out;
     });
@@ -2342,9 +2355,9 @@ void QmlPlayerBridge::setCaptureFormatKey(const QString& key) {
         impl_->captureStatus=tr("此采集卡无此格式，请重新选择分辨率、帧率和像素格式。");
         emit notice(impl_->captureStatus,true);emit captureChanged();return;
     }
-    if (impl_->captureFormatKey == format->key && impl_->captureResolutionChoice == source::captureResolutionId(*format) && impl_->captureRateChoice == source::captureFrameRateId(*format)) return;
+    if (impl_->captureFormatKey == format->key && impl_->captureResolutionChoice == source::captureResolutionId(*format) && impl_->captureRateChoice == source::captureFrameRateGroupId(*format)) return;
     impl_->captureResolutionChoice=source::captureResolutionId(*format);
-    impl_->captureRateChoice=source::captureFrameRateId(*format);
+    impl_->captureRateChoice=source::captureFrameRateGroupId(*format);
     impl_->captureFormatKey = format->key;
     impl_->captureStatus.clear();
     if(!impl_->persistCaptureSelection(true))emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
@@ -2368,14 +2381,21 @@ QString QmlPlayerBridge::captureResolutionId() const {
     return utf8Of(impl_->captureResolutionChoice);
 }
 void QmlPlayerBridge::setCaptureResolutionId(const QString& id) {
-    const auto wide = wideOf(id);
+    QString normalized=id.trimmed().toLower();normalized.remove(QLatin1Char(' '));
+    normalized.replace(QChar(0x00D7),QLatin1Char('x'));
+    const auto wide = wideOf(normalized);
     if(impl_->captureResolutionChoice==wide)return;
     const auto* sample=source::captureResolutionSample(impl_->captureFormatList,wide);
-    if(!sample){emit notice(tr("此采集卡无此格式，请重新选择分辨率、帧率和像素格式。"),true);return;}
+    if(!sample){
+        const auto hint=source::captureResolutionHint(wide);
+        if(hint.width&&hint.height&&!impl_->captureDevice.empty()&&!source::decklink::isPath(impl_->captureDevice)){
+            impl_->captureRequestedResolution=wide;queryCapture(4,impl_->captureDevice);return;
+        }
+        emit notice(tr("此采集卡无此格式，请重新选择分辨率、帧率和像素格式。"),true);return;
+    }
     impl_->captureResolutionChoice=wide;
-    // A rate the new resolution lacks becomes its first common rate, not the driver's first row.
     if(!source::captureRateSample(impl_->captureFormatList,wide,impl_->captureRateChoice))
-        if(const auto* rate=source::captureDefaultFrameRate(impl_->captureFormatList,wide))impl_->captureRateChoice=source::captureFrameRateId(*rate);
+        if(const auto* rate=source::captureDefaultFrameRate(impl_->captureFormatList,wide))impl_->captureRateChoice=source::captureFrameRateGroupId(*rate);
     impl_->captureFormatKey.clear();
     if(!impl_->persistCaptureSelection(true))emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
     emit captureChanged();
@@ -2405,7 +2425,8 @@ void QmlPlayerBridge::setCaptureFrameRateId(const QString& id) {
     if(!source::captureRateSample(impl_->captureFormatList,impl_->captureResolutionChoice,wide)){
         emit notice(tr("此采集卡无此格式，请重新选择分辨率、帧率和像素格式。"),true);return;
     }
-    impl_->captureRateChoice=wide;impl_->captureFormatKey.clear();
+    const auto* sample=source::captureRateSample(impl_->captureFormatList,impl_->captureResolutionChoice,wide);
+    impl_->captureRateChoice=source::captureFrameRateGroupId(*sample);impl_->captureFormatKey.clear();
     if(!impl_->persistCaptureSelection(true))emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
     emit captureChanged();
 }
@@ -2528,16 +2549,22 @@ void QmlPlayerBridge::queryCapture(int kind, std::wstring device) {
     if (captureQueryBusy()) { i.captureNextQuery=std::pair{kind,std::move(device)};return; }
     i.captureBusy = true; i.captureQueryKind = kind;
     i.captureStatus = kind == 0 ? tr("正在查询采集设备…当前播放继续") : tr("正在读取设备支持的格式…");
-    i.captureQuery = std::async(std::launch::async, [kind, device] {
-        CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-        Impl::CaptureQuery q; q.kind = kind; q.device = device;
+    const auto preferred=kind==2?i.capturePrefs.formatKey:
+        kind==3&&!i.captureDriverFormatKey.empty()?i.captureDriverFormatKey:i.captureFormatKey;
+    const auto requested=kind==4?i.captureRequestedResolution:
+        preferred.empty()&&wideOf(i.prefs.value("captureDraftDevice").toString())==device?
+            wideOf(i.prefs.value("captureDraftResolution").toString()):std::wstring{};
+    i.captureQuery = std::async(std::launch::async, [kind, device, preferred, requested] {
+        Impl::CaptureQuery q; q.kind = kind; q.device = device;q.requestedResolution=requested;
+        const auto initialized=CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        if(FAILED(initialized)){q.info.code=initialized;q.info.stage=L"COM initialization";return q;}
         try {
             if (kind == 0) { q.video = source::CaptureCardSource::deviceDetails(); q.audio = source::CaptureCardSource::deviceDetails(true); }
             else {
                 if (kind == 2) { q.video = source::CaptureCardSource::deviceDetails(); q.audio = source::CaptureCardSource::deviceDetails(true); }
-                q.formats = source::CaptureCardSource::formatsByPath(device);
+                q.formats = source::CaptureCardSource::formatsByPath(device,&q.info,preferred,requested);
             }
-        } catch (...) {}
+        } catch (...) {q.info.code=E_FAIL;q.info.stage=L"Capture capability exception";}
         CoUninitialize();
         return q;
     });
@@ -2549,6 +2576,13 @@ void QmlPlayerBridge::tickCapture() {
     auto q = i.captureQuery.get();
     i.captureBusy = false;
     if(i.captureNextQuery){auto next=std::move(*i.captureNextQuery);i.captureNextQuery.reset();queryCapture(next.first,std::move(next.second));return;}
+    if(FAILED(q.info.code)&&q.formats.empty()){
+        if(q.kind!=0&&q.device!=i.captureDevice){emit captureChanged();return;}
+        if(q.kind!=0&&q.kind!=4){i.captureFormatList.clear();++i.captureFormatGeneration;i.captureResolutionChoice.clear();i.captureRateChoice.clear();}
+        i.captureStatus=tr("读取采集格式失败：%1（0x%2）。请检查设备占用与驱动后重试。")
+            .arg(utf8Of(q.info.stage),QString::number(quint32(q.info.code),16).rightJustified(8,QLatin1Char('0')));
+        emit notice(i.captureStatus,true);emit captureChanged();return;
+    }
     if (q.kind == 0 || q.kind == 2) { i.captureVideo = std::move(q.video); i.captureAudio = std::move(q.audio); i.captureListed = true; }
     // The remembered rate and audio input, matched against the inputs listed now. Both the
     // panel (kind 0) and 继续上次 (kind 2) need it: the resume path skipped it and connected
@@ -2582,6 +2616,10 @@ void QmlPlayerBridge::tickCapture() {
         return;
     }
     if (q.device != i.captureDevice) { emit captureChanged(); return; }   // stale answer
+    if(q.kind==4&&!source::captureResolutionSample(q.formats,q.requestedResolution)){
+        i.captureStatus=tr("驱动未提供该分辨率，或尺寸不符合步进要求；原选择已保留。");
+        emit notice(i.captureStatus,true);emit captureChanged();return;
+    }
     i.captureFormatList = std::move(q.formats);
     ++i.captureFormatGeneration;
     const bool remembered = i.captureDevice == i.capturePrefs.videoPath;
@@ -2595,23 +2633,30 @@ void QmlPlayerBridge::tickCapture() {
     }
     i.captureResolutionChoice.clear();i.captureRateChoice.clear();
     if(const auto* f=selectedCaptureFormat(i.captureFormatList,i.captureFormatKey)){
-        i.captureResolutionChoice=source::captureResolutionId(*f);i.captureRateChoice=source::captureFrameRateId(*f);
+        i.captureResolutionChoice=source::captureResolutionId(*f);i.captureRateChoice=source::captureFrameRateGroupId(*f);
     }else if(remembered&&i.capturePrefs.formatKey.empty()&&wideOf(i.prefs.value("captureDraftDevice").toString())==i.captureDevice){
         const auto resolution=wideOf(i.prefs.value("captureDraftResolution").toString());
         const auto rate=wideOf(i.prefs.value("captureDraftRate").toString());
         if(source::captureResolutionSample(i.captureFormatList,resolution)){
             i.captureResolutionChoice=resolution;
-            if(source::captureRateSample(i.captureFormatList,resolution,rate))i.captureRateChoice=rate;
+            if(const auto* sample=source::captureRateSample(i.captureFormatList,resolution,rate))i.captureRateChoice=source::captureFrameRateGroupId(*sample);
         }
     }
+    if(q.kind==4){
+        i.captureResolutionChoice=q.requestedResolution;i.captureFormatKey.clear();
+        if(const auto* rate=source::captureDefaultFrameRate(i.captureFormatList,i.captureResolutionChoice))i.captureRateChoice=source::captureFrameRateGroupId(*rate);
+        if(!i.persistCaptureSelection(true))emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
+    }
     if(!i.captureFormatKey.empty()&&!i.persistCaptureSelection())emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
-    i.captureStatus = i.captureFormatList.empty() ? tr("未读到设备上报的采集格式，或设备正被其他应用占用。")
+    i.captureStatus = i.captureFormatList.empty() ? tr("驱动未提供可解析的视频格式，请检查设备与驱动后刷新。")
                     : i.captureFormatKey.empty() ? (!i.capturePrefs.formatKey.empty()?tr("此采集卡无此格式，请重新选择分辨率、帧率和像素格式。"):tr("先选择分辨率，再选择该分辨率支持的帧率和像素格式"))
                     : q.kind == 3 ? tr("驱动设置已关闭。请核对所选格式与设备帧率，再连接。")
                     : source::decklink::isPath(i.captureDevice) ? tr("原生采集先确认有效信号；请在设备列表选择对应的 HDMI/SDI 输入，支持自动检测的卡建议选择自动。Driver 保留驱动当前输入。")
                     : captureBlackmagicDevice() ? tr("请选择与输入信号一致的格式。驱动默认格式不代表检测到的信号。")
                     : tr("连接后使用当前增强设置。格式与音频变更需要重新连接。");
-    veyra::log::info("capture-ui", std::format("formats={} selected={}", i.captureFormatList.size(), !i.captureFormatKey.empty()));
+    if(q.info.partial)i.captureStatus=tr("部分采集能力读取失败（%1，0x%2）；当前列表可能不完整，请刷新重试。")
+        .arg(utf8Of(q.info.stage),QString::number(quint32(q.info.code),16).rightJustified(8,QLatin1Char('0')));
+    veyra::log::info("capture-ui", std::format("formats={} selected={} raw={} rejected={} partial={} fallback={}", i.captureFormatList.size(), !i.captureFormatKey.empty(),q.info.advertised,q.info.rejected,q.info.partial,q.info.fallback));
     emit captureChanged();
     if (q.kind == 2) {
         if (i.captureFormatKey.empty()) emit notice(tr("上次的采集格式不可用，请在采集卡面板重新选择"), true);
@@ -2653,13 +2698,16 @@ bool QmlPlayerBridge::startCaptureSession() {
     emit snapshotChanged();
     return true;
 }
-void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring& label) {
+void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring& label, bool screenFill) {
     rememberPosition(true);
     impl_->openingSource = true;
     impl_->openingSessionId = 0;
     impl_->sourceLabel = label;
     impl_->resumeSession = 0;
-    impl_->screenFillActive = false;
+    impl_->screenFillActive = screenFill;
+    // Honor the dialog's initial viewport before input can be taken over.
+    // Later explicit aspect choices still replace this session preset.
+    if (!impl_->gameModeUri.empty() && uri == impl_->gameModeUri) impl_->aspectMode = 0;
     const bool screen = uri.find(L"screen") != std::wstring::npos;
     veyra::log::info("capture-ui", "open uri " + QString::fromStdWString(uri).toStdString());
     openAfterCinema(screen ? tr("正在开始屏幕捕获…") : tr("正在打开采集设备 · %1").arg(utf8Of(label)), [this, uri] {
@@ -2671,6 +2719,7 @@ void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring&
         impl_->gameModeSessionId = !impl_->gameModeUri.empty() && uri == impl_->gameModeUri ? impl_->openingSessionId : 0;
         impl_->gameModeLive = false;
         impl_->gameModeUri.clear();
+        updateGameMode();
         refreshSubtitles({});
     });
 }
@@ -2678,7 +2727,11 @@ void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring&
 void QmlPlayerBridge::openAfterCinema(const QString& pending, std::function<void()> open) {
     const int gen = ++impl_->liveOpenGen;
     const bool fromHome = impl_->currentPage.isEmpty() || impl_->currentPage == QLatin1String("home");
-    if (!fromHome) { impl_->pendingLiveText.clear(); open(); return; }
+    if (!fromHome || !impl_->gameModeUri.empty()) {
+        // Game mode does not wait for the cinema animation or feature startup.
+        if (fromHome) emit navigate(QStringLiteral("min"));
+        impl_->pendingLiveText.clear(); open(); return;
+    }
     // User report 2026-09-29: the window blacked out and jumped into 极简 when
     // the engine opened in the same instant as the page switch and the window's
     // height spring. Switch first, say that it is connecting, then open once
@@ -2793,14 +2846,19 @@ bool QmlPlayerBridge::startScreenCapture() {
     } else impl_->gameModeUri.clear();
     veyra::log::info("screen-ui", std::format("start kind={} method={} fps={} cursor={} crop={},{},{},{} fill={} gameMode={}", int(value.kind), int(value.method),
         value.fps, value.cursor, value.left, value.top, value.right, value.bottom, o.value("fill").toBool(), game));
-    openSourceUri(value.uri(), wideOf(screenTargetLabel()));
-    impl_->screenFillActive = !game && o.value("fill").toBool();
+    openSourceUri(value.uri(), wideOf(screenTargetLabel()), o.value("fill").toBool());
     impl_->screenFitClient = impl_->screenFitImage = QSize();
+    if (gameMode()) { updateGameGeometry(); updateGameMode(); emit gameModeChanged(); }
+    emit compareChanged();
     rememberSource(QStringLiteral("screen"), screenTargetLabel());
     return true;
 }
 bool QmlPlayerBridge::gameMode() const { return impl_->gameModeSessionId != 0; }
 bool QmlPlayerBridge::passthroughActive() const { return impl_->passthroughShown; }
+bool QmlPlayerBridge::gameInputActive() const { return impl_->gameInputShown; }
+bool QmlPlayerBridge::gameScaledPreview() const {
+    return gameMode() && ui::gameViewportScaled(impl_->screenFillActive, impl_->aspectMode);
+}
 QRectF QmlPlayerBridge::gameVideoRect() const { return impl_->gameVideoRect; }
 void QmlPlayerBridge::attachMainWindow(qulonglong nativeHandle) {
     impl_->game.attach(reinterpret_cast<HWND>(nativeHandle));
@@ -2809,7 +2867,14 @@ void QmlPlayerBridge::attachMainWindow(qulonglong nativeHandle) {
 }
 void QmlPlayerBridge::updateGameGeometry() {
     if (!gameMode() || !impl_->presentation.fullscreen || !impl_->gameWindow) return;
-    const RECT r=impl_->game.pictureBounds();
+    RECT r=impl_->game.pictureBounds();
+    if (gameScaledPreview()) {
+        const HWND main = reinterpret_cast<HWND>(impl_->gameWindow->winId());
+        POINT origin{};
+        MONITORINFO info{sizeof(info)};
+        if (!GetMonitorInfoW(impl_->gameMonitor, &info) || !ClientToScreen(main, &origin)) return;
+        r=info.rcMonitor; OffsetRect(&r,-origin.x,-origin.y);
+    }
     const qreal scale=impl_->gameWindow->devicePixelRatio();
     if (scale<=0) return;
     const QRectF rect(r.left/scale,r.top/scale,(r.right-r.left)/scale,(r.bottom-r.top)/scale);
@@ -2845,13 +2910,15 @@ void QmlPlayerBridge::updateGameMode() {
     if (i.gameModeSessionId) {
         const bool same = s.sessionId == i.gameModeSessionId;
         if (same && s.running && !s.failed) i.gameModeLive = true;
-        const bool ended = (same && (s.failed || (i.gameModeLive && !s.running))) || s.sessionId > i.gameModeSessionId;
+        const bool ended = (same && (s.failed || s.transport == engine::TransportState::Stopping ||
+            s.transport == engine::TransportState::Empty || (i.gameModeLive && !s.running))) || s.sessionId > i.gameModeSessionId;
         if (ended) {
             const bool shown = i.game.mode() != Mode::Off;
             veyra::log::info("game-mode", std::format("capture session {} ended failed={} pictureInFront={}", i.gameModeSessionId, s.failed, shown));
             i.gameModeSessionId = 0; i.gameModeLive = false;
             if (shown) {
-                if (i.passthroughShown) { i.passthroughShown = false; emit gameModeChanged(); }
+                i.gameInputShown = i.passthroughShown = false;
+                emit gameModeChanged();
                 i.game.apply(Mode::Off);
                 const QString why = s.failed ? uiText(s.status) : QString();
                 emit gameModeStopped(why.isEmpty() ? tr("捕获已结束，已退出游戏模式") : why);
@@ -2859,9 +2926,8 @@ void QmlPlayerBridge::updateGameMode() {
         }
     }
     if (!i.presentation.fullscreen) i.gameRefused = false;
-    Mode want = Mode::Off;
-    if (i.gameModeSessionId && i.gameModeLive && i.presentation.fullscreen && !i.gameRefused)
-        want = i.gamePanelOpen ? Mode::Panel : Mode::Through;
+    Mode want = ui::gameInputMode(i.gameModeSessionId != 0, i.presentation.fullscreen,
+                                  i.gameRefused, i.gamePanelOpen, gameScaledPreview());
     if (want!=Mode::Off && i.gameVideoRect.isEmpty()) updateGameGeometry();
     // A listener failure holds until fullscreen is left.
     if (want != Mode::Off && i.game.mode() == Mode::Off && !i.game.arm()) { i.gameRefused = true; want = Mode::Off; }
@@ -2869,7 +2935,12 @@ void QmlPlayerBridge::updateGameMode() {
         // QML binds the window's click-through flags to passthroughActive: publish
         // first, so Qt has changed the window before the foreground moves.
         const bool through = want == Mode::Through;
-        if (through != i.passthroughShown) { i.passthroughShown = through; emit gameModeChanged(); }
+        const bool input = through || want == Mode::Scaled;
+        if (through != i.passthroughShown || input != i.gameInputShown) {
+            i.passthroughShown = through; i.gameInputShown = input; emit gameModeChanged();
+        }
+        if (want == Mode::Scaled && i.game.mode() != Mode::Panel)
+            emit notice(tr("全屏缩放已启用：键盘和手柄控制源窗口，鼠标点击已拦截以免错位；需要鼠标穿透时切回贴合原窗口"), false);
         i.game.apply(want);
     }
     const bool mode = i.gameModeSessionId != 0;
@@ -6585,6 +6656,16 @@ void QmlPlayerBridge::openReleasesPage() {
 QObject* QmlPlayerBridge::updates() const { return updates_; }
 bool QmlPlayerBridge::eventFilter(QObject* watched, QEvent* event) {
     const auto type = event->type();
+    if (watched == impl_->gameWindow && (type == QEvent::WinIdChange ||
+        (type == QEvent::PlatformSurface && static_cast<QPlatformSurfaceEvent*>(event)->surfaceEventType() ==
+                                          QPlatformSurfaceEvent::SurfaceCreated))) {
+        // Rebind after Qt's platform-window transition, never during teardown.
+        QMetaObject::invokeMethod(this, [this] {
+            if (!impl_->gameWindow || !impl_->gameWindow->handle()) return;
+            impl_->game.attach(reinterpret_cast<HWND>(impl_->gameWindow->winId()));
+            updateGameGeometry(); updateGameMode();
+        }, Qt::QueuedConnection);
+    }
     if (type == QEvent::KeyPress || type == QEvent::KeyRelease) {
         auto* key = static_cast<QKeyEvent*>(event);
         if (!key->isAutoRepeat() && qobject_cast<QWindow*>(watched)) {
@@ -7876,7 +7957,7 @@ void QmlPlayerBridge::setPresentationFullscreen(bool value) {
     else updateGameMode();
 }
 double QmlPlayerBridge::previewAspect() const {
-    const int mode=gameMode()&&impl_->presentation.fullscreen?0:impl_->screenFillActive?2:impl_->aspectMode;
+    const int mode=impl_->screenFillActive?2:impl_->aspectMode;
     if(mode==4)return 16.0/9;if(mode==5)return 4.0/3;if(mode==6)return 21.0/9;
     const auto e=impl_->snapshot.metrics.resolution.output;
     if(mode==1&&e.height){
@@ -7980,28 +8061,30 @@ void QmlPlayerBridge::setCompareSplitAt(double fx) {
     if (!i.holdKeyDown) i.engine.comparison(i.compareMode, i.compareBase, float(i.compareSplit));
     emit compareChanged();
 }
-int QmlPlayerBridge::aspectMode() const { return impl_->aspectMode; }
+int QmlPlayerBridge::aspectMode() const { return impl_->screenFillActive ? 2 : impl_->aspectMode; }
 void QmlPlayerBridge::setAspectMode(int value) {
-    if (value < 0 || value > 6 || impl_->aspectMode == value) return;
+    if (value < 0 || value > 6 || (impl_->aspectMode == value && !impl_->screenFillActive)) return;
     impl_->aspectMode = value;
+    impl_->screenFillActive = false;
     impl_->prefs[QStringLiteral("aspect")] = value;
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "aspect mode not saved");
     applyAspect(true);
+    if (gameMode()) { updateGameGeometry(); updateGameMode(); emit gameModeChanged(); }
     emit compareChanged();
 }
 void QmlPlayerBridge::applyAspect(bool force) {
     auto& i = *impl_;
-    const bool aligned=gameMode()&&i.presentation.fullscreen;
-    const int mode = aligned ? 0 : i.screenFillActive ? 2 : i.aspectMode;
+    const bool aligned=gameMode()&&i.presentation.fullscreen&&!gameScaledPreview();
+    const int mode = i.screenFillActive ? 2 : i.aspectMode;
     if (!i.videoWindow) return;
     RECT r{}; GetClientRect(i.videoWindow, &r);
     const auto e = i.snapshot.metrics.resolution.output;
     const QSize client(r.right, r.bottom), image(int(e.width), int(e.height));
-    if (!force && mode == i.aspectApplied && client == i.screenFitClient && image == i.screenFitImage) return;
-    i.screenFitClient = client; i.screenFitImage = image; i.aspectApplied = mode;
+    const double dar=sourceAspect();
+    if (!force && mode == i.aspectApplied && client == i.screenFitClient && image == i.screenFitImage && dar == i.screenFitAspect) return;
+    i.screenFitClient = client; i.screenFitImage = image; i.aspectApplied = mode; i.screenFitAspect = dar;
     auto view=force||aligned?engine::PreviewView{}:i.engine.previewView();
     view.mode=mode;
-    const double dar=sourceAspect();
     view.displayAspect=dar>0&&image.height()>0&&std::abs(dar-double(image.width())/image.height())>.001?dar:0;
     i.engine.previewView(view);
     veyra::log::info("ui-aspect", std::format("mode={} zoom={:.3f} dar={:.4f} client={}x{} image={}x{}",mode,view.zoom,dar,

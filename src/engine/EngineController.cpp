@@ -1867,6 +1867,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(nativeCapture){
                         captureGraphColor=activeSource->info().color;gd.rgbInput=captureGraphColor.pixelFormat==pipeline::SourcePixelFormat::Bgra8;
                         gd.yuy2Input=false;gd.packedInput=pipeline::packedInputCode(captureGraphColor.pixelFormat);gd.captureBitDepth=ingressBitDepth(captureGraphColor.pixelFormat);
+                    }
+                    // Window capture publishes the same geometry used to rebuild
+                    // the graph, rather than retaining its opening DAR.
+                    if(isScreen||nativeCapture){
                         std::lock_guard lock(mutex_);snapshot_.sourceWidth=width;snapshot_.sourceHeight=height;snapshot_.sourceHdr=gd.hdrInput;snapshot_.sourceMasteringPeakNits=resizeMastering;snapshot_.sourceMaxCllNits=resizeCll;snapshot_.sourceMaxFallNits=resizeFall;snapshot_.sourceDisplayAspect=activeSource->info().displayAspect;
                     }
                     if(!presenter.prepareGraphChange()){status(L"输入尺寸切换呈现排空失败",true);break;}

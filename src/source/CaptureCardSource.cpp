@@ -13,6 +13,7 @@
 #include "veyra/source/CaptureBuffer.h"
 #include "veyra/source/CaptureFormatRank.h"
 #include "veyra/source/CaptureFrameIntervals.h"
+#include "veyra/source/DirectShowFormatDiscovery.h"
 #include "veyra/source/CaptureCodec.h"
 #include "veyra/source/CaptureCompressedDecoder.h"
 #include "veyra/source/AverMediaAudioSwitch.h"
@@ -212,9 +213,34 @@ std::wstring captureDeviceName(std::wstring_view path){
     for(auto& moniker:monikers(false))if(monikerPath(moniker.Get())==path)return propertyString(moniker.Get(),L"FriendlyName");
     return {};
 }
-bool createConfiguration(ComPtr<IGraphBuilder>& g,ComPtr<ICaptureGraphBuilder2>& b){return SUCCEEDED(CoCreateInstance(CLSID_FilterGraph,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&g)))&&SUCCEEDED(CoCreateInstance(CLSID_CaptureGraphBuilder2,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&b)))&&SUCCEEDED(b->SetFiltergraph(g.Get()));}
-bool configuration(unsigned device,ComPtr<IGraphBuilder>& g,ComPtr<ICaptureGraphBuilder2>& b,ComPtr<IBaseFilter>& f,ComPtr<IAMStreamConfig>& c){return createConfiguration(g,b)&&bind(device,false,f)&&SUCCEEDED(g->AddFilter(f.Get(),L"Capture card"))&&SUCCEEDED(b->FindInterface(&PIN_CATEGORY_CAPTURE,&MEDIATYPE_Video,f.Get(),IID_PPV_ARGS(&c)));}
-bool configuration(std::wstring_view path,ComPtr<IGraphBuilder>& g,ComPtr<ICaptureGraphBuilder2>& b,ComPtr<IBaseFilter>& f,ComPtr<IAMStreamConfig>& c){return createConfiguration(g,b)&&bindPath(path,false,f)&&SUCCEEDED(g->AddFilter(f.Get(),L"Capture card"))&&SUCCEEDED(b->FindInterface(&PIN_CATEGORY_CAPTURE,&MEDIATYPE_Video,f.Get(),IID_PPV_ARGS(&c)));}
+bool createConfiguration(ComPtr<IGraphBuilder>& g,ComPtr<ICaptureGraphBuilder2>& b,HRESULT* status=nullptr){
+    HRESULT hr=CoCreateInstance(CLSID_FilterGraph,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&g));
+    if(SUCCEEDED(hr))hr=CoCreateInstance(CLSID_CaptureGraphBuilder2,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&b));
+    if(SUCCEEDED(hr))hr=b->SetFiltergraph(g.Get());if(status)*status=hr;return SUCCEEDED(hr);
+}
+bool videoConfiguration(ComPtr<IGraphBuilder>& g,ComPtr<ICaptureGraphBuilder2>& b,ComPtr<IBaseFilter>& f,ComPtr<IAMStreamConfig>& c,HRESULT* status){
+    HRESULT hr=g->AddFilter(f.Get(),L"Capture card");
+    ComPtr<IPin> pin;
+    if(SUCCEEDED(hr))hr=dshow::findCaptureVideoPin(f.Get(),pin);
+    if(SUCCEEDED(hr))hr=pin.As(&c);
+    if(status)*status=hr;
+    log::info("capture-formats",std::format("video configuration hr=0x{:08X}",uint32_t(hr)));
+    return SUCCEEDED(hr);
+}
+bool configuration(unsigned device,ComPtr<IGraphBuilder>& g,ComPtr<ICaptureGraphBuilder2>& b,ComPtr<IBaseFilter>& f,ComPtr<IAMStreamConfig>& c,HRESULT* status=nullptr){
+    if(!createConfiguration(g,b,status))return false;
+    const auto list=monikers(false);
+    const HRESULT hr=device<list.size()?list[device]->BindToObject(nullptr,nullptr,IID_PPV_ARGS(&f)):VFW_E_NOT_FOUND;
+    if(FAILED(hr)){if(status)*status=hr;return false;}
+    return videoConfiguration(g,b,f,c,status);
+}
+bool configuration(std::wstring_view path,ComPtr<IGraphBuilder>& g,ComPtr<ICaptureGraphBuilder2>& b,ComPtr<IBaseFilter>& f,ComPtr<IAMStreamConfig>& c,HRESULT* status=nullptr){
+    if(!createConfiguration(g,b,status))return false;
+    HRESULT hr=VFW_E_NOT_FOUND;
+    for(auto& moniker:monikers(false))if(monikerPath(moniker.Get())==path){hr=moniker->BindToObject(nullptr,nullptr,IID_PPV_ARGS(&f));break;}
+    if(FAILED(hr)){if(status)*status=hr;return false;}
+    return videoConfiguration(g,b,f,c,status);
+}
 HRESULT audioPinFor(ICaptureGraphBuilder2* builder,IBaseFilter* filter,ComPtr<IPin>& pin){
     if(!builder||!filter)return E_POINTER;const HRESULT categorized=builder->FindPin(filter,PINDIR_OUTPUT,&PIN_CATEGORY_CAPTURE,&MEDIATYPE_Audio,FALSE,0,&pin);
     if(SUCCEEDED(categorized))return categorized;
@@ -764,64 +790,85 @@ std::wstring CaptureCardSource::makeCapturePath(unsigned videoIndex,const Captur
     if(video.path.empty()||(audioMode>=0&&(!audio||audio->path.empty())))return std::format(L"capture:{}:{}:{}:{}{}",videoIndex,format,audioMode,colorOverride,suffix);
     return std::format(L"capture2:{}:{}:{}:{}:{}{}",encodePath(video.path),format,audioMode,audioMode>=0?encodePath(audio->path):L"",colorOverride,suffix);
 }
-std::vector<CaptureFormat> enumerateFormats(IAMStreamConfig* config,bool preferDriverCurrent=false,IBaseFilter* device=nullptr,IPin* capturePin=nullptr){
-    std::vector<CaptureFormat> out;if(!config)return out;int count=0,size=0;
-    std::unordered_set<std::wstring> keys;   // a driver may list 100+ rates per capability (logs(18): 32759 types)
-    ComPtr<IPin> pin=capturePin;if(!pin)config->QueryInterface(IID_PPV_ARGS(&pin));
+std::vector<CaptureFormat> enumerateFormats(IAMStreamConfig* config,bool preferDriverCurrent=false,IBaseFilter* device=nullptr,IPin* capturePin=nullptr,
+        std::span<const CaptureModeHint> hints={},dshow::CaptureNativeCapabilities* saved=nullptr,CaptureFormatQueryInfo* query=nullptr){
+    std::vector<CaptureFormat> out;
+    ComPtr<IPin> pin=capturePin;if(!pin&&config)config->QueryInterface(IID_PPV_ARGS(&pin));
+    auto discovered=dshow::discoverCaptureTypes(config,pin.Get());
+    if(query){query->code=discovered.result;query->stage=discovered.stage;query->advertised=discovered.advertised;
+        query->rejected=discovered.rejected;query->partial=discovered.failed>0;query->fallback=discovered.fallback;}
     ComPtr<IAMVideoControl> control;if(device)device->QueryInterface(IID_PPV_ARGS(&control));
     if(!control&&pin)pin->QueryInterface(IID_PPV_ARGS(&control));
     std::wstring currentKey;
-    if(preferDriverCurrent){AM_MEDIA_TYPE* current=nullptr;const HRESULT hr=config->GetFormat(&current);
+    if(preferDriverCurrent&&config){AM_MEDIA_TYPE* raw=nullptr;const auto hr=config->GetFormat(&raw);auto current=dshow::ownCaptureType(raw);
         if(SUCCEEDED(hr)&&current)currentKey=captureFormatIdentity(*current);
-        log::info("capture-default-format",std::format("GetFormat hr=0x{:08X} key={} configurationOnly=1 notSignalDetection=1",uint32_t(hr),narrowForLog(currentKey)));freeType(current);}
-    const HRESULT capsHr=config->GetNumberOfCapabilities(&count,&size);
-    log::info("capture-formats",std::format("GetNumberOfCapabilities hr=0x{:08X} count={} bytes={} discreteRates={}",uint32_t(capsHr),count,size,bool(control&&pin)));
-    if(FAILED(capsHr)||count<0||size<1||size>65536)return out;
-    std::vector<BYTE> caps(size);
-    for(int i=0;i<count;++i){AM_MEDIA_TYPE* type=nullptr;const HRESULT typeHr=config->GetStreamCaps(i,&type,caps.data());
-        if(FAILED(typeHr)){log::warn("capture-formats",std::format("GetStreamCaps index={} hr=0x{:08X}",i,uint32_t(typeHr)));freeType(type);continue;}BITMAPINFOHEADER* bitmap=nullptr;REFERENCE_TIME duration=0;
-        if(type&&type->pbFormat&&type->formattype==FORMAT_VideoInfo&&type->cbFormat>=sizeof(VIDEOINFOHEADER)){auto* info=reinterpret_cast<VIDEOINFOHEADER*>(type->pbFormat);bitmap=&info->bmiHeader;duration=info->AvgTimePerFrame;}
-        else if(type&&type->pbFormat&&type->formattype==FORMAT_VideoInfo2&&type->cbFormat>=sizeof(VIDEOINFOHEADER2)){auto* info=reinterpret_cast<VIDEOINFOHEADER2*>(type->pbFormat);bitmap=&info->bmiHeader;duration=info->AvgTimePerFrame;}
-        // Device capabilities, not a 1080p/2160p 30/60 preset list. Keep native
-        // indices so the selected row opens the exact driver media type.
-        if(bitmap&&bitmap->biWidth>0&&bitmap->biHeight!=0&&bitmap->biHeight!=LONG_MIN&&duration>=0){unsigned width=bitmap->biWidth,height=unsigned(std::abs(int64_t(bitmap->biHeight)));
-            HRESULT ratesHr=E_NOINTERFACE;
-            const auto intervals=captureFrameIntervals(control.Get(),pin.Get(),i,{LONG(width),LONG(height)},duration,&ratesHr);
-            if(control&&pin)log::info("capture-formats",std::format("GetFrameRateList index={} size={}x{} hr=0x{:08X} intervals={}",i,width,height,uint32_t(ratesHr),intervals.size()));
-            for(const auto interval:intervals){
-            if(type->formattype==FORMAT_VideoInfo)reinterpret_cast<VIDEOINFOHEADER*>(type->pbFormat)->AvgTimePerFrame=interval;
-            else reinterpret_cast<VIDEOINFOHEADER2*>(type->pbFormat)->AvgTimePerFrame=interval;
-            const double fps=interval>0?1e7/interval:0;
-            const auto pixel=capturePixelName(type->subtype);CaptureMediaLayout layout;const bool valid=captureMediaLayout(*type,layout);const bool knownRaw=capturePacking(type->subtype)!=CapturePacking::Unknown;
-            const wchar_t* support=valid?((layout.format==AV_PIX_FMT_P010||layout.format==AV_PIX_FMT_P016)?L"原生 · SDR":L"原生"):knownRaw?L"布局/颜色暂不支持":L"需系统解码/转换";
-            // N3: latency tier + recommended rank; compressed/unknown sorts last.
-            const auto tier=valid?captureFormatTier(layout.packing):CaptureFormatTier::Decoded;
-            const int rank=valid?captureFormatRank(layout.packing):captureFormatRank(CapturePacking::Unknown);
-            const auto key=captureFormatIdentity(*type);const bool current=!currentKey.empty()&&key==currentKey;
-            std::wstring scan;bool interlaced=false;
-            if(type->formattype==FORMAT_VideoInfo2){const auto flags=reinterpret_cast<const VIDEOINFOHEADER2*>(type->pbFormat)->dwInterlaceFlags;
-                interlaced=(flags&AMINTERLACE_IsInterlaced)!=0;
-                scan=interlaced?std::format(L"隔行（{:.2f} 场/秒）",fps*((flags&AMINTERLACE_1FieldPerSample)?1:2)):L"逐行";}
-            const std::wstring scanMark=scan.empty()?std::wstring{}:L" · "+scan;
-            const bool supported=width<=3840&&height<=2160&&(!knownRaw||valid);
-            if(keys.insert(key).second)
-                out.push_back({i,width,height,fps,std::format(L"{} x {} @ {:.3f} fps{} · {} · {} · {}{}{} [format {}]",width,height,fps,scanMark,pixel,support,captureFormatTierLabel(tier),current?L" · 驱动默认":L"",supported?L"":L" · 当前播放器不支持",i),key,rank,int(tier),current,pixel,scan,interlaced,interval,supported});
+        log::info("capture-default-format",std::format("GetFormat hr=0x{:08X} key={} configurationOnly=1 notSignalDetection=1",uint32_t(hr),narrowForLog(currentKey)));}
+    std::unordered_set<std::wstring> keys;
+    for(size_t capabilityIndex=0;capabilityIndex<discovered.types.size();++capabilityIndex){
+        const auto& capability=discovered.types[capabilityIndex];
+        const auto header=dshow::captureVideoHeader(*capability.media);
+        const auto originalWidth=header.bitmap->biWidth>0?unsigned(header.bitmap->biWidth):0;
+        const auto originalHeight=std::abs(int64_t(header.bitmap->biHeight));
+        const auto sizes=captureCandidateSizes(capability.range,originalWidth,originalHeight<=16384?unsigned(originalHeight):0,hints);
+        log::info("capture-formats",std::format("cap={} origin={} template={}x{} interval={} range={}x{}..{}x{} step={},{} intervals={}..{} sizeCandidates={}",
+            capability.nativeIndex,capability.origin==dshow::CaptureTypeOrigin::StreamCaps?"StreamCaps":"EnumMediaTypes",header.bitmap->biWidth,header.bitmap->biHeight,*header.interval,
+            capability.range.minWidth,capability.range.minHeight,capability.range.maxWidth,capability.range.maxHeight,capability.range.stepX,capability.range.stepY,
+            capability.range.minInterval,capability.range.maxInterval,sizes.size()));
+        for(auto [width,height]:sizes){
+            std::vector<int64_t> discrete;
+            if(capability.origin==dshow::CaptureTypeOrigin::StreamCaps){
+                HRESULT ratesHr=E_NOINTERFACE;
+                const auto rates=captureFrameIntervals(control.Get(),pin.Get(),capability.nativeIndex,{LONG(width),LONG(height)},*header.interval,&ratesHr);
+                discrete.assign(rates.begin(),rates.end());
             }
+            const auto intervals=captureCandidateIntervals(*header.interval,discrete,capability.range,hints);
+            for(const auto interval:intervals){
+                auto type=dshow::captureTypeForMode(capability,width,height,interval);if(!type){if(query)++query->rejected;continue;}
+                const auto key=captureFormatIdentity(*type);if(key.empty()||!keys.insert(key).second)continue;
+                const auto pixel=capturePixelName(type->subtype);CaptureMediaLayout layout;
+                const bool valid=captureMediaLayout(*type,layout),knownRaw=capturePacking(type->subtype)!=CapturePacking::Unknown;
+                const wchar_t* support=valid?((layout.format==AV_PIX_FMT_P010||layout.format==AV_PIX_FMT_P016)?L"原生 · SDR":L"原生"):knownRaw?L"布局/颜色暂不支持":L"需系统解码/转换";
+                const auto tier=valid?captureFormatTier(layout.packing):CaptureFormatTier::Decoded;
+                const int rank=valid?captureFormatRank(layout.packing):captureFormatRank(CapturePacking::Unknown);
+                const double fps=interval>0?1e7/interval:0;
+                const auto rateLabel=interval>0?std::format(L"{:.3f} fps",fps):L"设备默认帧率";
+                const auto candidateHeader=dshow::captureVideoHeader(*type);
+                const bool interlaced=(candidateHeader.scan&AMINTERLACE_IsInterlaced)!=0;
+                std::wstring scan;
+                if(type->formattype==FORMAT_VideoInfo2)scan=interlaced?std::format(L"隔行（{:.2f} 场/秒）",fps*((candidateHeader.scan&AMINTERLACE_1FieldPerSample)?1:2)):L"逐行";
+                const auto scanMark=scan.empty()?std::wstring{}:L" · "+scan;
+                const bool supported=width<=3840&&height<=2160&&(!knownRaw||valid);
+                const bool current=!currentKey.empty()&&currentKey==key;
+                const bool rangeCandidate=width!=originalWidth||height!=originalHeight||
+                    (interval!=*header.interval&&std::find(discrete.begin(),discrete.end(),interval)==discrete.end());
+                const auto rangeMark=rangeCandidate?L" · 范围候选（连接时验证）":L"";
+                CaptureFormat format{capability.nativeIndex,width,height,fps,
+                    std::format(L"{} x {} @ {}{} · {} · {} · {}{}{}{} [format {}]",width,height,rateLabel,scanMark,pixel,support,captureFormatTierLabel(tier),
+                        current?L" · 驱动默认":L"",supported?L"":L" · 当前播放器不支持",rangeMark,capability.nativeIndex),key,rank,int(tier),current,pixel,scan,interlaced,interval,supported};
+                format.capability=int(capabilityIndex);format.rangeCandidate=rangeCandidate;out.push_back(std::move(format));
+                if(out.size()>=131072){if(query){query->partial=true;query->code=E_OUTOFMEMORY;query->stage=L"Capability candidate limit";}break;}
+            }
+            if(out.size()>=131072)break;
         }
-        freeType(type);
+        if(out.size()>=131072)break;
     }
-    // Recommended order first; equal ranks keep the driver's enumeration order.
+    log::info("capture-formats",std::format("discovery hr=0x{:08X} raw={} failed={} rejected={} fallback={} concrete={}",
+        uint32_t(discovered.result),discovered.advertised,discovered.failed,query?query->rejected:discovered.rejected,discovered.fallback,out.size()));
+    if(query&&out.empty()&&SUCCEEDED(query->code)&&query->advertised){query->code=VFW_E_INVALIDMEDIATYPE;query->stage=L"Parse video capabilities";}
     std::stable_sort(out.begin(),out.end(),[](const CaptureFormat& a,const CaptureFormat& b){return a.driverCurrent!=b.driverCurrent?a.driverCurrent:a.rank<b.rank;});
+    if(saved)*saved=std::move(discovered);
     return out;
 }
 std::vector<CaptureFormat> CaptureCardSource::formats(unsigned device){
     const auto details=deviceDetails();if(device<details.size()&&decklink::isPath(details[device].path))return formatsByPath(details[device].path);
     ComPtr<IGraphBuilder> g;ComPtr<ICaptureGraphBuilder2>b;ComPtr<IBaseFilter>f;ComPtr<IAMStreamConfig>c;if(!configuration(device,g,b,f,c))return {};
     const auto list=monikers(false);const auto name=device<list.size()?propertyString(list[device].Get(),L"FriendlyName"):L"";
-    ComPtr<IPin> pin;b->FindPin(f.Get(),PINDIR_OUTPUT,&PIN_CATEGORY_CAPTURE,&MEDIATYPE_Video,FALSE,0,&pin);
+    ComPtr<IPin> pin;dshow::findCaptureVideoPin(f.Get(),pin);
     return enumerateFormats(c.Get(),isBlackmagicCaptureDevice(name),f.Get(),pin.Get());
 }
-std::vector<CaptureFormat> CaptureCardSource::formatsByPath(std::wstring_view devicePath){
+std::vector<CaptureFormat> CaptureCardSource::formatsByPath(std::wstring_view devicePath,CaptureFormatQueryInfo* query,
+        std::wstring_view preferredKey,std::wstring_view requestedResolution){
+    if(query)*query={};
     if(decklink::isPath(devicePath)){
         std::vector<CaptureFormat> out;
         for(const auto& device:decklink::devices())if(device.path==devicePath&&device.autoDetection)
@@ -830,9 +877,14 @@ std::vector<CaptureFormat> CaptureCardSource::formatsByPath(std::wstring_view de
             std::format(L"{} · {} x {} @ {:.3f} fps · {} · BMD 原生",mode.name,mode.width,mode.height,double(mode.scale)/mode.duration,mode.interlaced?L"隔行":L"逐行"),decklink::modeKey(mode.id),1,0,false,L"自动选择像素格式",mode.interlaced?L"隔行":L"逐行",mode.interlaced,int64_t(1e7*mode.duration/mode.scale),mode.width<=3840&&mode.height<=2160});
         return out;
     }
-    ComPtr<IGraphBuilder> g;ComPtr<ICaptureGraphBuilder2>b;ComPtr<IBaseFilter>f;ComPtr<IAMStreamConfig>c;if(!configuration(devicePath,g,b,f,c))return {};
-    ComPtr<IPin> pin;b->FindPin(f.Get(),PINDIR_OUTPUT,&PIN_CATEGORY_CAPTURE,&MEDIATYPE_Video,FALSE,0,&pin);
-    return enumerateFormats(c.Get(),isBlackmagicCaptureDevice(captureDeviceName(devicePath),devicePath),f.Get(),pin.Get());
+    ComPtr<IGraphBuilder> g;ComPtr<ICaptureGraphBuilder2>b;ComPtr<IBaseFilter>f;ComPtr<IAMStreamConfig>c;HRESULT status=S_OK;
+    if(!configuration(devicePath,g,b,f,c,&status)){
+        if(query){query->code=status;query->stage=L"Bind device / video capture pin";}
+        return {};
+    }
+    ComPtr<IPin> pin;dshow::findCaptureVideoPin(f.Get(),pin);
+    const CaptureModeHint hints[]{captureKeyHint(preferredKey),captureResolutionHint(requestedResolution)};
+    return enumerateFormats(c.Get(),isBlackmagicCaptureDevice(captureDeviceName(devicePath),devicePath),f.Get(),pin.Get(),hints,nullptr,query);
 }
 bool CaptureCardSource::showDeviceProperties(std::wstring_view devicePath,uintptr_t owner,bool inputSelector,std::wstring& error,std::wstring* changedFormatKey){
     error.clear();if(changedFormatKey)changedFormatKey->clear();
@@ -961,26 +1013,28 @@ bool CaptureCardSource::configureDeckLink(const SourceOpenDesc& desc){
 bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.clear();p_->lastAudioGain=-1;auto& p=*p_;CaptureSelection selection;if(!parseCapturePath(desc.path,selection))return false;const unsigned index=selection.videoIndex;int format=selection.format;const int audio=selection.audio;
     if(selection.stable&&decklink::isPath(selection.videoPath))return configureDeckLink(desc);
     if(selection.stable?!configuration(selection.videoPath,p.graph,p.builder,p.device,p.config):!configuration(index,p.graph,p.builder,p.device,p.config))return false;
-    ComPtr<IPin> formatPin;p.builder->FindPin(p.device.Get(),PINDIR_OUTPUT,&PIN_CATEGORY_CAPTURE,&MEDIATYPE_Video,FALSE,0,&formatPin);
-    const auto available=enumerateFormats(p.config.Get(),false,p.device.Get(),formatPin.Get());
+    ComPtr<IPin> formatPin;dshow::findCaptureVideoPin(p.device.Get(),formatPin);
+    dshow::CaptureNativeCapabilities capabilities;
+    CaptureFormatQueryInfo query;
+    const CaptureModeHint hint[]{captureKeyHint(selection.formatKey)};
+    const auto available=enumerateFormats(p.config.Get(),false,p.device.Get(),formatPin.Get(),hint,&capabilities,&query);
     const auto* chosen=selectCaptureFormat(available,format,selection.formatKey);
-    if(!chosen){error_=L"此采集卡无此格式，请重新选择分辨率、帧率和像素格式。";return false;}
-    if(chosen)format=chosen->index;
-    if(chosen&&!chosen->supported){error_=L"设备提供此格式，但当前播放器不支持其尺寸或像素布局，请选择其他格式";return false;}
-    // Capture the advertised identity before SetFormat: some drivers mutate
-    // their capability list to reflect the last negotiated rate/orientation.
-    const std::wstring selectedKey=chosen?chosen->key:L"";
-    const double expectedFps=selection.requestedFps>0?selection.requestedFps:chosen?chosen->fps:0;
-    int count=0,size=0;if(FAILED(p.config->GetNumberOfCapabilities(&count,&size))||format<0||format>=count||size<=0||size>65536)return false;
-    std::vector<BYTE> caps(size);AM_MEDIA_TYPE* native=nullptr;if(FAILED(p.config->GetStreamCaps(format,&native,caps.data())))return false;
-    if(selection.requestedFps>0||(chosen&&chosen->interval100ns>0)){
-        REFERENCE_TIME* interval=nullptr;
-        if(native->formattype==FORMAT_VideoInfo&&native->cbFormat>=sizeof(VIDEOINFOHEADER))interval=&reinterpret_cast<VIDEOINFOHEADER*>(native->pbFormat)->AvgTimePerFrame;
-        else if(native->formattype==FORMAT_VideoInfo2&&native->cbFormat>=sizeof(VIDEOINFOHEADER2))interval=&reinterpret_cast<VIDEOINFOHEADER2*>(native->pbFormat)->AvgTimePerFrame;
-        if(!interval){error_=L"该采集格式不支持设备帧率协商，请将采集帧率设为 0。";freeType(native);return false;}
-        *interval=selection.requestedFps>0?captureFrameInterval(selection.requestedFps):chosen->interval100ns;
-        log::info("capture-rate",std::format("requestFps={:.6f} interval100ns={} deviceNegotiation=1 softwareLimiter=0",expectedFps,*interval));
-    }
+    if(!chosen){error_=std::format(L"采集格式无法恢复：{}（0x{:08X}），请刷新并重新选择。",query.stage,uint32_t(query.code));return false;}
+    format=chosen->index;
+    if(!chosen->supported){error_=L"设备提供此格式，但当前播放器不支持其尺寸或像素布局，请选择其他格式";return false;}
+    if(chosen->capability<0||size_t(chosen->capability)>=capabilities.types.size()){error_=L"采集格式的能力记录已失效，请刷新后重试。";return false;}
+    const std::wstring selectedKey=chosen->key;
+    const double expectedFps=selection.requestedFps>0?selection.requestedFps:chosen->fps;
+    const auto interval=selection.requestedFps>0?captureFrameInterval(selection.requestedFps):chosen->interval100ns;
+    auto requested=dshow::captureTypeForMode(capabilities.types[size_t(chosen->capability)],chosen->width,chosen->height,interval);
+    if(!requested){error_=L"无法构造所选采集格式，请检查分辨率、帧率与驱动能力。";return false;}
+    auto nativeOwner=dshow::cloneCaptureType(*requested);
+    if(!nativeOwner){error_=L"采集格式内存分配失败";return false;}
+    // Existing connection code owns this pointer through freeType().
+    AM_MEDIA_TYPE* native=static_cast<AM_MEDIA_TYPE*>(CoTaskMemAlloc(sizeof(AM_MEDIA_TYPE)));
+    if(!native)return false;
+    *native=*nativeOwner;nativeOwner->pbFormat=nullptr;nativeOwner->cbFormat=0;nativeOwner->pUnk=nullptr;
+    log::info("capture-rate",std::format("requestFps={:.6f} interval100ns={} deviceNegotiation=1 softwareLimiter=0",expectedFps,interval));
     std::wstring devicePath=selection.videoPath;
     if(devicePath.empty()){const auto devices=monikers(false);if(index<devices.size())devicePath=monikerPath(devices[index].Get());}
     const auto deviceName=captureDeviceName(devicePath);p.signalProbeEnabled=isBlackmagicCaptureDevice(deviceName,devicePath);
@@ -994,10 +1048,23 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
     configureAverToneMap(p.device.Get(),devicePath,native->subtype.Data1==MAKEFOURCC('P','0','1','0')||native->subtype.Data1==MAKEFOURCC('P','0','1','6'));
     log::info("capture-device",std::format("path={} selectedFormat={} requestedFps={} nativeSubtype=0x{:X}",narrowForLog(devicePath),format,expectedFps,native->subtype.Data1));
     HRESULT hr=p.config->SetFormat(native);const GUID requestedSubtype=native->subtype;
-    log::info("capture",std::format("SetFormat device={} nativeIndex={} subtype=0x{:08X} hr=0x{:08X}",index,format,native->subtype.Data1,uint32_t(hr)));freeType(native);if(FAILED(hr)){error_=selection.requestedFps>0?std::format(L"此采集卡无此格式：拒绝 {:.3f} FPS（0x{:08X}），请改用设备支持的帧率，或填 0 沿用所选格式。",selection.requestedFps,uint32_t(hr)):std::format(L"此采集卡无此格式，驱动拒绝所选格式（0x{:08X}），请重新选择。",uint32_t(hr));return false;}
-    // Read the driver-negotiated type back. Native YUY2/NV12/RGB32 connects
-    // directly to our terminal filter: no intelligent-connect converter.
-    native=nullptr;hr=p.config->GetFormat(&native);if(FAILED(hr)||!native){freeType(native);return false;}
+    const bool connectionNegotiation=hr==E_NOTIMPL;
+    log::info("capture",std::format("SetFormat device={} nativeIndex={} subtype=0x{:08X} hr=0x{:08X} verifyConnection={}",index,format,native->subtype.Data1,uint32_t(hr),connectionNegotiation));
+    freeType(native);native=nullptr;
+    if(FAILED(hr)&&!connectionNegotiation){error_=std::format(L"驱动拒绝所选采集格式（0x{:08X}），请重新选择。",uint32_t(hr));return false;}
+    hr=p.config->GetFormat(&native);
+    if(FAILED(hr)&&hr!=E_NOTIMPL&&hr!=E_NOINTERFACE){error_=std::format(L"读取协商后的采集格式失败（0x{:08X}）。",uint32_t(hr));freeType(native);return false;}
+    if(SUCCEEDED(hr)&&native&&!connectionNegotiation&&!dshow::captureTypesMatch(*requested,*native)){
+        error_=L"驱动返回的分辨率、帧率、像素格式或扫描方式与所选模式不同，请重新选择。";freeType(native);return false;
+    }
+    // Drivers with unimplemented configuration methods must still accept the
+    // exact type in ConnectDirect, whose actual media type is checked below.
+    if(connectionNegotiation||FAILED(hr)||!native){
+        freeType(native);auto copy=dshow::cloneCaptureType(*requested);if(!copy)return false;
+        native=static_cast<AM_MEDIA_TYPE*>(CoTaskMemAlloc(sizeof(AM_MEDIA_TYPE)));if(!native)return false;
+        *native=*copy;copy->pbFormat=nullptr;copy->cbFormat=0;copy->pUnk=nullptr;
+    }
+    hr=S_OK;
     CaptureMediaLayout nativeLayout;const bool nativeSupported=captureMediaLayout(*native,nativeLayout);
     if(!nativeSupported&&capturePacking(native->subtype)!=CapturePacking::Unknown){log::error("capture","Known raw format has unsupported layout/color metadata; refusing implicit RGB conversion");freeType(native);return false;}
     if(nativeSupported&&(nativeLayout.format==AV_PIX_FMT_P010||nativeLayout.format==AV_PIX_FMT_P016)&&desc.legacyCaptureRgbForDiagnostic){log::error("capture","10/16-bit capture cannot use the legacy 8-bit RGB diagnostic converter");freeType(native);return false;}
@@ -1042,7 +1109,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
         ComPtr<IPin> input,output;
         hr=createCompressedCaptureSink(*native,[&p](IMediaSample* sample){REFERENCE_TIME a=0,b=0;const auto timeHr=sample->GetTime(&a,&b);if(FAILED(timeHr))return timeHr;return p.SampleCB(double(a)/1e7,sample);},p.grabFilter,input);
         if(SUCCEEDED(hr))hr=p.graph->AddFilter(p.grabFilter.Get(),L"Compressed frame mailbox");
-        if(SUCCEEDED(hr))hr=p.builder->FindPin(p.device.Get(),PINDIR_OUTPUT,&PIN_CATEGORY_CAPTURE,&MEDIATYPE_Video,FALSE,0,&output);
+        if(SUCCEEDED(hr))output=formatPin;
         if(SUCCEEDED(hr))suggestCaptureVideoBuffering(output.Get(),4,512*1024);
         if(SUCCEEDED(hr))hr=p.graph->ConnectDirect(output.Get(),input.Get(),native);
         if(SUCCEEDED(hr))hr=input->ConnectionMediaType(&connected);
@@ -1078,7 +1145,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
         ComPtr<IPin> input,output;
         hr=createNativeCaptureSink(*native,[&p](IMediaSample* sample){REFERENCE_TIME a=0,b=0;const auto timeHr=sample->GetTime(&a,&b);if(FAILED(timeHr))return timeHr;return p.SampleCB(double(a)/1e7,sample);},p.grabFilter,input,bmdCompat?CaptureAllocatorMode::Upstream:CaptureAllocatorMode::SinkDefault);
         if(SUCCEEDED(hr))hr=p.graph->AddFilter(p.grabFilter.Get(),L"Native frame mailbox");
-        if(SUCCEEDED(hr))hr=p.builder->FindPin(p.device.Get(),PINDIR_OUTPUT,&PIN_CATEGORY_CAPTURE,&MEDIATYPE_Video,FALSE,0,&output);
+        if(SUCCEEDED(hr))output=formatPin;
         if(SUCCEEDED(hr)&&suggestedBuffers>0)suggestCaptureVideoBuffering(output.Get(),suggestedBuffers,LONG(nativeLayout.sampleBytes));
         // OBS HDevice::ConnectPins (fixed commit/license in NativeCaptureSink.cpp)
         // lets the output pin supply its configured media type. Check the actual
@@ -1108,8 +1175,22 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
         if(SUCCEEDED(hr))hr=p.grab->SetMediaType(&want);
         if(SUCCEEDED(hr))hr=CoCreateInstance(NullRendererClass,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&p.nullFilter));
         if(SUCCEEDED(hr))hr=p.graph->AddFilter(p.nullFilter.Get(),L"Video sink");
-        if(SUCCEEDED(hr))hr=p.builder->RenderStream(&PIN_CATEGORY_CAPTURE,&MEDIATYPE_Video,p.device.Get(),p.grabFilter.Get(),p.nullFilter.Get());
+        if(SUCCEEDED(hr))hr=p.builder->RenderStream(nullptr,&MEDIATYPE_Video,formatPin.Get(),p.grabFilter.Get(),p.nullFilter.Get());
         if(SUCCEEDED(hr))hr=p.grab->GetConnectedMediaType(&connected);
+        if(SUCCEEDED(hr)){
+            AM_MEDIA_TYPE sourceConnected{};hr=formatPin->ConnectionMediaType(&sourceConnected);
+            if(SUCCEEDED(hr)&&!dshow::captureTypesMatch(*requested,sourceConnected))hr=VFW_E_INVALIDMEDIATYPE;
+            freeType(&sourceConnected,false);
+        }
+    }
+    if(FAILED(hr)){
+        error_=std::format(L"采集卡无法连接所选格式（0x{:08X}），请检查设备占用并重新选择。",uint32_t(hr));
+        freeType(native);freeType(&connected,false);return false;
+    }
+    if(SUCCEEDED(hr)&&(direct||compressedPath)&&!dshow::captureTypesMatch(*requested,connected)){
+        error_=L"实际连接的采集格式与所选模式不同，请刷新并重新选择。";
+        log::error("capture-formats","connected media type differs from exact selection; refusing implicit mode substitution");
+        freeType(native);freeType(&connected,false);return false;
     }
     bool layoutValid=false;
     if(compressedPath){
@@ -1698,7 +1779,7 @@ bool CaptureCardSource::reconnect(float gain,unsigned syncMode,int offsetMs){
     {std::lock_guard lock(p_->mutex);
         receivedOffset_+=p_->received;deliveredOffset_+=p_->sequence;droppedOffset_+=p_->dropped;}
     close();
-    int format=-1;for(const auto& candidate:formatsByPath(selection.videoPath))if(candidate.key==key){format=candidate.index;break;}
+    int format=-1;for(const auto& candidate:formatsByPath(selection.videoPath,nullptr,key))if(candidate.key==key){format=candidate.index;break;}
     if(format<0)return false;
     auto reopen=desc;reopen.path=std::format(L"capture2:{}:{}:{}:{}:{}",encodePath(selection.videoPath),format,selection.audio,encodePath(selection.audioPath),selection.colorOverride);
     reopen.path+=capturePathOptions(selection.requestedFps,encodePath(key));

@@ -74,6 +74,15 @@ int wmain(int argc,wchar_t** argv){
     SetWindowPos(child.window,nullptr,40,40,820,510,SWP_NOZORDER);end=GetTickCount64()+3000;bool resized=false;
     while(GetTickCount64()<end&&next(source,p,&f)){if(f->width>660){resized=true;break;}}
     check(resized&&unsigned(f->width)==source.info().width,"resize updates dimensions");check(content(ctx,ring,source,p,f),"resize retains RGB content");
+    check(resized&&std::abs(source.info().displayAspect-double(f->width)/f->height)<1e-9,"resize updates source display aspect");
+    SetWindowPos(child.window,nullptr,40,40,460,720,SWP_NOZORDER);end=GetTickCount64()+4000;resized=false;
+    while(GetTickCount64()<end&&next(source,p,&f)){
+        if(f->height>f->width){resized=true;break;}
+    }
+    check(resized&&pipeline::hasFrameFlag(p.flags,pipeline::FrameFlagBits::Resize)&&
+          std::abs(source.info().displayAspect-double(f->width)/f->height)<1e-9,
+          "portrait resize publishes new DAR and temporal reset flag together");
+    check(resized&&content(ctx,ring,source,p,f),"portrait resize retains actual RGB content");
     source.close();options.left=30;options.right=30;options.top=20;options.bottom=20;desc.path=options.uri();check(source.open(desc)&&next(source,p,&f)&&f->width<820,"cropped source opens");source.close();
     options.left=options.right=options.top=options.bottom=0;
     options.fps=0;check(source::ScreenCaptureOptions::parse(options.uri(),parsed)&&parsed.fps==0,"automatic rate URI round trip");
@@ -88,6 +97,16 @@ int wmain(int argc,wchar_t** argv){
         HWND host=CreateWindowW(L"STATIC",L"Screen engine test",WS_OVERLAPPEDWINDOW|WS_VISIBLE,880,40,720,480,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
         SetWindowDisplayAffinity(host,WDA_EXCLUDEFROMCAPTURE);engine::EngineController engine;engine::PlayerOptions settings;settings.nr=true;settings.fg=true;settings.fgMultiplier=4;engine.open(host,options.uri(),settings);
         end=GetTickCount64()+20000;while(GetTickCount64()<end){pump();Sleep(10);}auto snapshot=engine.snapshot();check(snapshot.running&&!snapshot.failed&&snapshot.frames>100&&snapshot.generated>100&&snapshot.nrEvaluated>100,"screen NR and DLSS4x actual evaluation");std::wcout<<L"ENGINE "<<snapshot.status<<L" frames="<<snapshot.frames<<L" generated="<<snapshot.generated<<L" nr="<<snapshot.nrEvaluated<<std::endl;
+        const auto framesBeforeResize=snapshot.frames;
+        SetWindowPos(child.window,nullptr,40,40,820,510,SWP_NOZORDER);
+        end=GetTickCount64()+10000;bool engineResized=false;
+        while(GetTickCount64()<end){
+            pump();Sleep(10);snapshot=engine.snapshot();
+            if(snapshot.sourceWidth>snapshot.sourceHeight&&snapshot.sourceWidth>700&&snapshot.frames>framesBeforeResize+5){engineResized=true;break;}
+            if(snapshot.failed)break;
+        }
+        check(engineResized&&std::abs(snapshot.sourceDisplayAspect-double(snapshot.sourceWidth)/snapshot.sourceHeight)<1e-9,
+              "engine window resize refreshes UI dimensions and DAR while frames advance");
         engine.stop();end=GetTickCount64()+10000;while(!engine.idle()&&GetTickCount64()<end){pump();Sleep(10);}check(engine.idle(),"engine stop drains");DestroyWindow(host);
     }
     HWND excluded=CreateWindowW(L"STATIC",L"Screen exclusion test",WS_OVERLAPPEDWINDOW|WS_VISIBLE,880,40,200,160,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
