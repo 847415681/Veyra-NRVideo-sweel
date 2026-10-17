@@ -9715,3 +9715,9 @@ final-audit.py pre已通过82旧树/94旧分支/509脏文件与main b571a44不�
 - 所有命令、失败夹具修正、实际路径和边界见docs/PR57_INTEGRATION_REPORT_2026-10-17.md及E:/项目/Veyra/reports/pr57-capture-window-20261017。合并前verify通过：84旧树、96分支、509脏文件与1524共享组件保持。用户请求PR合并，不发布/改包/关机。
 
 - PR57远端合并确认：2026-10-17T14:09:26Z，state=MERGED，merge=9c7b342，main正常推送7e2157d；保留云端源分支。本补充仅文档回执，不改已验收代码；最终保护与source-after.bundle回执在E:/项目/Veyra/reports/pr57-capture-window-20261017/final.json。
+
+### 2026-10-17 美颜节点开工（Claude，claude/beauty-20261017）
+- 授权与背景：用户“抗锯齿和美颜好好做，开工吧”；协调会话计划 `E:/项目/Veyra/reports/claude-plan-48-53-beauty-20261017/PLAN_48_53_BEAUTY_2026-10-17.md`（第 5 节 10 条复审、第 1.2/3 节共享基础 E0）。AGENTS.md 顶部已加授权条目。
+- 基线：本地 main `26c0d61`，分支 `claude/beauty-20261017`，工作树 `E:/项目/Veyra/worktrees/beauty-20261017`。存档：tag `checkpoint/pre-claude-beauty-20261017`，`E:/项目/Veyra/archives/claude-beauty-20261017/all-refs-26c0d61.bundle`（`git bundle verify` 通过，complete history）。
+- 产物目录：`E:/项目/Veyra/{build,tests,logs,tmp,reports,archives,downloads,deps}/claude-beauty-20261017`。
+- 计划：P0（推理路线对照 / SkinSoft D3D12 原型 / 同帧原画与 HDR 合同）→ 写 `docs/BEAUTY_IMPLEMENTATION_PLAN_2026-10-17.md`；`claude/effects-infra-20261017` 出现后再做 P1–P4。E0 范围（链容量、计时掩码、插入槽、格式版本）不自行改动。
