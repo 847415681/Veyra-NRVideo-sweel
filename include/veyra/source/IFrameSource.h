@@ -8,6 +8,7 @@
 #include <string>
 #include <atomic>
 
+#include "veyra/media/NetworkSettings.h"
 #include "veyra/pipeline/FramePacket.h"
 #include "veyra/source/DolbyVision.h"
 
@@ -31,6 +32,11 @@ struct SourceOpenDesc {
     bool legacyCaptureRgbForDiagnostic = false; // explicit A/B only; never set by the player
     const std::atomic<bool>* cancelled = nullptr;
     bool deinterlace = false; // playback opt-in; unchanged default for offline consumers
+    // Network and server playback (#48). Offline consumers (export, tools, tests) keep
+    // the defaults: strict about damaged data, reads that wait, direct file reads.
+    media::NetworkSettings network;   // the user's buffering / reconnect / damaged-picture choices
+    bool nonBlocking = false;         // player: read() may return Waiting while the network buffers
+    bool tolerateCorruption = false;  // player: keep going through damaged packets (network sources, MPEG-TS)
 };
 
 struct SourceInfo {

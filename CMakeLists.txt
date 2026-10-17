@@ -497,6 +497,7 @@ endif()
 if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avformat.h")
   add_library(veyra_media STATIC
     src/media/FFmpegDemuxer.cpp
+    src/media/DemuxSession.cpp
     src/media/FFmpegVideoDecoder.cpp
     src/media/FFmpegDeinterlacer.cpp
   )
@@ -562,7 +563,8 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_include_directories(veyra_sinks PRIVATE "${VEYRA_NVENC_HEADERS_ROOT}/include")
   target_compile_definitions(veyra_sinks PRIVATE VEYRA_SHADER_DIR="${CMAKE_BINARY_DIR}/shaders")
   add_dependencies(veyra_sinks veyra_shader_rgb_nv12)
-  target_link_libraries(veyra_sinks PUBLIC veyra_base veyra_gfx ole32 windowscodecs mmdevapi avrt mfplat mfuuid mf)
+  # veyra_media: AudioPipeline reads packets from the shared network demux session (#48).
+  target_link_libraries(veyra_sinks PUBLIC veyra_base veyra_gfx veyra_media ole32 windowscodecs mmdevapi avrt mfplat mfuuid mf)
   add_subdirectory(third_party/soundtouch EXCLUDE_FROM_ALL)
   target_link_libraries(veyra_sinks PRIVATE ${FFMPEG_LIBRARIES} veyra_soundtouch)
   if(FFMPEG_INCLUDE_DIRS)
