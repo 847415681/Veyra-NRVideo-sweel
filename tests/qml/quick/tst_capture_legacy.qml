@@ -46,5 +46,14 @@ Item {
             compare(list.count, 0)
             compare(chosen.count, 0)
         }
+        function test_mjpeg_keeps_red_warning() {
+            picker.formats = [{id:"mjpeg",label:"MJPEG（不建议使用）",danger:true,costHint:true}]
+            picker.open()
+            tryCompare(picker, "opened", true)
+            const list = findChild(picker.contentItem, "capture-legacy-list")
+            tryVerify(() => list.itemAtIndex(0) !== null)
+            compare(list.itemAtIndex(0).contentItem.color, Theme.err)
+            verify(list.itemAtIndex(0).contentItem.text.indexOf("不建议使用") >= 0)
+        }
     }
 }

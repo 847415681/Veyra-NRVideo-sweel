@@ -2318,6 +2318,7 @@ QString QmlPlayerBridge::captureDeviceLabel() const {
 static QString captureFormatUiLabel(const source::CaptureFormat& f, const std::wstring& device) {
     auto label=uiText(f.label);
     if(source::decklink::isPath(device))label=label.replace(QStringLiteral("逐行"),QmlPlayerBridge::tr("逐行")).replace(QStringLiteral("隔行"),QmlPlayerBridge::tr("隔行"));
+    if(source::captureMjpegFormat(f))label+=uiText(L"（不建议使用）");
     return label;
 }
 QVariantList QmlPlayerBridge::captureFormats() const {
@@ -2328,7 +2329,7 @@ QVariantList QmlPlayerBridge::captureFormats() const {
             out << QVariantMap{{"id", utf8Of(f.key)}, {"label", captureFormatUiLabel(f, impl_->captureDevice)}, {"tier", f.tier},
                                {"costHint", source::captureFormatNeedsCostHint(static_cast<source::CaptureFormatTier>(f.tier))}, {"driverCurrent", f.driverCurrent},
                                {"width", int(f.width)}, {"height", int(f.height)}, {"fps", f.fps}, {"pixel", uiText(f.pixel)},
-                               {"scan", uiText(f.scan)}, {"interlaced", f.interlaced}, {"disabled", !f.supported}, {"rangeCandidate", f.rangeCandidate}};
+                               {"scan", uiText(f.scan)}, {"interlaced", f.interlaced}, {"disabled", !f.supported}, {"rangeCandidate", f.rangeCandidate}, {"danger",source::captureMjpegFormat(f)}};
         }
         return out;
     });

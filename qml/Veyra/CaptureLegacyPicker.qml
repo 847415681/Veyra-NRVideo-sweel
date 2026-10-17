@@ -72,7 +72,7 @@ Popup {
                 highlighted: modelData.id === picker.selectedKey
                 contentItem: Text {
                     text: modelData.label
-                    color: modelData.disabled ? Theme.t3 : modelData.costHint ? Theme.warn : Theme.t1
+                    color: modelData.disabled ? Theme.t3 : modelData.danger ? Theme.err : modelData.costHint ? Theme.warn : Theme.t1
                     font.family: Theme.fontMono; font.pixelSize: 11
                     elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter
                 }

@@ -564,7 +564,9 @@ Window {
     }
     TapHandler {
         id: pictureTap
-        enabled: !root.fullLocked
+        // Scaled game input deliberately catches mouse events instead of
+        // forwarding wrong coordinates; they must not control the player either.
+        enabled: !root.fullLocked && !veyra.gameInputActive
         // Judged where the press landed: by the release the page may already have changed.
         property bool pressOnCover: false
         onPressedChanged: if (pressed) pressOnCover = root.overVideoCover(point.scenePosition)
@@ -584,7 +586,7 @@ Window {
         }
     }
     TapHandler {
-        enabled: !root.fullLocked
+        enabled: !root.fullLocked && !veyra.gameInputActive
         property bool pressOnCover: false
         onPressedChanged: if (pressed) pressOnCover = root.overVideoCover(point.scenePosition)
         onDoubleTapped: (eventPoint, button) => {
