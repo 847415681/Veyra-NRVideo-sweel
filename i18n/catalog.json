@@ -498,6 +498,13 @@
    "ja": "%1 が動作しています。インターフェースと映像の両方にフックするため、Veyra がフリーズすることがあります。互換描画を有効にするには Veyra を再起動してください。再起動後はインターフェースをソフトウェアで描画し、%1 は映像にだけ作用します。今すぐ再起動しますか？再生中の映像やストリーミングは停止します。"
   },
   {
+   "zh": "%1 秒",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "%1 秒",
+   "en": "%1 s",
+   "ja": "%1 秒"
+  },
+  {
    "zh": "%1 项",
    "src": "qml/PlaylistWindow.qml",
    "zh-TW": "%1 項",
@@ -2514,6 +2521,20 @@
    "ja": "次回起動時にこのプリセットを自動適用"
   },
   {
+   "zh": "下载 %1 MB/s",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "下載 %1 MB/s",
+   "en": "Download %1 MB/s",
+   "ja": "ダウンロード %1 MB/s"
+  },
+  {
+   "zh": "下载 —",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "下載 —",
+   "en": "Download —",
+   "ja": "ダウンロード —"
+  },
+  {
    "zh": "不使用 LUT",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "不使用 LUT",
@@ -2584,6 +2605,13 @@
    "ja": "わからなければ「自動」を選んでください。HDR をキャプチャーする場合：フォーマットに P010 を選び、ここでは「HDR · PQ」を選択（ゲーム機や GPU の HDR10 は PQ）。「HDR · HLG」は放送信号用、「SDR · 709」は通常の映像です。変更には再接続が必要です"
   },
   {
+   "zh": "不等待",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "不等待",
+   "en": "Don't wait",
+   "ja": "待たない"
+  },
+  {
    "zh": "不补偿",
    "src": "qml/ProPage.qml",
    "zh-TW": "不補償",
@@ -2631,6 +2659,13 @@
    "zh-TW": "專業頁「GPU 占用」只統計這一塊顯示卡",
    "en": "The Pro page's GPU usage counts only this GPU",
    "ja": "プロ画面の「GPU 使用率」はこの GPU だけを集計します"
+  },
+  {
+   "zh": "丢包 %1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "丟包 %1",
+   "en": "Lost %1",
+   "ja": "パケット損失 %1"
   },
   {
    "zh": "两台电脑接在同一个局域网，这里会自动出现；也可以在下面手填它的 IP。首次使用需要配对。",
@@ -3373,6 +3408,20 @@
    "zh-TW": "儲存預設失敗: %1",
    "en": "Failed to save preset: %1",
    "ja": "プリセットの保存に失敗しました：%1"
+  },
+  {
+   "zh": "保持画面",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "保持畫面",
+   "en": "Keep picture",
+   "ja": "映像を維持"
+  },
+  {
+   "zh": "保持画面 = 显示解码器修补后的画面，动作不中断；只对网络视频与 MPEG-TS 生效",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "保持畫面 = 顯示解碼器修補後的畫面，動作不中斷；只對網路影片與 MPEG-TS 生效",
+   "en": "Keep picture = show the picture the decoder patched up, so motion carries on; only applies to network video and MPEG-TS",
+   "ja": "映像を維持 = デコーダーが補修した映像をそのまま表示し、動きを止めません。ネットワーク動画と MPEG-TS にのみ適用されます"
   },
   {
    "zh": "保留全部",
@@ -6799,6 +6848,13 @@
    "ja": "起動要求を送信しました。PS5 が起動してから接続します。"
   },
   {
+   "zh": "已取消",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "已取消",
+   "en": "Cancelled",
+   "ja": "キャンセルしました"
+  },
+  {
    "zh": "已取消 · 可重新开始",
    "src": "qml/ExportPage.qml",
    "zh-TW": "已取消 · 可重新開始",
@@ -7420,6 +7476,13 @@
    "zh-TW": "開始擷取",
    "en": "Start capture",
    "ja": "キャプチャー開始"
+  },
+  {
+   "zh": "开始播放前先攒够的秒数；“跟随缓冲档”按上面的缓冲档位决定。下次打开网络视频生效",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "開始播放前先累積足夠的秒數；「跟隨緩衝檔」依上方的緩衝檔位決定。下次開啟網路影片生效",
+   "en": "Seconds to collect before playback starts; “Follow buffer level” uses the level chosen above. Takes effect the next time a network video is opened",
+   "ja": "再生を始める前に溜める秒数です。「バッファー段階に従う」は上のバッファー段階で決まります。次回ネットワーク動画を開いたときから反映されます"
   },
   {
    "zh": "开播自动选档",
@@ -8416,6 +8479,13 @@
    "ja": "破損したファイルは保護されており、設定は書き込んでいません。先にバックアップして移動してください"
   },
   {
+   "zh": "损坏画面处理",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "損壞畫面處理",
+   "en": "Damaged picture handling",
+   "ja": "破損した映像の扱い"
+  },
+  {
    "zh": "排序",
    "src": "qml/PlaylistWindow.qml",
    "zh-TW": "排序",
@@ -8900,6 +8970,13 @@
    "ja": "切断"
   },
   {
+   "zh": "断线自动重连",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "斷線自動重連",
+   "en": "Auto-reconnect",
+   "ja": "切断時の自動再接続"
+  },
+  {
    "zh": "新预设名称",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "新預設名稱",
@@ -8961,6 +9038,13 @@
    "zh-TW": "無法寫入匯出檔案",
    "en": "Could not write the export file",
    "ja": "書き出しファイルに書き込めませんでした"
+  },
+  {
+   "zh": "无法分配媒体上下文",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "無法配置媒體上下文",
+   "en": "Could not allocate the media context",
+   "ja": "メディアコンテキストを確保できません"
   },
   {
    "zh": "无法分配配对存档，请重试。",
@@ -9103,6 +9187,13 @@
    "ja": "フォルダーを開けません：%1"
   },
   {
+   "zh": "无法打开视频文件，请检查路径和网络共享是否可访问",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "無法開啟影片檔案，請檢查路徑和網路共用是否可存取",
+   "en": "Could not open the video file. Check that the path and the network share are reachable.",
+   "ja": "動画ファイルを開けません。パスとネットワーク共有にアクセスできるか確認してください。"
+  },
+  {
    "zh": "无法打开视频，请查看诊断",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "無法開啟影片，請查看診斷",
@@ -9166,6 +9257,13 @@
    "ja": "メディア情報を読み取れません"
   },
   {
+   "zh": "无法读取媒体信息，地址可能不是视频",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "無法讀取媒體資訊，位址可能不是影片",
+   "en": "Could not read the media information; the address may not be a video",
+   "ja": "メディア情報を読み取れません。アドレスが動画ではない可能性があります"
+  },
+  {
    "zh": "无法读取导入文件",
    "src": "src/engine/ColorLookStore.cpp",
    "zh-TW": "無法讀取匯入檔案",
@@ -9192,6 +9290,13 @@
    "zh-TW": "無法執行匯出處理程序",
    "en": "Could not run the export process",
    "ja": "書き出しプロセスを実行できません"
+  },
+  {
+   "zh": "无法连接到服务器或地址不可用，请检查网络",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "無法連線到伺服器或位址無法使用，請檢查網路",
+   "en": "Could not connect to the server, or the address is unavailable. Check the network.",
+   "ja": "サーバーに接続できないか、アドレスが利用できません。ネットワークを確認してください。"
   },
   {
    "zh": "无陀螺仪",
@@ -9803,6 +9908,13 @@
    "ja": "リミテッド · Limited"
   },
   {
+   "zh": "服务器速度 {:.1f} MB/s 低于视频码率 {:.1f} MB/s，建议加大缓冲或下载后播放",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "伺服器速度 {:.1f} MB/s 低於影片位元率 {:.1f} MB/s，建議加大緩衝或下載後播放",
+   "en": "Server speed {:.1f} MB/s is below the video bitrate {:.1f} MB/s; raise the buffer or download it before playing",
+   "ja": "サーバー速度 {:.1f} MB/s が動画のビットレート {:.1f} MB/s を下回っています。バッファーを増やすか、ダウンロードしてから再生してください"
+  },
+  {
    "zh": "未使用",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "未使用",
@@ -10279,6 +10391,13 @@
    "ja": "排他的フルスクリーンのゲームを検出しました。Windows は他のウィンドウを重ねられません。ゲームをボーダーレスまたはウィンドウモードにしてください"
   },
   {
+   "zh": "检测到网络丢包，已自动跳过 %1 处",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "偵測到網路丟包，已自動跳過 %1 處",
+   "en": "Network packet loss detected; %1 spot(s) skipped automatically",
+   "ja": "ネットワークのパケット損失を検出し、%1 か所を自動的にスキップしました"
+  },
+  {
    "zh": "检测异常增长时自动退出全屏；默认关闭",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "偵測異常增長時自動退出全螢幕；預設關閉",
@@ -10641,6 +10760,13 @@
    "zh-TW": "正在登入 Xbox 串流服務…",
    "en": "Signing in to the Xbox streaming service…",
    "ja": "Xbox ストリーミングサービスにサインイン中…"
+  },
+  {
+   "zh": "正在缓冲 {:.1f}/{:.1f} 秒",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "正在緩衝 {:.1f}/{:.1f} 秒",
+   "en": "Buffering {:.1f}/{:.1f} s",
+   "ja": "バッファー中 {:.1f}/{:.1f} 秒"
   },
   {
    "zh": "正在编码",
@@ -12015,6 +12141,20 @@
    "ja": "信号待ち"
   },
   {
+   "zh": "等待关键帧",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "等待關鍵幀",
+   "en": "Wait for keyframe",
+   "ja": "キーフレームを待つ"
+  },
+  {
+   "zh": "等待关键帧 = 丢弃损坏的画面，停在上一帧直到下一个完好的关键帧；只对网络视频与 MPEG-TS 生效",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "等待關鍵幀 = 丟棄損壞的畫面，停在上一幀直到下一個完好的關鍵幀；只對網路影片與 MPEG-TS 生效",
+   "en": "Wait for keyframe = drop damaged pictures and hold the last one until the next clean keyframe; only applies to network video and MPEG-TS",
+   "ja": "キーフレームを待つ = 破損した映像を破棄し、次の正常なキーフレームまで直前の映像を表示します。ネットワーク動画と MPEG-TS にのみ適用されます"
+  },
+  {
    "zh": "等待导出",
    "src": "qml/ExportPage.qml",
    "zh-TW": "等待匯出",
@@ -12302,6 +12442,20 @@
    "ja": "グリーン"
   },
   {
+   "zh": "缓冲 %1 s",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "緩衝 %1 s",
+   "en": "Buffer %1 s",
+   "ja": "バッファー %1 s"
+  },
+  {
+   "zh": "缓冲中",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "緩衝中",
+   "en": "Buffering",
+   "ja": "バッファー中"
+  },
+  {
    "zh": "编码",
    "src": "qml/DialogHost.qml",
    "zh-TW": "編碼",
@@ -12337,11 +12491,74 @@
    "ja": "この字幕形式のデコーダーがありません"
   },
   {
+   "zh": "网络",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "網路",
+   "en": "Network",
+   "ja": "ネットワーク"
+  },
+  {
+   "zh": "网络中断后自动重连：点播从断点继续，直播重新连接；关闭后断线即停止。下次打开网络视频生效",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "網路中斷後自動重連：點播從斷點繼續，直播重新連線；關閉後斷線即停止。下次開啟網路影片生效",
+   "en": "Reconnect automatically after a network drop: on-demand video resumes where it stopped and live streams reconnect; when off, a drop stops playback. Takes effect the next time a network video is opened",
+   "ja": "ネットワークが切れたら自動で再接続します。オンデマンドは中断した位置から再開し、ライブは再接続します。オフにすると切断で再生を止めます。次回ネットワーク動画を開いたときから反映されます"
+  },
+  {
+   "zh": "网络中断，正在重连（第 {} 次）",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "網路中斷，正在重連（第 {} 次）",
+   "en": "Network dropped, reconnecting (attempt {})",
+   "ja": "ネットワークが切断されました。再接続しています（{} 回目）"
+  },
+  {
+   "zh": "网络地址、直播与服务器视频先攒一段再播放；服务器速度低于视频码率时暂停缓冲并说明原因，不会报错黑屏。下次打开网络视频生效",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "網路位址、直播與伺服器影片會先累積一段再播放；伺服器速度低於影片位元率時會暫停緩衝並說明原因，不會報錯黑屏。下次開啟網路影片生效",
+   "en": "Network addresses, live streams and server videos collect a short buffer before playing. When the server is slower than the video's bitrate, playback pauses to buffer and says why instead of failing to a black screen. Takes effect the next time a network video is opened",
+   "ja": "ネットワークアドレス、ライブ、サーバー上の動画は、少し溜めてから再生します。サーバー速度が動画のビットレートを下回るとバッファーのため一時停止して理由を表示し、エラーや黒画面にはなりません。次回ネットワーク動画を開いたときから反映されます"
+  },
+  {
+   "zh": "网络已重新连接，继续播放",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "網路已重新連線，繼續播放",
+   "en": "Network reconnected, playback continues",
+   "ja": "ネットワークに再接続しました。再生を続けます"
+  },
+  {
+   "zh": "网络缓冲",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "網路緩衝",
+   "en": "Network buffer",
+   "ja": "ネットワークバッファー"
+  },
+  {
+   "zh": "网络缓冲中 {:.1f}/{:.1f} 秒",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "網路緩衝中 {:.1f}/{:.1f} 秒",
+   "en": "Buffering the network {:.1f}/{:.1f} s",
+   "ja": "ネットワークをバッファー中 {:.1f}/{:.1f} 秒"
+  },
+  {
    "zh": "网络视频 · %1",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "網路影片 · %1",
    "en": "Network video · %1",
    "ja": "ネットワーク動画 · %1"
+  },
+  {
+   "zh": "网络连接中断（断线自动重连已关闭）",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "網路連線中斷（斷線自動重連已關閉）",
+   "en": "Network connection lost (auto-reconnect is off)",
+   "ja": "ネットワーク接続が切れました（自動再接続はオフです）"
+  },
+  {
+   "zh": "网络连接中断，已重试 {} 秒仍无法恢复",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "網路連線中斷，已重試 {} 秒仍無法恢復",
+   "en": "Network connection lost; still not back after retrying for {} s",
+   "ja": "ネットワーク接続が切れ、{} 秒再試行しても復旧しませんでした"
   },
   {
    "zh": "美乐威低延迟模式",
@@ -13583,6 +13800,13 @@
    "ja": "診断情報をコピーしました。そのまま報告に貼り付けられます"
   },
   {
+   "zh": "该地址没有视频流",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "該位址沒有影片串流",
+   "en": "This address has no video stream",
+   "ja": "このアドレスには動画ストリームがありません"
+  },
+  {
    "zh": "该字幕轨没有可显示的内容",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "該字幕軌沒有可顯示的內容",
@@ -13898,6 +14122,13 @@
    "ja": "メディア情報の読み取りに失敗しました"
   },
   {
+   "zh": "读取媒体信息超时（30 秒），服务器太慢或不是视频流",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "讀取媒體資訊超時（30 秒），伺服器太慢或不是影片串流",
+   "en": "Timed out reading the media information (30 s); the server is too slow or this is not a video stream",
+   "ja": "メディア情報の読み取りがタイムアウトしました（30 秒）。サーバーが遅いか、動画ストリームではありません"
+  },
+  {
    "zh": "读取字幕参数",
    "src": "src/engine/ExportStreams.cpp",
    "zh-TW": "讀取字幕參數",
@@ -14080,6 +14311,13 @@
    "ja": "リソースを使用できません"
   },
   {
+   "zh": "起播预缓冲",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "起播預緩衝",
+   "en": "Startup buffer",
+   "ja": "再生開始前のバッファー"
+  },
+  {
    "zh": "超分",
    "src": "include/veyra/engine/BackendRecovery.h",
    "zh-TW": "超解析",
@@ -14190,6 +14428,13 @@
    "zh-TW": "跟隨系統預設",
    "en": "Follow the system default",
    "ja": "システムの既定に従う"
+  },
+  {
+   "zh": "跟随缓冲档",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "跟隨緩衝檔",
+   "en": "Follow buffer level",
+   "ja": "バッファー段階に従う"
   },
   {
    "zh": "跟随驱动输入",
@@ -14962,6 +15207,13 @@
    "ja": "接続して開始"
   },
   {
+   "zh": "连接服务器超时（15 秒内没有响应），请检查地址和网络",
+   "src": "src/media/DemuxSession.cpp",
+   "zh-TW": "連線伺服器超時（15 秒內沒有回應），請檢查位址和網路",
+   "en": "Timed out connecting to the server (no response within 15 s). Check the address and the network.",
+   "ja": "サーバーへの接続がタイムアウトしました（15 秒以内に応答がありません）。アドレスとネットワークを確認してください。"
+  },
+  {
    "zh": "连接端点无效",
    "src": "src/engine/EffectChain.cpp",
    "zh-TW": "連接端點無效",
@@ -15569,6 +15821,13 @@
    "zh-TW": "重連",
    "en": "Reconnect",
    "ja": "再接続"
+  },
+  {
+   "zh": "重连 %1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "重連 %1",
+   "en": "Reconnects %1",
+   "ja": "再接続 %1"
   },
   {
    "zh": "重连中",

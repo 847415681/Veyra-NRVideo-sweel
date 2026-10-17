@@ -807,6 +807,20 @@ VPage {
                         horizontalAlignment: Text.AlignRight
                         elide: Text.ElideRight
                     }
+                    // Network / server playback (#48): buffer, download speed, reconnects.
+                    Text { visible: veyra.networkActive; text: qsTr("网络"); color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 12 }
+                    Text {
+                        objectName: "pro-network-summary"
+                        visible: veyra.networkActive
+                        Layout.fillWidth: true
+                        text: veyra.networkSummary
+                        color: veyra.networkHolding ? Theme.warn : Theme.t1; font.family: Theme.fontMono; font.pixelSize: 12
+                        horizontalAlignment: Text.AlignRight
+                        // The card is narrow: the three figures wrap instead of losing the last one.
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 3
+                        elide: Text.ElideRight
+                    }
                 }
                 Item { Layout.fillHeight: true }
             }

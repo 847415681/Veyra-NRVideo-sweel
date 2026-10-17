@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <cwctype>
 #include <format>
 #include <limits>
@@ -307,11 +308,26 @@ std::shared_ptr<DemuxSession> DemuxSession::open(const OpenParams& params, std::
         return nullptr;
     }
     AVFormatContext* context = s.context_;
-    const int video = av_find_best_stream(context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+    int video = av_find_best_stream(context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
     if (video < 0) {
         log::error("net-session", "no video stream");
         if (error) *error = L"该地址没有视频流";
         return nullptr;
+    }
+    // An HLS master playlist lists every quality as streams of one context. Like other players
+    // (mpv: hls-bitrate=max) take the best one rather than whichever FFmpeg met first; the bandwidth
+    // check later says so when the server cannot keep up, instead of silently switching down.
+    if (context->iformat && context->iformat->name && std::strstr(context->iformat->name, "hls")) {
+        int64_t bestScore = -1;
+        for (unsigned i = 0; i < context->nb_streams; ++i) {
+            const auto* p = context->streams[i]->codecpar;
+            if (p->codec_type != AVMEDIA_TYPE_VIDEO) continue;
+            const int64_t score = int64_t(p->width) * p->height * 1000 + std::min<int64_t>(p->bit_rate / 1000, 999);
+            if (score > bestScore) {
+                bestScore = score;
+                video = int(i);
+            }
+        }
     }
     int audio = params.audioStream;
     if (audio == -2) audio = av_find_best_stream(context, AVMEDIA_TYPE_AUDIO, -1, video, nullptr, 0);
@@ -678,8 +694,9 @@ NetworkStats DemuxSession::stats() const {
         out.state = NetworkStats::State::Playing;
     }
     if (bandwidthLow_ && (out.state == NetworkStats::State::Buffering || out.state == NetworkStats::State::Prebuffering)) {
-        out.message += std::format(L"；服务器速度 {:.1f} MB/s 低于视频码率 {:.1f} MB/s，建议加大缓冲或下载后播放",
-                                   out.serverBytesPerSecond / 1048576.0, out.bitrateBytesPerSecond / 1048576.0);
+        // Separate piece (the UI translates "；"-separated parts on their own).
+        out.message += L"；" + std::format(L"服务器速度 {:.1f} MB/s 低于视频码率 {:.1f} MB/s，建议加大缓冲或下载后播放",
+                                           out.serverBytesPerSecond / 1048576.0, out.bitrateBytesPerSecond / 1048576.0);
     }
     return out;
 }

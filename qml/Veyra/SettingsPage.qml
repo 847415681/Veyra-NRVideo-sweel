@@ -361,6 +361,53 @@ VPage {
                             hint: veyra.deinterlaceAvailable ? qsTr("只处理标记为隔行的视频，优先使用 GPU；软解使用兼容算法。下次打开视频生效。") : qsTr("当前软件包未包含去隔行组件")
                             VSwitch { enabled: veyra.deinterlaceAvailable; checked: veyra.preferences.deinterlace !== false; onToggled: checked => veyra.setPreference("deinterlace",checked) }
                         }
+                        // Network / server playback (#48). Read when a source opens.
+                        VRow {
+                            label: qsTr("网络缓冲")
+                            hint: qsTr("网络地址、直播与服务器视频先攒一段再播放；服务器速度低于视频码率时暂停缓冲并说明原因，不会报错黑屏。下次打开网络视频生效")
+                            VSeg {
+                                objectName: "set-network-buffer"
+                                options: [{ id: "auto", label: qsTr("自动") }, { id: "off", label: qsTr("关闭", "off") },
+                                          { id: "small", label: qsTr("小") }, { id: "medium", label: qsTr("中") }, { id: "large", label: qsTr("大") }]
+                                current: veyra.preferences.networkBuffer || "auto"
+                                onPicked: id => veyra.setPreference("networkBuffer", id)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("起播预缓冲")
+                            hint: qsTr("开始播放前先攒够的秒数；“跟随缓冲档”按上面的缓冲档位决定。下次打开网络视频生效")
+                            VSelect {
+                                objectName: "set-network-prebuffer"
+                                implicitWidth: 170
+                                options: [{ id: "-1", label: qsTr("跟随缓冲档") }, { id: "0", label: qsTr("不等待") },
+                                          { id: "3", label: qsTr("%1 秒").arg(3) }, { id: "5", label: qsTr("%1 秒").arg(5) },
+                                          { id: "10", label: qsTr("%1 秒").arg(10) }, { id: "20", label: qsTr("%1 秒").arg(20) },
+                                          { id: "30", label: qsTr("%1 秒").arg(30) }]
+                                value: (options.find(o => o.id === (veyra.preferences.networkPrebuffer === undefined ? "-1" : String(veyra.preferences.networkPrebuffer))) || options[0]).label
+                                onPicked: id => veyra.setPreference("networkPrebuffer", Number(id))
+                            }
+                        }
+                        VRow {
+                            label: qsTr("断线自动重连")
+                            hint: qsTr("网络中断后自动重连：点播从断点继续，直播重新连接；关闭后断线即停止。下次打开网络视频生效")
+                            VSwitch {
+                                objectName: "set-network-reconnect"
+                                checked: veyra.preferences.networkAutoReconnect !== false
+                                onToggled: checked => veyra.setPreference("networkAutoReconnect", checked)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("损坏画面处理")
+                            hint: (veyra.preferences.networkCorrupt || "conceal") === "keyframe"
+                                  ? qsTr("等待关键帧 = 丢弃损坏的画面，停在上一帧直到下一个完好的关键帧；只对网络视频与 MPEG-TS 生效")
+                                  : qsTr("保持画面 = 显示解码器修补后的画面，动作不中断；只对网络视频与 MPEG-TS 生效")
+                            VSeg {
+                                objectName: "set-network-corrupt"
+                                options: [{ id: "conceal", label: qsTr("保持画面") }, { id: "keyframe", label: qsTr("等待关键帧") }]
+                                current: veyra.preferences.networkCorrupt || "conceal"
+                                onPicked: id => veyra.setPreference("networkCorrupt", id)
+                            }
+                        }
                         // HDR 亮度曲线: static, so the highlights are protected.
                         // One-click presets (same ids as the list page).
                         Flow {
