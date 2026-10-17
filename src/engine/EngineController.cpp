@@ -1375,6 +1375,25 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     networkShownStatus.clear();
                 }
             };
+            // Runs every loop turn and inside the presentation back-pressure wait: while playback is held
+            // for buffering the frozen clock keeps queued pictures from presenting, and that wait must
+            // neither look like a hang to the watchdog nor stop the statistics.
+            auto networkTick=[&]{
+                if(!demuxSession)return;
+                const bool holding=demuxSession->holding();
+                if(holding)watchdog_->beat();
+                // Without an audio device the media clock is the wall clock: stand it still while the
+                // session pauses playback for buffering (with audio, pausing the endpoint does that).
+                if(!audioStarted){
+                    if(holding){
+                        if(!networkClockFrozen){networkClockFrozen=true;networkFrozenMs=nowMs();}
+                        anchor=Clock::now();anchorMs=networkFrozenMs;
+                    }else networkClockFrozen=false;
+                }
+                // Where playback is decides how far ahead the session reads and when it pauses for buffering.
+                source.setPlaybackPositionMs(nowMs());
+                if(Clock::now()>=nextNetworkPublish){nextNetworkPublish=Clock::now()+std::chrono::milliseconds(100);publishNetwork();}
+            };
             uint64_t hdrDisplayCheck=0;
             bool captureRecovering=false;unsigned captureRetries=0;
             Clock::time_point captureRetryAt{};
@@ -1437,19 +1456,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 diagnostics::CpuStallTrace loopTrace("engine-stall",frames,45.0,watchdog_->stage());
                 collectTimings();
                 loopTrace.mark("collect");
-                if(demuxSession){
-                    // Without an audio device the media clock is the wall clock: stand it still while the
-                    // session pauses playback for buffering (with audio, pausing the endpoint does that).
-                    if(!audioStarted){
-                        if(demuxSession->holding()){
-                            if(!networkClockFrozen){networkClockFrozen=true;networkFrozenMs=nowMs();}
-                            anchor=Clock::now();anchorMs=networkFrozenMs;
-                        }else networkClockFrozen=false;
-                    }
-                    // Where playback is decides how far ahead the session reads and when it pauses for buffering.
-                    source.setPlaybackPositionMs(nowMs());
-                    if(Clock::now()>=nextNetworkPublish){nextNetworkPublish=Clock::now()+std::chrono::milliseconds(100);publishNetwork();}
-                }
+                networkTick();
                 if(captureRecovering){
                     if(Clock::now()<captureRetryAt){std::this_thread::sleep_for(std::chrono::milliseconds(20));continue;}
                     ++captureRetries;
@@ -1782,6 +1789,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     };
                     const auto leaseWaitStart=Clock::now();
                     while((liveScheduler->occupancy()>=2||!graph->nextFrameSlotAvailable()||enhancementPending())&&!stop_&&(!paused_||seekPreviewPending)&&!liveScheduler->failed()){
+                        networkTick();
                         advanceLive();if(seekSeconds_>=0)break;
                         if(liveScheduler->occupancy()==0&&!graph->nextFrameSlotAvailable()&&elapsedMs(leaseWaitStart)>2000){status(L"等待输出纹理释放超时",true);stop_=true;break;}
                         if(liveScheduler->occupancy()>=2||!graph->nextFrameSlotAvailable()||enhancementPending()){

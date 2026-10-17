@@ -380,7 +380,9 @@ uint64_t DemuxSession::aheadBytesLocked() const {
 }
 
 double DemuxSession::leadSecondsLocked() const {
-    const int64_t position = playbackUs_;
+    // The player reports where playback is; offline readers (export, tools, tests) do not, and for
+    // them the video packet last taken is the position.
+    const int64_t position = hasHint_ ? playbackUs_ : consumedUs_;
     double best = std::numeric_limits<double>::infinity();
     auto consider = [&](const Queue& q) {
         if (q.lastEndUs == INT64_MIN || q.firstUs == INT64_MIN) {
@@ -433,6 +435,9 @@ double DemuxSession::resumeTargetLocked() const {
             target = std::max(target, 60.0 * (1.0 - ratio));
         }
     }
+    // A slow server needs as long to fill a big window as to play it: cap the wait per level.
+    const double cap = settings_.level == NetworkBufferLevel::Large ? 45.0 : 20.0;
+    target = std::min(target, std::max(cap, plan_.startSeconds));
     return std::min(target, std::max(1.0, aheadSecondsLocked() - 0.5));
 }
 
@@ -521,6 +526,7 @@ DemuxSession::Pop DemuxSession::popVideo(AVPacket* dst, Meta& meta, int waitMs, 
             Item item = std::move(video_.items.front());
             video_.items.pop_front();
             video_.bytes -= item.bytes;
+            consumedUs_ = item.startUs;
             av_packet_move_ref(dst, item.packet);
             av_packet_free(&item.packet);
             meta.discontinuity = item.discontinuity;
@@ -572,6 +578,7 @@ void DemuxSession::setPlaybackPositionUs(int64_t us) {
     if (us < 0) return;
     std::lock_guard lock(m_);
     playbackUs_ = us;
+    hasHint_ = true;
     updatePhaseLocked();
     producerCv_.notify_one();
 }
@@ -790,6 +797,17 @@ void DemuxSession::threadMain() {
         const bool timedOut = irq_->timedOut();
         irq_->disarm();
         const double seconds = std::chrono::duration<double>(Clock::now() - begin).count();
+        if (result >= 0 && (packet->flags & AV_PKT_FLAG_CORRUPT) && context_->pb && context_->pb->error < 0) {
+            // The connection broke in the middle of a packet: FFmpeg hands the partial data over flagged
+            // "corrupt" and reports the error only on the next read. That is a lost connection, not
+            // damaged media - the packet is dropped and the link re-established.
+            const int code = context_->pb->error;
+            av_packet_unref(packet);
+            log::warn("net-session", std::format("packet cut short by a transport error code={} text={}", code, errorText(code)));
+            if (stop_.load()) break;
+            recover(code, "truncated packet");
+            continue;
+        }
         if (result >= 0) {
             {
                 std::lock_guard lock(m_);
@@ -1003,6 +1021,7 @@ void DemuxSession::doSeek() {
         generation_.fetch_add(1);
         eof_ = false;
         playbackUs_ = target;
+        consumedUs_ = target;
         rateSamples_.clear();
         contentBytes_ = 0;
         afterSeek_ = true;
@@ -1122,7 +1141,8 @@ bool DemuxSession::recover(int code, const char* why) {
         }
         closeContext();
         gateKeyframe_ = false;
-        delayMs = std::min(delayMs * 2, 8000);
+        // 1, 2, 4 s, then every 4 s: an outage of about eight seconds is over within 5 s of its end.
+        delayMs = std::min(delayMs * 2, 4000);
     }
     if (stop_.load() || (cancelled_ && cancelled_->load())) return false;
     fail(std::format(L"网络连接中断，已重试 {} 秒仍无法恢复", reconnectBudgetMs_ / 1000));

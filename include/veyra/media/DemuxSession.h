@@ -179,7 +179,9 @@ private:
     Phase phase_ = Phase::Prebuffering;
     double targetSeconds_ = 0;
     bool afterSeek_ = false;
-    int64_t playbackUs_ = -1;
+    int64_t playbackUs_ = -1;              // hint from the player (media timeline)
+    bool hasHint_ = false;                 // the player supplies playbackUs_; otherwise consumption is the position
+    int64_t consumedUs_ = -1;              // start of the last video packet a consumer took
     bool eof_ = false, failed_ = false, reconnecting_ = false;
     uint32_t reconnectAttempt_ = 0, reconnects_ = 0, stalls_ = 0, connections_ = 0;
     std::wstring failure_;

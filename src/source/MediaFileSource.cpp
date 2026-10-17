@@ -180,6 +180,7 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
         session.path = desc.path;
         session.settings = desc.network;
         session.cancelled = desc.cancelled;
+        session.audioStream = desc.nonBlocking ? -2 : -1;   // offline readers (export, tools) take no audio
         std::wstring failure;
         auto opened = media::DemuxSession::open(session, &failure);
         if (!opened || !demuxer_.openShared(std::move(opened))) {

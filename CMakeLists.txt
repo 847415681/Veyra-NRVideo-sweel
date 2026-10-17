@@ -674,6 +674,11 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_features(veyra_network_interlace_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_network_interlace_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
   target_link_libraries(veyra_network_interlace_tests PRIVATE veyra_engine)
+  # #48: shared demux session, reconnect, buffering, damaged-data tolerance (tests/network).
+  add_executable(veyra_network_buffer_tests tests/integration/NetworkBufferTests.cpp)
+  target_compile_features(veyra_network_buffer_tests PRIVATE cxx_std_20)
+  target_compile_definitions(veyra_network_buffer_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+  target_link_libraries(veyra_network_buffer_tests PRIVATE veyra_engine)
   add_executable(veyra_decklink_tests tests/unit/DeckLinkCaptureTests.cpp)
   target_compile_features(veyra_decklink_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_decklink_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
