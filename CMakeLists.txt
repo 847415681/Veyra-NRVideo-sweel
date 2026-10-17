@@ -1350,6 +1350,14 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
   target_compile_definitions(veyra_color_grade_gpu_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_include_directories(veyra_color_grade_gpu_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${FFMPEG_INCLUDE_DIRS})
   target_link_libraries(veyra_color_grade_gpu_tests PRIVATE veyra_pipeline veyra_sinks)
+  # Byte-exact regression for the effect insertion slots (colour today, more
+  # effects later): one frame per configuration through the real graph, printed
+  # as SHA-256 so a build from before a change can be compared with one after it.
+  add_executable(veyra_effect_slot_regression_tests tests/integration/EffectSlotRegressionTests.cpp)
+  target_compile_features(veyra_effect_slot_regression_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_effect_slot_regression_tests PRIVATE /utf-8)
+  target_compile_definitions(veyra_effect_slot_regression_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_link_libraries(veyra_effect_slot_regression_tests PRIVATE veyra_engine)
   # Adobe .cube parsing + the runtime LUT store (CPU only).
   add_executable(veyra_color_lut_tests tests/unit/ColorLutTests.cpp src/engine/ColorLut.cpp)
   target_compile_features(veyra_color_lut_tests PRIVATE cxx_std_20)
