@@ -167,6 +167,8 @@ class QmlPlayerBridge : public QObject {
     // fullscreen picture is click-through and the captured program has the input.
     Q_PROPERTY(bool gameMode READ gameMode NOTIFY gameModeChanged)
     Q_PROPERTY(bool passthroughActive READ passthroughActive NOTIFY gameModeChanged)
+    Q_PROPERTY(bool gameInputActive READ gameInputActive NOTIFY gameModeChanged)
+    Q_PROPERTY(bool gameScaledPreview READ gameScaledPreview NOTIFY gameModeChanged)
     Q_PROPERTY(QRectF gameVideoRect READ gameVideoRect NOTIFY gameModeChanged)
 
     // Subtitles (P4-c): the engine's SubtitleLoader reads the embedded tracks and
@@ -691,6 +693,8 @@ public:
     Q_INVOKABLE bool startScreenCapture();
     bool gameMode() const;
     bool passthroughActive() const;
+    bool gameInputActive() const;
+    bool gameScaledPreview() const;
     QRectF gameVideoRect() const;
     // The Home panel is open: the picture stays on top but takes the input back.
     Q_INVOKABLE void setGamePanelOpen(bool open);
@@ -1377,7 +1381,7 @@ private:
 #endif
     void queryCapture(int kind, std::wstring device);
     // Opens a device/stream URI (capture, screen) the way openPath opens a file.
-    void openSourceUri(const std::wstring& uri, const std::wstring& label);
+    void openSourceUri(const std::wstring& uri, const std::wstring& label, bool screenFill = false);
 
     struct Impl;
     std::unique_ptr<Impl> impl_;

@@ -1,5 +1,17 @@
 # WORKLOG
 
+## 2026-10-17 窗口捕获游戏模式修正（Linux 源码候选）
+
+按用户最新要求取消进入穿透的初始化/动画等待，修正退出热键接收和先释放后退出、全屏拉伸/填满与源窗口 resize 元数据；任务栏问题暂缓。以 origin/main d68d6be 在隔离 codex/window-game-fixes-20261017、/workspace/veyra-window-fixes 实施，原 main/用户文件/运行组件保持。源码、输入边界和验收记录见 docs/WINDOW_GAME_FIXES_2026-10-17.md。
+
+无固定3秒入口倒计时可删；取消等待引擎running及游戏模式首页820ms动画，保留3秒GUI卡死保护。热键改用message-only接收窗口，退出动作先原生恢复；Qt句柄替换重绑定，投递失败可恢复。缩放实际生效，键盘/手柄前台保留，鼠标点击拦截以免坐标错位；原尺寸模式保留精确穿透，未实现任意缩放鼠标映射。SourceInfo/DAR、UI快照和比例缓存同步更新，300ms去抖/250ms几何节奏保持；没有改NR/SR/FG算法或任务栏Shell标记。
+
+实际运行Linux g++ C++20 GameModePolicyTests：44检查0失败；Qt6.8.3 qmlcachegen两文件字节码/basic-block通过；i18n extract --check：2428条三语缺失0/占位符0；diff --check通过。MinGW14 Windows目标语法检查GamePassthroughTests通过。回执/workspace/scratch/veyra-window-checks/{checks.json,windows-syntax.log}。原生CMake配置因Linux缺RC编译器失败；交叉对象编译最初缺Windows汇编器，保留失败证据并补齐工具，最终结果另记。工具安装/公开头文件只在shared，不进源码库。
+
+补齐目标汇编器后，GamePassthroughTests及其真实热键/穿透头文件Windows对象编译通过，生成x86-64 COFF；windows-object-command.json记录实际命令/返回0，windows-object.log为空，首次失败日志保留。此对象未链接或运行。
+
+新增Qt Quick宿主连续切换与WGC源/engine resize回归，但本轮未在Windows运行；完整MSVC构建、实际QML bridge/GPU、真实游戏/远程热键、DPI跨屏均未执行，不宣称已实机复现或修复验收。下一步唯一任务是Windows隔离构建和用户操作顺序实测；无打包/合并main/push/Release/关机。
+
 ## 2026-10-10 VFG 优化（Claude，任务一）
 
 - 授权：用户“开始进行优化吧，全部搞定掉”“开始之前先创建存档，然后开分支弄，如果是结果是性能反而倒退，直接退回”。开工前打标签 checkpoint/pre-claude-perf-20261010（main 5ba186a），E 盘 archives/claude-perf-20261010 存 source-before.bundle（已 verify）和 start.json（46 工作树、495 脏文件逐项 SHA）。分支 claude/vfg-20261010 只改 VFG；软件链路在 claude/pipeline-20261010 独立实施。

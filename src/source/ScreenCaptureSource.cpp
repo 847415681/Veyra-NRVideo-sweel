@@ -356,7 +356,10 @@ SourceReadStatus ScreenCaptureSource::read(pipeline::FramePacket& packet,const A
         packet.sourceKind=pipeline::SourceKind::ScreenCapture;packet.colorInfo=p.info.color;
         packet.arrivalHost100ns=host100ns();packet.decodedHost100ns=packet.arrivalHost100ns;
         if(p.sequence==1)packet.flags|=uint32_t(pipeline::FrameFlagBits::Open);
-        if(w!=p.info.width||h!=p.info.height){packet.flags|=uint32_t(pipeline::FrameFlagBits::Resize);p.info.width=w;p.info.height=h;}
+        if(w!=p.info.width||h!=p.info.height){
+            packet.flags|=uint32_t(pipeline::FrameFlagBits::Resize);
+            p.info.width=w;p.info.height=h;p.info.displayAspect=double(w)/h;
+        }
         if(p.wasWaiting||p.lastPts&&pts-p.lastPts>std::max<int64_t>(p.interval()*2,1000000))packet.flags|=uint32_t(pipeline::FrameFlagBits::Discontinuity);
         packet.hardwareSurface={slot->consumer.Get(),0,p.fence.Get(),p.signal,w,h};
         p.nextPts=std::max(p.nextPts+p.interval(),pts+p.interval()/2);

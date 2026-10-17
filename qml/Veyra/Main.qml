@@ -32,7 +32,8 @@ Window {
     // 游戏模式 click-through (ui/GamePassthrough.h): Qt's own flags, so Qt keeps the
     // window's layered/transparent/no-activate styles in both interface renderers.
     flags: Qt.Window | Qt.FramelessWindowHint
-           | (veyra.passthroughActive ? (Qt.WindowTransparentForInput | Qt.WindowDoesNotAcceptFocus) : 0)
+           | (veyra.passthroughActive ? Qt.WindowTransparentForInput : 0)
+           | (veyra.gameInputActive ? Qt.WindowDoesNotAcceptFocus : 0)
     title: "Veyra " + veyra.version
 
     // Page ids match the prototype's PAGES keys so a design screenshot and an
@@ -66,7 +67,7 @@ Window {
     // 16:9 until a source reports its own shape: a PS5 / capture session has no
     // aspect while it connects, and 2.39 then left a thin black strip.
     property real filmAspect: 16 / 9
-    readonly property bool gameAligned: fullscreen && veyra.gameMode
+    readonly property bool gameAligned: fullscreen && veyra.gameMode && !veyra.gameScaledPreview
     readonly property real reportedAspect: veyra.previewAspect
     onReportedAspectChanged: if (reportedAspect < 0.2) fitToFilm(16 / 9)
     property string lastPage: "home"
@@ -440,8 +441,12 @@ Window {
         // Home: the adjust panel takes the input back / gives it to the program again.
         // Ctrl+Alt+Home: leave the fullscreen picture (and with it the click-through).
         function onGameHotkey(which) {
+            if (which === 1) {
+                root.closeQuickPanel()
+                if (root.fullscreen) root.toggleFullscreen()
+                return
+            }
             if (!root.fullscreen) return
-            if (which === 1) { root.closeQuickPanel(); root.toggleFullscreen(); return }
             root.fullLocked = false
             root.toggleQuickPanel()
         }
@@ -451,7 +456,7 @@ Window {
         }
         function onGameModeChanged() {
             videoHost.syncRect()
-            if (veyra.passthroughActive && playlistWindow.visible) playlistWindow.hide()
+            if (veyra.gameInputActive && playlistWindow.visible) playlistWindow.hide()
         }
     }
     onFullscreenChanged: {
@@ -640,7 +645,7 @@ Window {
         // an open dialog, which lives in the main window below it.
         cinema: root.cinema && !root.fullscreen
         pillTop: (root.maximized ? root.height : root.pictureHeight) - 46
-        shown: veyra.hasSource && !root.pillHidden && !veyra.passthroughActive && (root.fullscreen ? root.fullControls && !root.fullLocked
+        shown: veyra.hasSource && !root.pillHidden && !veyra.gameInputActive && (root.fullscreen ? root.fullControls && !root.fullLocked
                                                    : root.cinema && root.shownPage === "min"
                                                      && root.leavingPage === "" && dialogs.dialog === ""
                                                      && root.visibility !== Window.Minimized)

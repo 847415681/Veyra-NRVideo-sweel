@@ -3564,6 +3564,13 @@
    "ja": "全画面表示（映像をダブルクリック / F11）"
   },
   {
+   "zh": "全屏缩放已启用：键盘和手柄控制源窗口，鼠标点击已拦截以免错位；需要鼠标穿透时切回贴合原窗口",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "全螢幕縮放已啟用：鍵盤和手把控制來源視窗，滑鼠點擊已攔截以免錯位；需要滑鼠穿透時切回貼合原視窗",
+   "en": "Fullscreen scaling is active. Keyboard and gamepad control the source window; mouse clicks are blocked to avoid misalignment. Return to original-window alignment for mouse passthrough.",
+   "ja": "全画面拡大を有効にしました。キーボードとゲームパッドは元のウィンドウを操作し、位置ずれを防ぐためマウスクリックを遮断します。マウス透過には元のウィンドウに合わせる表示へ戻してください。"
+  },
+  {
    "zh": "全屏（双击画面 / F11）· 全屏后按 %1 打开快速调节",
    "src": "qml/ProPage.qml",
    "zh-TW": "全螢幕（雙擊畫面 / F11）· 全螢幕後按 %1 開啟快速調整",
@@ -5341,6 +5348,20 @@
    "zh-TW": "填充裁切",
    "en": "Fill and crop",
    "ja": "フィル（切り取り）"
+  },
+  {
+   "zh": "填满屏幕",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "填滿螢幕",
+   "en": "Fill screen",
+   "ja": "画面全体に表示"
+  },
+  {
+   "zh": "填满屏幕支持键盘和手柄；需要精确鼠标穿透时请选择贴合原窗口",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "填滿螢幕支援鍵盤和手把；需要精確滑鼠穿透時請選擇貼合原視窗",
+   "en": "Fill screen supports keyboard and gamepad. Choose original-window alignment for precise mouse passthrough.",
+   "ja": "画面全体に表示する場合はキーボードとゲームパッドを使用できます。正確なマウス透過には元のウィンドウに合わせてください。"
   },
   {
    "zh": "填满窗口",
@@ -11077,11 +11098,11 @@
    "ja": "ゲームモード"
   },
   {
-   "zh": "游戏模式不裁剪，画面和屏幕一一对应，点到哪里就是哪里",
+   "zh": "游戏模式不裁剪；贴合原窗口时画面与鼠标位置一一对应",
    "src": "qml/DialogHost.qml",
-   "zh-TW": "遊戲模式不裁切，畫面和螢幕一一對應，點到哪裡就是哪裡",
-   "en": "Game mode does not crop: the picture matches the screen, so clicks land where you see them",
-   "ja": "ゲームモードでは切り抜きません。映像と画面が一致し、見た位置をそのままクリックできます"
+   "zh-TW": "遊戲模式不裁剪；貼合原視窗時畫面與滑鼠位置一一對應",
+   "en": "Game mode does not crop the source. Original-window alignment preserves exact mouse positions.",
+   "ja": "ゲームモードではソースを切り抜きません。元のウィンドウに合わせると映像とマウス位置が一致します。"
   },
   {
    "zh": "游戏模式用真实指针，画面里不再画一个",
@@ -11091,11 +11112,11 @@
    "ja": "ゲームモードでは実際のポインターを使い、映像には描きません"
   },
   {
-   "zh": "游戏模式键盘监听启动失败，未开启鼠标穿透；请退出全屏后重试",
+   "zh": "游戏模式键盘监听不可用，已退出鼠标穿透；请退出全屏后重试",
    "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "遊戲模式鍵盤監聽啟動失敗，未開啟滑鼠穿透；請退出全螢幕後重試",
-   "en": "Game mode keyboard listener could not start. Mouse passthrough is off; leave fullscreen and try again.",
-   "ja": "ゲームモードのキー監視を開始できません。マウス透過はオフです。全画面を解除して再試行してください。"
+   "zh-TW": "遊戲模式鍵盤監聽無法使用，已退出滑鼠穿透；請退出全螢幕後重試",
+   "en": "Game-mode keyboard listener is unavailable. Mouse passthrough has been released; leave fullscreen and retry.",
+   "ja": "ゲームモードのキーボード監視を利用できません。マウス透過を解除しました。全画面を終了して再試行してください。"
   },
   {
    "zh": "游戏模式：调整画面",
@@ -11481,13 +11502,6 @@
    "zh-TW": "畫面調控已接管時域穩定；關閉調控後恢復此設定",
    "en": "Image correction controls temporal stability; this setting returns when correction is off",
    "ja": "画質調整が時間方向の安定化を制御中。オフにするとこの設定に戻ります。"
-  },
-  {
-   "zh": "画面贴合游戏窗口的位置，键鼠和手柄照常操作游戏；%1 调整画面，%2 退出。独占全屏请改为无边框窗口",
-   "src": "qml/DialogHost.qml",
-   "zh-TW": "畫面貼合遊戲視窗位置，鍵鼠與手把照常操作遊戲；%1 調整畫面，%2 退出。獨佔全螢幕請改為無邊框視窗",
-   "en": "The picture follows the game window position. Use the keyboard, mouse and controller normally; %1 adjusts the picture and %2 exits. Use borderless mode instead of exclusive fullscreen.",
-   "ja": "ゲームウィンドウの位置に画面を合わせます。通常どおり操作し、%1 で画面調整、%2 で解除。排他全画面ではなくボーダーレスにしてください。"
   },
   {
    "zh": "界面卡住超过 3 秒，已退出游戏模式",
@@ -13959,6 +13973,20 @@
    "zh-TW": "品質策略",
    "en": "Rate control",
    "ja": "品質の方式"
+  },
+  {
+   "zh": "贴合原窗口",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "貼合原視窗",
+   "en": "Align to source window",
+   "ja": "元のウィンドウに合わせる"
+  },
+  {
+   "zh": "贴合原窗口时可精确穿透鼠标；填满或拉伸支持键盘和手柄，鼠标点击会被拦截以免错位。%1 调整画面，%2 退出；独占全屏请改为无边框窗口",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "貼合原視窗時可精確穿透滑鼠；填滿或拉伸支援鍵盤和手把，滑鼠點擊會被攔截以免錯位。%1 調整畫面，%2 退出；獨佔全螢幕請改為無邊框視窗",
+   "en": "Original-window alignment supports precise mouse passthrough. Fill/stretch supports keyboard and gamepad; mouse clicks are blocked to prevent misalignment. %1 adjusts the picture; %2 exits. Use borderless instead of exclusive fullscreen.",
+   "ja": "元のウィンドウに合わせると正確なマウス透過を利用できます。塗りつぶし・引き伸ばしではキーボードとゲームパッドに対応し、位置ずれを防ぐためマウスクリックを遮断します。%1 で画面調整、%2 で終了。排他全画面ではなくボーダーレスにしてください。"
   },
   {
    "zh": "资源不可用",

@@ -1364,7 +1364,7 @@ Item {
                 label: qsTr("游戏模式")
                 hint: screenDialog.o.kind === 1
                       ? qsTr("开始后 Veyra 在这块屏幕上全屏，键鼠和手柄直接操作屏幕上的程序；%1 调整画面，%2 退出").arg(veyra.shortcuts.gamePanel).arg(veyra.shortcuts.gameExit)
-                      : qsTr("画面贴合游戏窗口的位置，键鼠和手柄照常操作游戏；%1 调整画面，%2 退出。独占全屏请改为无边框窗口").arg(veyra.shortcuts.gamePanel).arg(veyra.shortcuts.gameExit)
+                      : qsTr("贴合原窗口时可精确穿透鼠标；填满或拉伸支持键盘和手柄，鼠标点击会被拦截以免错位。%1 调整画面，%2 退出；独占全屏请改为无边框窗口").arg(veyra.shortcuts.gamePanel).arg(veyra.shortcuts.gameExit)
                 VSwitch {
                     objectName: "screen-game-mode"
                     checked: screenDialog.o.passthrough === true
@@ -1408,7 +1408,7 @@ Item {
             }
             VRow {
                 label: qsTr("裁剪（像素）")
-                hint: screenDialog.o.passthrough === true ? qsTr("游戏模式不裁剪，画面和屏幕一一对应，点到哪里就是哪里") : qsTr("左 / 上 / 右 / 下，按源像素")
+                hint: screenDialog.o.passthrough === true ? qsTr("游戏模式不裁剪；贴合原窗口时画面与鼠标位置一一对应") : qsTr("左 / 上 / 右 / 下，按源像素")
                 RowLayout {
                     spacing: 4
                     enabled: screenDialog.o.passthrough !== true
@@ -1426,8 +1426,10 @@ Item {
             }
             VRow {
                 label: qsTr("画面")
+                hint: screenDialog.o.passthrough === true ? qsTr("填满屏幕支持键盘和手柄；需要精确鼠标穿透时请选择贴合原窗口") : ""
                 VSeg {
-                    options: [{ id: "fit", label: qsTr("适应窗口") }, { id: "fill", label: qsTr("填满窗口") }]
+                    options: [{ id: "fit", label: screenDialog.o.passthrough === true ? qsTr("贴合原窗口") : qsTr("适应窗口") },
+                              { id: "fill", label: screenDialog.o.passthrough === true ? qsTr("填满屏幕") : qsTr("填满窗口") }]
                     current: screenDialog.o.fill ? "fill" : "fit"
                     onPicked: id => veyra.setScreenOption("fill", id === "fill")
                 }
