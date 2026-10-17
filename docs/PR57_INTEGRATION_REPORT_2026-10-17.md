@@ -1,6 +1,6 @@
 # PR57 Windows接入与验收报告（2026-10-17）
 
-用户要求合入云端Agent的PR57并完成本机测试。本机验收已完成，可以同步main；远端合并回执在本报告末尾登记。原云端提交1295d6bc6c9077738e230da9dc1d4f551be3b29e、09ac54bd31ceb28f613f38beab6bbb05b486efdb通过no-ff合并9c7b342保留。整合基线d68d6be9c37127350698a1d4d47fc01b36b29475，隔离分支codex/pr57-capture-window-20261017，最终实测产品代码1f283dc9ccbd9461124372b5dfb53c4737184aac。未重新制作或修改已发布2.0.9包/标签，没有新增Release。
+用户要求合入云端Agent的PR57并完成本机测试。本机验收已完成，并已正常推送main；GitHub确认PR57已合并，回执见本报告末尾。原云端提交1295d6bc6c9077738e230da9dc1d4f551be3b29e、09ac54bd31ceb28f613f38beab6bbb05b486efdb通过no-ff合并9c7b342保留。整合基线d68d6be9c37127350698a1d4d47fc01b36b29475，隔离分支codex/pr57-capture-window-20261017，最终实测产品代码1f283dc9ccbd9461124372b5dfb53c4737184aac。未重新制作或修改已发布2.0.9包/标签，没有新增Release。
 
 ## 接入内容与本机补齐
 
@@ -46,3 +46,7 @@
 保留早期夹具错误：两个旧测试第一次缺少CLI参数；首页提前接管输入后的原生viewport需等待异步落位；测试调用stop而非stopPlayback；未打开全部帧率就断言完整遍历；隔离profile尚未建立第一次连接就调用继续。这些均修正并回归，原失败不删。一次退出时Qt报告位置差1px：仅允许同尺寸、位置各差≤1px的明确平台舍入警告，实际视频矩形仍严格相等；最终四场景无该警告或其他QML错误。前期存在有重叠的未通过探索运行，不用于性能/验收结论，最终各GPU测试串行。
 
 存档checkpoint/pre-pr57-capture-window-20261017；source-before.bundle verify通过，SHA78826150658331c101903a3125aa1c2a8a59a60719ea293bd0467e4585b50d88。84个原工作区、96原分支及509未提交文件逐项保持；只允许授权main推进。1524个原运行组件与QA副本逐文件相同，SF310.9.16和原版NR身份不变，无SDK/DLL/模型加入Git。原分支和已发布2.0.9不删不改。最终source-after.bundle与远端合并状态在archives/reports下记录。
+
+## 远端合并回执
+
+2026-10-17 22:09:26（UTC+8），GitHub确认PR57状态MERGED、非Draft。云端head仍为09ac54bd31ceb28f613f38beab6bbb05b486efdb，mergeCommit为9c7b342a9f53697e2ec3663c71e1202e12477550；main经快进、正常非force推送至7e2157d3a427e361fb8a71eb4b6dff1c3f09edbe，包含云端提交、本机适配和验收报告。云端源分支保留。其后的本回执提交只更新报告/WORKLOG，不改变已验收产品源码或现有Release。完整命令回执E:/项目/Veyra/logs/pr57-capture-window-20261017/main-integration/commands.json，最终远端SHA与备份校验见reports/pr57-capture-window-20261017/final.json。

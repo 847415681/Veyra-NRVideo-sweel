@@ -9713,3 +9713,5 @@ final-audit.py pre已通过82旧树/94旧分支/509脏文件与main b571a44不�
 - 静态resize独立回归先真实失败；session/pool必须成对恢复的原生错误也已修复。最终native-215901新增检查全过，仅保留与2.0.9逐像素一致的HDR桌面颜色阈值6项失败（旧5项+新增竖屏）。fullScreenSuitePassed=false明确保留，不称全绿。
 - T911枚举1136模板/区间候选，三级/旧版列表共享精确选择、四语言及10场景保存/恢复/拒绝缺失项通过；NV12/YUY2 1080p60各两轮实际重连及单调PTS通过，回调约60.06–60.15fps。范围候选未逐一实卡连接，BMD无硬件不外推。
 - 所有命令、失败夹具修正、实际路径和边界见docs/PR57_INTEGRATION_REPORT_2026-10-17.md及E:/项目/Veyra/reports/pr57-capture-window-20261017。合并前verify通过：84旧树、96分支、509脏文件与1524共享组件保持。用户请求PR合并，不发布/改包/关机。
+
+- PR57远端合并确认：2026-10-17T14:09:26Z，state=MERGED，merge=9c7b342，main正常推送7e2157d；保留云端源分支。本补充仅文档回执，不改已验收代码；最终保护与source-after.bundle回执在E:/项目/Veyra/reports/pr57-capture-window-20261017/final.json。
