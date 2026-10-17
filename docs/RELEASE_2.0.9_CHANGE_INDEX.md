@@ -1,0 +1,145 @@
+# 2.0.8 → 2.0.9 变更覆盖索引
+
+固定比较v2.0.8至bfce70b，共57个非merge提交/70个产品/构建/测试路径。包含验证夹具的中间修正与文档收尾，不将所有提交都算作新功能；最终保留行为以RELEASE_NOTES_2.0.9为准。
+
+## 全部提交
+
+- `bfce70be7b61845dda1d7b3fe1a7cdb8fd5b228c` Record sealed 2.0.9 test packages and four extracted playback checks
+- `c9e779bbb77840be2ce29e39fd6d8e5e84e8174d` Record verified NR model, persistence, reuse and native export checks for 2.0.9
+- `0ac9d39e88cc20163468e3f9ec5007d4b76549bc` Use checked filter headers with reused FFmpeg caches and reject silently stubbed deinterlacing
+- `5b86d580b18352d9277cb8fa103fd840445b792a` Document SF model contract and local 2.0.9 build materials
+- `ca89055ffea6eaa501887a77c7b6d14a0591b568` Open the real NR card before exercising its model switch in Qt Quick
+- `23e6ed2833c196affdc657e18beee89860ca584c` Keep NR model persistence fixture limited to its declared layer count
+- `9738f1a31dfd6c70ecfade7d45b97b163986dcd1` Exercise NR migration through public preset persistence APIs
+- `60205f40c4f156bc86dbb3171c051d61394073bf` Default NVIDIA NR to SF 310.9.16 and persist per-layer performance model selection
+- `6f09e3a8be503b780dd9f8fbd1f4956e520ed6e9` Record 2.0.9 test package scope and probe explicit NR model hints
+- `0c6cd70c86c575db4102baad2a3a244277c6f0e8` Support user-provided SF NR 310.9.16 compatibility runtime
+- `ab567d3c129db86c0fdad7a47dd682c01425b650` Record fan adaptation tests, input boundaries and rollback evidence
+- `5f6a8a94ca860d3fa4fa9dba78f70e72534a57d2` Finish Qt fullscreen activation before handing input to game
+- `6515697ce5c7992453317fe5b6fb5fa4d6e51bc0` Keep unsupported Win modifier visible to shortcut validation
+- `f29c12a26efba78eeaaa52265bcccff4dc4f02c0` Validate raw foreground in separate-process player regression
+- `f07001391652bc712597f6718a0f8e5b441818f4` Keep receiver pumping during controlled native input tests
+- `09c6db30cca39a0d60705aa45fcf6d02f7b0e779` Trace controlled hook test inputs to diagnose missed dispatch
+- `1f57216911aa7eb667933de37b693d1da7016516` Keep raw-input hook message pump awake for pending input
+- `290408849333938c7fbdb8089f2fa9eae392a806` Record real hook event counts for raw-input regression diagnosis
+- `ffc00be34a82d2dddb8c1094ec9c735a99103d97` Adapt subtitle cache and game passthrough with configurable hotkeys
+- `4a2c8e8a0fc8fe8546d6e39474bd8799757f6d3c` Document NVOF registration repair and validation
+- `b0d02e9a539abbcc71c8eebf03b012af66d56fcf` Fix NVOF resource registration fences and NR failure readouts
+- `b571a44b821c7981b107593e4c4b72bad521813d` Record PR44 HDR integration, provenance and verified compatibility
+- `26db779c3bb021189b005d8347eb141d44522035` Keep custom HDR presets and unavailable guidance honest in the display UI
+- `6d5951dc868e16b6da9748b2fb44a82652f108b2` Cover the HDR display curve after real SDR to TrueHDR conversion
+- `15af1f45ad1e8a8fd3b863527615db7c7e069385` Report HDR preset applications only after accepted settings
+- `f6362910f6041e493342400da77cdeea37cead25` Reuse the existing snapshot publication for HDR statistics
+- `827e3ffae003d4634b193fbd43ea0cfdff28f488` Restore diagnostic grayscale before comparing HDR curve output
+- `2423771a35d10af29cffae7d55b7ecc76f779487` Use legal CPU descriptors for asynchronous HDR counters and test black frames
+- `eccb5ea07e59016c2765c70b01812eab889c873b` Adapt HDR controls with sparse GPU statistics and reliable curve memory
+- `72871fad048fa66db67290443bc232f0f5fb6c11` Plan PR44 HDR integration and protect presentation performance
+- `ab0a266df31416e4435538c72028920406d13870` Record four-issue validation and corresponding-source handoff
+- `61cc02e4bb11f6f4eecaca29c46e7d24aa4e3d38` Persist the automatic deinterlacing preference through validated settings
+- `aa70a87d022331f3267eb9d246c5aa86d7fbd35c` Document deinterlace provenance and exact issue validation boundaries
+- `0d7b319dee8ca961b267d854913794bda7238b8c` Expose deinterlace component availability and keep portable source references relative
+- `a0e564dc2b3c972bba6670510aa7c4c61dc77d68` Require and audit optional deinterlace deployment and preserve network clocks
+- `828a808d8d9531cd6e1a9a5592a639a7b7b04df7` Check real GPU output with valid diagnostic barriers and qualify pending VRR
+- `669cfb93b23d448a5c4eb802491421ac6d6e5a52` Validate drained deinterlacer output independently of decoder EOF
+- `3f087d857dfb9c284df6cd33c00df0a95eb8e032` Preserve visible hardware extents and drain final deinterlaced fields
+- `9f087e9ba79f62171373a57eec6624ab9ff4b3ed` Wrap the reported pro inspector footer and expose GPU validation in regression
+- `790335b2727d724a28ee8bd73592cec30c83218f` Correct regression fixture enum names
+- `3c3793241e5a03fac4d0e9e047deb37b17346c2c` Initialize hardware filter sources with their frame context and add playback regression
+- `8164099d13cda9c3f766f95af4d37814af97fa8c` Use interlaced-compatible hardware decode and preserve field clocks at EOF
+- `31fa17b412a70f075e4f6ee0c4044832816278cd` Fix VRR eligibility and pro status wrapping; add URL playback and file deinterlacing
+- `a21bf7c28a65b590146c8c5daf7ea40f1aa51d02` docs: scope issues 41 42 43 and 45 repair
+- `8d8eb094f9930390600a62af7ac1c4f2bae053f1` docs: record current branch integration audit
+- `3ee17b62f00154fd3efef2d91f6053ce12470f06` style(hdr): HDR 元数据面板加 12px 上间距，与 HDR 亮度曲线面板不再贴在一起
+- `b1dffdf610747ba2287f313aea54b6efaf640352` feat(hdr): 界面卡片化 —— HDR 亮度曲线面板重排为五张分组卡片
+- `ced1d8c2af19eab3a49ddd8fffb72de1ce107265` hdr: follow the last applied preset system, not the panel view
+- `9a0085bb57df3d402854f3d7a0a244da1fa9f031` hdr: finish the English comments for the status and equivalence lines
+- `00a05fbf9b2f4a6a17dc3c4cd2555675ab0e8331` hdr: English comments for the curve panel (UI strings stay Chinese, as upstream's do)
+- `de06d62a87cf775fcc306c2795bb9228afc70492` hdr: curve panel - axes presets, human dials, per-display/per-title memory, live coverage, chart and metadata settings
+- `7b4b46e7d9e5fb5228e42f5bf0593d7a6112edde` hdr: expose source info, recommendation, axes/dial settings, per-display and per-title memory, chart and live coverage to QML
+- `bfe3eca3b2473d799348c721197d5d3f4051660d` hdr: publish the live curve coverage into the player snapshot
+- `af627569315e4fee21afd5718f8f21a34640b9c6` hdr: non-blocking live coverage probe, HDR-source-only gate and output-aware metadata
+- `bd005a4d8e7b586c0e3317717288b0d847f3c014` hdr: static curve tuning + axes presets, dials, recommendation and live coverage (pure functions + tests)
+- `0cfa8a8c8770bd394ed9df923c8d86724590e560` Clarify final release audit checkout line-ending equivalence
+- `37f768685188cc26db2497bc91916f5c09429229` Record verified Veyra 2.0.8 publication and unchanged package digests
+
+## 全部变化路径
+
+- `CMakeLists.txt`
+- `i18n/catalog.json`
+- `include/veyra/engine/EffectChain.h`
+- `include/veyra/engine/EngineController.h`
+- `include/veyra/engine/EnhancementSettings.h`
+- `include/veyra/engine/HdrOutputTuning.h`
+- `include/veyra/engine/RecentGraphCache.h`
+- `include/veyra/engine/SubtitleCacheBudget.h`
+- `include/veyra/engine/VideoPresenter.h`
+- `include/veyra/gfx/NvidiaVrr.h`
+- `include/veyra/media/FFmpegDeinterlacer.h`
+- `include/veyra/media/FFmpegDemuxer.h`
+- `include/veyra/media/NetworkInput.h`
+- `include/veyra/ngx/NrArchitecturePolicy.h`
+- `include/veyra/ngx/NvOfSession.h`
+- `include/veyra/pipeline/EnhanceGraph.h`
+- `include/veyra/sink/WasapiAudioSink.h`
+- `include/veyra/source/IFrameSource.h`
+- `include/veyra/source/MediaFileSource.h`
+- `include/veyra/ui/GameHotkeys.h`
+- `include/veyra/ui/GamePassthrough.h`
+- `include/veyra/ui/PlayerUiFacade.h`
+- `include/veyra/ui/QmlPlayerBridge.h`
+- `qml/Veyra/CineBar.qml`
+- `qml/Veyra/DialogHost.qml`
+- `qml/Veyra/HomePage.qml`
+- `qml/Veyra/Main.qml`
+- `qml/Veyra/MinimalPage.qml`
+- `qml/Veyra/NodePage.qml`
+- `qml/Veyra/NrLayerEditor.qml`
+- `qml/Veyra/ProPage.qml`
+- `qml/Veyra/SettingsPage.qml`
+- `scripts/acceptance/test-2.0.8-build.py`
+- `scripts/acceptance/test-2.0.8-package.py`
+- `scripts/ffmpeg/build-deinterlace-module.py`
+- `scripts/ffmpeg/deinterlace-d3d12-async.patch`
+- `scripts/package-qml-release.py`
+- `scripts/stage-ui-migration.ps1`
+- `scripts/tests/make-subtitle-cache-fixture.py`
+- `shaders/HdrCurveCoverage.hlsl`
+- `src/engine/EngineController.cpp`
+- `src/engine/ExportJobManager.cpp`
+- `src/engine/PresetLibrary.cpp`
+- `src/engine/PresetStore.cpp`
+- `src/engine/PreviewGpuSession.cpp`
+- `src/engine/Subtitles.cpp`
+- `src/engine/VideoPresenter.cpp`
+- `src/media/FFmpegDeinterlacer.cpp`
+- `src/media/FFmpegDemuxer.cpp`
+- `src/ngx/NvOfSession.cpp`
+- `src/pipeline/EnhanceGraph.cpp`
+- `src/sink/WasapiAudioSink.cpp`
+- `src/source/MediaFileSource.cpp`
+- `src/ui/QmlPlayerBridge.cpp`
+- `tests/integration/BidirectionalFlowTests.cpp`
+- `tests/integration/GamePassthroughTests.cpp`
+- `tests/integration/HdrOutputTuningGpuTests.cpp`
+- `tests/integration/NetworkInterlaceTests.cpp`
+- `tests/integration/NrRuntimeAssertionTests.cpp`
+- `tests/integration/NrRuntimeSwitchTests.cpp`
+- `tests/integration/SubtitleCacheTests.cpp`
+- `tests/perf/NrExperimentalFixture.h`
+- `tests/perf/NrModelPresetExperiment.cpp`
+- `tests/qml/QuickSmokeTests.cpp`
+- `tests/qml/quick/tst_components.qml`
+- `tests/unit/HdrOutputTuningTests.cpp`
+- `tests/unit/NrModelSettingsTests.cpp`
+- `tests/unit/PresetLibraryTests.cpp`
+- `tests/unit/RepairContractTests.cpp`
+- `tests/unit/RepairPresetTests.cpp`
+
+## 功能对应
+
+- SF双模型/默认与保存/缓存/导出：更新第1节及NR_SF_310916_REPORT。
+- HDR显示PR44：第2节及PR44_HDR_DISPLAY_REPORT，保留georgeg911原提交。
+- 字幕预算/游戏热键与对齐：第3节及FAN_SUBTITLE_PASSTHROUGH_REPORT。
+- VRR/英文专业底栏/网络/去隔行：第4节及ISSUES_41_45_REPORT，包含最终CMake缓存头文件修正。
+- NVOF注册/NR失败状态：第4节及NR2060_SYNC_REPORT。
+- 剩余路径为上述共享设置/音频/来源/翻译/打包与回归接点；2.0.8发布收尾和分支审计未带来额外产品功能。

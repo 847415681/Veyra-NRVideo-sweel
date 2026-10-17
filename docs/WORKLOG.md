@@ -9663,3 +9663,12 @@ final-audit.py pre已通过82旧树/94旧分支/509脏文件与main b571a44不�
 从最终两个ZIP各自全新解压，最小PATH/全新配置/关闭增强，普通D3D12和OBS软件UI四次真实GTA4K冷启动播放均退出0、至少100原帧，无QML或GPU错误，配置sentinel保留；实际呈现/用时见同级cold-start.json。此为基础播放/封包检查，AMD包在本机NVIDIA上启动不等于AMD实卡增强验收。DELIVERY.json绑定ZIP/源码/EXE，reports/.../package.json passed=true。
 
 已按cleanup.py删除本轮6个被替代的私有测试app副本和作者DLL解压重复件，保留最终product209/构建/两最终包/源码/所有日志与前后存档；目标全部先核对解析后绝对路径及无reparse、无共享来源引用。cleanup.json记录7048678414逻辑字节，含硬链接，不能冒充实际磁盘释放量。首清理脚本误用Python3.12才有的is_junction，在删除前即失败；改3.11支持的FILE_ATTRIBUTE_REPARSE_POINT核验后成功，没有扩大删除范围。最后执行final-audit.py post写保护/交付/增量bundle核验回执final.json。main仍b571a44，无推送/正式发布/关机。
+
+
+## 2026-10-17 2.0.9正式发布开工
+
+用户明确发布并要求老样子群公告。control.py start已存档83旧树/95分支/509脏文件状态、六原ZIP、旧2.0.8主/源码及固定FFmpeg/依赖Release回执，source-before.bundle verify；dirty-files-before.zip硬链接保护原509未提交备份。新独立codex/release-2.0.9-20261017起点bfce70b，main b571a44暂不变。只改README/发行文档，原两包和应用源外部重命名原样发布；主两资产、源归档应用与新增去隔行源码两资产，未变依赖链接沿用。不派Agent/代发/关机，不改真实配置/驱动/专有二进制。
+
+已整理v2.0.8..bfce70b共57非merge提交/70产品构建测试路径，RELEASE_2.0.9_CHANGE_INDEX逐项保留，公开报告覆盖SF模型/性能、PR44、字幕/游戏快捷键、2060注册、四issues及集成去隔行修正。README当前新增区/下载/现行NR/快捷键/构建更新，原六群/微信赞助/Discord/Ko-fi/知识库footer逐字保持；两Release正文支持区两图各width220。本机NR GPU45.49%与画质/全机FPS/光学延迟/未验硬件边界区分，内部test标识原样说明。来源RAR匹配回执实际位于verify/nr-sf-310916-20261017/source-receipt.json，此前WORKLOG中的reports/...路径仅是误记，不影响原证据。后续原包审计/草稿上传/正式发布回执另记；产物全E:/项目/Veyra/{用途}/release-2.0.9-20261017。
+
+2.0.9原包逐文件审计与文档gate通过：NVIDIA1666/AMD2106payload、48/534运行组件、PE/EXE/CRC；应用源2044文件和新增去隔行源完整。实际旧构建树745输入SHA保持，发布新checkout仅LF/CRLF者归一化与Git对象一致（实际数量见assets.json），不把两者原始字节混称。四原ZIP冷启绑定原SHA；两用户包/两个新增源正式外名硬链接不重打包，旧两依赖服务器digest一致。57提交/70路径覆盖、README支持footer不变，Release/SOURCE两图width220和知识库保持。尚未上传/发布，后续回执另记。

@@ -61,9 +61,9 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 ---
 
-**2.0.8 release, 2026-10-15:** lower application latency, capture Game mode, variable refresh, capture-card video with controller forwarding, and combined Claude/Codex fixes. [Full update report](docs/RELEASE_NOTES_2.0.8.md).
+**2.0.9 release, 2026-10-17:** SF310.9.16 NR with performance/legacy models, expanded HDR display controls, subtitles/game hotkeys, URL playback, deinterlacing and compatibility fixes. [Full update report](docs/RELEASE_NOTES_2.0.9.md).
 
-**Measured examples:** RTX5070/T911/2K60/NR, optional DLSS6X performance-mode FG GPU P95 **8.1→3.3ms (−59%)**; six-effect UI parameter edits **65–80→about5ms**. These describe particular GPU/UI stages, not universal quality-equivalent gains or optical end-to-end latency. [Conditions and limits](docs/RELEASE_NOTES_2.0.8.md).
+**Measured NR example:** RTX5070/GTA4K input/internal1080p, oldSF-v2 **5.87→3.20ms (−45.5% NR GPU time)**. Models can differ visually; this is not a universal FPS or optical-latency claim. [Conditions and limits](docs/RELEASE_NOTES_2.0.9.md).
 
 **[Veyra knowledge base](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home)** — community guidance compiled from four group chats, covering software setup, common problems and capture cards.
 
@@ -75,23 +75,22 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 - **Node editing and layered NR:** executable connections, independent NR/colour parameters, separate List/Node configurations, sessions and presets.
 - **PC / Xbox streaming:** Moonlight/Sunshine-compatible PC streaming and unofficial experimental Xbox support, alongside PS5, capture cards and screen capture.
 - **New export workflow:** editable ordered queue, trimming, MP4/MKV, multiple audio/embedded subtitle tracks, cancellation/retry and completion sound.
-- **Enhancement and compatibility:** four NR runtime choices (NVIDIA original for RTX 50, Lecram, SF-v2 and AMD lmxxf), DLSS/XeSS/FSR options, capture improvements and a persistent OBS Game Capture switch with restart confirmation. Full details are in the Release.
+- **Enhancement and compatibility:** SF310.9.16 performance/legacy models, NVIDIA original for RTX50 and AMD lmxxf, DLSS/XeSS/FSR options, capture improvements and a persistent OBS Game Capture switch with restart confirmation. Full details are in the Release.
 
-## New in 2.0.8
+## New in 2.0.9
 
-- **Lower application latency:** tighter input/GPU/presentation sequencing, aligned XeSS cycles, bounded display backlog and refresh-budget hints that keep your selected multiplier.
-- **Capture Game mode:** enhance a window or monitor fullscreen while input reaches the game; Home opens controls and Ctrl+Alt+Home exits passthrough. Capture borders and accidentally captured controls are handled where Windows permits.
-- **Variable refresh:** a saved Display switch with capability and active-state explanations, currently using NVIDIA driver detection for G-SYNC/Compatible displays.
-- **Capture picture + remote controllers:** PS5 controller forwarding beside HDMI capture; enhanced PC gaming can be relayed through separately configured third-party remote software with input forwarding.
-- **DLSS performance mode and compute-GPU selection:** optional RTX50 performance runtime, dual-GPU selection with compatible backend migration and restoration.
-- **Responsiveness and compatibility:** granular sliders, controlled switches, cached components, stable capture resizing, huge format-list fixes, common/all-rate menus, GC550 audio-clock compatibility, remembered BMD inputs, Douyin compatibility, GPU-reset recovery and native-size VSR cost reduction for uncompressed sources.
-- **Playback and maintenance:** portrait geometry, unobstructed node controls, fullscreen Home panels, aligned setting metrics, startup update banners and bounded logs.
+- **New NR models:** SF310.9.16 defaults for RTX20–50; Use performance model defaults on (B), off selects embedded legacy A. NVIDIA original remains available with this control disabled; AMD components stay unchanged. Lecram/oldSF-v2 are removed from the new package.
+- **Measured NR cost reduction:** RTX5070, GTA4K source/internal1080NR, oldSF-v2 about5.87→new default3.20ms (−45.5% NR GPU time). Models can produce different pictures; this is not a universal equal-quality pipeline speedup.
+- **HDR display controls:** PR44's five cards, quick/axes presets, simple dials, metadata, per-title/per-display memory and recommendations; nativeHDR and RTXVideoHDR output, on-demand sparse statistics.
+- **Subtitles and game input:** fix late multi-trackPGS cache truncation; align the picture to the captured game window, customize adjustment/exit-passthrough hotkeys, and fix fullscreen re-entry focus timing.
+- **Playback and compatibility:** Ctrl+U opens directHTTP/HTTPS/RTSP media; automatic software/hardware deinterlacing preserves final fields and seek resets; fix G-SYNC Compatible request-versus-active reporting and the English Professional footer.
+- **NR initialization and persistence:** synchronize NVOF resource registration relevant to RTX20 waiting-for-samples reports and expose failure reasons; A/B settings survive layers/presets/List/Node sessions/export without rebuilding playback for inactive model edits.
 
-[Complete2.0.7→2.0.8 update, instructions and measured limits](docs/RELEASE_NOTES_2.0.8.md). The user-approved packages are promoted unchanged; internal2.0.8-test labels remain.
+[Complete2.0.8→2.0.9 update, instructions and measured limits](docs/RELEASE_NOTES_2.0.9.md). Delivered packages are promoted unchanged; internal2.0.9-test labels/manifests remain, PE2.0.9.0.
 
 ## Install and upgrade
 
-Download **Veyra-2.0.8-NVIDIA-win64-portable.zip** or **Veyra-2.0.8-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
+Download **Veyra-2.0.9-NVIDIA-win64-portable.zip** or **Veyra-2.0.9-AMD-win64-portable.zip** for Veyra's active GPU. Extract with Windows or 7-Zip into a new writable folder and run **veyra_qml_ui.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
 
 Start with effects off, check picture/sound, then enable effects individually. High resolution, layered NR and frame generation increase GPU/VRAM requirements.
 
@@ -110,7 +109,7 @@ Home offers files, capture card, PS5, PC, Xbox and screen capture. Files/images 
 
 ### List mode
 
-The NR version selector offers RTX 50 · NVIDIA original, RTX 50 · Lecram, RTX 20–50 · SF-v2 and RX9000 · lmxxf (experimental) in both List and Node mode. Unsupported versions remain visible but gray; switching supported versions updates the entire NR chain. AMD NR requires driver HIP 7. Video export uses at most internal 1080p inference and composites to the original output size; this is not native 4K NR and actual AMD offline encoding still needs hardware retesting. Image exports retain the native model pixel budget; HDR NR is unavailable. See [runtime identities](docs/RUNTIME_COMPONENTS_2.0.3.md).
+The NR version selector offers RTX20–50 · SF310.9.16, RTX50 · NVIDIA original and RX9000 · lmxxf (experimental) in both List and Node mode. SF defaults to performance modelB; disable Use performance model for legacyA. The control is disabled for NVIDIA original and hidden for AMD; model selection is saved per layer. Lecram/oldSF-v2 settings migrate to SF. Unsupported versions remain visible but gray; switching supported versions updates the entire NR chain. AMD NR requires driver HIP 7. Video export uses at most internal 1080p inference and composites to the original output size; this is not native 4K NR and actual AMD offline encoding still needs hardware retesting. Image exports retain the native model pixel budget; HDR NR is unavailable. See [current runtime identities](docs/BUILD_2.0.9.md).
 
 Select List at the top of Professional. Enable SR, NR or RTX Video HDR as needed. Up to four NR layers have independent internal resolution, strength and parameters. The master switch disables all layers and restores their previous enabled states.
 
@@ -141,7 +140,7 @@ Select Nodes at the top of Professional. This is an executable chain editor:
 | Xbox | Follow device-code sign-in and select a console with remote features enabled. Unofficial/experimental; account, service and console restrictions apply. |
 | Screen | Select a window/display; avoid recursively capturing Veyra itself. |
 
-For **Screen Capture → Game mode**, choose a borderless game window or monitor. **Home** opens adjustments, Home/Esc closes them, **Ctrl+Alt+Home** exits passthrough. For **Capture card → PS5 controller control**, pair the console first; third-party streaming software can relay this PC's enhanced picture and forward remote input. Enable background controller forwarding and audio monitoring as needed. See the2.0.8 update for setup and hardware limits.
+For **Screen Capture → Game mode**, choose a borderless game window or monitor. **Home** opens adjustments, Home/Esc closes them, **Ctrl+Alt+Home** exits passthrough. For **Capture card → PS5 controller control**, pair the console first; third-party streaming software can relay this PC's enhanced picture and forward remote input. Enable background controller forwarding and audio monitoring as needed. See the2.0.8 update for setup and hardware limits. Hotkeys are now customizable in Settings → Shortcuts; defaults stay Home/Ctrl+Alt+Home. Windowed game pictures follow the original visible bounds; use borderless fullscreen to fill the display.
 
 Pausing capture/streaming freezes the preview while keeping the session, not the host game. Physical hardware, networks, HDR and controllers need individual validation.
 
@@ -188,7 +187,7 @@ QML renders UI; native D3D12 renders video. List/Nodes share the engine, disconn
 
 ## Source and build
 
-Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.0.8 build/source](docs/BUILD_2.0.8.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
+Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.0.9 build/source](docs/BUILD_2.0.9.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
 
 ## Support
 
