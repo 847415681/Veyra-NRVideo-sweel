@@ -9706,3 +9706,10 @@ final-audit.py pre已通过82旧树/94旧分支/509脏文件与main b571a44不�
 - Preserve300ms pool debounce and existing queue/PTS contracts. After a resized pool supplies no frame for another300ms, restart its WGC session once, preserving cursor/border settings. No target repaint, synthetic pixels/PTS, perpetual retry or change to UI cadence. Animated sources keep their session. Native regression must confirm the actual new-size frame and reset metadata.
 - Actual final GUI run `window-20261017-215528` passed aspect/input/rapid double-click/portrait/exit checks, but flagged the legacy search TextField's custom background as unsupported by the Windows native Controls style. Use explicitly scoped Qt Basic TextField/ItemDelegate/ScrollBar, consistent with existing custom controls; do not change the application's global style.
 - Related16-process run `checks-20261017-215403` passed, including82 Qt Quick cases. These predate the two follow-up changes and do not substitute their final regression.
+
+
+### 2026-10-17 PR57最终原生验收
+- 实测代码1f283dc：24目标构建通过，最终16程序/82Qt Quick/2448条i18n检查通过；实际窗口Raw Input、快速双击、五显示方式、正常/OBS软件125%、静态/动态图和多次退出重入通过。
+- 静态resize独立回归先真实失败；session/pool必须成对恢复的原生错误也已修复。最终native-215901新增检查全过，仅保留与2.0.9逐像素一致的HDR桌面颜色阈值6项失败（旧5项+新增竖屏）。fullScreenSuitePassed=false明确保留，不称全绿。
+- T911枚举1136模板/区间候选，三级/旧版列表共享精确选择、四语言及10场景保存/恢复/拒绝缺失项通过；NV12/YUY2 1080p60各两轮实际重连及单调PTS通过，回调约60.06–60.15fps。范围候选未逐一实卡连接，BMD无硬件不外推。
+- 所有命令、失败夹具修正、实际路径和边界见docs/PR57_INTEGRATION_REPORT_2026-10-17.md及E:/项目/Veyra/reports/pr57-capture-window-20261017。合并前verify通过：84旧树、96分支、509脏文件与1524共享组件保持。用户请求PR合并，不发布/改包/关机。
