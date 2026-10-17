@@ -22,6 +22,19 @@ licenses/notices are retained, and this local authorization grants no new
 public redistribution permission. See `docs/NR_SF_310916_PLAN_2026-10-17.md`
 and the corresponding report for measured conditions and untested hardware.
 
+## Capture format capability discovery (2026-10-17)
+
+The format compatibility review used OBS Studio 32.2.2 at
+`ba2f32bdf791005443988a4955e963663e16b1ed` and its libdshowcapture submodule
+at `8878638324393815512f802640b0d5ce940161f1`, especially
+`src/dshow-enum.cpp` and `src/dshow-base.cpp` (LGPL-2.1-or-later).
+Veyra independently implements the capability fallback, range candidates,
+pin selection and exact media-type validation in
+`include/veyra/source/DirectShowFormatDiscovery.h` and
+`CaptureCapabilityRange.h`. No OBS runtime, capture loop, buffering,
+decoder or renderer is imported by this change. This is separate from the
+existing attributed libdshowcapture adaptations below.
+
 ## Compressed Matroska subtitles (2026-10-09)
 
 The subtitle candidate rebuilds the existing LGPL FFmpeg n9.0.1 with zlib

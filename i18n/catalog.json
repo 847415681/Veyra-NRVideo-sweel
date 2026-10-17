@@ -288,6 +288,13 @@
    "ja": " · ノード"
   },
   {
+   "zh": " · 范围候选（连接时验证）",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": " · 範圍候選（連線時驗證）",
+   "en": " · Range candidate (verified on connection)",
+   "ja": " · 範囲内の候補（接続時に検証）"
+  },
+  {
    "zh": " · 质量 ",
    "src": "qml/DialogHost.qml",
    "zh-TW": " · 品質 ",
@@ -412,6 +419,13 @@
    "zh-TW": " 項",
    "en": " items",
    "ja": " 件"
+  },
+  {
+   "zh": "%1 / %2 个格式",
+   "src": "qml/CaptureLegacyPicker.qml",
+   "zh-TW": "%1 / %2 個格式",
+   "en": "%1 / %2 formats",
+   "ja": "%1 / %2 形式"
   },
   {
    "zh": "%1 · 去重后约 %2 fps",
@@ -3095,6 +3109,13 @@
    "ja": "ゲームモード中のみキーを使用します。Ctrl、Alt、Shift の組み合わせに対応"
   },
   {
+   "zh": "仅接受驱动尺寸范围与步进支持的值；连接时核对实际格式",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "僅接受驅動尺寸範圍與步進支援的值；連線時核對實際格式",
+   "en": "Only sizes within driver bounds and granularity are accepted; the actual format is checked on connection",
+   "ja": "ドライバーのサイズ範囲と刻みに合う値のみ使用できます。実際の形式は接続時に確認します"
+  },
+  {
    "zh": "仅清空列表，不删除硬盘文件",
    "src": "qml/PlaylistWindow.qml",
    "zh-TW": "僅清空清單，不刪除硬碟檔案",
@@ -3628,7 +3649,7 @@
   },
   {
    "zh": "关闭",
-   "src": "qml/DialogHost.qml",
+   "src": "qml/CaptureLegacyPicker.qml",
    "zh-TW": "關閉",
    "en": "Close",
    "ja": "閉じる"
@@ -3985,6 +4006,13 @@
    "ja": "解像度"
   },
   {
+   "zh": "分辨率、帧率和像素格式合并显示；包含非常用帧率，与主界面共用同一个精确选择。范围候选将在连接时验证。",
+   "src": "qml/CaptureLegacyPicker.qml",
+   "zh-TW": "解析度、影格率和像素格式合併顯示；包含非常用影格率，與主介面共用同一個精確選擇。範圍候選將在連線時驗證。",
+   "en": "Resolution, frame rate and pixel format in one list, including uncommon rates. Both views share the same exact selection. Range candidates are verified on connection.",
+   "ja": "解像度・フレームレート・ピクセル形式をまとめて表示します。一般的でないレートも含み、通常画面と同じ正確な選択を使用します。範囲内の候補は接続時に検証します。"
+  },
+  {
    "zh": "分辨率与帧率",
    "src": "qml/DialogHost.qml",
    "zh-TW": "解析度與幀率",
@@ -4060,6 +4088,13 @@
    "zh-TW": "切換極簡 / 專業",
    "en": "Toggle Minimal / Pro",
    "ja": "シンプル / プロを切り替え"
+  },
+  {
+   "zh": "列出离散帧率及驱动范围内的候选；设备帧率填 0 时沿用此选择，连接时验证实际值",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "列出離散影格率及驅動範圍內的候選；裝置影格率填 0 時沿用此選擇，連線時驗證實際值",
+   "en": "Lists discrete rates and candidates within driver bounds; device FPS 0 uses this selection, verified on connection",
+   "ja": "個別のレートとドライバー範囲内の候補を表示します。デバイスFPSが0の場合はこの選択を使い、接続時に実際の値を検証します"
   },
   {
    "zh": "列表",
@@ -4683,13 +4718,6 @@
    "zh-TW": "只保留一幀在處理，未補幀時加 Reflex",
    "en": "One frame in flight; adds Reflex without frame generation",
    "ja": "処理中は 1 フレームのみ、フレーム生成なしでは Reflex を追加"
-  },
-  {
-   "zh": "只列出当前分辨率下设备上报的帧率。设备帧率填 0 时，连接使用这里选中的帧率",
-   "src": "qml/DialogHost.qml",
-   "zh-TW": "只列出目前解析度下裝置回報的幀率。裝置幀率填 0 時，連接使用這裡選中的幀率",
-   "en": "Only frame rates the device reports for the current resolution. A device frame rate of 0 uses the rate selected here",
-   "ja": "現在の解像度でデバイスが報告するフレームレートだけを表示します。デバイスのフレームレートが 0 のときは、ここで選んだ値で接続します"
   },
   {
    "zh": "只列出当前分辨率和帧率下的像素格式",
@@ -6020,6 +6048,13 @@
    "zh-TW": "實際執行：FSR %1 · 2X",
    "en": "Actually running: FSR %1 · 2X",
    "ja": "実際の動作：FSR %1 · 2X"
+  },
+  {
+   "zh": "实际连接的采集格式与所选模式不同，请刷新并重新选择。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "實際連線的擷取格式與所選模式不同，請重新整理並重新選擇。",
+   "en": "The connected capture format differs from the selected mode. Refresh and select again.",
+   "ja": "接続されたキャプチャ形式が選択したモードと異なります。更新して選び直してください。"
   },
   {
    "zh": "实验",
@@ -8094,6 +8129,13 @@
    "ja": "新しいファイルを開くと 2 番目の字幕を自動で選択"
   },
   {
+   "zh": "打开旧版格式列表",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "開啟舊版格式清單",
+   "en": "Open legacy format list",
+   "ja": "従来の形式一覧を開く"
+  },
+  {
    "zh": "打开时的默认页面",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "開啟時的預設頁面",
@@ -8456,6 +8498,13 @@
    "zh-TW": "搜索完成，未發現 PS5；確認同一區域網路，或手動填寫 IP。",
    "en": "Search finished; no PS5 found. Make sure it is on the same LAN, or enter the IP by hand.",
    "ja": "検索が完了しましたが、PS5 は見つかりませんでした。同じ LAN にあるか確認するか、IP を手入力してください。"
+  },
+  {
+   "zh": "搜索，例如：1920 60 NV12",
+   "src": "qml/CaptureLegacyPicker.qml",
+   "zh-TW": "搜尋，例如：1920 60 NV12",
+   "en": "Search, e.g. 1920 60 NV12",
+   "ja": "検索例：1920 60 NV12"
   },
   {
    "zh": "撤销",
@@ -9075,6 +9124,13 @@
    "ja": "書き出し用の通信リソースをマップできませんでした"
   },
   {
+   "zh": "无法构造所选采集格式，请检查分辨率、帧率与驱动能力。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "無法建立所選擷取格式，請檢查解析度、影格率與驅動能力。",
+   "en": "Cannot construct the selected capture format. Check resolution, frame rate and driver capabilities.",
+   "ja": "選択したキャプチャ形式を作成できません。解像度、レート、ドライバーの対応能力を確認してください。"
+  },
+  {
    "zh": "无法检测屏幕是否支持（目前只支持 NVIDIA 显卡）",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "無法偵測螢幕是否支援（目前只支援 NVIDIA 顯示卡）",
@@ -9164,6 +9220,20 @@
    "zh-TW": "日本語",
    "en": "日本語",
    "ja": "日本語"
+  },
+  {
+   "zh": "旧版格式列表",
+   "src": "qml/CaptureLegacyPicker.qml",
+   "zh-TW": "舊版格式清單",
+   "en": "Legacy format list",
+   "ja": "従来の形式一覧"
+  },
+  {
+   "zh": "旧版格式选择",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "舊版格式選擇",
+   "en": "Legacy format selection",
+   "ja": "従来の形式選択"
   },
   {
    "zh": "旧节点配置的 NR 保护区域已移除；列表保护及其他节点参数保留，后续保存到 .p3-node 文件，原文件不覆盖",
@@ -9964,13 +10034,6 @@
    "ja": "上限なし"
   },
   {
-   "zh": "未读到设备上报的采集格式，或设备正被其他应用占用。",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "未讀到裝置回報的擷取格式，或裝置正被其他應用程式佔用。",
-   "en": "No capture formats were reported, or the device is in use by another application.",
-   "ja": "キャプチャ形式が取得できないか、他のアプリがデバイスを使用しています。"
-  },
-  {
    "zh": "未输出",
    "src": "qml/NodePage.qml",
    "zh-TW": "未輸出",
@@ -10137,6 +10200,13 @@
    "zh-TW": "檢查中…",
    "en": "Checking…",
    "ja": "確認中…"
+  },
+  {
+   "zh": "检查并选择",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "檢查並選擇",
+   "en": "Check and select",
+   "ja": "確認して選択"
   },
   {
    "zh": "检查更新",
@@ -10769,20 +10839,6 @@
    "ja": "このキャプチャカードにこの形式はありません。対応する解像度、フレームレート、ピクセル形式を選び直してください。"
   },
   {
-   "zh": "此采集卡无此格式，驱动拒绝所选格式（0x{:08X}），请重新选择。",
-   "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "此擷取卡無此格式，驅動拒絕所選格式（0x{:08X}），請重新選擇。",
-   "en": "This capture card rejected the selected format (0x{:08X}). Choose another supported format.",
-   "ja": "キャプチャカードのドライバーが選択形式を拒否しました（0x{:08X}）。対応する形式を選び直してください。"
-  },
-  {
-   "zh": "此采集卡无此格式：拒绝 {:.3f} FPS（0x{:08X}），请改用设备支持的帧率，或填 0 沿用所选格式。",
-   "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "此擷取卡無此格式：拒絕 {:.3f} FPS（0x{:08X}），請改用裝置支援的幀率，或填 0 沿用所選格式。",
-   "en": "This capture card rejected the requested format at {:.3f} FPS (0x{:08X}). Choose a supported rate, or enter 0 to use the selected format rate.",
-   "ja": "キャプチャカードが {:.3f} FPS の指定形式を拒否しました（0x{:08X}）。対応するレートを選ぶか、0 を入力して選択形式のレートを使用してください。"
-  },
-  {
    "zh": "残差",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "殘差",
@@ -10809,6 +10865,13 @@
    "zh-TW": "比較源畫面與上一幀：沒有明顯變化的像素沿用上一幀輸出，明顯變化的位置直接用新結果。",
    "en": "Compares the source with the previous frame: pixels without a clear change reuse the previous output; clearly changed areas take the new result directly.",
    "ja": "ソースを前のフレームと比較し、目立った変化のないピクセルは前の出力を使い、変化した部分は新しい結果をそのまま使います。"
+  },
+  {
+   "zh": "没有匹配的格式",
+   "src": "qml/CaptureLegacyPicker.qml",
+   "zh-TW": "沒有相符的格式",
+   "en": "No matching formats",
+   "ja": "一致する形式がありません"
   },
   {
    "zh": "没有可保存的画面",
@@ -11749,6 +11812,13 @@
    "ja": "IPTV やカメラなどの HTTP、HTTPS、RTSP メディアストリームを開きます。"
   },
   {
+   "zh": "直接查看完整格式列表，包含被常用帧率筛选隐藏的模式",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "直接查看完整格式清單，包含被常用影格率篩選隱藏的模式",
+   "en": "View the full list, including modes hidden by the common frame rate filter",
+   "ja": "一般的なレートのフィルターで隠れるモードも含め、形式の全一覧を表示します"
+  },
+  {
    "zh": "直播兼容模式未能启用，已恢复",
    "src": "src/engine/EngineControllerImage.cpp",
    "zh-TW": "直播相容模式未能啟用，已恢復",
@@ -12594,6 +12664,13 @@
    "zh-TW": "自定義上限（FPS）",
    "en": "Custom cap (FPS)",
    "ja": "カスタム上限（FPS）"
+  },
+  {
+   "zh": "自定义分辨率",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "自訂解析度",
+   "en": "Custom resolution",
+   "ja": "カスタム解像度"
   },
   {
    "zh": "自定义播放速度",
@@ -13548,13 +13625,6 @@
    "ja": "この種類のノードは上限に達しています（無効・未接続のノードを含む）"
   },
   {
-   "zh": "该采集格式不支持设备帧率协商，请将采集帧率设为 0。",
-   "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "該擷取格式不支援裝置幀率協商，請將擷取幀率設為 0。",
-   "en": "This capture format does not support frame rate negotiation; set the capture frame rate to 0.",
-   "ja": "このキャプチャーフォーマットはフレームレートの調整に対応していません。キャプチャーのフレームレートを 0 にしてください。"
-  },
-  {
    "zh": "请先切换到要保存的编辑模式",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "請先切換到要儲存的編輯模式",
@@ -13814,6 +13884,13 @@
    "ja": "入力ポートを選んで接続を完了 · Esc でキャンセル"
   },
   {
+   "zh": "读取协商后的采集格式失败（0x{:08X}）。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "讀取協商後的擷取格式失敗（0x{:08X}）。",
+   "en": "Failed to read the negotiated capture format (0x{:08X}).",
+   "ja": "合意されたキャプチャ形式を読み取れませんでした（0x{:08X}）。"
+  },
+  {
    "zh": "读取媒体信息失败",
    "src": "src/engine/ExportQueue.cpp",
    "zh-TW": "讀取媒體資訊失敗",
@@ -13833,6 +13910,13 @@
    "zh-TW": "讀取源軌道",
    "en": "Read source tracks",
    "ja": "ソーストラックの読み取り"
+  },
+  {
+   "zh": "读取采集格式失败：%1（0x%2）。请检查设备占用与驱动后重试。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "讀取擷取格式失敗：%1（0x%2）。請檢查裝置占用與驅動後重試。",
+   "en": "Failed to read capture formats: %1 (0x%2). Check whether the device is in use and check its driver, then retry.",
+   "ja": "キャプチャ形式を読み取れません：%1（0x%2）。デバイスの使用状況とドライバーを確認して再試行してください。"
   },
   {
    "zh": "读取附属轨道",
@@ -15011,6 +15095,13 @@
    "ja": "現在のコンテナーに保持できないトラックがあり、保持していません（キューの説明を参照）"
   },
   {
+   "zh": "部分采集能力读取失败（%1，0x%2）；当前列表可能不完整，请刷新重试。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "部分擷取能力讀取失敗（%1，0x%2）；目前清單可能不完整，請重新整理再試。",
+   "en": "Some capture capabilities could not be read (%1, 0x%2). The list may be incomplete; refresh to retry.",
+   "ja": "一部のキャプチャ能力を読み取れませんでした（%1、0x%2）。一覧が不完全な可能性があります。更新して再試行してください。"
+  },
+  {
    "zh": "配对",
    "src": "qml/DialogHost.qml",
    "zh-TW": "配對",
@@ -15291,11 +15382,32 @@
    "ja": "キャプチャー方式"
   },
   {
+   "zh": "采集格式内存分配失败",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取格式記憶體配置失敗",
+   "en": "Capture format memory allocation failed",
+   "ja": "キャプチャ形式のメモリを確保できませんでした"
+  },
+  {
    "zh": "采集格式无效",
    "src": "src/source/MagewellCapture.cpp",
    "zh-TW": "擷取格式無效",
    "en": "Invalid capture format",
    "ja": "キャプチャーフォーマットが不正です"
+  },
+  {
+   "zh": "采集格式无法恢复：{}（0x{:08X}），请刷新并重新选择。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取格式無法還原：{}（0x{:08X}），請重新整理並重新選擇。",
+   "en": "Cannot restore capture format: {} (0x{:08X}). Refresh and select again.",
+   "ja": "キャプチャ形式を復元できません：{}（0x{:08X}）。更新して選び直してください。"
+  },
+  {
+   "zh": "采集格式的能力记录已失效，请刷新后重试。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取格式的能力記錄已失效，請重新整理後再試。",
+   "en": "The capture capability record is no longer valid. Refresh and retry.",
+   "ja": "キャプチャ能力の記録が無効です。更新して再試行してください。"
   },
   {
    "zh": "采集没有开始",
@@ -16558,6 +16670,27 @@
    "ja": "ホーム = ソースを選ぶ画面（上部のロゴをクリックしても戻れます）"
   },
   {
+   "zh": "驱动拒绝所选采集格式（0x{:08X}），请重新选择。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "驅動拒絕所選擷取格式（0x{:08X}），請重新選擇。",
+   "en": "The driver rejected the selected capture format (0x{:08X}). Select another mode.",
+   "ja": "ドライバーが選択したキャプチャ形式を拒否しました（0x{:08X}）。選び直してください。"
+  },
+  {
+   "zh": "驱动未提供可解析的视频格式，请检查设备与驱动后刷新。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "驅動未提供可解析的視訊格式，請檢查裝置與驅動後重新整理。",
+   "en": "The driver provided no readable video formats. Check the device and driver, then refresh.",
+   "ja": "ドライバーから読み取れる映像形式が取得できません。デバイスとドライバーを確認して更新してください。"
+  },
+  {
+   "zh": "驱动未提供该分辨率，或尺寸不符合步进要求；原选择已保留。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "驅動未提供該解析度，或尺寸不符合步進要求；原選擇已保留。",
+   "en": "The driver does not offer this resolution, or its size violates granularity. The previous selection was kept.",
+   "ja": "ドライバーがこの解像度に対応していないか、サイズが刻みに合いません。以前の選択を保持しました。"
+  },
+  {
    "zh": "驱动没有公开此设置页。Blackmagic 请用 Desktop Video Setup 选择 HDMI/SDI，并在采集面板匹配分辨率、帧率和逐行/隔行制式。",
    "src": "src/source/CaptureCardSource.cpp",
    "zh-TW": "驅動未提供此設定頁。Blackmagic 請使用 Desktop Video Setup 選擇 HDMI/SDI，並在擷取面板匹配解析度、幀率及循序／交錯制式。",
@@ -16584,6 +16717,13 @@
    "zh-TW": "驅動設定無法開啟（0x{:08X}）。",
    "en": "Cannot open driver settings (0x{:08X}).",
    "ja": "ドライバー設定を開けません（0x{:08X}）。"
+  },
+  {
+   "zh": "驱动返回的分辨率、帧率、像素格式或扫描方式与所选模式不同，请重新选择。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "驅動傳回的解析度、影格率、像素格式或掃描方式與所選模式不同，請重新選擇。",
+   "en": "The driver returned a different resolution, frame rate, pixel format or scan mode. Select again.",
+   "ja": "ドライバーが返した解像度、レート、ピクセル形式、または走査方式が選択と異なります。選び直してください。"
   },
   {
    "zh": "驱动默认",

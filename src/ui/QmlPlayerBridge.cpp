@@ -70,6 +70,7 @@
 #include "veyra/engine/PlaybackRate.h"
 #include "veyra/sink/WasapiAudioSink.h"
 #include "veyra/source/CaptureFormatSelection.h"
+#include "veyra/source/CaptureCapabilityRange.h"
 #include "veyra/source/CaptureFormatRank.h"
 #include "veyra/source/CaptureColorOverride.h"
 #include "veyra/source/CaptureFrameRate.h"
@@ -359,7 +360,7 @@ struct QmlPlayerBridge::Impl {
     double resumeAt = 0;
     std::vector<sink::RenderEndpoint> audioEndpoints;
     // --- capture connection (P4-e) ---
-    struct CaptureQuery { int kind = 0; std::wstring device; std::vector<source::CaptureDevice> video, audio; std::vector<source::CaptureFormat> formats; };
+    struct CaptureQuery { int kind = 0; std::wstring device,requestedResolution; std::vector<source::CaptureDevice> video, audio; std::vector<source::CaptureFormat> formats;source::CaptureFormatQueryInfo info; };
     std::future<CaptureQuery> captureQuery;
     std::optional<std::pair<int,std::wstring>> captureNextQuery;
     bool captureBusy = false, captureListed = false, captureResumePending = false;
@@ -398,6 +399,7 @@ struct QmlPlayerBridge::Impl {
     }
     std::wstring captureFormatKey;
     std::wstring captureResolutionChoice, captureRateChoice;
+    std::wstring captureRequestedResolution;
     int captureAudioChoice = source::kCaptureAudioDisabled;
     bool captureAudioMissing = false;
     unsigned captureColor = 0;
@@ -2297,6 +2299,7 @@ void QmlPlayerBridge::setCaptureDeviceId(const QString& value) {
     impl_->captureDevice = wideOf(value);
     impl_->captureFormatList.clear();++impl_->captureFormatGeneration;
     impl_->captureResolutionChoice.clear();impl_->captureRateChoice.clear();
+    impl_->captureRequestedResolution.clear();
     impl_->captureFormatKey=impl_->captureDevice==impl_->capturePrefs.videoPath?impl_->capturePrefs.formatKey:std::wstring{};
     impl_->captureDriverFormatKey.clear();
     // Colour follows the device, as in 1.4.4; audio returns to "none" unless it
@@ -2325,7 +2328,7 @@ QVariantList QmlPlayerBridge::captureFormats() const {
             out << QVariantMap{{"id", utf8Of(f.key)}, {"label", captureFormatUiLabel(f, impl_->captureDevice)}, {"tier", f.tier},
                                {"costHint", source::captureFormatNeedsCostHint(static_cast<source::CaptureFormatTier>(f.tier))}, {"driverCurrent", f.driverCurrent},
                                {"width", int(f.width)}, {"height", int(f.height)}, {"fps", f.fps}, {"pixel", uiText(f.pixel)},
-                               {"scan", uiText(f.scan)}, {"interlaced", f.interlaced}};
+                               {"scan", uiText(f.scan)}, {"interlaced", f.interlaced}, {"disabled", !f.supported}, {"rangeCandidate", f.rangeCandidate}};
         }
         return out;
     });
@@ -2352,9 +2355,9 @@ void QmlPlayerBridge::setCaptureFormatKey(const QString& key) {
         impl_->captureStatus=tr("此采集卡无此格式，请重新选择分辨率、帧率和像素格式。");
         emit notice(impl_->captureStatus,true);emit captureChanged();return;
     }
-    if (impl_->captureFormatKey == format->key && impl_->captureResolutionChoice == source::captureResolutionId(*format) && impl_->captureRateChoice == source::captureFrameRateId(*format)) return;
+    if (impl_->captureFormatKey == format->key && impl_->captureResolutionChoice == source::captureResolutionId(*format) && impl_->captureRateChoice == source::captureFrameRateGroupId(*format)) return;
     impl_->captureResolutionChoice=source::captureResolutionId(*format);
-    impl_->captureRateChoice=source::captureFrameRateId(*format);
+    impl_->captureRateChoice=source::captureFrameRateGroupId(*format);
     impl_->captureFormatKey = format->key;
     impl_->captureStatus.clear();
     if(!impl_->persistCaptureSelection(true))emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
@@ -2378,14 +2381,21 @@ QString QmlPlayerBridge::captureResolutionId() const {
     return utf8Of(impl_->captureResolutionChoice);
 }
 void QmlPlayerBridge::setCaptureResolutionId(const QString& id) {
-    const auto wide = wideOf(id);
+    QString normalized=id.trimmed().toLower();normalized.remove(QLatin1Char(' '));
+    normalized.replace(QChar(0x00D7),QLatin1Char('x'));
+    const auto wide = wideOf(normalized);
     if(impl_->captureResolutionChoice==wide)return;
     const auto* sample=source::captureResolutionSample(impl_->captureFormatList,wide);
-    if(!sample){emit notice(tr("此采集卡无此格式，请重新选择分辨率、帧率和像素格式。"),true);return;}
+    if(!sample){
+        const auto hint=source::captureResolutionHint(wide);
+        if(hint.width&&hint.height&&!impl_->captureDevice.empty()&&!source::decklink::isPath(impl_->captureDevice)){
+            impl_->captureRequestedResolution=wide;queryCapture(4,impl_->captureDevice);return;
+        }
+        emit notice(tr("此采集卡无此格式，请重新选择分辨率、帧率和像素格式。"),true);return;
+    }
     impl_->captureResolutionChoice=wide;
-    // A rate the new resolution lacks becomes its first common rate, not the driver's first row.
     if(!source::captureRateSample(impl_->captureFormatList,wide,impl_->captureRateChoice))
-        if(const auto* rate=source::captureDefaultFrameRate(impl_->captureFormatList,wide))impl_->captureRateChoice=source::captureFrameRateId(*rate);
+        if(const auto* rate=source::captureDefaultFrameRate(impl_->captureFormatList,wide))impl_->captureRateChoice=source::captureFrameRateGroupId(*rate);
     impl_->captureFormatKey.clear();
     if(!impl_->persistCaptureSelection(true))emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
     emit captureChanged();
@@ -2415,7 +2425,8 @@ void QmlPlayerBridge::setCaptureFrameRateId(const QString& id) {
     if(!source::captureRateSample(impl_->captureFormatList,impl_->captureResolutionChoice,wide)){
         emit notice(tr("此采集卡无此格式，请重新选择分辨率、帧率和像素格式。"),true);return;
     }
-    impl_->captureRateChoice=wide;impl_->captureFormatKey.clear();
+    const auto* sample=source::captureRateSample(impl_->captureFormatList,impl_->captureResolutionChoice,wide);
+    impl_->captureRateChoice=source::captureFrameRateGroupId(*sample);impl_->captureFormatKey.clear();
     if(!impl_->persistCaptureSelection(true))emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
     emit captureChanged();
 }
@@ -2538,16 +2549,22 @@ void QmlPlayerBridge::queryCapture(int kind, std::wstring device) {
     if (captureQueryBusy()) { i.captureNextQuery=std::pair{kind,std::move(device)};return; }
     i.captureBusy = true; i.captureQueryKind = kind;
     i.captureStatus = kind == 0 ? tr("正在查询采集设备…当前播放继续") : tr("正在读取设备支持的格式…");
-    i.captureQuery = std::async(std::launch::async, [kind, device] {
-        CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-        Impl::CaptureQuery q; q.kind = kind; q.device = device;
+    const auto preferred=kind==2?i.capturePrefs.formatKey:
+        kind==3&&!i.captureDriverFormatKey.empty()?i.captureDriverFormatKey:i.captureFormatKey;
+    const auto requested=kind==4?i.captureRequestedResolution:
+        preferred.empty()&&wideOf(i.prefs.value("captureDraftDevice").toString())==device?
+            wideOf(i.prefs.value("captureDraftResolution").toString()):std::wstring{};
+    i.captureQuery = std::async(std::launch::async, [kind, device, preferred, requested] {
+        Impl::CaptureQuery q; q.kind = kind; q.device = device;q.requestedResolution=requested;
+        const auto initialized=CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        if(FAILED(initialized)){q.info.code=initialized;q.info.stage=L"COM initialization";return q;}
         try {
             if (kind == 0) { q.video = source::CaptureCardSource::deviceDetails(); q.audio = source::CaptureCardSource::deviceDetails(true); }
             else {
                 if (kind == 2) { q.video = source::CaptureCardSource::deviceDetails(); q.audio = source::CaptureCardSource::deviceDetails(true); }
-                q.formats = source::CaptureCardSource::formatsByPath(device);
+                q.formats = source::CaptureCardSource::formatsByPath(device,&q.info,preferred,requested);
             }
-        } catch (...) {}
+        } catch (...) {q.info.code=E_FAIL;q.info.stage=L"Capture capability exception";}
         CoUninitialize();
         return q;
     });
@@ -2559,6 +2576,13 @@ void QmlPlayerBridge::tickCapture() {
     auto q = i.captureQuery.get();
     i.captureBusy = false;
     if(i.captureNextQuery){auto next=std::move(*i.captureNextQuery);i.captureNextQuery.reset();queryCapture(next.first,std::move(next.second));return;}
+    if(FAILED(q.info.code)&&q.formats.empty()){
+        if(q.kind!=0&&q.device!=i.captureDevice){emit captureChanged();return;}
+        if(q.kind!=0&&q.kind!=4){i.captureFormatList.clear();++i.captureFormatGeneration;i.captureResolutionChoice.clear();i.captureRateChoice.clear();}
+        i.captureStatus=tr("读取采集格式失败：%1（0x%2）。请检查设备占用与驱动后重试。")
+            .arg(utf8Of(q.info.stage),QString::number(quint32(q.info.code),16).rightJustified(8,QLatin1Char('0')));
+        emit notice(i.captureStatus,true);emit captureChanged();return;
+    }
     if (q.kind == 0 || q.kind == 2) { i.captureVideo = std::move(q.video); i.captureAudio = std::move(q.audio); i.captureListed = true; }
     // The remembered rate and audio input, matched against the inputs listed now. Both the
     // panel (kind 0) and 继续上次 (kind 2) need it: the resume path skipped it and connected
@@ -2592,6 +2616,10 @@ void QmlPlayerBridge::tickCapture() {
         return;
     }
     if (q.device != i.captureDevice) { emit captureChanged(); return; }   // stale answer
+    if(q.kind==4&&!source::captureResolutionSample(q.formats,q.requestedResolution)){
+        i.captureStatus=tr("驱动未提供该分辨率，或尺寸不符合步进要求；原选择已保留。");
+        emit notice(i.captureStatus,true);emit captureChanged();return;
+    }
     i.captureFormatList = std::move(q.formats);
     ++i.captureFormatGeneration;
     const bool remembered = i.captureDevice == i.capturePrefs.videoPath;
@@ -2605,23 +2633,30 @@ void QmlPlayerBridge::tickCapture() {
     }
     i.captureResolutionChoice.clear();i.captureRateChoice.clear();
     if(const auto* f=selectedCaptureFormat(i.captureFormatList,i.captureFormatKey)){
-        i.captureResolutionChoice=source::captureResolutionId(*f);i.captureRateChoice=source::captureFrameRateId(*f);
+        i.captureResolutionChoice=source::captureResolutionId(*f);i.captureRateChoice=source::captureFrameRateGroupId(*f);
     }else if(remembered&&i.capturePrefs.formatKey.empty()&&wideOf(i.prefs.value("captureDraftDevice").toString())==i.captureDevice){
         const auto resolution=wideOf(i.prefs.value("captureDraftResolution").toString());
         const auto rate=wideOf(i.prefs.value("captureDraftRate").toString());
         if(source::captureResolutionSample(i.captureFormatList,resolution)){
             i.captureResolutionChoice=resolution;
-            if(source::captureRateSample(i.captureFormatList,resolution,rate))i.captureRateChoice=rate;
+            if(const auto* sample=source::captureRateSample(i.captureFormatList,resolution,rate))i.captureRateChoice=source::captureFrameRateGroupId(*sample);
         }
     }
+    if(q.kind==4){
+        i.captureResolutionChoice=q.requestedResolution;i.captureFormatKey.clear();
+        if(const auto* rate=source::captureDefaultFrameRate(i.captureFormatList,i.captureResolutionChoice))i.captureRateChoice=source::captureFrameRateGroupId(*rate);
+        if(!i.persistCaptureSelection(true))emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
+    }
     if(!i.captureFormatKey.empty()&&!i.persistCaptureSelection())emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
-    i.captureStatus = i.captureFormatList.empty() ? tr("未读到设备上报的采集格式，或设备正被其他应用占用。")
+    i.captureStatus = i.captureFormatList.empty() ? tr("驱动未提供可解析的视频格式，请检查设备与驱动后刷新。")
                     : i.captureFormatKey.empty() ? (!i.capturePrefs.formatKey.empty()?tr("此采集卡无此格式，请重新选择分辨率、帧率和像素格式。"):tr("先选择分辨率，再选择该分辨率支持的帧率和像素格式"))
                     : q.kind == 3 ? tr("驱动设置已关闭。请核对所选格式与设备帧率，再连接。")
                     : source::decklink::isPath(i.captureDevice) ? tr("原生采集先确认有效信号；请在设备列表选择对应的 HDMI/SDI 输入，支持自动检测的卡建议选择自动。Driver 保留驱动当前输入。")
                     : captureBlackmagicDevice() ? tr("请选择与输入信号一致的格式。驱动默认格式不代表检测到的信号。")
                     : tr("连接后使用当前增强设置。格式与音频变更需要重新连接。");
-    veyra::log::info("capture-ui", std::format("formats={} selected={}", i.captureFormatList.size(), !i.captureFormatKey.empty()));
+    if(q.info.partial)i.captureStatus=tr("部分采集能力读取失败（%1，0x%2）；当前列表可能不完整，请刷新重试。")
+        .arg(utf8Of(q.info.stage),QString::number(quint32(q.info.code),16).rightJustified(8,QLatin1Char('0')));
+    veyra::log::info("capture-ui", std::format("formats={} selected={} raw={} rejected={} partial={} fallback={}", i.captureFormatList.size(), !i.captureFormatKey.empty(),q.info.advertised,q.info.rejected,q.info.partial,q.info.fallback));
     emit captureChanged();
     if (q.kind == 2) {
         if (i.captureFormatKey.empty()) emit notice(tr("上次的采集格式不可用，请在采集卡面板重新选择"), true);

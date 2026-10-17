@@ -1,5 +1,11 @@
 # WORKLOG
 
+## 2026-10-17 采集格式与旧版入口（Linux 源码候选）
+
+按用户“全部修复掉，再添加老版本采集格式选择入口”，在窗口修复 1295d6b 之上隔离实施 `codex/capture-format-fixes-20261017`。修复 DirectShow 能力回退、尺寸/帧率范围候选、±1 tick 显示分组漏掉像素项、精确媒体类型恢复与连接校验；增加可搜索虚拟化旧版组合列表、自定义尺寸检查和查询错误诊断。原低延迟回调/队列、BMD 原生、增强/音频/渲染/运行库与配置保持。详见 docs/CAPTURE_FORMAT_FIXES_2026-10-17.md。
+
+原生能力测试、Windows/Wine 枚举及原格式测试、Qt 旧列表回归、QML 字节码与翻译检查，另做采集源和桥接的 Windows 对象编译。完整 MSVC 程序构建与真实采集卡端到端仍需 Windows 环境，不能用 Wine/模拟驱动结果代替实卡验收。没有合并 main、推送、打包或发布。
+
 ## 2026-10-17 窗口捕获游戏模式修正（Linux 源码候选）
 
 按用户最新要求取消进入穿透的初始化/动画等待，修正退出热键接收和先释放后退出、全屏拉伸/填满与源窗口 resize 元数据；任务栏问题暂缓。以 origin/main d68d6be 在隔离 codex/window-game-fixes-20261017、/workspace/veyra-window-fixes 实施，原 main/用户文件/运行组件保持。源码、输入边界和验收记录见 docs/WINDOW_GAME_FIXES_2026-10-17.md。

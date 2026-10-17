@@ -20,6 +20,7 @@ Item {
 
     // Which dialog is showing: "" | capture | ps5 | moonlight | xbox | screen | subtitle | audio
     property string dialog: ""
+    onDialogChanged: if (dialog !== "capture") legacyCapturePicker.close()
 
     function open(key) {
         if (key === "save") saveDialog.resetForOpen()
@@ -37,6 +38,17 @@ Item {
     signal startMoonlight()
     signal startXbox()
     signal startScreen()
+
+    CaptureLegacyPicker {
+        id: legacyCapturePicker
+        formats: visible ? veyra.captureFormats : []
+        selectedKey: veyra.captureFormatKey
+        onSelected: key => { if (!veyra.captureQueryBusy) veyra.captureFormatKey = key }
+    }
+    Connections {
+        target: veyra
+        function onCaptureChanged() { if (veyra.captureQueryBusy) legacyCapturePicker.close() }
+    }
 
     // Scrim (M16): the design dims the page behind the dialog, opacity .2s linear.
     // The native video window cannot be dimmed from QML; only the dialog panel is cut
@@ -386,6 +398,17 @@ Item {
                 }
             }
             VRow {
+                objectName: "capture-legacy-entry"
+                label: qsTr("旧版格式选择")
+                hint: qsTr("直接查看完整格式列表，包含被常用帧率筛选隐藏的模式")
+                VButton {
+                    objectName: "capture-legacy-open"
+                    text: qsTr("打开旧版格式列表")
+                    enabled: !veyra.captureQueryBusy && veyra.captureDeviceId.length > 0
+                    onClicked: legacyCapturePicker.open()
+                }
+            }
+            VRow {
                 label: qsTr("分辨率")
                 hint: qsTr("先选择分辨率，再选择该分辨率支持的帧率和像素格式")
                 VSelect {
@@ -399,8 +422,18 @@ Item {
                 }
             }
             VRow {
+                label: qsTr("自定义分辨率")
+                hint: qsTr("仅接受驱动尺寸范围与步进支持的值；连接时核对实际格式")
+                RowLayout {
+                    spacing: 6
+                    enabled: !veyra.captureQueryBusy && veyra.captureDeviceId.length > 0
+                    VTextField { id: customCaptureResolution; objectName: "capture-custom-resolution"; implicitWidth: 140; text: "1920x1080" }
+                    VButton { text: qsTr("检查并选择"); onClicked: veyra.captureResolutionId = customCaptureResolution.text }
+                }
+            }
+            VRow {
                 label: qsTr("帧率")
-                hint: qsTr("只列出当前分辨率下设备上报的帧率。设备帧率填 0 时，连接使用这里选中的帧率")
+                hint: qsTr("列出离散帧率及驱动范围内的候选；设备帧率填 0 时沿用此选择，连接时验证实际值")
                 VSelect {
                     objectName: "capture-frame-rate"
                     enabled: !veyra.captureQueryBusy && veyra.captureResolutionId.length > 0
