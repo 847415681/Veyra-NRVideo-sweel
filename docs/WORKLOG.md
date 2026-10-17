@@ -9721,3 +9721,9 @@ final-audit.py pre已通过82旧树/94旧分支/509脏文件与main b571a44不�
 - 基线：本地 main `26c0d61`，分支 `claude/beauty-20261017`，工作树 `E:/项目/Veyra/worktrees/beauty-20261017`。存档：tag `checkpoint/pre-claude-beauty-20261017`，`E:/项目/Veyra/archives/claude-beauty-20261017/all-refs-26c0d61.bundle`（`git bundle verify` 通过，complete history）。
 - 产物目录：`E:/项目/Veyra/{build,tests,logs,tmp,reports,archives,downloads,deps}/claude-beauty-20261017`。
 - 计划：P0（推理路线对照 / SkinSoft D3D12 原型 / 同帧原画与 HDR 合同）→ 写 `docs/BEAUTY_IMPLEMENTATION_PLAN_2026-10-17.md`；`claude/effects-infra-20261017` 出现后再做 P1–P4。E0 范围（链容量、计时掩码、插入槽、格式版本）不自行改动。
+
+### 2026-10-17 美颜 P0 中段（用量上限中断，Claude）
+- 已完成：构建脚本 `scripts/acceptance/claude-beauty-build.py`（基线 configure+build 69 秒通过）；YuNet 两个 fp32 权重（2023mar / 2026may）下载到 `E:/项目/Veyra/deps/claude-beauty-20261017/yunet-47534e27`，SHA256 与 Git LFS 指针 oid 一致；SkinSoft fd5690f、GPUPixel ef552bf、公共测试人像已取到同目录下各自独立子目录；用 OpenCV 5.0.0 复现了 FaceDetectorYN 的预处理与解码（4 张图结果一致）。
+- 已写未验证：`include/veyra/beauty/{OnnxLite,YuNetGpu}.h`、`src/beauty/{OnnxLite,YuNetGpu}.cpp`、`shaders/BeautyYuNet*.hlsl`。**尚未接入 CMake、尚未编译、尚未运行**，不能当作已通过；不影响现有目标构建。
+- 未做：WinML / ORT-DML 实测对照、SkinSoft HLSL 原型、P0.3 合同测试、`docs/BEAUTY_IMPLEMENTATION_PLAN_2026-10-17.md`。`claude/effects-infra-20261017` 尚未出现（E0 未交付），P1–P4 未开始。
+- 详细发现与下一步：`C:/Users/123/AppData/Roaming/Claude/side-session-notes/local_089fcd60-31dd-4fd0-aac7-c63d8dc7d88a/beauty-20261017-handover.md`。
