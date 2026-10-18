@@ -3,9 +3,10 @@
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include <iostream>
 #include <cstdlib>
+#include <string_view>
 using namespace veyra;
 int wmain(int argc,wchar_t** argv){
-    if(argc!=3)return 2;
+    if(argc!=3&&argc!=4)return 2;
     const std::filesystem::path runtime=argv[1],scratch=argv[2];
     if(!runtime.is_absolute()||!scratch.is_absolute()||std::filesystem::exists(scratch))return 2;
     unsigned failures=0,checks=0;
@@ -13,6 +14,14 @@ int wmain(int argc,wchar_t** argv){
     gfx::D3D12DeviceContext ctx;Status status=Status::Ok;gfx::DeviceContextDesc desc{};
     if(!ctx.initialize(desc,status))return 2;
     pipeline::LmxxfNrBackend smallBackend,original;
+    if(argc==4){
+        if(std::wstring_view(argv[3])!=L"--reject-config")return 2;
+        check(!smallBackend.open(runtime,ctx.device(),ctx.directQueue(),0x1002,true)&&
+            smallBackend.error().find("Veyra-owned history")!=std::string::npos,
+            "real runtime config is checked inside its own CRT after Create");
+        check(!smallBackend.ready(),"rejected real runtime context is fully closed");
+        return failures?1:0;
+    }
     check(!smallBackend.open(runtime,ctx.device(),ctx.directQueue(),0x10de),"actual NVIDIA vendor remains blocked");
     _putenv_s("DLSS5_MULTI_PASS","3"); // Must not override either compiled model.
     check(smallBackend.open(runtime,ctx.device(),ctx.directQueue(),0x1002,true),"real Small Create/PrepareSession metadata");
