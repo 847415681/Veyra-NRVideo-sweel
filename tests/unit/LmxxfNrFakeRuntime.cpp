@@ -79,6 +79,8 @@ extern "C" __declspec(dllexport) uint32_t VeyraLmxxfModelMode(){
     return mode()=="wrong-model" ? 2 : VEYRA_TEST_MODEL_MODE;
 }
 extern "C" __declspec(dllexport) uint32_t VeyraTestLmxxfCreates(){return creates.load();}
+// Fixture cleanup must use this DLL's CRT, just as production validation does.
+extern "C" __declspec(dllexport) void VeyraTestLmxxfResetControls(){_putenv_s("DLSS5_TEMPORAL_MODE","");}
 extern "C" __declspec(dllexport) uint32_t VeyraLmxxfControlsCompatible(){
     const auto* temporal=std::getenv("DLSS5_TEMPORAL_MODE");
     return !temporal||!*temporal||std::string(temporal)=="0";

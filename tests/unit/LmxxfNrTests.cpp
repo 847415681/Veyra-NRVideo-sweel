@@ -28,8 +28,13 @@ int main(){
     check(nr.open(directory,ctx.device(),ctx.directQueue(),0x1002,true)&&
         original.open(directory,ctx.device(),ctx.directQueue(),0x1002,false),"Small and Original sessions coexist");
     original.close();nr.close();
+    const auto injectedModule=LoadLibraryExW((directory/L"LmxxfNrRuntime.dll").c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
+    if(!injectedModule)return 2;
+    const auto resetInjectedControls=reinterpret_cast<void(*)()>(GetProcAddress(injectedModule,"VeyraTestLmxxfResetControls"));
+    if(!resetInjectedControls){FreeLibrary(injectedModule);return 2;}
     SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",L"hidden-config");
     check(!nr.open(directory,ctx.device(),ctx.directQueue(),0x1002),"runtime config cannot enable hidden history after host preflight");
+    resetInjectedControls();FreeLibrary(injectedModule);
     _putenv_s("DLSS5_TEMPORAL_MODE","");
     SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",nullptr);
     SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",L"bad-table");
