@@ -97,6 +97,10 @@ constexpr const char* kExportSdkInitialize = "?initialize@VendorSdk@AVerMedia@@Q
 constexpr const char* kExportSdkUninitialize = "?uninitialize@VendorSdk@AVerMedia@@QEAAHXZ";
 constexpr const char* kExportSdkClosePort = "?closePort@VendorSdk@AVerMedia@@QEAAHXZ";
 constexpr const char* kExportSdkGetAudioFormat = "?getAudioFormat@VendorSdk@AVerMedia@@QEAAHPEAH@Z";
+// Passthrough control. Present in 1.0.15 (verified against the installed
+// avt_device_opener.dll); resolved as optional so older components still load.
+constexpr const char* kExportSdkGetNonPcmOnOff = "?getNonPcmOnOff@VendorSdk@AVerMedia@@QEAAHPEAI@Z";
+constexpr const char* kExportSdkSetNonPcmOnOff = "?setNonPcmOnOff@VendorSdk@AVerMedia@@QEAAHH@Z";
 constexpr const char* kExportOpenerCtor = "??0DeviceOpener@AVerMedia@@QEAA@XZ";
 constexpr const char* kExportOpenerDtor = "??1DeviceOpener@AVerMedia@@QEAA@XZ";
 constexpr const char* kExportOpenerSetVendorSdk = "?SetVendorSdk@DeviceOpener@AVerMedia@@QEAAXPEAVVendorSdk@2@@Z";
@@ -254,6 +258,8 @@ struct AverMediaAudioSwitch::Impl {
         RawFn uninitialize = nullptr;
         RawFn closePort = nullptr;
         RawFn getAudioFormat = nullptr;
+        RawFn getNonPcmOnOff = nullptr;  // optional
+        RawFn setNonPcmOnOff = nullptr;  // optional
         RawFn openerCtor = nullptr;
         RawFn openerDtor = nullptr;
         RawFn setVendorSdk = nullptr;
@@ -300,6 +306,8 @@ struct AverMediaAudioSwitch::Impl {
             {kExportSdkUninitialize, &exports.uninitialize},
             {kExportSdkClosePort, &exports.closePort},
             {kExportSdkGetAudioFormat, &exports.getAudioFormat},
+            {kExportSdkGetNonPcmOnOff, &exports.getNonPcmOnOff},
+            {kExportSdkSetNonPcmOnOff, &exports.setNonPcmOnOff},
             {kExportOpenerCtor, &exports.openerCtor},
             {kExportOpenerDtor, &exports.openerDtor},
             {kExportOpenerSetVendorSdk, &exports.setVendorSdk},
@@ -314,7 +322,9 @@ struct AverMediaAudioSwitch::Impl {
             if (address == nullptr) {
                 // The log sink is optional: keep working with components that
                 // do not export it, we just lose their internal trace.
-                if (entry.target == &exports.setLogHandler) continue;
+                if (entry.target == &exports.setLogHandler ||
+                    entry.target == &exports.getNonPcmOnOff ||
+                    entry.target == &exports.setNonPcmOnOff) continue;
                 status.detail = std::format("missing export {}", entry.name);
                 return false;
             }
@@ -599,8 +609,10 @@ bool AverMediaAudioSwitch::apply(const std::wstring& deviceName, const std::wstr
             formatCall.result, formatError.empty() ? "" : " ", formatError);
         return false;
     }
+    // The SDK returns the format sign-extended (measured -236 = 0xFFFFFF14).
+    const int formatByte = chipFormat & 0xFF;
     impl.status.detail = std::format("chipAudioFormat={}{}", chipFormat,
-        chipFormat == kChipFormatNonPcm ? " (non-PCM/Dolby)" : " (PCM)");
+        formatByte == kChipFormatNonPcm ? " (non-PCM/Dolby)" : " (PCM)");
     impl.status.state = AverMediaSwitchState::Switched;
     impl.lastAppliedPath = devicePath;
     startMonitoring();
@@ -644,6 +656,62 @@ void AverMediaAudioSwitch::stop() noexcept {
     }
     // The modules stay loaded on purpose: their monitor thread and the Qt
     // runtime are not safe to unload while other threads may still touch them.
+}
+
+bool AverMediaAudioSwitch::refreshChipState() {
+    if (!p_) return false;
+    auto& impl = *p_;
+    if (!impl.sdkInitialized || impl.exports.getAudioFormat == nullptr) return false;
+    std::string error;
+    int chipFormat = -1;
+    RawCall formatCall{impl.exports.getAudioFormat, impl.sdk(), &chipFormat};
+    const bool formatOk = callVendor(formatCall, error) && formatCall.result == 0;
+    if (formatOk) impl.status.chipAudioFormat = chipFormat;
+    if (impl.exports.getNonPcmOnOff != nullptr) {
+        unsigned onOff = 0;
+        RawCall onOffCall{impl.exports.getNonPcmOnOff, impl.sdk(), &onOff};
+        if (callVendor(onOffCall, error) && onOffCall.result == 0) {
+            impl.status.passthroughEnabled = onOff != 0;
+        }
+    }
+    return formatOk;
+}
+
+bool AverMediaAudioSwitch::sourceIsBitstream() {
+    return refreshChipState() && (p_->status.chipAudioFormat & 0xFF) == kChipFormatNonPcm;
+}
+
+bool AverMediaAudioSwitch::passthroughEnabled() const {
+    return p_ && p_->status.passthroughEnabled;
+}
+
+bool AverMediaAudioSwitch::setPassthrough(bool enable) {
+    if (!p_) return false;
+    auto& impl = *p_;
+    if (!impl.sdkInitialized || impl.exports.setNonPcmOnOff == nullptr) return false;
+    // The raw invoker passes void* arguments; an int parameter travels in the
+    // low 32 bits of the register on x64, which is how the component reads it.
+    RawCall call{impl.exports.setNonPcmOnOff, impl.sdk(),
+        reinterpret_cast<void*>(static_cast<intptr_t>(enable ? 1 : 0))};
+    std::string error;
+    const bool ok = callVendor(call, error) && call.result == 0;
+    log::info("capture-audio-vendor", std::format("setNonPcmOnOff({}) result={}{}",
+        enable ? 1 : 0, call.result, ok ? "" : (error.empty() ? " failed" : " failed: " + error)));
+    if (ok) impl.status.passthroughEnabled = enable;
+    return ok;
+}
+
+void AverMediaAudioSwitch::alignPassthroughOnce() {
+    if (!p_ || !p_->sdkInitialized) return;
+    const bool bitstream = sourceIsBitstream();
+    const bool armed = passthroughEnabled();
+    log::info("capture-audio-vendor", std::format(
+        "HDMI source audio format: chipFormat={} ({}); passthrough reports armed={}",
+        p_->status.chipAudioFormat, bitstream ? "bitstream" : "PCM", armed ? 1 : 0));
+    // Forcing this call when the component already reports armed left the KS
+    // pin silent (2026-10-01). Only top it up when it is actually off, and
+    // never disarm: the monitor thread treats a disarm as something to undo.
+    if (!armed) setPassthrough(true);
 }
 
 void AverMediaAudioSwitch::startMonitoring() {
