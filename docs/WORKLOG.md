@@ -9724,7 +9724,7 @@ final-audit.py pre已通过82旧树/94旧分支/509脏文件与main b571a44不�
 ### 2026-10-18 AMD NR0.44模型接入与首轮构建
 - 同一既有performance参数接入AMD，默认Small/关闭Original；列表/节点/设置重建与关闭效果编辑合同统一，NVIDIA NGX preset不变。公共C ABI逐字节不变，两个独立MIT源码模块固定实际model selector，共享原样权重/内核，禁上游F9与配置轮询，不逐帧改全局环境。真实Small资源预检拒绝缺权重时静默回原模型。
 - 上游直接MSVC构建失败：Windows rpcndr small宏与新版bool small冲突、缺utf8。兼容头含D3D12后undef small，增加/utf-8；原源码只在本任务build/source副本施加可复现patch，外部固定checkout不改。初版patch CRLF导致git apply不匹配，规范LF后通过。两模块真实编译通过：logs/amd-nr-044-20261018/runtime-small-03.json、runtime-original-01.json；上游现有C4244告警保留。
-- 新stage-044-runtime.py只读验证用户ZIP875条SHA，再部署279旧新权重、80HIP模块及必要codec/许可证；未提取执行Magpie/proxy/driver/add-on。两个真实模块同时加载检查其实际selector和上游Small structural preflight，正式模型与fake合同测试物理分开。0.39脚本保留作历史。
+- 新stage-044-runtime.py只读验证用户ZIP875条SHA，再部署280个.f16/.f32参数文件（含辅助参数）、80HIP模块及必要codec/许可证；未提取执行Magpie/proxy/driver/add-on。两个真实模块同时加载检查其实际selector和上游Small structural preflight，正式模型与fake合同测试物理分开。0.39脚本保留作历史。
 - 增加混合模型真实D3D12合同计数（fake）、磁盘AMD预设/会话恢复、真实runtime元数据/缺资源/错模块测试；这些均不等同HIP推理。四语言新增Small提示。不提高UI33ms/250ms刷新率，Claude树不动。接下来提交输入、限-j2构建13目标并定向执行。
 
 ### 2026-10-18 AMD NR0.44接入完成
