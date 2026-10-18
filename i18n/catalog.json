@@ -253,6 +253,20 @@
    "ja": " · バイパス"
   },
   {
+   "zh": " · 时域 4x（实验）",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": " · 時域 4x（實驗）",
+   "en": " · temporal 4x (experimental)",
+   "ja": " · 時間方向 4x（実験的）"
+  },
+  {
+   "zh": " · 时域 T2x（实验）",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": " · 時域 T2x（實驗）",
+   "en": " · temporal T2x (experimental)",
+   "ja": " · 時間方向 T2x（実験的）"
+  },
+  {
    "zh": " · 校准中",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": " · 校準中",
@@ -1044,6 +1058,13 @@
    "ja": "FSR 4 ML には対応する RX 9000 とドライバーが必要です。実機での検証は未完了です"
   },
   {
+   "zh": "FXAA：最快，整体略柔",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "FXAA：最快，整體略柔",
+   "en": "FXAA: fastest, slightly softer overall",
+   "ja": "FXAA：最速。全体がやや柔らかくなります"
+  },
+  {
    "zh": "GPU / 输入 / 显示资源",
    "src": "include/veyra/engine/BackendRecovery.h",
    "zh-TW": "GPU / 輸入 / 顯示資源",
@@ -1329,6 +1350,13 @@
    "zh-TW": "MKV 不支援直接保留此編碼，請排除此軌",
    "en": "MKV cannot keep this codec as is; exclude this track",
    "ja": "MKV ではこのコーデックをそのまま保持できません。このトラックを除外してください"
+  },
+  {
+   "zh": "MLAA：形态学抗锯齿，阈值与强度可调",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "MLAA：形態學抗鋸齒，閾值與強度可調",
+   "en": "MLAA: morphological anti-aliasing with adjustable threshold and strength",
+   "ja": "MLAA：モルフォロジカル アンチエイリアス。しきい値と強度を調整できます"
   },
   {
    "zh": "MP4 · MKV · 图片",
@@ -1945,6 +1973,13 @@
    "zh-TW": "SDR顯示未轉換",
    "en": "SDR display, not converted",
    "ja": "SDR 表示、変換なし"
+  },
+  {
+   "zh": "SMAA：边缘判断更准，细节保留更好",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "SMAA：邊緣判斷更準，細節保留更好",
+   "en": "SMAA: more accurate edges, keeps more detail",
+   "ja": "SMAA：エッジ判定がより正確で、ディテールをよく保ちます"
   },
   {
    "zh": "Smooth Motion 开启方法",
@@ -2662,7 +2697,7 @@
   },
   {
    "zh": "中",
-   "src": "qml/NodePage.qml",
+   "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "中",
    "en": "Medium",
    "ja": "中"
@@ -3102,6 +3137,13 @@
    "ja": "バランスのよい輝度分布"
   },
   {
+   "zh": "亮度差超过它才算边缘；越低，处理的边缘越多",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "亮度差超過它才算邊緣；越低，處理的邊緣越多",
+   "en": "A brightness step above this counts as an edge; lower values treat more edges",
+   "ja": "輝度差がこれを超えるとエッジとみなします。低いほど多くのエッジを処理します"
+  },
+  {
    "zh": "仅在游戏模式中接管按键；支持 Ctrl、Alt、Shift 组合",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "僅在遊戲模式中接管按鍵；支援 Ctrl、Alt、Shift 組合",
@@ -3194,7 +3236,7 @@
   },
   {
    "zh": "低",
-   "src": "qml/NodePage.qml",
+   "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "低",
    "en": "Low",
    "ja": "低"
@@ -3649,7 +3691,7 @@
   },
   {
    "zh": "关闭",
-   "src": "qml/CaptureLegacyPicker.qml",
+   "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "關閉",
    "en": "Close",
    "ja": "閉じる"
@@ -4396,6 +4438,20 @@
    "zh-TW": "單擊畫面",
    "en": "Click the picture",
    "ja": "映像をクリック"
+  },
+  {
+   "zh": "历史拒绝",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "歷史拒絕",
+   "en": "History rejection",
+   "ja": "履歴の棄却"
+  },
+  {
+   "zh": "历史权重",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "歷史權重",
+   "en": "History weight",
+   "ja": "履歴の重み"
   },
   {
    "zh": "压住高光",
@@ -5294,6 +5350,13 @@
    "ja": "ブラウザーでサインインページを開く"
   },
   {
+   "zh": "在源分辨率去除锯齿边缘，适合游戏画面、文字和界面线条；放在超分之前，锯齿不会被一起放大。",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "在來源解析度去除鋸齒邊緣，適合遊戲畫面、文字和介面線條；放在超解析之前，鋸齒不會被一起放大。",
+   "en": "Removes jagged edges at source resolution, for game footage, text and interface lines. It runs before super resolution, so the jaggies are not enlarged with the picture.",
+   "ja": "ソース解像度でギザギザのエッジを取り除きます。ゲーム映像、文字、UI の線に向いています。超解像の前に処理するため、ギザギザが一緒に拡大されません。"
+  },
+  {
    "zh": "在画面上按住左键拖出",
    "src": "qml/ProPage.qml",
    "zh-TW": "在畫面上按住左鍵拖出",
@@ -6062,6 +6125,13 @@
    "zh-TW": "實驗",
    "en": "Experimental",
    "ja": "実験的"
+  },
+  {
+   "zh": "实验：采集画面无法抖动，这是 SMAA T2x / 4x 的不抖动近似；静止画面更稳，运动处可能拖影",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "實驗：擷取畫面無法抖動，這是 SMAA T2x / 4x 的不抖動近似；靜止畫面更穩，運動處可能拖影",
+   "en": "Experimental: captured frames cannot be jittered, so this approximates SMAA T2x / 4x without jitter; steadier on still scenes, may ghost on motion",
+   "ja": "実験的：キャプチャー映像にはジッターをかけられないため、SMAA T2x / 4x のジッターなし近似です。静止画面は安定しますが、動く部分に残像が出ることがあります"
   },
   {
    "zh": "对比",
@@ -7570,7 +7640,7 @@
   },
   {
    "zh": "强度",
-   "src": "qml/SettingsPage.qml",
+   "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "强度",
    "en": "Strength",
    "ja": "Strength"
@@ -8283,6 +8353,20 @@
    "ja": "白い壁、雲、灰色領域への余計な着色を抑えます"
   },
   {
+   "zh": "抗锯齿",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "抗鋸齒",
+   "en": "Anti-aliasing",
+   "ja": "アンチエイリアス"
+  },
+  {
+   "zh": "抗锯齿 2",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "抗鋸齒 2",
+   "en": "Anti-aliasing 2",
+   "ja": "アンチエイリアス 2"
+  },
+  {
    "zh": "抗闪烁档位",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "抗閃爍檔位",
@@ -8907,6 +8991,13 @@
    "ja": "新しいプリセット名"
   },
   {
+   "zh": "方式",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "方式",
+   "en": "Method",
+   "ja": "方式"
+  },
+  {
    "zh": "旋转显示器请使用 Windows 采集方式",
    "src": "src/source/ScreenCaptureSource.cpp",
    "zh-TW": "旋轉顯示器請使用 Windows 擷取方式",
@@ -9255,6 +9346,13 @@
    "zh-TW": "時域穩定",
    "en": "Temporal stability",
    "ja": "時間方向の安定化"
+  },
+  {
+   "zh": "时域累积",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "時域累積",
+   "en": "Temporal accumulation",
+   "ja": "時間方向の蓄積"
   },
   {
    "zh": "时间",
@@ -10129,6 +10227,13 @@
    "src": "src/engine/PresetLibrary.cpp",
    "zh-TW": "極致",
    "en": "Ultimate",
+   "ja": "最高"
+  },
+  {
+   "zh": "极高",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "極高",
+   "en": "Ultra",
    "ja": "最高"
   },
   {
@@ -11497,6 +11602,13 @@
    "ja": "平坦な映像のコントラスト感を高めます。"
   },
   {
+   "zh": "画面变化超过时丢弃历史；越高越不容易拖影",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "畫面變化超過時捨棄歷史；越高越不容易拖影",
+   "en": "Drops the history where the picture changes by more; higher means less ghosting",
+   "ja": "画面の変化がこれを超えると履歴を破棄します。高いほど残像が出にくくなります"
+  },
+  {
    "zh": "画面呈现失败",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "畫面呈現失敗",
@@ -12356,6 +12468,13 @@
    "zh-TW": "美樂威擷取啟動失敗，已回到普通擷取（詳見日誌 magewell）",
    "en": "Magewell capture failed to start; back to normal capture (see magewell in the log)",
    "ja": "Magewell のキャプチャーを開始できず、通常のキャプチャーに戻しました（ログの magewell を参照）"
+  },
+  {
+   "zh": "美颜",
+   "src": "src/engine/EffectChain.cpp",
+   "zh-TW": "美顏",
+   "en": "Beauty",
+   "ja": "美顔"
   },
   {
    "zh": "羽化像素",
@@ -13667,6 +13786,13 @@
    "ja": "先に RTX Video HDR ノードを追加してください"
   },
   {
+   "zh": "请先添加抗锯齿节点",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "請先添加抗鋸齒節點",
+   "en": "Add an anti-aliasing node first",
+   "ja": "先にアンチエイリアスのノードを追加してください"
+  },
+  {
    "zh": "请先添加补帧节点",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "請先添加補幀節點",
@@ -14046,7 +14172,7 @@
   },
   {
    "zh": "质量",
-   "src": "qml/NodePage.qml",
+   "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "品質",
    "en": "Quality",
    "ja": "品質"
@@ -14141,6 +14267,13 @@
    "zh-TW": "越小越敏感，越大穩得越多",
    "en": "Smaller is more sensitive; larger holds more steady",
    "ja": "小さいほど敏感、大きいほど安定させる範囲が広がります"
+  },
+  {
+   "zh": "越高越平滑，运动拖影也越多",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "越高越平滑，運動拖影也越多",
+   "en": "Higher is smoother but ghosts more on motion",
+   "ja": "高いほど滑らかですが、動きの残像も増えます"
   },
   {
    "zh": "越高越稳，过高会显得发闷",
@@ -14589,6 +14722,13 @@
    "zh-TW": "邊緣神盾（XeSS 防果凍）",
    "en": "Edge Aegis (XeSS anti-jelly)",
    "ja": "エッジイージス（XeSS ゼリー対策）"
+  },
+  {
+   "zh": "边缘阈值",
+   "src": "qml/AntiAliasEditor.qml",
+   "zh-TW": "邊緣閾值",
+   "en": "Edge threshold",
+   "ja": "エッジのしきい値"
   },
   {
    "zh": "运动估算质量",
@@ -15641,6 +15781,13 @@
    "ja": "長時間、完全な映像が届いていません。ネットワークが非常に不安定か、ビットレートが高すぎます。"
   },
   {
+   "zh": "阈值 %1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "閾值 %1",
+   "en": "threshold %1",
+   "ja": "しきい値 %1"
+  },
+  {
    "zh": "队列 ",
    "src": "qml/ExportPage.qml",
    "zh-TW": "佇列 ",
@@ -16404,6 +16551,13 @@
    "ja": "プリセットライブラリのノード項目が破損しています"
   },
   {
+   "zh": "预设库节点抗锯齿参数损坏",
+   "src": "src/engine/PresetLibrary.cpp",
+   "zh-TW": "預設庫節點抗鋸齒參數損壞",
+   "en": "Preset library: node anti-aliasing settings damaged",
+   "ja": "プリセットライブラリのノードのアンチエイリアス設定が破損しています"
+  },
+  {
    "zh": "预设库节点调色参数损坏",
    "src": "src/engine/PresetLibrary.cpp",
    "zh-TW": "預設庫節點調色參數損壞",
@@ -16741,7 +16895,7 @@
   },
   {
    "zh": "高",
-   "src": "qml/NodePage.qml",
+   "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "高",
    "en": "High",
    "ja": "高"

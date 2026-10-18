@@ -89,6 +89,7 @@ VPage {
         else {
             tab = "quality"
             if (chip.type === "sr") target = "list-sr"
+            else if (chip.type === "aa") target = "list-anti-alias"
             else if (chip.type === "video-hdr") target = "list-video-hdr"
             else if (chip.type === "protection") target = "list-global-protection"
             else if (chip.type === "nr") {
@@ -1305,6 +1306,25 @@ VPage {
                         // The design builds the inspector from accordion cards, not
                         // flat rows: an icon, a title, a live summary line, a switch
                         // and a chevron, with nested groups inside.
+                        // Spatial anti-aliasing (#53) runs at source size right after the
+                        // input conversion, in front of SR, so jaggies are never enlarged.
+                        VAccordion {
+                            objectName: "list-anti-alias"
+                            Layout.fillWidth: true
+                            glyph: "type"
+                            hue: "#7FD4FF"
+                            title: qsTr("抗锯齿")
+                            summary: veyra.antiAliasEnabled ? veyra.antiAliasParams.summary : qsTr("已关闭")
+                            on: veyra.antiAliasEnabled
+                            onToggled: on => veyra.antiAliasEnabled = on
+                            AntiAliasEditor {
+                                Layout.fillWidth: true
+                                namePrefix: "list-aa"
+                                params: veyra.antiAliasParams
+                                onEdited: (key, amount) => veyra.setAntiAliasParameter(key, amount)
+                            }
+                        }
+
                         VAccordion {
                             objectName: "list-sr"
                             Layout.fillWidth: true

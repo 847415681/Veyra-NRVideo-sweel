@@ -1100,7 +1100,88 @@ __declspec(noinline) void testDlssSrModels() {
     ChainSessionStore finalReader(sessionPath);
     check(finalReader.load(*restored)&&*restored==*session,"DLSS session: saved K wins over old M/L choices");
 }
+// E0 (2026-10-18): library v14 / session v9 carry anti-aliasing nodes and chains
+// past 16 nodes in their own files; older readers keep their bytes.
+__declspec(noinline) void testEffectNodeStorage() {
+    const auto path = scratch(L"effects-library.v1");
+    const auto sidecar = std::filesystem::path(path).concat(L".effects");
+    std::filesystem::remove(sidecar);
+    PresetLibrary writer(path); writer.setIncludeBuiltins(false);
+    auto old = std::make_unique<PresetEntry>(); old->name = L"before effects"; old->chain = toChain(sample());
+    check(writer.load() && writer.put(*old), "effects storage: seed a library without anti-aliasing");
+    const auto original = readBytes(path);
+    check(!original.starts_with("VEYRA_PRESET_LIBRARY 14") && !std::filesystem::exists(sidecar),
+          "effects storage: untouched anti-aliasing keeps the older format");
+    auto settings = sample();
+    settings.antiAlias.enabled = true; settings.antiAlias.method = AntiAliasMethod::Mlaa; settings.antiAlias.quality = 0;
+    settings.antiAlias.mlaaThreshold = 0.15f; settings.antiAlias.mlaaStrength = 0.7f;
+    auto entry = std::make_unique<PresetEntry>(); entry->name = L"anti-aliased"; entry->chain = toChain(settings);
+    check(writer.put(*entry), "effects storage: save an anti-aliasing chain");
+    check(readBytes(path) == original && readBytes(sidecar).starts_with("VEYRA_PRESET_LIBRARY 14\n"),
+          "effects storage: v14 goes to its own file and keeps the older library intact");
+    {
+        PresetLibrary reader(path); reader.setIncludeBuiltins(false);
+        check(reader.load() && reader.entries().size() == 2 && reader.entries()[1].chain == entry->chain,
+              "effects storage: anti-aliasing parameters reload exactly");
+        auto applied = sample(); PresetLibrary::apply(reader.entries()[1], applied);
+        check(applied.antiAlias == settings.antiAlias, "effects storage: applying the chain restores anti-aliasing");
+        auto plain = sample(); PresetLibrary::apply(reader.entries()[0], plain);
+        check(plain.antiAlias == AntiAliasSettings{}, "effects storage: an older chain applies without anti-aliasing");
+    }
+    // A v13 header cannot smuggle the new node type; a newer version is refused outright.
+    auto downgraded = readBytes(sidecar);
+    downgraded.replace(0, std::string("VEYRA_PRESET_LIBRARY 14").size(), "VEYRA_PRESET_LIBRARY 13");
+    const auto downgradedPath = scratch(L"effects-downgraded.v1");
+    { std::ofstream f(downgradedPath, std::ios::binary); f << downgraded; }
+    {
+        PresetLibrary reader(downgradedPath); reader.setIncludeBuiltins(false);
+        check(!reader.load() || reader.entries().empty(), "effects storage: anti-aliasing nodes under a v13 header are refused");
+    }
+    auto future = readBytes(sidecar);
+    future.replace(0, std::string("VEYRA_PRESET_LIBRARY 14").size(), "VEYRA_PRESET_LIBRARY 15");
+    const auto futurePath = scratch(L"effects-future.v1");
+    { std::ofstream f(futurePath, std::ios::binary); f << future; }
+    {
+        PresetLibrary reader(futurePath); reader.setIncludeBuiltins(false);
+        check(!reader.load() || reader.entries().empty(), "effects storage: an unknown newer version is refused");
+    }
+    // A node chain past the old 16-node limit.
+    auto wide = std::make_unique<PresetEntry>(); wide->name = L"wide nodes"; wide->kind = ChainMode::Node;
+    wide->chain.mode = ChainMode::Node;
+    const auto add = [&](EffectType type, uint32_t count) {
+        for (uint32_t i = 0; i < count; ++i) {
+            auto& node = wide->chain.nodes[wide->chain.nodeCount++]; node.type = type; node.enabled = true;
+            node.viewX = float(wide->chain.nodeCount) * 10.0f;
+            if (type == EffectType::Color) { node.color.enabled = true; node.color.exposure = 0.1f * float(i); }
+            if (type == EffectType::AntiAliasing) { node.aa.enabled = true; node.aa.method = AntiAliasMethod(i % 3); node.aa.quality = 0; }
+        }
+    };
+    add(EffectType::Color, kMaxColorInstances); add(EffectType::AntiAliasing, kMaxAntiAliasInstances);
+    add(EffectType::SuperResolution, 1); add(EffectType::NrEnhance, kMaxNrInstances); add(EffectType::Beauty, 3);
+    add(EffectType::VideoHdr, 1); add(EffectType::FrameGeneration, 1);
+    check(wide->chain.nodeCount == 18 && writer.put(*wide), "effects storage: save an 18-node chain");
+    {
+        PresetLibrary reader(path); reader.setIncludeBuiltins(false);
+        check(reader.load() && reader.entries().size() == 3 && reader.entries()[2].chain == wide->chain,
+              "effects storage: an 18-node chain reloads exactly");
+    }
+
+    const auto sessionPath = scratch(L"effects-session.v1");
+    std::filesystem::remove(std::filesystem::path(sessionPath).concat(L".effects"));
+    auto session = std::make_unique<ChainSession>(ChainSession::initial(sample()));
+    ChainSessionStore sessions(sessionPath);
+    check(sessions.save(*session), "effects session: save the older format first");
+    const auto rollback = readBytes(sessionPath);
+    session->configurations[0].chain = toChain(settings);
+    check(sessions.save(*session) && readBytes(sessionPath) == rollback &&
+          readBytes(std::filesystem::path(sessionPath).concat(L".effects")).starts_with("VEYRA_CHAIN_SESSION 9"),
+          "effects session: v9 goes to its own file beside the older session");
+    auto restored = std::make_unique<ChainSession>();
+    ChainSessionStore reopened(sessionPath);
+    check(reopened.load(*restored) && *restored == *session, "effects session: anti-aliasing round-trips through the session");
+}
 int main() {
+    testEffectNodeStorage();
     testDlssSrModels();
     testFlowStorage();
     testFlowApplication();

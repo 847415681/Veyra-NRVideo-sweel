@@ -37,6 +37,14 @@ inline void describeNrLayers(const EnhancementSettings& settings,pipeline::Enhan
 // Stage selection for one graph build. Preview and export used to fill the
 // EnhanceGraphDesc in five separate places with slightly different formulas;
 // every build now goes through describeStages() so the rules live in one spot.
+// Anti-aliasing by parameter ordinal. An ordinal the settings do not hold is the
+// disabled default, so a description never carries a stale instance.
+inline void describeAntiAlias(const EnhancementSettings& settings,pipeline::EnhanceGraphDesc& desc){
+    desc.antiAlias[0]=settings.antiAlias;
+    for(uint32_t i=1;i<kMaxAntiAliasInstances;++i)
+        desc.antiAlias[i]=i-1<settings.additionalAntiAliasCount?settings.additionalAntiAlias[i-1]:AntiAliasSettings{};
+}
+
 struct StageRequest {
     bool nr=false,sr=false,fg=false;
     uint32_t fgMultiplier=2;
@@ -57,7 +65,8 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
                                                pipeline::EnhanceGraphDesc& desc) {
     desc.fixedExecutionPlan.reset();desc.fixedExecutionPlanError.clear();
     desc.runtimeNodeOrder=request.nodeOrder!=nullptr;
-    if(savedSettings.nrLayerCount>savedSettings.nrLayers.size()||savedSettings.additionalColorCount>savedSettings.additionalColors.size()){
+    if(savedSettings.nrLayerCount>savedSettings.nrLayers.size()||savedSettings.additionalColorCount>savedSettings.additionalColors.size()||
+       savedSettings.additionalAntiAliasCount>savedSettings.additionalAntiAlias.size()){
         desc.fixedExecutionPlanError="too many runtime chain instances";return {};
     }
     std::optional<EnhancementSettings> exportSettings;
@@ -119,6 +128,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     desc.color=settings.color;
     desc.additionalColors=settings.additionalColors;
     desc.additionalColorCount=settings.additionalColorCount;
+    describeAntiAlias(settings,desc);
     desc.videoHdr=settings.videoHdr;
     // Custom: static HDR output tuning (present blit curve + display metadata).
     desc.hdrCurve=settings.hdrCurve;
