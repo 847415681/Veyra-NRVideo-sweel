@@ -758,7 +758,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     const bool admitted=(tested||(autoRequested&&automatic==desc.nrLayersSizePolicy.begin()&&selected.settings.activeAutoNrLayerCount()==1))&&
                        !nrAutoPoolUnavailable&&selected.settings.activeNrLayerCount()<=2&&
                        !isCapture&&!isImage&&desc.enableNr&&!desc.enableSr&&!desc.enableFg&&
-                       !desc.hdrWorking()&&!desc.videoHdr.enabled&&!desc.color.enabled&&!desc.additionalColorCount&&!desc.antiAliasActive()&&!desc.runtimeNodeOrder&&desc.nrHoldStrength==0&&
+                       !desc.hdrWorking()&&!desc.videoHdr.enabled&&!desc.color.enabled&&!desc.additionalColorCount&&!desc.antiAliasActive()&&!desc.beautyActive()&&!desc.runtimeNodeOrder&&desc.nrHoldStrength==0&&
                        currentNrRuntime(desc.nrRuntime)==NrRuntime::Ampere&&desc.opticalFlowBackend==OpticalFlowBackend::Nvidia&&
                        desc.nrMotion==MotionSource::OpticalFlow&&
                        nvidiaAdapter&&ctx.adapter().deviceId==0x2f04&&desc.workWidth==1920&&desc.workHeight==1080&&

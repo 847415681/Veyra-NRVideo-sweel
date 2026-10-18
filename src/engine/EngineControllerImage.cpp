@@ -72,6 +72,11 @@ void EngineController::runLargeImage(HWND window,const sink::RgbaImage& original
             desc.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
             sink::RgbaImage candidate;TiledImageProcessor::Stats stats;
             status(L"正在分块增强大图，保留完整输出尺寸…");
+            // Faces cannot be found tile by tile; the beauty nodes are not applied here.
+            if(requested.beautyEnabled()){
+                veyra::log::warn("image-tiles","beauty nodes are not applied to tiled large images");
+                std::lock_guard lock(mutex_);snapshot_.backendWarning=L"大图分块处理不支持美颜，本图未应用美颜";
+            }
             bool processed=false;
             try{processed=TiledImageProcessor::process(ctx,ring,original,candidate,desc,stop_,stats,[this](uint32_t n,uint32_t total){status(std::format(L"大图分块增强 {}/{} · 每块独立上下文",n,total));});}
             catch(const std::exception& e){veyra::log::warn("image-tiles",std::format("settings exception; retaining previous result: {}",e.what()));}

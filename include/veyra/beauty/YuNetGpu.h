@@ -28,6 +28,7 @@ struct YuNetConfig {
     uint32_t candidateCapacity = 1024;
     float scoreThreshold = 0.6f;
     float nmsThreshold = 0.3f;
+    bool readback = true;           // copy each slot's candidates to a CPU-readable buffer (collect)
 };
 
 // YuNet (OpenCV Zoo / libfacedetection, MIT) face detector as D3D12 compute
@@ -39,7 +40,7 @@ struct YuNetConfig {
 class YuNetGpu {
 public:
     struct Source {
-        ID3D12Resource* texture = nullptr;  // RGBA16F, readable as a non-pixel SRV
+        ID3D12Resource* texture = nullptr;  // RGBA16F / RGBA32F float texture, readable as a non-pixel SRV
         uint32_t width = 0, height = 0;     // full texture size
         bool hdr = false;                   // scRGB (1.0 = 80 nits) instead of linear SDR
         uint32_t originX = 0, originY = 0;  // optional crop; 0 size = whole texture
@@ -69,6 +70,14 @@ public:
     // score. Returns false when the readback is not available.
     bool collect(uint32_t slot, std::vector<FaceBox>& faces, uint32_t* rawCandidates = nullptr);
     static void nonMaxSuppression(std::vector<FaceBox>& boxes, float iouThreshold);
+
+    // GPU consumers (the beauty tracking pass): this slot's candidate list as a raw
+    // buffer (count, then 64-byte records), in the UAV state between records.
+    ID3D12Resource* candidateBuffer(uint32_t slot) const;
+    uint64_t candidateBufferBytes() const;
+    uint32_t candidateCapacity() const;
+    // Live: the decode keeps candidates at or above this score.
+    void setScoreThreshold(float threshold);
 
     // Test and tooling hooks.
     ID3D12Resource* inputBuffer() const;                 // padded BGR0 float4 grid, UAV state

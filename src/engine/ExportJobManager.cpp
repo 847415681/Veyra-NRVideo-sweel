@@ -30,7 +30,7 @@ struct Shared {
     // chain is fixed-capacity and trivially copyable, so it can cross the
     // process boundary; a worker that sees another version refuses the job
     // instead of reading a mismatched layout.
-    DWORD signature=magic,version=10,bytes=sizeof(Shared); // 10: 32-node chain with anti-aliasing / beauty payloads
+    DWORD signature=magic,version=11,bytes=sizeof(Shared); // 10: 32-node chain with anti-aliasing; 11: beauty payloads and face detection
     EnhancementSettings settings;
     EffectChain chain;
     wchar_t input[32768]{},output[32768]{},temporary[32768]{};

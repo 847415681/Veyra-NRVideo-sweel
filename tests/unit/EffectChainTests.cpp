@@ -1065,7 +1065,8 @@ __declspec(noinline) void testAntiAliasSettingsChain() {
     check(chain->countOf(EffectType::AntiAliasing) == 0 && chain->countOf(EffectType::Beauty) == 0 && !chain->overflow,
           "E0: untouched settings add no anti-aliasing or beauty node");
     check(effectInfo(EffectType::AntiAliasing).hidden != pipeline::EnhanceGraphDesc::antiAliasExecutor &&
-          effectInfo(EffectType::Beauty).hidden, "E0: the catalog hides effects whose executor is not built");
+          effectInfo(EffectType::Beauty).hidden != pipeline::EnhanceGraphDesc::beautyExecutor,
+          "E0: the catalog shows exactly the effects whose executor is built");
     chain->overflow = true;
     check(!validateChain(*chain).accepted, "E0: an overflowing chain is refused instead of losing its last node");
 
@@ -1148,6 +1149,7 @@ __declspec(noinline) void testSameSizeSlots() {
             auto& node = chain->nodes[chain->nodeCount++]; node.type = type; node.enabled = true;
             if (type == EffectType::Color) node.color.enabled = true;
             if (type == EffectType::AntiAliasing) { node.aa.enabled = true; node.aa.method = AntiAliasMethod::Smaa; node.aa.quality = 1; }
+            if (type == EffectType::Beauty) { node.beauty.enabled = true; node.beauty.smooth = true; }
         }
         auto settings = std::make_unique<EnhancementSettings>(); fromChain(*chain, *settings);
         const auto order = runtimeOrder(*chain);
@@ -1191,11 +1193,118 @@ __declspec(noinline) void testSameSizeSlots() {
           desc->slotOfStep(step(*desc, EffectType::AntiAliasing, 1)) == Slot::Tail && desc->antiAlias[1].enabled,
           "E0 slots: mixed same-size passes after SR share the tail slot in order");
     describe({EffectType::SuperResolution, EffectType::NrEnhance, EffectType::Beauty}, true, *desc);
-    check(!desc->fixedExecutionPlanError.empty(), "E0: beauty nodes do not reach the graph in this build");
+    check(desc->fixedExecutionPlanError.empty() && desc->slotOfStep(step(*desc, EffectType::Beauty, 0)) == Slot::Tail &&
+          desc->validateFixedExecutionPlan().empty() && desc->beautyActive(), "beauty: SR -> NR -> beauty runs in the tail slot");
+    describe({EffectType::Beauty, EffectType::SuperResolution, EffectType::NrEnhance}, true, *desc);
+    check(desc->slotOfStep(step(*desc, EffectType::Beauty, 0)) == Slot::SourcePost && desc->validateFixedExecutionPlan().empty(),
+          "beauty: a leading beauty node runs at source size");
+    describe({EffectType::SuperResolution, EffectType::Beauty, EffectType::NrEnhance}, true, *desc);
+    check(desc->slotOfStep(step(*desc, EffectType::Beauty, 0)) == Slot::PreNr && desc->validateFixedExecutionPlan().empty(),
+          "beauty: SR -> beauty -> NR uses the pre-NR slot");
+    describe({EffectType::NrEnhance, EffectType::Beauty, EffectType::SuperResolution}, true, *desc);
+    check(desc->nrBeforeSr && desc->slotOfStep(step(*desc, EffectType::Beauty, 0)) == Slot::PreSr && desc->validateFixedExecutionPlan().empty(),
+          "beauty: NR -> beauty -> SR uses the pre-SR slot");
     // Color-only chains keep their existing slots (also covered byte-for-byte by the slot regression).
     describe({EffectType::NrEnhance, EffectType::Color, EffectType::SuperResolution, EffectType::Color}, true, *desc);
     check(desc->validateFixedExecutionPlan().empty() && desc->preSrColor(0) && desc->tailColor(1) && !desc->sourcePostActive(),
           "E0 slots: Color-only node chains keep the pre-SR and tail grades");
+}
+
+__declspec(noinline) void testBeautySettingsChain() {
+    using namespace veyra;
+    using namespace veyra::engine;
+    using Slot = pipeline::EnhanceGraphDesc::PassSlot;
+    BeautySettings b;
+    check(b.validate().empty() && !b.configured() && !b.effective(), "beauty: defaults validate and do nothing");
+    const auto refused = [](auto edit) { BeautySettings v; v.enabled = true; edit(v); return !v.validate().empty(); };
+    check(refused([](BeautySettings& v) { v.radius = 13.0f; }) && refused([](BeautySettings& v) { v.satMin = 0.9f; }) &&
+          refused([](BeautySettings& v) { v.minConfidence = 0.2f; }) && refused([](BeautySettings& v) { v.regionExpand = 0.5f; }) &&
+          refused([](BeautySettings& v) { v.restoreStrength = std::nanf(""); }),
+          "beauty: out-of-range values are refused");
+    BeautyDetection d;
+    check(d.validate().empty() && d.inputLongSide() == 512 && d.rateHz() == 15.0f, "beauty: balanced detection by default");
+    d.maxFaces = 0; check(!d.validate().empty(), "beauty: a detector needs at least one face");
+    // Sub-functions are independent: strength 0 skips only the smoothing.
+    b.enabled = true; b.restore = true; b.smooth = true; b.strength = 0.0f;
+    check(b.restoreActive() && !b.smoothActive() && b.effective(), "beauty: smoothing strength 0 keeps the face restore");
+    b.strength = 1.0f; b.restoreStrength = 0.0f;
+    check(!b.restoreActive() && b.smoothActive(), "beauty: restore strength 0 keeps the smoothing");
+
+    // Two list layers and shared detection survive the chain round trip, after protection.
+    auto s = std::make_unique<EnhancementSettings>();
+    s->nr = true; s->sr = true; s->protection.enabled = true;
+    s->beauty.enabled = true; s->beauty.restore = true; s->beauty.restoreStrength = 0.75f; s->beauty.feather = 0.12f;
+    s->additionalBeautyCount = 1;
+    auto& second = s->additionalBeauty[0];
+    second.enabled = false; second.smooth = true; second.smoothAmount = 0.5f; second.radius = 3.5f; second.scope = BeautyScope::AllSkin;
+    s->beautyDetection.quality = 2; s->beautyDetection.maxFaces = 2; s->beautyDetection.stability = 0.8f;
+    check(s->validate().empty(), "beauty: two list layers validate");
+    auto chain = std::make_unique<EffectChain>(toChain(*s));
+    uint32_t protection = chain->nodeCount, first = chain->nodeCount, hdr = chain->nodeCount;
+    for (uint32_t i = 0; i < chain->nodeCount; ++i) {
+        if (chain->nodes[i].type == EffectType::Protection) protection = i;
+        if (chain->nodes[i].type == EffectType::Beauty && first == chain->nodeCount) first = i;
+        if (chain->nodes[i].type == EffectType::VideoHdr) hdr = i;
+    }
+    check(chain->countOf(EffectType::Beauty) == 2 && protection < first && first < hdr && chain->beautyDetection == s->beautyDetection,
+          "beauty: the list group follows NR protection and precedes RTX Video HDR");
+    auto back = std::make_unique<EnhancementSettings>();
+    fromChain(*chain, *back);
+    check(back->beauty == s->beauty && back->additionalBeautyCount == 1 && back->additionalBeauty[0] == second &&
+          back->beautyDetection == s->beautyDetection, "beauty: fromChain restores both layers and the detection values");
+
+    // Plan: default order puts the group in the tail; NR-first preview right after NR.
+    StageRequest request; request.width = 1280; request.height = 720; request.nr = true; request.sr = true;
+    auto desc = std::make_unique<pipeline::EnhanceGraphDesc>();
+    describeStages(request, *s, *desc);
+    const auto beautyStep = desc->planStepOf(EffectType::Beauty, 0);
+    check(desc->fixedExecutionPlanError.empty() && desc->slotOfStep(beautyStep) == Slot::Tail && desc->beauty[0] == s->beauty &&
+          desc->beautyDetection == s->beautyDetection && desc->validateFixedExecutionPlan().empty(),
+          "beauty: list mode runs the group in the tail slot");
+    auto nrFirst = std::make_unique<EnhancementSettings>(*s); nrFirst->lowLatency = true;
+    for (auto& layer : nrFirst->nrLayers) layer.lowLatencyPairing = true;
+    describeStages(request, *nrFirst, *desc);
+    check(desc->nrBeforeSr && desc->slotOfStep(desc->planStepOf(EffectType::Beauty, 0)) == Slot::PreSr && desc->validateFixedExecutionPlan().empty(),
+          "beauty: NR-first preview runs the group between NR and SR");
+    StageRequest still = request; still.stillImage = true; still.sr = false;
+    describeStages(still, *s, *desc);
+    check(desc->beautyDetectEveryFrame && !desc->beautyRequireDetector, "beauty: a picture is detected on its own frame");
+    StageRequest exportJob = request; exportJob.exportJob = true;
+    auto masked = std::make_unique<EnhancementSettings>(*s); masked->beauty.showMask = true;
+    describeStages(exportJob, *masked, *desc);
+    check(desc->beautyRequireDetector && desc->beautyDetectEveryFrame && !desc->beauty[0].showMask,
+          "beauty: export needs the detector, detects every frame and never writes the mask view");
+
+    // Only the master switch (and the instance count) rebuilds; every value is live.
+    auto live = std::make_unique<EnhancementSettings>(*s);
+    live->beauty.restoreStrength = 0.3f; live->beauty.smooth = true; live->beauty.radius = 6.0f; live->beautyDetection.quality = 0;
+    check(s->sameVideoConfiguration(*live) && !requiresGraphRebuild(*s, *live), "beauty: tuning an enabled node is live");
+    auto toggled = std::make_unique<EnhancementSettings>(*s); toggled->beauty.enabled = false;
+    check(!s->sameVideoConfiguration(*toggled) && requiresGraphRebuild(*s, *toggled), "beauty: switching a node rebuilds");
+    auto counted = std::make_unique<EnhancementSettings>(*s); counted->additionalBeautyCount = 0;
+    check(requiresGraphRebuild(*s, *counted), "beauty: removing a layer rebuilds");
+    auto disabled = std::make_unique<EnhancementSettings>(*toggled); disabled->beauty.radius = 7.0f;
+    check(toggled->sameVideoConfiguration(*disabled), "beauty: editing a disabled node changes nothing");
+
+    // Node mode: two beauty nodes keep their order and parameters.
+    auto node = std::make_unique<EffectChain>(); node->mode = ChainMode::Node;
+    const auto add = [&](EffectType type) -> ChainNode& { auto& n = node->nodes[node->nodeCount++]; n = ChainNode{}; n.type = type; n.enabled = true; return n; };
+    add(EffectType::Beauty).beauty.smooth = true;
+    add(EffectType::SuperResolution);
+    auto& tail = add(EffectType::Beauty); tail.beauty.restore = true; tail.beauty.minConfidence = 0.8f;
+    auto nodeSettings = std::make_unique<EnhancementSettings>(); fromChain(*node, *nodeSettings);
+    const auto order = runtimeOrder(*node);
+    auto restored = std::make_unique<EffectChain>();
+    const auto verdict = restoreRuntimeOrder(*nodeSettings, *order, *restored);
+    check(verdict.accepted && restored->nodes[2].beauty.minConfidence == 0.8f && restored->nodes[0].beauty.smooth,
+          "beauty: node order restores both instances");
+    StageRequest nodeRequest; nodeRequest.width = 640; nodeRequest.height = 360; nodeRequest.sr = true; nodeRequest.nodeOrder = &*order;
+    describeStages(nodeRequest, *nodeSettings, *desc);
+    check(desc->slotOfStep(desc->planStepOf(EffectType::Beauty, 0)) == Slot::SourcePost &&
+          desc->slotOfStep(desc->planStepOf(EffectType::Beauty, 1)) == Slot::Tail && desc->validateFixedExecutionPlan().empty(),
+          "beauty: node mode runs one instance at source size and one in the tail");
+    for (int i = 0; i < 6; ++i) add(EffectType::Beauty);
+    check(!validateChain(*node).accepted, "beauty: more than six beauty nodes are refused");
 }
 
 __declspec(noinline) void testWideChains() {
@@ -1293,6 +1402,7 @@ int main() {
     testNativeVideoSrPolicy();
     testAntiAliasSettingsChain();
     testSameSizeSlots();
+    testBeautySettingsChain();
     testWideChains();
     std::printf(failures ? "effect chain: %d FAILURES\n" : "effect chain: all checks passed\n", failures);
     return failures ? 1 : 0;

@@ -603,7 +603,7 @@ struct YuNetGpu::Impl {
         list->SetComputeRootSignature(rootSignature.Get());
         if (source) {
             D3D12_SHADER_RESOURCE_VIEW_DESC sd{};
-            sd.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+            sd.Format = source->texture->GetDesc().Format;   // RGBA16F or RGBA32F, both read as float4
             sd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
             sd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
             sd.Texture2D.MipLevels = 1;
@@ -663,9 +663,13 @@ struct YuNetGpu::Impl {
             uavBarrier(list);
             if (profileHeap) list->EndQuery(profileHeap, D3D12_QUERY_TYPE_TIMESTAMP, profileBase + 1 + uint32_t(i));
         }
-        transition(list, candidates[slot].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
-        list->CopyBufferRegion(readbacks[slot].Get(), 0, candidates[slot].Get(), 0, candidateBytes);
-        transition(list, candidates[slot].Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        if (cfg.readback) {
+            transition(list, candidates[slot].Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+            list->CopyBufferRegion(readbacks[slot].Get(), 0, candidates[slot].Get(), 0, candidateBytes);
+            transition(list, candidates[slot].Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        } else {
+            uavBarrier(list);
+        }
         return true;
     }
 
@@ -697,6 +701,13 @@ void YuNetGpu::setProfiler(ID3D12QueryHeap* heap, uint32_t baseIndex) { impl_->p
 uint64_t YuNetGpu::weightBytes() const { return uint64_t(impl_->weights.size()) * 4; }
 uint64_t YuNetGpu::workingSetBytes() const { return impl_->workingSet; }
 uint64_t YuNetGpu::multiplyAccumulates(uint32_t w, uint32_t h) const { return impl_->macs(w, h); }
+ID3D12Resource* YuNetGpu::candidateBuffer(uint32_t slot) const
+{
+    return impl_->ready && slot < impl_->candidates.size() ? impl_->candidates[slot].Get() : nullptr;
+}
+uint64_t YuNetGpu::candidateBufferBytes() const { return impl_->candidateBytes; }
+uint32_t YuNetGpu::candidateCapacity() const { return impl_->cfg.candidateCapacity; }
+void YuNetGpu::setScoreThreshold(float threshold) { impl_->cfg.scoreThreshold = threshold; }
 ID3D12Resource* YuNetGpu::inputBuffer() const
 {
     return impl_->ready ? impl_->buffers[size_t(impl_->tensors[size_t(impl_->inputTensor)].buffer)].Get() : nullptr;

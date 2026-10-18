@@ -13,10 +13,14 @@ inline EnhancementSettings freezeExportSettings(EnhancementSettings settings) {
     // Preserve invalid counts for the caller's validation; normalization must
     // not turn a corrupt settings transaction into an apparently valid one.
     if(settings.nrLayerCount>settings.nrLayers.size()||settings.additionalColorCount>settings.additionalColors.size()||
-       settings.additionalAntiAliasCount>settings.additionalAntiAlias.size())return settings;
+       settings.additionalAntiAliasCount>settings.additionalAntiAlias.size()||
+       settings.additionalBeautyCount>settings.additionalBeauty.size())return settings;
     settings.nrPolicy=exportNrSizePolicy(settings.nrRuntime);
     for(uint32_t i=0;i<settings.nrLayerCount&&i<settings.nrLayers.size();++i)
         settings.nrLayers[i].sizePolicy=exportNrSizePolicy(settings.nrLayers[i].runtime);
+    // The beauty mask view is a diagnostic overlay of the preview, never part of a file.
+    settings.beauty.showMask=false;
+    for(auto& beauty:settings.additionalBeauty)beauty.showMask=false;
     const auto chain=toChain(settings);fromChain(chain,settings);
     return settings;
 }

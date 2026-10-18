@@ -1102,6 +1102,63 @@ __declspec(noinline) void testDlssSrModels() {
 }
 // E0 (2026-10-18): library v14 / session v9 carry anti-aliasing nodes and chains
 // past 16 nodes in their own files; older readers keep their bytes.
+__declspec(noinline) void testBeautyNodeStorage() {
+    const auto path = scratch(L"beauty-library.v1");
+    const auto sidecar = std::filesystem::path(path).concat(L".beauty");
+    for (const auto* suffix : {L".beauty", L".effects", L".effects.beauty"}) std::filesystem::remove(std::filesystem::path(path).concat(suffix));
+    PresetLibrary writer(path); writer.setIncludeBuiltins(false);
+    auto old = std::make_unique<PresetEntry>(); old->name = L"before beauty"; old->chain = toChain(sample());
+    check(writer.load() && writer.put(*old), "beauty storage: seed a library without beauty");
+    const auto original = readBytes(path);
+    check(!original.starts_with("VEYRA_PRESET_LIBRARY 15") && !std::filesystem::exists(sidecar),
+          "beauty storage: untouched beauty keeps the older format");
+    auto settings = sample();
+    settings.beauty.enabled = true; settings.beauty.restore = true; settings.beauty.restoreStrength = 0.8f; settings.beauty.feather = 0.12f;
+    settings.beauty.smooth = true; settings.beauty.smoothAmount = 0.55f; settings.beauty.radius = 6.5f; settings.beauty.scope = BeautyScope::AllSkin;
+    settings.beauty.minConfidence = 0.7f; settings.beauty.lumaMin = 0.06f;
+    settings.additionalBeautyCount = 1;
+    settings.additionalBeauty[0].enabled = false; settings.additionalBeauty[0].restore = true; settings.additionalBeauty[0].restoreScope = BeautyRestoreScope::Skin;
+    settings.beautyDetection.quality = 2; settings.beautyDetection.maxFaces = 3; settings.beautyDetection.stability = 0.25f;
+    check(settings.validate().empty(), "beauty storage: two beauty layers validate");
+    auto entry = std::make_unique<PresetEntry>(); entry->name = L"beauty"; entry->chain = toChain(settings);
+    check(writer.put(*entry), "beauty storage: save a chain with beauty");
+    check(readBytes(path) == original && readBytes(sidecar).starts_with("VEYRA_PRESET_LIBRARY 15\n"),
+          "beauty storage: v15 goes to its own file and keeps the older library intact");
+    {
+        PresetLibrary reader(path); reader.setIncludeBuiltins(false);
+        check(reader.load() && reader.entries().size() == 2 && reader.entries()[1].chain == entry->chain,
+              "beauty storage: both layers and the shared detection reload exactly");
+        auto applied = sample(); PresetLibrary::apply(reader.entries()[1], applied);
+        check(applied.beauty == settings.beauty && applied.additionalBeautyCount == 1 && applied.additionalBeauty[0] == settings.additionalBeauty[0] &&
+              applied.beautyDetection == settings.beautyDetection, "beauty storage: applying the chain restores beauty");
+        auto plain = sample(); PresetLibrary::apply(reader.entries()[0], plain);
+        check(plain.beauty == BeautySettings{} && plain.additionalBeautyCount == 0, "beauty storage: an older chain applies without beauty");
+    }
+    // A v14 reader (anti-aliasing build) cannot take the beauty payload; it refuses the file.
+    auto downgraded = readBytes(sidecar);
+    downgraded.replace(0, std::string("VEYRA_PRESET_LIBRARY 15").size(), "VEYRA_PRESET_LIBRARY 14");
+    const auto downgradedPath = scratch(L"beauty-downgraded.v1");
+    { std::ofstream f(downgradedPath, std::ios::binary); f << downgraded; }
+    {
+        PresetLibrary reader(downgradedPath); reader.setIncludeBuiltins(false);
+        check(!reader.load() || reader.entries().empty(), "beauty storage: beauty payloads under a v14 header are refused");
+    }
+    const auto sessionPath = scratch(L"beauty-session.v1");
+    for (const auto* suffix : {L".beauty", L".effects"}) std::filesystem::remove(std::filesystem::path(sessionPath).concat(suffix));
+    auto session = std::make_unique<ChainSession>(ChainSession::initial(sample()));
+    ChainSessionStore sessions(sessionPath);
+    check(sessions.save(*session), "beauty session: save the older format first");
+    const auto rollback = readBytes(sessionPath);
+    session->configurations[0].chain = toChain(settings);
+    check(sessions.save(*session) && readBytes(sessionPath) == rollback &&
+          readBytes(std::filesystem::path(sessionPath).concat(L".beauty")).starts_with("VEYRA_CHAIN_SESSION 10"),
+          "beauty session: v10 goes to its own file");
+    auto restored = std::make_unique<ChainSession>();
+    ChainSessionStore reload(sessionPath);
+    check(reload.load(*restored) && restored->configurations[0].chain == session->configurations[0].chain,
+          "beauty session: the list chain with beauty reloads exactly");
+}
+
 __declspec(noinline) void testEffectNodeStorage() {
     const auto path = scratch(L"effects-library.v1");
     const auto sidecar = std::filesystem::path(path).concat(L".effects");
@@ -1138,7 +1195,7 @@ __declspec(noinline) void testEffectNodeStorage() {
         check(!reader.load() || reader.entries().empty(), "effects storage: anti-aliasing nodes under a v13 header are refused");
     }
     auto future = readBytes(sidecar);
-    future.replace(0, std::string("VEYRA_PRESET_LIBRARY 14").size(), "VEYRA_PRESET_LIBRARY 15");
+    future.replace(0, std::string("VEYRA_PRESET_LIBRARY 14").size(), "VEYRA_PRESET_LIBRARY 16");
     const auto futurePath = scratch(L"effects-future.v1");
     { std::ofstream f(futurePath, std::ios::binary); f << future; }
     {
@@ -1182,6 +1239,7 @@ __declspec(noinline) void testEffectNodeStorage() {
 }
 int main() {
     testEffectNodeStorage();
+    testBeautyNodeStorage();
     testDlssSrModels();
     testFlowStorage();
     testFlowApplication();

@@ -10,12 +10,10 @@
 #include "veyra/source/CaptureBuffer.h"
 #include "veyra/engine/ColorSettings.h"
 #include "veyra/engine/AntiAliasSettings.h"
+#include "veyra/engine/BeautySettings.h"
 namespace veyra::engine {
 inline constexpr uint32_t kMaxColorInstances = 6;
 inline constexpr uint32_t kMaxNrInstances = 4;
-// Beauty nodes (face restore + skin smoothing). Reserved by the effect-chain
-// extension; the effect itself is not available yet (hidden in the catalog).
-inline constexpr uint32_t kMaxBeautyInstances = 6;
 // Anti-flicker route for the NR temporal pass. The tiers come from Magpie's
 // DLSSNRTemporal (GPL-3.0, commit 3841698): see shaders/NrTemporal.hlsl.
 //   Off        - no temporal accumulation at all.
@@ -352,6 +350,17 @@ struct EnhancementSettings {
     AntiAliasSettings antiAlias;
     std::array<AntiAliasSettings,kMaxAntiAliasInstances-1> additionalAntiAlias{};
     uint32_t additionalAntiAliasCount=0;
+    // Beauty nodes: instance zero is the first list layer, the rest follow in
+    // group order. The detection values are shared by every instance of the chain.
+    BeautySettings beauty;
+    std::array<BeautySettings,kMaxBeautyInstances-1> additionalBeauty{};
+    uint32_t additionalBeautyCount=0;
+    BeautyDetection beautyDetection;
+    bool beautyEnabled() const {
+        if(beauty.enabled)return true;
+        for(uint32_t i=0;i<additionalBeautyCount&&i<additionalBeauty.size();++i)if(additionalBeauty[i].enabled)return true;
+        return false;
+    }
     // Stage-5 output stabiliser (anti-flicker). Holds the previous output where
     // the source has not visibly changed. 0 is off, and off is the default: the
     // graph then skips the dispatch entirely, so a build with this feature
@@ -413,6 +422,10 @@ struct EnhancementSettings {
         active.antiAlias=antiAlias.active();
         for(size_t i=0;i<active.additionalAntiAlias.size();++i)
             active.additionalAntiAlias[i]=i<additionalAntiAliasCount?additionalAntiAlias[i].active():AntiAliasSettings{};
+        active.beauty=beauty.active();
+        for(size_t i=0;i<active.additionalBeauty.size();++i)
+            active.additionalBeauty[i]=i<additionalBeautyCount?additionalBeauty[i].active():BeautySettings{};
+        if(!beautyEnabled())active.beautyDetection=defaults.beautyDetection;
         if(nrHoldStrength==0)active.nrHoldTolerance=defaults.nrHoldTolerance;
         if(!hdrCurve.enabled){
             active.hdrCurve=defaults.hdrCurve;
@@ -471,6 +484,11 @@ struct EnhancementSettings {
         if(video.antiAlias.sameStructure(target.antiAlias))video.antiAlias=target.antiAlias;
         for(size_t i=0;i<additionalAntiAlias.size();++i)
             if(video.additionalAntiAlias[i].sameStructure(target.additionalAntiAlias[i]))video.additionalAntiAlias[i]=target.additionalAntiAlias[i];
+        // Beauty: only a node's master switch (and the node count) shapes the graph.
+        if(video.beauty.sameStructure(target.beauty))video.beauty=target.beauty;
+        for(size_t i=0;i<additionalBeauty.size();++i)
+            if(video.additionalBeauty[i].sameStructure(target.additionalBeauty[i]))video.additionalBeauty[i]=target.additionalBeauty[i];
+        video.beautyDetection=target.beautyDetection;
         return video==target;
     }
     void rejectVideoRequest(const EnhancementSettings& attempted,const EnhancementSettings& previous) {
@@ -545,6 +563,11 @@ struct EnhancementSettings {
         if(additionalAntiAliasCount>additionalAntiAlias.size())return "too many anti-aliasing instances";
         for(uint32_t i=0;i<additionalAntiAliasCount;++i)
             if(auto error=additionalAntiAlias[i].validate();!error.empty())return error;
+        if(auto error=beauty.validate();!error.empty())return error;
+        if(additionalBeautyCount>additionalBeauty.size())return "too many beauty instances";
+        for(uint32_t i=0;i<additionalBeautyCount;++i)
+            if(auto error=additionalBeauty[i].validate();!error.empty())return error;
+        if(auto error=beautyDetection.validate();!error.empty())return error;
         if(!pipeline::validNrSizePolicy(nrPolicy))return "invalid NR size policy";
         if(flow<FlowQuality::Performance||flow>FlowQuality::Quality||content<ContentRate::Transport||content>ContentRate::Capture60To30)return "invalid flow/content mode";
         return {};

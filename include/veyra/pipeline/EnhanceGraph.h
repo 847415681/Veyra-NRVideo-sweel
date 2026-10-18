@@ -5,6 +5,8 @@
 #include "veyra/pipeline/ColorGradeTables.h"
 #include "veyra/pipeline/ColorGradeInstance.h"
 #include "veyra/pipeline/AntiAliasPass.h"
+#include "veyra/pipeline/BeautyPass.h"
+#include "veyra/beauty/FaceTracker.h"
 #include "veyra/pipeline/NrInstance.h"
 #include "veyra/pipeline/ResolutionPlan.h"
 #include "veyra/pipeline/NrTemporalPass.h"
@@ -173,6 +175,17 @@ struct EnhanceGraphDesc {
     static constexpr bool antiAliasExecutor=true;
     bool antiAliasActive() const {
         for(const auto& a:antiAlias)if(a.enabled)return true;
+        return false;
+    }
+    // Beauty nodes by parameter ordinal, plus the chain's shared face detection.
+    std::array<engine::BeautySettings,engine::kMaxBeautyInstances> beauty{};
+    engine::BeautyDetection beautyDetection{};
+    bool beautyDetectEveryFrame=false;   // still pictures / export: detect on every frame
+    bool beautyRequireDetector=false;    // export: a missing face detector fails the job before it starts
+    std::wstring beautyModelPath;        // empty: the shipped YuNet file (beauty::locateFaceModel)
+    static constexpr bool beautyExecutor=true;
+    bool beautyActive() const {
+        for(const auto& b:beauty)if(b.enabled)return true;
         return false;
     }
     // Production builders compile once and use this plan for NR resource
@@ -416,18 +429,26 @@ struct EnhanceGraphDesc {
                     return "anti-aliasing parameter index/enabled mismatch";
                 if(!antiAliasExecutor)return "anti-aliasing is not available in this build";
             }
-            if(step.type==EffectType::Beauty)return "beauty nodes are not available in this build";
+            if(step.type==EffectType::Beauty){
+                if(step.parameterIndex>=beauty.size()||!beauty[step.parameterIndex].enabled)
+                    return "beauty parameter index/enabled mismatch";
+                if(!beautyExecutor)return "beauty nodes are not available in this build";
+            }
             // Same-size passes take the rank of the slot they run in.
             PassSlot passSlot=PassSlot::None;
             if(samePass(step.type)){
                 passSlot=slotOfStep(i);
                 if(passSlot==PassSlot::None)return "same-size node position is not supported by the fixed dispatcher";
-                if(step.type!=EffectType::Color)rank=0;   // list mode / source-size slot; node slots below
+                // List mode: anti-aliasing runs at source size first; the beauty group
+                // follows the whole NR group (with its protection). Node slots below.
+                if(step.type==EffectType::AntiAliasing)rank=0;
+                if(step.type==EffectType::Beauty)rank=passSlot==PassSlot::SourcePost?0:int(EffectType::Protection);
             }
             if(nrBeforeSr){
                 if(step.type==EffectType::NrEnhance)rank=1;
                 if(step.type==EffectType::Protection)rank=2;
                 if(step.type==EffectType::SuperResolution)rank=3;
+                if(step.type==EffectType::Beauty&&!runtimeNodeOrder)rank=2;   // right after the NR group
             }
             if(runtimeNodeOrder){
                 if(step.type==EffectType::Protection&&interProtection)rank=nrBeforeSr?1:2;
@@ -702,6 +723,16 @@ public:
     // does not match the content domain). The engine surfaces this in the
     // status panel so the refusal is visible, not only logged.
     const std::wstring& colorLutNotice() const { return colorLutNotice_; }
+    // Beauty nodes: a problem that disables them (shown, never only logged), and the
+    // faces the shared tracker found a few frames ago (status only; the picture
+    // uses this frame's GPU result).
+    const std::wstring& beautyNotice() const { return beautyNotice_; }
+    bool beautyNodesActive() const { return beautyNodesActive_; }
+    bool beautyDetectorReady() const { return faceTracker_&&faceTracker_->ready(); }
+    uint32_t beautyFaceCount() const { return faceTracker_?faceTracker_->faceCount():0; }
+    uint64_t beautyDetections() const { return faceTracker_?faceTracker_->detections():0; }
+    // Tests: the tracked faces (non-pixel SRV state between frames).
+    ID3D12Resource* beautyFacesBuffer() const { return beautyNodesActive_?beautyFaces():nullptr; }
     // True when the colour stage exists in this graph (master switch on and not
     // neutral). The encoder uses it to dither its 8/10-bit conversion output.
     bool colorGradeActive() const { return colorActive_||additionalColorActiveCount_!=0||tailColorActiveCount_!=0||preNrColorActiveCount_!=0||preSrColorActiveCount_!=0||interNrColorActiveCount_!=0||sourcePostColorActiveCount_!=0; }
@@ -904,6 +935,33 @@ private:
     std::array<std::unique_ptr<AntiAliasPass>,engine::kMaxAntiAliasInstances> antiAliasPasses_{};
     std::array<ComPtr<ID3D12Resource>,engine::kMaxAntiAliasInstances> antiAliasOutputs_{};
     bool createAntiAlias(uint32_t parameter,uint32_t width,uint32_t height);
+    // Beauty nodes by parameter ordinal, plus what they share: the face tracker,
+    // the faces buffer (a zero buffer when the detector is unavailable) and this
+    // frame's original - the picture before every effect node. Without a fused
+    // grade the converted input already is that picture (srcRgba_ / preGradeRgba_
+    // are never written again in the frame); with one, beautyOriginal_ receives an
+    // ungraded conversion on the frames where a node restores faces.
+    std::array<std::unique_ptr<BeautyPass>,engine::kMaxBeautyInstances> beautyPasses_{};
+    std::array<ComPtr<ID3D12Resource>,engine::kMaxBeautyInstances> beautyOutputs_{};
+    bool createBeauty(uint32_t parameter,uint32_t width,uint32_t height);
+    bool createBeautyShared();
+    ID3D12Resource* beautyFaces() const { return faceTracker_&&faceTracker_->ready()?faceTracker_->faces():beautyFacesFallback_.Get(); }
+    bool beautyRestoreRequested() const {
+        for(const auto& b:desc_.beauty)if(b.restoreActive())return true;
+        return false;
+    }
+    float beautyMinConfidence() const {
+        float value=0.95f;
+        for(const auto& b:desc_.beauty)if(b.enabled)value=std::min(value,b.minConfidence);
+        return value;
+    }
+    // Re-points one slot pass at a new input (chainSlotViews, NR bypass).
+    void bindSlotPassInput(const SlotPass& pass,ID3D12Resource* input);
+    std::unique_ptr<beauty::FaceTracker> faceTracker_;
+    ComPtr<ID3D12Resource> beautyOriginal_,beautyFacesFallback_;
+    ID3D12Resource* beautyOriginalSource_=nullptr;
+    bool beautyNodesActive_=false,beautyOriginalValid_=false,beautyDetectFailureLogged_=false;
+    std::wstring beautyNotice_;
     bool tailColorExecutionLogged_=false,preNrColorExecutionLogged_=false;
     bool preSrColorExecutionLogged_=false;
     bool interNrColorExecutionLogged_=false;

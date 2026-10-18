@@ -44,6 +44,13 @@ inline void describeAntiAlias(const EnhancementSettings& settings,pipeline::Enha
     for(uint32_t i=1;i<kMaxAntiAliasInstances;++i)
         desc.antiAlias[i]=i-1<settings.additionalAntiAliasCount?settings.additionalAntiAlias[i-1]:AntiAliasSettings{};
 }
+// Beauty by parameter ordinal, like anti-aliasing; the detection values are the chain's.
+inline void describeBeauty(const EnhancementSettings& settings,pipeline::EnhanceGraphDesc& desc){
+    desc.beauty[0]=settings.beauty;
+    for(uint32_t i=1;i<kMaxBeautyInstances;++i)
+        desc.beauty[i]=i-1<settings.additionalBeautyCount?settings.additionalBeauty[i-1]:BeautySettings{};
+    desc.beautyDetection=settings.beautyDetection;
+}
 
 struct StageRequest {
     bool nr=false,sr=false,fg=false;
@@ -66,7 +73,8 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     desc.fixedExecutionPlan.reset();desc.fixedExecutionPlanError.clear();
     desc.runtimeNodeOrder=request.nodeOrder!=nullptr;
     if(savedSettings.nrLayerCount>savedSettings.nrLayers.size()||savedSettings.additionalColorCount>savedSettings.additionalColors.size()||
-       savedSettings.additionalAntiAliasCount>savedSettings.additionalAntiAlias.size()){
+       savedSettings.additionalAntiAliasCount>savedSettings.additionalAntiAlias.size()||
+       savedSettings.additionalBeautyCount>savedSettings.additionalBeauty.size()){
         desc.fixedExecutionPlanError="too many runtime chain instances";return {};
     }
     std::optional<EnhancementSettings> exportSettings;
@@ -129,6 +137,12 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     desc.additionalColors=settings.additionalColors;
     desc.additionalColorCount=settings.additionalColorCount;
     describeAntiAlias(settings,desc);
+    describeBeauty(settings,desc);
+    // A still picture or an export frame is judged on its own faces, never on a
+    // detection that is a few frames old.
+    desc.beautyDetectEveryFrame=request.stillImage||request.exportJob;
+    // An export never writes a file that silently lacks a selected effect.
+    desc.beautyRequireDetector=request.exportJob;
     desc.videoHdr=settings.videoHdr;
     // Custom: static HDR output tuning (present blit curve + display metadata).
     desc.hdrCurve=settings.hdrCurve;

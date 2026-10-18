@@ -31,7 +31,7 @@ enum class EffectType : uint8_t {
     VideoHdr,           // SDR -> HDR conversion
     FrameGeneration,    // must be the last node
     AntiAliasing,       // spatial anti-aliasing (#53): same size, repeatable, before RTX Video HDR
-    Beauty,             // face restore + skin smoothing: same size, repeatable (reserved, hidden)
+    Beauty,             // face restore + skin smoothing: same size, repeatable, before RTX Video HDR
     Count
 };
 constexpr uint32_t effectTypeCount = uint32_t(EffectType::Count);
@@ -78,6 +78,7 @@ struct ChainNode {
     ColorSettings color{};
     VideoHdrSettings videoHdr{};
     AntiAliasSettings aa{};
+    BeautySettings beauty{};
     bool operator==(const ChainNode&) const = default;
 };
 
@@ -98,6 +99,8 @@ struct EffectChain {
     // toChain() ran out of nodes: validateChain() refuses the chain instead of a
     // stage being dropped silently.
     bool overflow = false;
+    // One face detector serves every beauty node of this chain.
+    BeautyDetection beautyDetection{};
     bool operator==(const EffectChain&) const = default;
 
     // Counts nodes of one type, regardless of enabled state.

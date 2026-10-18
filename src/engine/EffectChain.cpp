@@ -14,9 +14,8 @@ constexpr std::array<EffectInfo, effectTypeCount> kCatalog{{
     {EffectType::Protection, effectTypeName(EffectType::Protection), "NR 保护区域", 1, false, false, false, false, false},
     {EffectType::VideoHdr, effectTypeName(EffectType::VideoHdr), "RTX Video HDR", 1, false, false, true, false, false},
     {EffectType::FrameGeneration, effectTypeName(EffectType::FrameGeneration), "补帧", 1, false, true, false, false, false},
-    // Beauty stays hidden until its executor ships; the engine and file formats already know it.
     {EffectType::AntiAliasing, effectTypeName(EffectType::AntiAliasing), "抗锯齿", kMaxAntiAliasInstances, true, false, false, false, false, false},
-    {EffectType::Beauty, effectTypeName(EffectType::Beauty), "美颜", kMaxBeautyInstances, true, false, false, false, false, true},
+    {EffectType::Beauty, effectTypeName(EffectType::Beauty), "美颜", kMaxBeautyInstances, true, false, false, false, false, false},
 }};
 } // namespace
 
@@ -242,6 +241,8 @@ ChainValidation validateChain(const EffectChain& chain) {
             return {false, "节点模式已取消 NR 保护区域，请迁移旧节点配置"};
         if(node.type==EffectType::NrEnhance&&!pipeline::validNrSizePolicy(node.nr.sizePolicy))
             return {false, "NR 内部处理分辨率非法"};
+        if(node.type==EffectType::Beauty&&!node.beauty.validate().empty())
+            return {false, "美颜参数超出范围"};
         ++seen[index];
         if (node.enabled) lastEnabled = i;
     }
@@ -249,6 +250,7 @@ ChainValidation validateChain(const EffectChain& chain) {
         const auto& info = kCatalog[t];
         if (seen[t] > info.maxInstances) return {false, "该效果数量超出上限"};
     }
+    if (!chain.beautyDetection.validate().empty()) return {false, "美颜人脸识别设置超出范围"};
     // Frame generation always runs on the chain's final output: the present
     // sink owns the swapchain and the OSD/subtitles are composited after it.
     // The UI refuses to move it, and this is the engine-side guard.
@@ -293,6 +295,7 @@ EffectChain toChain(const EnhancementSettings& settings) {
     chain.mode = ChainMode::List;
     chain.fgStrictAdmission = settings.fgStrictAdmission;
     chain.fgMultiplier = std::max(2u, settings.multiplier);
+    chain.beautyDetection = settings.beautyDetection;
     // A full chain never overwrites its last node: it is flagged, and validateChain()
     // refuses it, instead of a stage disappearing (the old 16-node chain did that).
     ChainNode spill;
@@ -305,7 +308,8 @@ EffectChain toChain(const EnhancementSettings& settings) {
         return node;
     };
     // List order is the product order: colour (fused into the ingest shader),
-    // anti-aliasing (source size), SR, NR layers, protection, Video HDR, frame generation.
+    // anti-aliasing (source size), SR, NR layers, protection, the beauty group,
+    // Video HDR, frame generation.
     append(EffectType::Color, settings.color.enabled).color = settings.color;
     for(uint32_t i=0;i<std::min(settings.additionalColorCount,kMaxColorInstances-1);++i)
         append(EffectType::Color,settings.additionalColors[i].enabled).color=settings.additionalColors[i];
@@ -332,6 +336,11 @@ EffectChain toChain(const EnhancementSettings& settings) {
         nr.nr.sizePolicy = layer.sizePolicy;
     }
     append(EffectType::Protection, settings.protection.enabled).protection = settings.protection;
+    // Untouched beauty adds no node either.
+    if(settings.beauty.configured()||settings.additionalBeautyCount)
+        append(EffectType::Beauty,settings.beauty.enabled).beauty=settings.beauty;
+    for(uint32_t i=0;i<std::min(settings.additionalBeautyCount,kMaxBeautyInstances-1);++i)
+        append(EffectType::Beauty,settings.additionalBeauty[i].enabled).beauty=settings.additionalBeauty[i];
     append(EffectType::VideoHdr, settings.videoHdr.enabled).videoHdr = settings.videoHdr;
     append(EffectType::FrameGeneration, settings.multiplier > 1);
     return chain;
@@ -349,7 +358,8 @@ std::optional<ChainRuntimeOrder> runtimeOrder(const EffectChain& chain) {
 ChainValidation restoreRuntimeOrder(const EnhancementSettings& settings, const ChainRuntimeOrder& order,
                                     EffectChain& output) {
     if (order.nodeCount > kMaxChainNodes || settings.nrLayerCount > kMaxNrInstances ||
-        settings.additionalColorCount >= kMaxColorInstances || settings.additionalAntiAliasCount >= kMaxAntiAliasInstances)
+        settings.additionalColorCount >= kMaxColorInstances || settings.additionalAntiAliasCount >= kMaxAntiAliasInstances ||
+        settings.additionalBeautyCount >= kMaxBeautyInstances)
         return {false, "运行节点顺序或实例数量无效"};
     const auto source = toChain(settings);
     EffectChain restored;
@@ -357,6 +367,7 @@ ChainValidation restoreRuntimeOrder(const EnhancementSettings& settings, const C
     restored.nodeCount = order.nodeCount;
     restored.fgMultiplier = source.fgMultiplier;
     restored.fgStrictAdmission = source.fgStrictAdmission;
+    restored.beautyDetection = source.beautyDetection;
     std::array<bool, kMaxChainNodes> used{};
     for (uint32_t i = 0; i < order.nodeCount; ++i) {
         if (uint32_t(order.types[i]) >= effectTypeCount) return {false, "运行节点类型无效"};
@@ -371,7 +382,8 @@ ChainValidation restoreRuntimeOrder(const EnhancementSettings& settings, const C
         const auto& node = source.nodes[i];
         if (node.enabled || (node.type == EffectType::NrEnhance && settings.nrLayerCount) ||
             (node.type == EffectType::Color && settings.additionalColorCount) ||
-            (node.type == EffectType::AntiAliasing && settings.additionalAntiAliasCount))
+            (node.type == EffectType::AntiAliasing && settings.additionalAntiAliasCount) ||
+            (node.type == EffectType::Beauty && settings.additionalBeautyCount))
             return {false, "运行节点顺序遗漏实例参数"};
     }
     const auto valid = validateChain(restored);
@@ -391,6 +403,11 @@ void fromChain(const EffectChain& chain, EnhancementSettings& settings) {
     settings.additionalAntiAlias = {};
     settings.additionalAntiAliasCount = 0;
     bool firstAntiAlias = true;
+    settings.beauty = {};
+    settings.additionalBeauty = {};
+    settings.additionalBeautyCount = 0;
+    settings.beautyDetection = chain.beautyDetection;
+    bool firstBeauty = true;
     settings.sr = false;
     settings.nr = false;
     settings.nrLayers = {};
@@ -463,7 +480,16 @@ void fromChain(const EffectChain& chain, EnhancementSettings& settings) {
                 aa.enabled=node.enabled;
             }
             break;
-        case EffectType::Beauty:   // reserved: no executor or settings yet
+        case EffectType::Beauty:
+            if(firstBeauty){
+                settings.beauty=node.beauty;
+                settings.beauty.enabled=node.enabled;
+                firstBeauty=false;
+            }else if(settings.additionalBeautyCount<settings.additionalBeauty.size()){
+                auto& beauty=settings.additionalBeauty[settings.additionalBeautyCount++];
+                beauty=node.beauty;
+                beauty.enabled=node.enabled;
+            }
             break;
         case EffectType::Count:
             break;
@@ -693,6 +719,11 @@ bool requiresGraphRebuild(const EnhancementSettings& savedPrevious, const Enhanc
     if(!previous.antiAlias.sameStructure(next.antiAlias))return true;
     for(uint32_t i=0;i<std::min(next.additionalAntiAliasCount,kMaxAntiAliasInstances-1);++i)
         if(!previous.additionalAntiAlias[i].sameStructure(next.additionalAntiAlias[i]))return true;
+    // Beauty: a node exists while it is enabled; every value inside it is live.
+    if(previous.additionalBeautyCount!=next.additionalBeautyCount)return true;
+    if(!previous.beauty.sameStructure(next.beauty))return true;
+    for(uint32_t i=0;i<std::min(next.additionalBeautyCount,kMaxBeautyInstances-1);++i)
+        if(!previous.additionalBeauty[i].sameStructure(next.additionalBeauty[i]))return true;
     if(previous.additionalColorCount!=next.additionalColorCount)return true;
     for(uint32_t i=0;i<std::min(next.additionalColorCount,kMaxColorInstances-1);++i){
         const auto& a=previous.additionalColors[i];
