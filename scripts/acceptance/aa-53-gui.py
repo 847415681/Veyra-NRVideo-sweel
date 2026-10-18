@@ -1,6 +1,6 @@
 """Anti-aliasing (#53) GUI acceptance: real QML card, bridge, engine and live player.
 
-usage: py -3.11 -I scripts/acceptance/aa-53-gui.py <staged-app-name>
+usage: py -3.11 -I scripts/acceptance/aa-53-gui.py <staged-app-name> [task-folder]
 
 Runs a private copy of the staged app (tests/claude-aa-53-20261017/<name>) with an
 isolated profile, injects aa-53-gui.qml into that copy's Main.qml (restored
@@ -11,7 +11,7 @@ from pathlib import Path
 import json, os, re, subprocess, sys, time
 
 ROOT = Path(__file__).resolve().parents[2]
-BASE = Path('E:/项目/Veyra'); TASK = 'claude-aa-53-20261017'
+BASE = Path('E:/项目/Veyra'); TASK = sys.argv[2] if len(sys.argv) > 2 else 'claude-aa-53-20261017'
 APP = BASE / 'tests' / TASK / sys.argv[1]
 MEDIA = BASE / 'tests' / TASK / 'media' / 'aa-player-720p.mp4'
 LOG = BASE / 'logs' / TASK / ('gui-' + time.strftime('%Y%m%d-%H%M%S')); LOG.mkdir(parents=True)

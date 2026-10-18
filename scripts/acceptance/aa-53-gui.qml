@@ -31,7 +31,7 @@ Item {
                 if (test.ticks < 4) return
                 test.require(!veyra.antiAliasEnabled && p.present === false, "a fresh profile has no anti-aliasing node")
                 const ids = veyra.effectCatalog.map(e => e.id)
-                test.require(ids.indexOf("aa") >= 0 && ids.indexOf("beauty") < 0, "catalog offers anti-aliasing, beauty stays hidden")
+                test.require(ids.indexOf("aa") >= 0 && ids.indexOf("beauty") >= 0, "catalog offers anti-aliasing and beauty")
                 veyra.volume = 0
                 veyra.openPath(test.media)
                 test.step = 1; return

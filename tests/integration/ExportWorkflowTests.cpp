@@ -64,6 +64,14 @@ int wmain(int argc,wchar_t** argv){
         // worker's graph runs the pass (its log names the instance).
         const bool antiAlias=mode==L"aa"||mode==L"aa-mkv";
         if(antiAlias){settings.antiAlias.enabled=true;settings.antiAlias.method=AntiAliasMethod::Smaa;settings.antiAlias.quality=2;}
+        // Beauty: the frozen settings cross the worker protocol with the mask view off,
+        // and the worker creates the node and the face tracker (an export refuses to
+        // start without the face model, which the staged app keeps in models/).
+        const bool beauty=mode==L"beauty";
+        if(beauty){
+            settings.beauty.enabled=true;settings.beauty.restore=true;settings.beauty.restoreStrength=.8f;
+            settings.beauty.smooth=true;settings.beauty.showMask=true;settings.beautyDetection.quality=2;
+        }
         if(mode==L"queue"){
             std::filesystem::create_directories(output);
             ExportQueue queue(manager);
@@ -180,6 +188,16 @@ int wmain(int argc,wchar_t** argv){
                 require(text.find("[anti-alias] instance=0 SMAA high")!=std::string::npos,"export worker did not create the anti-aliasing pass");
                 // The log path may hold non-ASCII folders, which would fail the narrow console stream.
                 std::wcout<<L"ANTI_ALIAS_EXPORT encoded="<<s.encoded<<L" passCreated=1\n";
+            }
+            if(beauty){
+                auto expected=settings.beauty;expected.showMask=false;
+                require(s.frozen.beauty==expected&&s.frozen.beautyDetection==settings.beautyDetection,
+                        "frozen job lost the beauty settings or kept the mask view");
+                std::ifstream log(s.workerLog);const std::string text((std::istreambuf_iterator<char>(log)),{});
+                require(text.find("[beauty] instance=0 ")!=std::string::npos,"export worker did not create the beauty node");
+                require(text.find("face tracker ready")!=std::string::npos,"export worker did not start the face tracker");
+                require(text.find("beauty-detect")==std::string::npos||text.find("unavailable")==std::string::npos,"export worker ran without faces");
+                std::wcout<<L"BEAUTY_EXPORT encoded="<<s.encoded<<L" nodeCreated=1 tracker=1\n";
             }
         }
         passed=true;

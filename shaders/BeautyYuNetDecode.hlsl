@@ -2,7 +2,8 @@
 // anchor: 0 cls, 1 obj, 2..5 box, 6..15 five landmarks (x,y pairs). Anchors whose
 // sqrt(sigmoid(cls) * sigmoid(obj)) reaches the threshold are appended to a
 // bounded candidate list (atomic counter in the first 16 bytes, then 64-byte
-// records); the host reads the list back after the fence and runs NMS.
+// records). The face tracker runs NMS on the GPU (BeautyTrack.hlsl); with
+// readback (the detector test) the host reads the list back and runs it.
 //   arg0 stride | arg1 capacity | arg2 threshold (float bits) | arg3 scale index
 // Record: x, y, w, h, 5 x (lx, ly), score, id (scale << 24 | anchor).
 #include "BeautyYuNet.hlsli"

@@ -41,6 +41,7 @@ VScrollBar 1.0 VScrollBar.qml
 VConfirm 1.0 VConfirm.qml
 NrLayerEditor 1.0 NrLayerEditor.qml
 AntiAliasEditor 1.0 AntiAliasEditor.qml
+BeautyEditor 1.0 BeautyEditor.qml
 VSpinner 1.0 VSpinner.qml
 VEqBars 1.0 VEqBars.qml
 VTelemetryValue 1.0 VTelemetryValue.qml

@@ -386,6 +386,13 @@
    "ja": " ch"
   },
   {
+   "zh": " 层依次处理",
+   "src": "qml/ProPage.qml",
+   "zh-TW": " 層依次處理",
+   "en": " layers in sequence",
+   "ja": " 層を順に処理"
+  },
+  {
    "zh": " 层依次处理 · 每层参数独立",
    "src": "qml/ProPage.qml",
    "zh-TW": " 層依次處理 · 每層參數獨立",
@@ -533,6 +540,13 @@
    "ja": "+  NR 層を追加"
   },
   {
+   "zh": "+  添加美颜层",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "+  添加美顏層",
+   "en": "+  Add beauty layer",
+   "ja": "+  美顔層を追加"
+  },
+  {
    "zh": "0 = 不做高光滚降",
    "src": "qml/ProPage.qml",
    "zh-TW": "0 = 不做高光滾降",
@@ -596,6 +610,13 @@
    "ja": "1080p · 既定"
   },
   {
+   "zh": "1080p 像素，随画面尺寸缩放；越大越柔",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "1080p 像素，隨畫面尺寸縮放；越大越柔",
+   "en": "In 1080p pixels, scaled with the picture size; larger is softer",
+   "ja": "1080p 換算のピクセル数。画面サイズに合わせて変わり、大きいほど柔らかくなります"
+  },
+  {
    "zh": "2 项",
    "src": "qml/ProPage.qml",
    "zh-TW": "2 項",
@@ -617,6 +638,13 @@
    "ja": "2X はネイティブ動作、3X / 4X は実験的なアンロックです。失敗の理由は診断を参照してください"
   },
   {
+   "zh": "320 像素，每秒 10 次，最省",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "320 像素，每秒 10 次，最省",
+   "en": "320 px, 10 times a second, lightest",
+   "ja": "320 px、毎秒 10 回、最も軽い"
+  },
+  {
    "zh": "4 项",
    "src": "qml/ProPage.qml",
    "zh-TW": "4 項",
@@ -631,11 +659,25 @@
    "ja": "5 項目"
   },
   {
+   "zh": "512 像素，每秒 15 次",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "512 像素，每秒 15 次",
+   "en": "512 px, 15 times a second",
+   "ja": "512 px、毎秒 15 回"
+  },
+  {
    "zh": "6 项",
    "src": "qml/ProPage.qml",
    "zh-TW": "6 項",
    "en": "6 items",
    "ja": "6 項目"
+  },
+  {
+   "zh": "640 像素，每秒 30 次，小脸也能识别",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "640 像素，每秒 30 次，小臉也能識別",
+   "en": "640 px, 30 times a second, finds small faces too",
+   "ja": "640 px、毎秒 30 回、小さな顔も検出"
   },
   {
    "zh": "8 位配对码",
@@ -2409,6 +2451,13 @@
    "ja": "おすすめ"
   },
   {
+   "zh": "一键设定开关和数值，肤色范围与人脸识别保持不变",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "一鍵設定開關和數值，膚色範圍與人臉識別保持不變",
+   "en": "Sets the switches and values in one go; the skin range and face detection stay as they are",
+   "ja": "スイッチと数値をまとめて設定します。肌色範囲と顔検出はそのままです"
+  },
+  {
    "zh": "一键还原",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "一鍵還原",
@@ -2507,6 +2556,13 @@
    "ja": "前回のキャプチャーデバイスが接続されていません。差し直して更新するか、別のデバイスを選んでください。"
   },
   {
+   "zh": "上移",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "上移",
+   "en": "Move up",
+   "ja": "上へ移動"
+  },
+  {
    "zh": "上限 %1 nit 未被触及（滚降区 %2% · 暗部提升区 %3%）",
    "src": "qml/ProPage.qml",
    "zh-TW": "上限 %1 nit 未被觸及（滾降區 %2% · 暗部提升區 %3%）",
@@ -2547,6 +2603,13 @@
    "zh-TW": "下次啟動軟體時自動應用這個預設",
    "en": "Apply this preset automatically the next time the app starts",
    "ja": "次回起動時にこのプリセットを自動適用"
+  },
+  {
+   "zh": "下移",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "下移",
+   "en": "Move down",
+   "ja": "下へ移動"
   },
   {
    "zh": "不使用 LUT",
@@ -3123,6 +3186,20 @@
    "ja": "明るさの変化"
   },
   {
+   "zh": "亮度上限",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "亮度上限",
+   "en": "Brightness max",
+   "ja": "明るさの上限"
+  },
+  {
+   "zh": "亮度下限",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "亮度下限",
+   "en": "Brightness min",
+   "ja": "明るさの下限"
+  },
+  {
    "zh": "亮度保持",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "亮度保持",
@@ -3144,6 +3221,48 @@
    "ja": "輝度差がこれを超えるとエッジとみなします。低いほど多くのエッジを処理します"
   },
   {
+   "zh": "人脸原画保护",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "人臉原畫保護",
+   "en": "Original face restore",
+   "ja": "顔のオリジナル保護"
+  },
+  {
+   "zh": "人脸原画保护：在识别到的人脸里混回本帧原画（没有经过任何效果）。磨皮：柔化皮肤，保留眼睛、睫毛和嘴唇的细节。两项可分别开关。",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "人臉原畫保護：在識別到的人臉裡混回本幀原畫（沒有經過任何效果）。磨皮：柔化皮膚，保留眼睛、睫毛和嘴唇的細節。兩項可分別開關。",
+   "en": "Original face restore: blends this frame's original (before any effect) back into the detected faces. Skin smoothing: softens skin and keeps the detail of eyes, lashes and lips. Each can be switched on its own.",
+   "ja": "顔のオリジナル保護：検出した顔の中に、このフレームの元の画像（どの効果も通す前）を戻して合成します。美肌：目・まつ毛・唇のディテールを残したまま肌をなめらかにします。それぞれ個別にオン／オフできます。"
+  },
+  {
+   "zh": "人脸置信度",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "人臉置信度",
+   "en": "Face confidence",
+   "ja": "顔の信頼度"
+  },
+  {
+   "zh": "人脸识别",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "人臉識別",
+   "en": "Face detection",
+   "ja": "顔検出"
+  },
+  {
+   "zh": "人脸识别 · 全部美颜节点共用",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "人臉識別 · 所有美顏節點共用",
+   "en": "Face detection · shared by all beauty nodes",
+   "ja": "顔検出 · すべての美顔ノードで共有"
+  },
+  {
+   "zh": "仅人脸",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "僅人臉",
+   "en": "Faces only",
+   "ja": "顔のみ"
+  },
+  {
    "zh": "仅在游戏模式中接管按键；支持 Ctrl、Alt、Shift 组合",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "僅在遊戲模式中接管按鍵；支援 Ctrl、Alt、Shift 組合",
@@ -3163,6 +3282,20 @@
    "zh-TW": "僅清空清單，不刪除硬碟檔案",
    "en": "Clear playlist; keep files on disk",
    "ja": "リストのみクリア。ファイルは削除しません"
+  },
+  {
+   "zh": "仅皮肤",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "僅皮膚",
+   "en": "Skin only",
+   "ja": "肌のみ"
+  },
+  {
+   "zh": "仅皮肤：头发和背景保留效果",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "僅皮膚：頭髮和背景保留效果",
+   "en": "Skin only: hair and background keep the effects",
+   "ja": "肌のみ：髪と背景には効果が残ります"
   },
   {
    "zh": "仅美乐威 Pro Capture（PCIe 内置卡）可用；USB Capture 系列不支持",
@@ -3242,6 +3375,13 @@
    "ja": "低"
   },
   {
+   "zh": "低于它的人脸不算；误识别时调高",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "低於它的人臉不計；誤識別時調高",
+   "en": "Faces below it don't count; raise it when other things are taken for faces",
+   "ja": "これ未満の顔は無視します。誤検出するときは上げてください"
+  },
+  {
    "zh": "低延迟",
    "src": "include/veyra/source/CaptureFormatRank.h",
    "zh-TW": "低延遲",
@@ -3317,6 +3457,13 @@
    "zh-TW": "餘量 ",
    "en": "Headroom ",
    "ja": "余裕 "
+  },
+  {
+   "zh": "例如调色或增强后脸色不自然时，让人脸回到原画",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "例如調色或增強後臉色不自然時，讓人臉回到原畫",
+   "en": "For example when grading or enhancement makes faces look wrong: they go back to the original",
+   "ja": "色調整や強調で顔色が不自然になったときなどに、顔を元の画像に戻します"
   },
   {
    "zh": "例如：夜间游戏",
@@ -3415,6 +3562,20 @@
    "zh-TW": "儲存預設失敗: %1",
    "en": "Failed to save preset: %1",
    "ja": "プリセットの保存に失敗しました：%1"
+  },
+  {
+   "zh": "保护强度",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "保護強度",
+   "en": "Restore strength",
+   "ja": "保護の強さ"
+  },
+  {
+   "zh": "保护范围",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "保護範圍",
+   "en": "Restore area",
+   "ja": "保護範囲"
   },
   {
    "zh": "保留全部",
@@ -3646,6 +3807,20 @@
    "zh-TW": "全部顯示卡",
    "en": "All GPUs",
    "ja": "すべての GPU"
+  },
+  {
+   "zh": "全部肤色",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "全部膚色",
+   "en": "All skin",
+   "ja": "すべての肌色"
+  },
+  {
+   "zh": "全部肤色：不依赖人脸识别，画面中所有肤色区域都会处理",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "全部膚色：不依賴人臉識別，畫面中所有膚色區域都會處理",
+   "en": "All skin: works without face detection; every skin-coloured area of the picture is smoothed",
+   "ja": "すべての肌色：顔検出を使わず、画面内の肌色の部分をすべて処理します"
   },
   {
    "zh": "全部还原",
@@ -4398,6 +4573,13 @@
    "ja": "領域内をすべての NR 層から除外 · リストモードのみ"
   },
   {
+   "zh": "区域扩展",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "區域擴展",
+   "en": "Area expansion",
+   "ja": "範囲の拡張"
+  },
+  {
    "zh": "半分辨率",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "半解析度",
@@ -4543,6 +4725,20 @@
    "zh-TW": "原畫 / 增強對比",
    "en": "Original / enhanced comparison",
    "ja": "オリジナル / 補正後の比較"
+  },
+  {
+   "zh": "原画保护 %1%",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "原畫保護 %1%",
+   "en": "Original restore %1%",
+   "ja": "オリジナル保護 %1%"
+  },
+  {
+   "zh": "原画保护 + 自然磨皮",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "原畫保護 + 自然磨皮",
+   "en": "Original restore + natural smoothing",
+   "ja": "オリジナル保護 + 自然な美肌"
   },
   {
    "zh": "去专业模式管理预设…",
@@ -5329,6 +5525,13 @@
    "ja": "ホストで Sunshine の Web ページ（https://ホストIP:47990）を開き、「PIN」ページで下の数字を入力して送信してください："
   },
   {
+   "zh": "在原画保护之后执行",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "在原畫保護之後執行",
+   "en": "Runs after the original restore",
+   "ja": "オリジナル保護の後に実行"
+  },
+  {
    "zh": "在手机或浏览器打开 ",
    "src": "qml/DialogHost.qml",
    "zh-TW": "在手機或瀏覽器開啟 ",
@@ -5400,7 +5603,7 @@
   },
   {
    "zh": "均衡",
-   "src": "src/engine/PresetLibrary.cpp",
+   "src": "qml/BeautyEditor.qml",
    "zh-TW": "均衡",
    "en": "Balanced",
    "ja": "バランス"
@@ -5651,6 +5854,13 @@
    "ja": "コピー · リセット · 削除"
   },
   {
+   "zh": "复制 · 移动 · 恢复默认 · 删除",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "複製 · 移動 · 恢復預設 · 刪除",
+   "en": "Copy · move · reset · delete",
+   "ja": "コピー · 移動 · 既定に戻す · 削除"
+  },
+  {
    "zh": "复制为新层",
    "src": "qml/ProPage.qml",
    "zh-TW": "複製為新層",
@@ -5756,6 +5966,13 @@
    "ja": "複数の NR レイヤーでは前段を 720p、最終段を 1080p に、3 段では 480p / 720p / 1080p にする方法もあります。前段の解像度を下げると映像が変わります。書き出しは引き続きネイティブサイズで処理します。"
   },
   {
+   "zh": "夜景或暗部的脸调低",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "夜景或暗部的臉調低",
+   "en": "Lower it for faces at night or in shadow",
+   "ja": "夜景や暗い場所の顔では下げてください"
+  },
+  {
    "zh": "夜里关灯看：柔和一点，同时保留暗部细节。",
    "src": "qml/ProPage.qml",
    "zh-TW": "夜裡關燈看：柔和一點，同時保留暗部細節。",
@@ -5782,6 +5999,13 @@
    "zh-TW": "大圖分塊增強失敗，請查看診斷",
    "en": "Large image tiled enhancement failed; see diagnostics",
    "ja": "大きな画像の分割補正に失敗しました。診断を確認してください"
+  },
+  {
+   "zh": "大图分块处理不支持美颜，本图未应用美颜",
+   "src": "src/engine/EngineControllerImage.cpp",
+   "zh-TW": "大圖分塊處理不支援美顏，本圖未套用美顏",
+   "en": "Beauty is not supported when a large image is processed in tiles; it was not applied to this image",
+   "ja": "大きな画像のタイル処理は美顔に対応していないため、この画像には美顔を適用していません"
   },
   {
    "zh": "大图参数应用失败，已保留上一结果",
@@ -7641,9 +7865,9 @@
   {
    "zh": "强度",
    "src": "qml/AntiAliasEditor.qml",
-   "zh-TW": "强度",
+   "zh-TW": "強度",
    "en": "Strength",
-   "ja": "Strength"
+   "ja": "強度"
   },
   {
    "zh": "强度 ",
@@ -7934,7 +8158,7 @@
   },
   {
    "zh": "性能",
-   "src": "qml/NodePage.qml",
+   "src": "qml/BeautyEditor.qml",
    "zh-TW": "性能",
    "en": "Performance",
    "ja": "パフォーマンス"
@@ -8323,6 +8547,13 @@
    "zh-TW": "把一個視窗或整塊顯示器作為片源",
    "en": "Use a window or a whole display as the source",
    "ja": "ウィンドウまたはディスプレイ全体をソースにする"
+  },
+  {
+   "zh": "把一部分皮肤纹理留回来，避免塑料感",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "把一部分皮膚紋理留回來，避免塑膠感",
+   "en": "Brings part of the skin texture back to avoid a plastic look",
+   "ja": "肌の質感の一部を戻して、プラスチックのような見た目を防ぎます"
   },
   {
    "zh": "把当前设置另存为预设…",
@@ -8851,6 +9082,13 @@
    "ja": "全体の明るさ"
   },
   {
+   "zh": "整体强度",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "整體強度",
+   "en": "Overall strength",
+   "ja": "全体の強さ"
+  },
+  {
    "zh": "整体观感",
    "src": "qml/ProPage.qml",
    "zh-TW": "整體觀感",
@@ -8863,6 +9101,13 @@
    "zh-TW": "整套設定無效，未應用任何字段",
    "en": "The whole set of settings is invalid; nothing was applied",
    "ja": "設定一式が無効なため、何も適用していません"
+  },
+  {
+   "zh": "整张脸",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "整張臉",
+   "en": "Whole face",
+   "ja": "顔全体"
   },
   {
    "zh": "整档预设",
@@ -9600,6 +9845,13 @@
    "ja": "ディスプレイのピーク（nit）"
   },
   {
+   "zh": "显示遮罩",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "顯示遮罩",
+   "en": "Show mask",
+   "ja": "マスクを表示"
+  },
+  {
    "zh": "显示队列恢复失败 · ",
    "src": "src/engine/VideoPresenter.cpp",
    "zh-TW": "顯示佇列恢復失敗 · ",
@@ -9817,6 +10069,13 @@
    "ja": "保護領域は最大 4 個です。先に 1 つ削除してください"
   },
   {
+   "zh": "最多人脸",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "最多人臉",
+   "en": "Max faces",
+   "ja": "最大顔数"
+  },
+  {
    "zh": "最多保存64套色彩预设",
    "src": "src/engine/ColorLookStore.cpp",
    "zh-TW": "最多儲存64套色彩預設",
@@ -9922,6 +10181,13 @@
    "ja": "無効"
   },
   {
+   "zh": "未启用子功能",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "未啟用子功能",
+   "en": "No function switched on",
+   "ja": "機能がオンになっていません"
+  },
+  {
    "zh": "未启用：",
    "src": "src/source/MagewellCapture.cpp",
    "zh-TW": "未啟用：",
@@ -9992,6 +10258,13 @@
    "ja": "再生していません"
   },
   {
+   "zh": "未检测到人脸",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "未偵測到人臉",
+   "en": "No face detected",
+   "ja": "顔が検出されていません"
+  },
+  {
    "zh": "未检测到手柄",
    "src": "qml/DialogHost.qml",
    "zh-TW": "未偵測到手把",
@@ -10032,6 +10305,13 @@
    "zh-TW": "未新增項目：檔案已在清單中，或沒有支援的媒體檔案",
    "en": "No new items: files are already listed or no supported media was found.",
    "ja": "新しい項目はありません。登録済みか、対応するメディアが見つかりませんでした。"
+  },
+  {
+   "zh": "未添加美颜层 · 人脸原画保护与磨皮",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "未添加美顏層 · 人臉原畫保護與磨皮",
+   "en": "No beauty layer · original face restore and skin smoothing",
+   "ja": "美顔層なし · 顔のオリジナル保護と美肌"
   },
   {
    "zh": "未登录",
@@ -10333,6 +10613,13 @@
    "zh-TW": "偵測到 %1",
    "en": "%1 detected",
    "ja": "%1 を検出"
+  },
+  {
+   "zh": "检测到 %1 张人脸",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "偵測到 %1 張人臉",
+   "en": "%1 face(s) detected",
+   "ja": "%1 人の顔を検出"
   },
   {
    "zh": "检测到 Dolby Vision RPU，但缺少基础层兼容声明，无法确认颜色，已停止",
@@ -11952,6 +12239,13 @@
    "ja": "相関が {:.2f} しかなく、信頼できるオフセットが見つかりません（字幕が動画と合っていない可能性があります）"
   },
   {
+   "zh": "相对人脸大小；负值向内收",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "相對人臉大小；負值向內收",
+   "en": "Relative to the face size; negative shrinks it",
+   "ja": "顔の大きさに対する割合。負の値で内側に縮めます"
+  },
+  {
    "zh": "睡眠（可唤醒）",
    "src": "src/ui/XboxModel.cpp",
    "zh-TW": "睡眠（可喚醒）",
@@ -12006,6 +12300,41 @@
    "zh-TW": "確定",
    "en": "OK",
    "ja": "OK"
+  },
+  {
+   "zh": "磨皮",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "磨皮",
+   "en": "Skin smoothing",
+   "ja": "美肌"
+  },
+  {
+   "zh": "磨皮 %1%",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "磨皮 %1%",
+   "en": "Smoothing %1%",
+   "ja": "美肌 %1%"
+  },
+  {
+   "zh": "磨皮半径",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "磨皮半徑",
+   "en": "Smoothing radius",
+   "ja": "美肌の半径"
+  },
+  {
+   "zh": "磨皮程度",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "磨皮程度",
+   "en": "Smoothing amount",
+   "ja": "美肌の度合い"
+  },
+  {
+   "zh": "磨皮范围",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "磨皮範圍",
+   "en": "Smoothing area",
+   "ja": "美肌の範囲"
   },
   {
    "zh": "离线",
@@ -12212,7 +12541,7 @@
   },
   {
    "zh": "精细",
-   "src": "qml/DialogHost.qml",
+   "src": "qml/BeautyEditor.qml",
    "zh-TW": "精細",
    "en": "Fine",
    "ja": "精細"
@@ -12365,6 +12694,13 @@
    "ja": "テクスチャ"
   },
   {
+   "zh": "纹理保留",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "紋理保留",
+   "en": "Texture kept",
+   "ja": "質感の保持"
+  },
+  {
    "zh": "组件与许可",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "組件與許可",
@@ -12377,6 +12713,13 @@
    "zh-TW": "細",
    "en": "Thin",
    "ja": "細い"
+  },
+  {
+   "zh": "细节保护",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "細節保護",
+   "en": "Detail protection",
+   "ja": "ディテール保護"
   },
   {
    "zh": "继续上次",
@@ -12471,10 +12814,87 @@
   },
   {
    "zh": "美颜",
-   "src": "src/engine/EffectChain.cpp",
+   "src": "qml/ProPage.qml",
    "zh-TW": "美顏",
    "en": "Beauty",
    "ja": "美顔"
+  },
+  {
+   "zh": "美颜 2",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "美顏 2",
+   "en": "Beauty 2",
+   "ja": "美顔 2"
+  },
+  {
+   "zh": "美颜 3",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "美顏 3",
+   "en": "Beauty 3",
+   "ja": "美顔 3"
+  },
+  {
+   "zh": "美颜 4",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "美顏 4",
+   "en": "Beauty 4",
+   "ja": "美顔 4"
+  },
+  {
+   "zh": "美颜 5",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "美顏 5",
+   "en": "Beauty 5",
+   "ja": "美顔 5"
+  },
+  {
+   "zh": "美颜 6",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "美顏 6",
+   "en": "Beauty 6",
+   "ja": "美顔 6"
+  },
+  {
+   "zh": "美颜人脸识别设置超出范围",
+   "src": "src/engine/EffectChain.cpp",
+   "zh-TW": "美顏人臉識別設定超出範圍",
+   "en": "Beauty face detection settings out of range",
+   "ja": "美顔の顔検出設定が範囲外です"
+  },
+  {
+   "zh": "美颜参数超出范围",
+   "src": "src/engine/EffectChain.cpp",
+   "zh-TW": "美顏參數超出範圍",
+   "en": "Beauty settings out of range",
+   "ja": "美顔の設定が範囲外です"
+  },
+  {
+   "zh": "美颜层 ",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "美顏層 ",
+   "en": "Beauty layer ",
+   "ja": "美顔層 "
+  },
+  {
+   "zh": "美颜预设",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "美顏預設",
+   "en": "Beauty presets",
+   "ja": "美顔プリセット"
+  },
+  {
+   "zh": "美颜：人脸模型文件缺失，人脸原画保护与人脸区域美颜暂不生效",
+   "src": "src/pipeline/EnhanceGraph.cpp",
+   "zh-TW": "美顏：人臉模型檔案缺失，人臉原畫保護與人臉區域美顏暫不生效",
+   "en": "Beauty: the face model file is missing; original face restore and face-area beauty are not applied",
+   "ja": "美顔：顔モデルファイルがないため、顔のオリジナル保護と顔の範囲の美顔は適用されません"
+  },
+  {
+   "zh": "美颜：人脸识别初始化失败，人脸原画保护与人脸区域美颜暂不生效",
+   "src": "src/pipeline/EnhanceGraph.cpp",
+   "zh-TW": "美顏：人臉識別初始化失敗，人臉原畫保護與人臉區域美顏暫不生效",
+   "en": "Beauty: face detection failed to start; original face restore and face-area beauty are not applied",
+   "ja": "美顔：顔検出を開始できなかったため、顔のオリジナル保護と顔の範囲の美顔は適用されません"
   },
   {
    "zh": "羽化像素",
@@ -12489,6 +12909,20 @@
    "zh-TW": "老片平淡",
    "en": "Flat older transfer",
    "ja": "平坦な旧作"
+  },
+  {
+   "zh": "肤色提亮",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "膚色提亮",
+   "en": "Skin brightening",
+   "ja": "肌を明るく"
+  },
+  {
+   "zh": "肤色范围 · 高级",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "膚色範圍 · 高級",
+   "en": "Skin range · advanced",
+   "ja": "肌色範囲 · 詳細"
   },
   {
    "zh": "肤质 · 未证实",
@@ -12806,6 +13240,13 @@
    "ja": "カスタム：下のスライダーで調整済み。"
   },
   {
+   "zh": "自然磨皮",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "自然磨皮",
+   "en": "Natural smoothing",
+   "ja": "自然な美肌"
+  },
+  {
    "zh": "自然饱和度",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "自然飽和度",
@@ -12946,11 +13387,25 @@
    "ja": "色相"
   },
   {
+   "zh": "色相中心",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "色相中心",
+   "en": "Hue centre",
+   "ja": "色相の中心"
+  },
+  {
    "zh": "色相保护",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "色相保護",
    "en": "Hue protection",
    "ja": "色相保護"
+  },
+  {
+   "zh": "色相范围",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "色相範圍",
+   "en": "Hue range",
+   "ja": "色相の範囲"
   },
   {
    "zh": "色调",
@@ -13065,6 +13520,13 @@
    "ja": "ノードモードは接続順に実際に処理します。オフラインの書き出しはリストモードのみ対応です。"
   },
   {
+   "zh": "节点模式请用节点的复制",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "節點模式請用節點的複製",
+   "en": "In node mode, copy the node instead",
+   "ja": "ノードモードではノードのコピーを使ってください"
+  },
+  {
    "zh": "节点编辑文档类型或容量无效",
    "src": "src/engine/EffectChain.cpp",
    "zh-TW": "節點編輯文檔類型或容量無效",
@@ -13154,6 +13616,13 @@
    "zh-TW": "藍色",
    "en": "Blue",
    "ja": "ブルー"
+  },
+  {
+   "zh": "蓝色为原画保护区域，品红为磨皮区域；导出时自动关闭",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "藍色為原畫保護區域，洋紅為磨皮區域；匯出時自動關閉",
+   "en": "Blue: original restore area; magenta: smoothing area. Turned off automatically for export",
+   "ja": "青はオリジナル保護の範囲、マゼンタは美肌の範囲です。書き出し時は自動でオフになります"
   },
   {
    "zh": "补帧",
@@ -13679,6 +14148,13 @@
    "zh-TW": "識別 60fps 內容",
    "en": "Detect 60 fps content",
    "ja": "60fps コンテンツを判別"
+  },
+  {
+   "zh": "识别档位",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "識別檔位",
+   "en": "Detection level",
+   "ja": "検出レベル"
   },
   {
    "zh": "诊断信息",
@@ -14269,6 +14745,20 @@
    "ja": "小さいほど敏感、大きいほど安定させる範囲が広がります"
   },
   {
+   "zh": "越高人脸区域越稳，快速移动时跟得越慢",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "越高人臉區域越穩，快速移動時跟得越慢",
+   "en": "Higher keeps the face area steadier but follows fast movement more slowly",
+   "ja": "高いほど顔の範囲が安定しますが、速い動きへの追従は遅くなります"
+  },
+  {
+   "zh": "越高越保留五官和发丝",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "越高越保留五官和髮絲",
+   "en": "Higher keeps more of the facial features and hair",
+   "ja": "高いほど目鼻立ちや髪の毛を残します"
+  },
+  {
    "zh": "越高越平滑，运动拖影也越多",
    "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "越高越平滑，運動拖影也越多",
@@ -14281,6 +14771,13 @@
    "zh-TW": "越高越穩，過高會顯得發悶",
    "en": "Higher is steadier; too high looks dull",
    "ja": "高いほど安定しますが、高すぎるとこもった印象になります"
+  },
+  {
+   "zh": "跟踪平滑",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "追蹤平滑",
+   "en": "Tracking smoothing",
+   "ja": "追跡の平滑化"
   },
   {
    "zh": "跟随",
@@ -14449,6 +14946,13 @@
    "zh-TW": "輕",
    "en": "Light",
    "ja": "弱"
+  },
+  {
+   "zh": "轻度磨皮",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "輕度磨皮",
+   "en": "Light smoothing",
+   "ja": "軽い美肌"
   },
   {
    "zh": "轻微",
@@ -14710,6 +15214,13 @@
    "ja": "出力制限 · ディスプレイに合わせる"
   },
   {
+   "zh": "边界柔和",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "邊界柔和",
+   "en": "Edge softness",
+   "ja": "境界の柔らかさ"
+  },
+  {
    "zh": "边缘神盾",
    "src": "qml/ProPage.qml",
    "zh-TW": "邊緣神盾",
@@ -14722,6 +15233,13 @@
    "zh-TW": "邊緣神盾（XeSS 防果凍）",
    "en": "Edge Aegis (XeSS anti-jelly)",
    "ja": "エッジイージス（XeSS ゼリー対策）"
+  },
+  {
+   "zh": "边缘羽化",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "邊緣羽化",
+   "en": "Edge feather",
+   "ja": "エッジのぼかし"
   },
   {
    "zh": "边缘阈值",
@@ -15163,6 +15681,13 @@
    "zh-TW": "選一個片源開始，畫質預設和補幀隨時在播放欄切換",
    "en": "Choose a source to start; picture presets and frame generation can be switched in the playback bar at any time",
    "ja": "ソースを選んで開始します。画質プリセットとフレーム生成は再生バーでいつでも切り替えられます"
+  },
+  {
+   "zh": "选择…",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "選擇…",
+   "en": "Choose…",
+   "ja": "選択…"
   },
   {
    "zh": "选择保存目录…",
@@ -15872,11 +16397,11 @@
    "ja": "ゼロモーションは時間方向の再構成を制限します。RTX ビデオ超解像はこの入力を使いません"
   },
   {
-   "zh": "需 1080p SDR 文件、SF 和 NVIDIA 光流；关闭超分、补帧、抗闪烁、调色及 HDR",
+   "zh": "需 1080p SDR 文件、SF 和 NVIDIA 光流；关闭超分、补帧、抗闪烁、调色、美颜及 HDR",
    "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "需 1080p SDR 檔案、SF 與 NVIDIA 光流；關閉超解析度、補幀、抗閃爍、調色及 HDR",
-   "en": "Requires a 1080p SDR file, SF and NVIDIA optical flow; turn off upscaling, frame generation, anti-flicker, grading and HDR",
-   "ja": "1080p SDR ファイル、SF、NVIDIA 光フローが必要です。超解像、フレーム生成、ちらつき抑制、色調整、HDR をオフにしてください"
+   "zh-TW": "需 1080p SDR 檔案、SF 與 NVIDIA 光流；關閉超解析度、補幀、抗閃爍、調色、美顏及 HDR",
+   "en": "Requires a 1080p SDR file, SF and NVIDIA optical flow; turn off upscaling, frame generation, anti-flicker, grading, beauty and HDR",
+   "ja": "1080p SDR ファイル、SF、NVIDIA 光フローが必要です。超解像、フレーム生成、ちらつき抑制、色調整、美顔、HDR をオフにしてください"
   },
   {
    "zh": "需系统解码/转换",
@@ -16215,6 +16740,13 @@
    "ja": "プロジェクトの README にある QR コード"
   },
   {
+   "zh": "须低于上限",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "須低於上限",
+   "en": "Must stay below the maximum",
+   "ja": "上限より低くしてください"
+  },
+  {
    "zh": "预算 ",
    "src": "qml/ProPage.qml",
    "zh-TW": "預算 ",
@@ -16265,7 +16797,7 @@
   },
   {
    "zh": "预设",
-   "src": "qml/CineBar.qml",
+   "src": "qml/BeautyEditor.qml",
    "zh-TW": "預設",
    "en": "Presets",
    "ja": "プリセット"
@@ -16537,6 +17069,13 @@
    "ja": "プリセットライブラリの形式またはバージョンに対応していません"
   },
   {
+   "zh": "预设库美颜人脸识别字段损坏",
+   "src": "src/engine/PresetLibrary.cpp",
+   "zh-TW": "預設庫美顏人臉識別欄位損壞",
+   "en": "Preset library: beauty face detection fields damaged",
+   "ja": "プリセットライブラリの美顔の顔検出項目が破損しています"
+  },
+  {
    "zh": "预设库节点取值超出范围",
    "src": "src/engine/PresetLibrary.cpp",
    "zh-TW": "預設庫節點取值超出範圍",
@@ -16556,6 +17095,13 @@
    "zh-TW": "預設庫節點抗鋸齒參數損壞",
    "en": "Preset library: node anti-aliasing settings damaged",
    "ja": "プリセットライブラリのノードのアンチエイリアス設定が破損しています"
+  },
+  {
+   "zh": "预设库节点美颜参数损坏",
+   "src": "src/engine/PresetLibrary.cpp",
+   "zh-TW": "預設庫節點美顏參數損壞",
+   "en": "Preset library: node beauty settings damaged",
+   "ja": "プリセットライブラリのノードの美顔設定が破損しています"
   },
   {
    "zh": "预设库节点调色参数损坏",
@@ -16794,6 +17340,20 @@
    "zh-TW": "飽和度",
    "en": "Saturation",
    "ja": "彩度"
+  },
+  {
+   "zh": "饱和度上限",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "飽和度上限",
+   "en": "Saturation max",
+   "ja": "彩度の上限"
+  },
+  {
+   "zh": "饱和度下限",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "飽和度下限",
+   "en": "Saturation min",
+   "ja": "彩度の下限"
   },
   {
    "zh": "首次使用：PS5 设置 → 系统 → 远程游玩 → 关联设备，填写账号 ID 与 8 位配对码后配对。",
@@ -17174,11 +17734,25 @@
    "ja": "（MKV にするとより多く保持できます）"
   },
   {
+   "zh": "（新层默认关闭 · 最多 6 层）",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "（新層預設關閉 · 最多 6 層）",
+   "en": " (new layers start off · max 6 layers)",
+   "ja": "（新しい層はオフで追加 · 最大 6 層）"
+  },
+  {
    "zh": "（最多 4 层）",
    "src": "qml/ProPage.qml",
    "zh-TW": "（最多 4 層）",
    "en": " (max 4 layers)",
    "ja": "（最大 4 層）"
+  },
+  {
+   "zh": "（最多 6 层）",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "（最多 6 層）",
+   "en": " (max 6 layers)",
+   "ja": "（最大 6 層）"
   },
   {
    "zh": "（片源最亮 %1 nit、最亮帧平均 %2 nit）",

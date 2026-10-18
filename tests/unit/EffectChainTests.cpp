@@ -1303,6 +1303,26 @@ __declspec(noinline) void testBeautySettingsChain() {
     check(desc->slotOfStep(desc->planStepOf(EffectType::Beauty, 0)) == Slot::SourcePost &&
           desc->slotOfStep(desc->planStepOf(EffectType::Beauty, 1)) == Slot::Tail && desc->validateFixedExecutionPlan().empty(),
           "beauty: node mode runs one instance at source size and one in the tail");
+    // A node just added (beauty arrives switched off) or switched off at its defaults
+    // has no settings instance; the node order still restores it, for AA too.
+    auto fresh = std::make_unique<EffectChain>(); fresh->mode = ChainMode::Node;
+    const auto addFresh = [&](EffectType type, bool enabled) { auto& n = fresh->nodes[fresh->nodeCount++]; n = ChainNode{}; n.type = type; n.enabled = enabled; };
+    addFresh(EffectType::AntiAliasing, false); addFresh(EffectType::SuperResolution, true); addFresh(EffectType::Beauty, false);
+    auto freshSettings = std::make_unique<EnhancementSettings>(); fromChain(*fresh, *freshSettings);
+    check(!freshSettings->beauty.configured() && !freshSettings->antiAlias.configured(), "untouched nodes: no settings instance");
+    const auto freshOrder = runtimeOrder(*fresh);
+    auto freshRestored = std::make_unique<EffectChain>();
+    check(restoreRuntimeOrder(*freshSettings, *freshOrder, *freshRestored).accepted && freshRestored->nodeCount == 3 &&
+          freshRestored->nodes[0] == fresh->nodes[0] && freshRestored->nodes[2] == fresh->nodes[2],
+          "untouched nodes: a switched-off default AA and beauty node keep their places in the node order");
+    auto twice = *freshOrder; twice.types[twice.nodeCount++] = EffectType::AntiAliasing;
+    check(!restoreRuntimeOrder(*freshSettings, twice, *freshRestored).accepted,
+          "untouched nodes: an order asking for a second untouched instance is still refused");
+    addFresh(EffectType::Beauty, false);
+    fromChain(*fresh, *freshSettings);
+    check(restoreRuntimeOrder(*freshSettings, *runtimeOrder(*fresh), *freshRestored).accepted &&
+          freshRestored->countOf(EffectType::Beauty) == 2, "untouched nodes: two beauty nodes carry their own instances");
+
     for (int i = 0; i < 6; ++i) add(EffectType::Beauty);
     check(!validateChain(*node).accepted, "beauty: more than six beauty nodes are refused");
 }

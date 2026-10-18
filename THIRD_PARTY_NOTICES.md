@@ -1,5 +1,24 @@
 # Third-party dependencies
 
+## Beauty node: face restore and skin smoothing (2026-10-18)
+
+| Source | License | Veyra use |
+|---|---|---|
+| YuNet face detector, OpenCV Zoo `models/face_detection_yunet` at `47534e27`: `face_detection_yunet_2023mar.onnx` (232,589 bytes, SHA256 `8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4`) and `face_detection_yunet_2026may.onnx` (229,738 bytes, SHA256 `ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0`); hashes match the Git LFS pointer oids | MIT, Copyright (c) 2020 Shiqi Yu | Weights only, loaded at run time from `runtime/models`, `runtime_local/models` or `models` next to the program; never in source Git. The network runs as Veyra's own D3D12 compute shaders (`shaders/BeautyYuNet*.hlsl`, `src/beauty/YuNetGpu.cpp`); `src/beauty/OnnxLite.cpp` reads the ONNX file. |
+| SkinSoft, yasunari01/obs-filters `fd5690f`, `skinsoft-filter/data/effects/skinsoft.effect` | GPL-2.0-or-later | Skin selection (HSV hue distance, saturation / luma windows, shared softness), detail protection and texture restore, ported to `shaders/Beauty.hlsli` and `shaders/BeautyApply.hlsl` |
+| GPUPixel, pixpark/gpupixel `ef552bf`, `BeautyFaceUnitFilter` | Apache-2.0 | The variance-adaptive skin blend, re-implemented as a fast guided filter (He & Sun 2015) in `shaders/BeautyStats.hlsl` / `BeautyBlur.hlsl`; no GPUPixel source or binary is included |
+| OpenCV 5.0.0 `FaceDetectorYN` | Apache-2.0 | Test references only (`scripts/beauty/yunet-reference.py` writes the expected detector outputs); `shaders/BeautyTrack.hlsl` follows its non-maximum suppression rules (whole-pixel boxes, score order, IoU). OpenCV is neither linked nor shipped |
+
+Veyra changes: the detector, the GPU face tracking (stable ids, alpha-beta
+filter, grace and fade), the same-frame original restore, the region pass with
+indirect dispatch and every UI / preset / export connection are Veyra's own.
+Smoothing works on a perceptual copy relative to the SDR or 203-nit HDR white
+and blends back in linear light; SkinSoft's sparse 9-tap blur is replaced by the
+guided filter, and its saturation / luma floors are lowered for dim skin. The
+test pictures (OpenCV samples, the OpenCV Zoo example, scikit-image's astronaut)
+are used by local tests only and are not part of the source tree. No inference
+runtime (ONNX Runtime, DirectML, WinML) is added.
+
 ## Spatial anti-aliasing: FXAA / SMAA / MLAA (#53, 2026-10-18)
 
 Ported from SAOG0721/Magpie (experimental branch), commit

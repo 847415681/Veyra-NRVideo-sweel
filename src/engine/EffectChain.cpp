@@ -369,11 +369,25 @@ ChainValidation restoreRuntimeOrder(const EnhancementSettings& settings, const C
     restored.fgStrictAdmission = source.fgStrictAdmission;
     restored.beautyDetection = source.beautyDetection;
     std::array<bool, kMaxChainNodes> used{};
+    // An anti-aliasing or beauty node that is switched off with its default values
+    // has no instance in the settings (toChain adds none, so older presets keep their
+    // layout), yet the node graph still holds it: it comes back as that untouched node.
+    bool untouchedAa = !settings.antiAlias.configured() && !settings.additionalAntiAliasCount;
+    bool untouchedBeauty = !settings.beauty.configured() && !settings.additionalBeautyCount;
     for (uint32_t i = 0; i < order.nodeCount; ++i) {
         if (uint32_t(order.types[i]) >= effectTypeCount) return {false, "运行节点类型无效"};
         uint32_t index = 0;
         while (index < source.nodeCount && (used[index] || source.nodes[index].type != order.types[i])) ++index;
-        if (index == source.nodeCount) return {false, "运行节点顺序与实例参数数量不匹配"};
+        if (index == source.nodeCount) {
+            bool& untouched = order.types[i] == EffectType::AntiAliasing ? untouchedAa : untouchedBeauty;
+            if ((order.types[i] != EffectType::AntiAliasing && order.types[i] != EffectType::Beauty) || !untouched)
+                return {false, "运行节点顺序与实例参数数量不匹配"};
+            untouched = false;
+            restored.nodes[i] = ChainNode{};
+            restored.nodes[i].type = order.types[i];
+            restored.nodes[i].enabled = false;
+            continue;
+        }
         used[index] = true;
         restored.nodes[i] = source.nodes[index];
     }
