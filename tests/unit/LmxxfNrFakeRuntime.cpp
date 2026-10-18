@@ -79,6 +79,10 @@ extern "C" __declspec(dllexport) uint32_t VeyraLmxxfModelMode(){
     return mode()=="wrong-model" ? 2 : VEYRA_TEST_MODEL_MODE;
 }
 extern "C" __declspec(dllexport) uint32_t VeyraTestLmxxfCreates(){return creates.load();}
+extern "C" __declspec(dllexport) uint32_t VeyraLmxxfControlsCompatible(){
+    const auto* temporal=std::getenv("DLSS5_TEMPORAL_MODE");
+    return !temporal||!*temporal||std::string(temporal)=="0";
+}
 extern "C" __declspec(dllexport) uint32_t VeyraLmxxfModelAssetsReady(const wchar_t*){
     return mode()!="missing-small";
 }

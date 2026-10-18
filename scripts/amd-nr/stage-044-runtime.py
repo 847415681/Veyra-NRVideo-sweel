@@ -58,9 +58,10 @@ modules=[]
 for name,mode in (('LmxxfNrRuntime.dll',0),('LmxxfNrRuntime-Original.dll',1)):
     dll=ctypes.WinDLL(str((a.out/name).resolve()),winmode=0x1100);modules.append(dll)
     dll.VeyraLmxxfModelMode.restype=ctypes.c_uint32
+    dll.VeyraLmxxfControlsCompatible.restype=ctypes.c_uint32
     dll.VeyraLmxxfModelAssetsReady.argtypes=[ctypes.c_wchar_p]
     dll.VeyraLmxxfModelAssetsReady.restype=ctypes.c_uint32
-    if dll.VeyraLmxxfModelMode()!=mode or not dll.VeyraLmxxfModelAssetsReady(str((a.out/'assets').resolve())):
+    if dll.VeyraLmxxfModelMode()!=mode or not dll.VeyraLmxxfControlsCompatible() or not dll.VeyraLmxxfModelAssetsReady(str((a.out/'assets').resolve())):
         raise SystemExit('Actual model selector/asset preflight failed')
     if mode==0 and dll.VeyraLmxxfModelAssetsReady(str(a.out/'missing-assets')):
         raise SystemExit('Missing Small assets wrongly accepted')

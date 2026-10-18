@@ -27,7 +27,8 @@ bool LmxxfNrBackend::open(const std::filesystem::path& directory, ID3D12Device* 
     if (!module_) { error_ = std::format("{} load failed win32={}", path.filename().string(), GetLastError()); log::error("amd-nr", error_); return false; }
     const auto modelMode = reinterpret_cast<uint32_t (*)()>(GetProcAddress(module_, "VeyraLmxxfModelMode"));
     const auto assetsReady = reinterpret_cast<uint32_t (*)(const wchar_t*)>(GetProcAddress(module_, "VeyraLmxxfModelAssetsReady"));
-    if (!modelMode || !assetsReady || modelMode() != (performance ? 0u : 1u)) {
+    const auto controlsCompatible = reinterpret_cast<uint32_t (*)()>(GetProcAddress(module_, "VeyraLmxxfControlsCompatible"));
+    if (!modelMode || !assetsReady || !controlsCompatible || modelMode() != (performance ? 0u : 1u)) {
         error_ = "AMD NR model module mismatch: install the complete Veyra lmxxf 0.44 runtime";
         log::error("amd-nr", error_); close(); return false;
     }
@@ -66,13 +67,13 @@ bool LmxxfNrBackend::open(const std::filesystem::path& directory, ID3D12Device* 
         error_="Veyra AMD NR requires linear input and Veyra-owned history: set DLSS5_CODEC_SRGB, DLSS5_VIT_ADAPTIVE, DLSS5_TEMPORAL_MODE, DLSS5_FAST_HISTORY and DLSS5_TEMPORAL_HISTORY_EXPERIMENT to 0";
         log::error("amd-nr",error_);close();return false;
     };
-    if(!compatibleEnvironment())return rejectEnvironment();
+    if(!compatibleEnvironment()||!controlsCompatible())return rejectEnvironment();
     LmxxfNrCreateInfo info{}; info.struct_size = sizeof(info); info.device = device; info.queue = queue;
     info.assets_directory = assets.c_str(); // flags=0: a failed network is never passed off as NR
     if (!result(api_.Create(&info, &context_), "Create") || !context_) { close(); return false; }
     // Create reads the runtime's local config. Recheck after it, not only the
     // inherited environment, before unsupported internal history can run.
-    if(!compatibleEnvironment())return rejectEnvironment();
+    if(!compatibleEnvironment()||!controlsCompatible())return rejectEnvironment();
     if (!result(api_.PrepareSession(context_), "PrepareSession")) { close(); return false; }
     queue_ = queue;
     static std::atomic<uint64_t> next{1}; session_ = next++;
