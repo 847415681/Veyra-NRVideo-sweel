@@ -9726,3 +9726,10 @@ final-audit.py pre已通过82旧树/94旧分支/509脏文件与main b571a44不�
 - 上游直接MSVC构建失败：Windows rpcndr small宏与新版bool small冲突、缺utf8。兼容头含D3D12后undef small，增加/utf-8；原源码只在本任务build/source副本施加可复现patch，外部固定checkout不改。初版patch CRLF导致git apply不匹配，规范LF后通过。两模块真实编译通过：logs/amd-nr-044-20261018/runtime-small-03.json、runtime-original-01.json；上游现有C4244告警保留。
 - 新stage-044-runtime.py只读验证用户ZIP875条SHA，再部署279旧新权重、80HIP模块及必要codec/许可证；未提取执行Magpie/proxy/driver/add-on。两个真实模块同时加载检查其实际selector和上游Small structural preflight，正式模型与fake合同测试物理分开。0.39脚本保留作历史。
 - 增加混合模型真实D3D12合同计数（fake）、磁盘AMD预设/会话恢复、真实runtime元数据/缺资源/错模块测试；这些均不等同HIP推理。四语言新增Small提示。不提高UI33ms/250ms刷新率，Claude树不动。接下来提交输入、限-j2构建13目标并定向执行。
+
+### 2026-10-18 AMD NR0.44接入完成
+- 最终代码94861a0，13目标构建与12程序/13次有效验证通过；66ABI、20图/4K场景、82Quick、2449i18n、预设/会话/导出/关闭效果编辑及RTX5070实际GTA NR切换通过。真实模块10元数据检查与2项冲突配置拒绝通过，不等同AMD HIP推理。最终索引reports/amd-nr-044-20261018/checks.json；源码/二进制复用与重新链接目标复测回执在同目录。
+- 首轮3图失败是10-07测试仍预期4次FSR，与10-10既有108cbaab全帧重建修复冲突，像素输出已正确；纠正为6次，未改FSR产品实现。配置注入真实暴露跨CRT环境不可见，增加运行库内部有效参数导出，Create前/后均检查；fake注入也必须由其自身CRT清理，已定向回归。失败日志全部保留，详见AMD_NR_044_REPORT_2026-10-18.md。
+- 当前真实Small/Original DLL为runtime-small-04与runtime-original-02构建；publisher配方核验两模块身份，拒绝漏原模型/误放fake。只做本地审计，没有正式包/上传/发布。527文件对应源码归档覆盖实际构建输入，无专有二进制；最终源码bundle另见final.json。
+- 88原树/101原分支/main核对：87树未变；Claude AA树12 shader的正常并行施工已记录，不阻塞或回滚。509既有脏文件内容未改。所有新构建/测试/日志/源码和资源都在E:/项目/Veyra对应任务目录，未关他人进程或修改用户配置。
+- 自动审批拦截了本任务冗余解压目录清理（仅返回blocked by policy），没有换工具绕过，目录保留；原用户ZIP、旧0.39和已发布包未改。AMD实卡执行/画质/性能/长期显存、HDR及其他硬件未验；本轮未合main/push/发布/关机。
