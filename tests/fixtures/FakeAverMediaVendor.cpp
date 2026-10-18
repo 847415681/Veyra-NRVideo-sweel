@@ -21,7 +21,7 @@ extern "C" {
 __declspec(dllexport) void FakeMode(const wchar_t* value){mode=value;starts=stops=callbacks=live=0;sta=true;}
 __declspec(dllexport) unsigned FakeCount(unsigned which){return which==0?starts.load():which==1?stops.load():which==2?callbacks.load():which==3?live.load():sta?1:0;}
 void* FakeCtor(void* self){apartment();graph(self)=new Graph;++live;return self;}
-void FakeStop(void* self){++stops;auto* g=graph(self);if(!g)return;g->stop=true;if(g->thread.joinable())g->thread.join();}
+bool FakeStop(void* self){++stops;auto* g=graph(self);if(!g)return true;if(mode==L"stop-fail")return false;g->stop=true;if(g->thread.joinable())g->thread.join();return true;}
 void FakeDtor(void* self){FakeStop(self);delete graph(self);graph(self)=nullptr;--live;}
 bool FakeReset(void*){apartment();if(mode==L"seh")RaiseException(0xC0000005,0,0,nullptr);if(mode==L"exception")throw std::runtime_error("test vendor exception");return mode!=L"reset-fail";}
 void FakeDevices(std::vector<DeviceInfo>& out){

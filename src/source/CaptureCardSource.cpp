@@ -1419,6 +1419,12 @@ bool CaptureCardSource::applyVendorAudioSwitch(const std::wstring& audioName,con
         // the USB functions are still there.
         if(!avermedia::eligible(name,path,p.audioIngressMode))return false;
         auto functions=AverMediaAudioSwitch::findUsbFunctions(L"vid_07ca");
+        const auto audioFunction=[](const AverMediaUsbFunction& f){
+            return avermedia::lower(f.instanceId).find(L"mi_02")!=std::wstring::npos
+                ||avermedia::lower(f.friendlyName).find(L"audio")!=std::wstring::npos;
+        };
+        if(std::any_of(functions.begin(),functions.end(),audioFunction))
+            std::erase_if(functions,[&](const auto& f){return !audioFunction(f);});
         // A class-manager audio moniker has no USB serial. Require one unique
         // matching audio function, rather than arming every installed card.
         std::vector<avermedia::DeviceInfo> identities;
@@ -1818,6 +1824,7 @@ void CaptureCardSource::recoverAudio(float gain,unsigned syncMode,int offsetMs){
         if(p.vendorDelivering)p.vendorDelivering->store(false);
         p.vendorAudio->stop();p.vendorAudio.reset();p.vendorDelivering.reset();
         vendorFailed=true;
+        p.audioError=L"AVerMedia audio graph failed; trying the original DirectShow audio input";
         log::warn("capture-audio-vendor","vendor recovery exhausted; reconnecting the original DirectShow audio input");
     }
     CaptureSelection selection;if(!parseCapturePath(reconnectDesc_.path,selection)||!selection.stable||selection.audio==kCaptureAudioDisabled||selection.audio==kCaptureAudioWasapi)return;
@@ -1978,6 +1985,7 @@ void CaptureCardSource::close()noexcept{
     if(p.audioSession)p.audioSession->stop();p.audioError.clear();
     if(p.audioPassthrough)p.audioPassthrough->close();
     p.events.Reset();p.control.Reset();p.grab.Reset();p.nullFilter.Reset();p.grabFilter.Reset();p.audioSink.Reset();p.audioFilter.Reset();p.config.Reset();p.device.Reset();p.builder.Reset();p.graph.Reset();p.referenceClock.Reset();p.ageClock.Reset();p.runReference=0;p.audioSession.reset();p.audioPassthrough.reset();
+    p.audioSessionDeferred=false;p.audioBitstream.reset();p.audioBitstreamKind.clear();
     if(p.decodeThread.joinable()){{std::lock_guard lock(p.mutex);p.decodeStop=true;p.compressedQueue.clear();p.payloadPool.clear();}p.decodeWake.notify_all();p.decodeThread.join();}
     for(auto& thread:p.extraDecodeThreads)if(thread.joinable())thread.join();
     p.extraDecodeThreads.clear();p.extraDecoders.clear();p.mjpegParallel=false;

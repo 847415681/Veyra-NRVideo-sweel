@@ -65,6 +65,7 @@ struct AverMediaVendorAudio::Impl {
     std::array<ForeignFn,EntryCount> api{};
     alignas(16) std::array<unsigned char,64> storage{};
     bool constructed=false;
+    bool quarantine=false;
     HMODULE module=nullptr;
     std::vector<DLL_DIRECTORY_COOKIE> directories;
     std::mutex decodeMutex;
@@ -139,7 +140,18 @@ struct AverMediaVendorAudio::Impl {
     void teardown(){
         // Stop joins the vendor callback; never hold decodeMutex across it.
         {std::lock_guard lock(decodeMutex);tearingDown=true;carrier.reset();}
-        if(constructed){call(Stop);call(SetCallback,nullptr);call(Dtor,nullptr,nullptr,false);constructed=false;}
+        if(constructed){
+            // A failed external Stop cannot prove its callback thread joined.
+            // Retain this one opaque graph/module until process exit instead
+            // of unloading code underneath that thread or reusing its storage.
+            if(!call(Stop)){
+                quarantine=true;recordError("vendor Stop failed; graph quarantined until process exit");
+            }else{
+                call(SetCallback,nullptr);
+                if(!call(Dtor,nullptr,nullptr,false))quarantine=true;
+            }
+            constructed=false;
+        }
         {std::lock_guard lock(mutex);state.started=state.running=false;}
     }
     bool onCarrier(avermedia::SampleInfo info,const uint8_t* data,size_t bytes){
@@ -168,14 +180,14 @@ struct AverMediaVendorAudio::Impl {
                     if(stalled||restartRequested.exchange(false)){
                         if(attempts>=maxRestarts){recordError("vendor audio recovery limit reached; falling back to DirectShow");ok=false;break;}
                         ++attempts;{std::lock_guard lock(mutex);++state.losses;state.starting=true;}
-                        teardown();if(stopRequested)break;if(!setup()){ok=false;break;}
+                        teardown();if(quarantine){ok=false;break;}if(stopRequested)break;if(!setup()){ok=false;break;}
                         {std::lock_guard lock(mutex);++state.restarts;}
                     }
                 }
             }
         }catch(...){recordError("vendor audio worker exception");ok=false;}
         try{teardown();}catch(...){ok=false;}
-        if(module){FreeLibrary(module);module=nullptr;}
+        if(module&&!quarantine){FreeLibrary(module);module=nullptr;}
         for(auto cookie:directories)RemoveDllDirectory(cookie);directories.clear();api.fill(nullptr);
         {std::lock_guard lock(mutex);state.starting=state.started=state.running=false;state.failed=!ok&&!stopRequested;
             if(state.failed&&state.error.empty())state.error=L"vendor audio graph unavailable";}
@@ -186,9 +198,10 @@ struct AverMediaVendorAudio::Impl {
 AverMediaVendorAudio::AverMediaVendorAudio(unsigned stallMs,unsigned maxRestarts):p_(std::make_unique<Impl>()){
     p_->stallMs=std::max(50u,stallMs);p_->maxRestarts=maxRestarts;
 }
-AverMediaVendorAudio::~AverMediaVendorAudio(){stop();}
+AverMediaVendorAudio::~AverMediaVendorAudio(){stop();if(p_->quarantine)p_.release();}
 bool AverMediaVendorAudio::start(PcmCallback callback,const std::wstring& name,const std::wstring& path){
     if(p_->worker.joinable()){const auto s=state();return !s.failed&&(s.starting||s.running);}
+    if(p_->quarantine)return false;
     if(!avermedia::eligible(name,path,0)){p_->recordError("selected input is not an AVerMedia capture device");return false;}
     if(AverMediaAudioSwitch::locateComponentRoot().empty()){p_->recordError("AVerMedia Multichannel Audio component not installed");return false;}
     p_->onPcm=std::move(callback);p_->preferName=name;p_->preferPath=path;p_->stopRequested=false;p_->restartRequested=false;

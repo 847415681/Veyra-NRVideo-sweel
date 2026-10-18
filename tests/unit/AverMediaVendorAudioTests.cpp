@@ -64,6 +64,14 @@ int wmain(int argc,wchar_t** argv){try{
         mode(L"normal");AverMediaVendorAudio audio;
         for(unsigned i=0;i<10;++i){require(audio.start(callback,name,path),"repeat startup");audio.stop();require(count(3)==0,"repeat teardown");}
     }
+    {
+        mode(L"stop-fail");AverMediaVendorAudio audio;
+        const auto previous=received.load();require(audio.start(callback,name,path),"start faulty Stop fixture");
+        require(wait([&]{return received>previous;}),"fixture callback is active before Stop");audio.stop();
+        const auto stopped=received.load();std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        require(received==stopped,"failed vendor Stop cannot call released PCM session");
+        require(count(3)==1&&!audio.start(callback,name,path),"one failed external graph is quarantined without reuse/unload");
+    }
     FreeLibrary(module);SetEnvironmentVariableW(L"VEYRA_AVERMEDIA_COMPONENT",nullptr);
     std::cout<<"PASS "<<checks<<" checks: public ABI, STA, delayed startup, device identity, callback shutdown, SEH/C++ faults, bounded watchdog\n";return 0;
 }catch(const std::exception& e){std::cerr<<"FAIL "<<e.what()<<" after "<<checks<<" checks\n";return 1;}}
