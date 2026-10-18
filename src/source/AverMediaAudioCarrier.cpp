@@ -40,7 +40,7 @@ bool AverMediaAudioCarrier::emitPcm(std::span<const uint8_t> bytes,avermedia::Sa
     state_.channels=info.channels;state_.rate=info.rate;state_.codec="linear PCM";state_.bitstream=false;state_.error.clear();
     return true;
 }
-bool AverMediaAudioCarrier::emitBurst(std::span<const uint8_t> words,sink::BitstreamKind kind){
+bool AverMediaAudioCarrier::emitBurst(std::span<const uint8_t> words,size_t payloadBytes,sink::BitstreamKind kind){
     if(kind!=candidate_){candidate_=kind;confirmations_=0;}
     if(confirmations_<2)++confirmations_;
     if(confirmations_<2)return true; // Count distinct complete payloads, not sync inside a payload.
@@ -52,7 +52,7 @@ bool AverMediaAudioCarrier::emitBurst(std::span<const uint8_t> words,sink::Bitst
     }
     packet_.resize(words.size());
     for(size_t i=0;i+1<words.size();i+=2){packet_[i]=words[i+1];packet_[i+1]=words[i];}
-    if(words.size()%2)packet_.back()=words.back();
+    packet_.resize(payloadBytes); // Odd byte payloads include a padded carrier word.
     pcm_.clear();
     if(!decoder_->push(packet_.data(),packet_.size(),pcm_)){state_.error=decoder_->lastError();return false;}
     state_.codec=sink::bitstreamKindName(kind);state_.bitstream=true;
@@ -101,7 +101,7 @@ bool AverMediaAudioCarrier::feed(std::span<const uint8_t> bytes,avermedia::Sampl
         const size_t stored=(payload+1)&~size_t(1);
         if(cursor+8+stored>buffer_.size())break;
         ++state_.bursts;
-        const bool ok=emitBurst(std::span(buffer_).subspan(cursor+8,payload),kind);
+        const bool ok=emitBurst(std::span(buffer_).subspan(cursor+8,stored),payload,kind);
         cursor+=8+stored;
         if(!ok){buffer_.erase(buffer_.begin(),buffer_.begin()+cursor);state_.retainedBytes=buffer_.size();return false;}
     }

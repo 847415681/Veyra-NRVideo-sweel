@@ -35,7 +35,7 @@ public:
     const VendorCarrierState& state()const{return state_;}
 private:
     bool emitPcm(std::span<const uint8_t>,avermedia::SampleInfo);
-    bool emitBurst(std::span<const uint8_t>,sink::BitstreamKind);
+    bool emitBurst(std::span<const uint8_t>,size_t payloadBytes,sink::BitstreamKind);
     Callback callback_;
     VendorCarrierState state_;
     std::vector<uint8_t> buffer_,packet_;

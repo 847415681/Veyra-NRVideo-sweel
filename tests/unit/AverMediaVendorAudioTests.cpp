@@ -14,7 +14,7 @@ void require(bool value,const char* text){++checks;if(!value)throw std::runtime_
 template<class F> bool wait(F f,unsigned ms=2000){for(unsigned n=0;n<ms/10;++n){if(f())return true;std::this_thread::sleep_for(std::chrono::milliseconds(10));}return f();}
 }
 int wmain(int argc,wchar_t** argv){try{
-    require(argc==3,"usage: vendor tests fake.dll owned-test-root");
+    require(argc==3||argc==4,"usage: vendor tests fake.dll owned-test-root [--missing-export]");
     const auto root=std::filesystem::absolute(argv[2]);std::filesystem::create_directories(root/L"obs-plugins/64bit");
     std::filesystem::create_directories(root/L"data/obs-plugins/AVerMediaMultichannelAudio");
     const auto dll=root/L"obs-plugins/64bit/avt_dshow_core.dll";
@@ -28,6 +28,14 @@ int wmain(int argc,wchar_t** argv){try{
     auto mode=reinterpret_cast<void(*)(const wchar_t*)>(GetProcAddress(module,"FakeMode"));
     auto count=reinterpret_cast<unsigned(*)(unsigned)>(GetProcAddress(module,"FakeCount"));require(mode&&count,"fixture exports");
     const std::wstring name=L"Live Gamer Ultra 2.1-Video",path=L"\\\\?\\usb#vid_07ca&pid_2553&mi_00#5&first&0&0000#{guid}";
+    if(argc==4){
+        require(std::wstring_view(argv[3])==L"--missing-export","known test scenario");mode(L"normal");
+        {AverMediaVendorAudio audio;audio.start([](const VendorPcmBlock&){return true;},name,path);
+         require(wait([&]{return audio.state().failed;}),"missing export fails asynchronously without crash");
+         require(audio.state().error.find(L"missing vendor export")!=std::wstring::npos,"missing ABI export diagnostic");audio.stop();}
+        require(count(3)==0&&count(0)==0,"no graph constructed on incomplete ABI");FreeLibrary(module);
+        std::cout<<"PASS "<<checks<<" missing-export checks\n";return 0;
+    }
     std::atomic<unsigned> received=0;std::atomic<bool> valid=true;
     auto callback=[&](const VendorPcmBlock& block){valid=valid&&block.channels==2&&block.rate==48000&&block.mask==3&&block.samples[0]==0.25f;++received;return true;};
     {
