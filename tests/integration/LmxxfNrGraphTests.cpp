@@ -67,7 +67,10 @@ void checkSrHandoff(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,unsi
             worst=std::max(worst,error);if(f==0)first=error;last=error;
         }
         const auto nr=graph.metrics().nrEvaluateCount,sr=graph.metrics().srEvaluateCount;
-        const uint64_t expectedSr=c.fsr?(c.flow?4:6):0;
+        // Since 108cbaab (2026-10-10), FSR reconstructs all source frames:
+        // first/reset frames use zero guidance instead of bypassing the effect.
+        // The original 10-07 fixture's four-dispatch expectation is obsolete.
+        const uint64_t expectedSr=c.fsr?6:0;
         const bool pass=executed&&worst<=3&&nr==uint64_t(c.layers)*6&&sr==expectedSr;
         ring.drainQueue();graph.shutdown();av_frame_free(&frame);++checks;failures+=!pass;
         std::cout<<"AMD_NR_SR_MARKER case="<<c.name<<" output="<<gd.workWidth<<'x'<<gd.workHeight

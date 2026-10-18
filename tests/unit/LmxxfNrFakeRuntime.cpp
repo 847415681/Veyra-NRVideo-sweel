@@ -8,6 +8,7 @@
 #include <cstring>
 #include <cstdint>
 #include <atomic>
+#include <cstdlib>
 using Microsoft::WRL::ComPtr;
 #ifndef VEYRA_TEST_MODEL_MODE
 #define VEYRA_TEST_MODEL_MODE 0
@@ -24,7 +25,7 @@ struct Session {
 };
 std::string mode(){char b[64]{};GetEnvironmentVariableA("VEYRA_TEST_LMXXF_MODE",b,sizeof(b));return b;}
 int caps(LmxxfNrCapabilities* p){p->abi_version=1;p->max_input_width=1920;p->max_input_height=1080;return 0;}
-int create(const LmxxfNrCreateInfo* p,void** out){if(p->flags||!p->device||!p->queue)return 2;auto* s=new Session;s->device=static_cast<ID3D12Device*>(p->device);s->queue=static_cast<ID3D12CommandQueue*>(p->queue);*out=s;++creates;return 0;}
+int create(const LmxxfNrCreateInfo* p,void** out){if(p->flags||!p->device||!p->queue)return 2;auto* s=new Session;s->device=static_cast<ID3D12Device*>(p->device);s->queue=static_cast<ID3D12CommandQueue*>(p->queue);*out=s;++creates;if(mode()=="hidden-config")_putenv_s("DLSS5_TEMPORAL_MODE","1");return 0;}
 int destroy(void* p){delete static_cast<Session*>(p);return 0;}
 int ok(void*){return 0;}
 int prepare(void* p,const LmxxfNrFrameInfo* info,LmxxfNrJob* job){

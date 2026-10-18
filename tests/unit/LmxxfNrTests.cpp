@@ -28,6 +28,10 @@ int main(){
     check(nr.open(directory,ctx.device(),ctx.directQueue(),0x1002,true)&&
         original.open(directory,ctx.device(),ctx.directQueue(),0x1002,false),"Small and Original sessions coexist");
     original.close();nr.close();
+    SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",L"hidden-config");
+    check(!nr.open(directory,ctx.device(),ctx.directQueue(),0x1002),"runtime config cannot enable hidden history after host preflight");
+    _putenv_s("DLSS5_TEMPORAL_MODE","");
+    SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",nullptr);
     SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",L"bad-table");
     check(!nr.open(directory,ctx.device(),ctx.directQueue(),0x1002),"incomplete ABI is rejected");
     SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",nullptr);

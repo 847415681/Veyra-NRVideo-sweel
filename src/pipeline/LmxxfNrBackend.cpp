@@ -52,22 +52,28 @@ bool LmxxfNrBackend::open(const std::filesystem::path& directory, ID3D12Device* 
     // The add-on's sRGB input mode is incompatible with Veyra's linear FP16
     // contract. Runtime flags ignore that file key, but a process environment
     // override still reaches the upstream codec. Do not silently change it.
-    const auto* srgb=std::getenv("DLSS5_CODEC_SRGB");
-    const auto* adaptive=std::getenv("DLSS5_VIT_ADAPTIVE");
-    const auto hiddenHistory=[] {
+    const auto compatibleEnvironment=[this] {
+        const auto* srgb=std::getenv("DLSS5_CODEC_SRGB");
+        const auto* adaptive=std::getenv("DLSS5_VIT_ADAPTIVE");
+        if((srgb&&std::string_view(srgb)=="1")||(!caps_.history_supported&&adaptive&&*adaptive&&std::string_view(adaptive)!="0"))return false;
         for(const auto* key:{"DLSS5_TEMPORAL_MODE","DLSS5_FAST_HISTORY","DLSS5_TEMPORAL_HISTORY_EXPERIMENT"}){
             const auto* value=std::getenv(key);
-            if(value&&*value&&std::string_view(value)!="0")return true;
+            if(value&&*value&&std::string_view(value)!="0")return false;
         }
-        return false;
+        return true;
     };
-    if((srgb&&std::string_view(srgb)=="1") || (!caps_.history_supported&&adaptive&&std::string_view(adaptive)!="0"&&*adaptive) || hiddenHistory()){
+    const auto rejectEnvironment=[&] {
         error_="Veyra AMD NR requires linear input and Veyra-owned history: set DLSS5_CODEC_SRGB, DLSS5_VIT_ADAPTIVE, DLSS5_TEMPORAL_MODE, DLSS5_FAST_HISTORY and DLSS5_TEMPORAL_HISTORY_EXPERIMENT to 0";
         log::error("amd-nr",error_);close();return false;
-    }
+    };
+    if(!compatibleEnvironment())return rejectEnvironment();
     LmxxfNrCreateInfo info{}; info.struct_size = sizeof(info); info.device = device; info.queue = queue;
     info.assets_directory = assets.c_str(); // flags=0: a failed network is never passed off as NR
-    if (!result(api_.Create(&info, &context_), "Create") || !context_ || !result(api_.PrepareSession(context_), "PrepareSession")) { close(); return false; }
+    if (!result(api_.Create(&info, &context_), "Create") || !context_) { close(); return false; }
+    // Create reads the runtime's local config. Recheck after it, not only the
+    // inherited environment, before unsupported internal history can run.
+    if(!compatibleEnvironment())return rejectEnvironment();
+    if (!result(api_.PrepareSession(context_), "PrepareSession")) { close(); return false; }
     queue_ = queue;
     static std::atomic<uint64_t> next{1}; session_ = next++;
     log::info("amd-nr", std::format("lmxxf 0.44 model={} ABI={} session={} maxInput={}x{}; module metadata admitted, HIP inference initializes on first frame", performance ? "Small" : "Original", api_.abi_version, session_, caps_.max_input_width, caps_.max_input_height));
