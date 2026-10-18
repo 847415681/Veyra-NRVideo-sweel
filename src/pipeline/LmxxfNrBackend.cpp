@@ -16,15 +16,26 @@ bool LmxxfNrBackend::result(int32_t code, const char* operation) {
     log::error("amd-nr", error_);
     return false;
 }
-bool LmxxfNrBackend::open(const std::filesystem::path& directory, ID3D12Device* device, ID3D12CommandQueue* queue, uint32_t vendor) {
+bool LmxxfNrBackend::open(const std::filesystem::path& directory, ID3D12Device* device, ID3D12CommandQueue* queue, uint32_t vendor, bool performance) {
     close(); error_.clear();
     if (vendor != 0x1002 || !device || !queue || !directory.is_absolute()) {
         error_ = "lmxxf NR requires an AMD adapter, a D3D12 queue and an absolute runtime directory";
         log::error("amd-nr", error_); return false;
     }
-    const auto path = directory / L"LmxxfNrRuntime.dll";
+    const auto path = directory / (performance ? L"LmxxfNrRuntime.dll" : L"LmxxfNrRuntime-Original.dll");
     module_ = LoadLibraryExW(path.c_str(), nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
-    if (!module_) { error_ = std::format("LmxxfNrRuntime.dll load failed win32={}", GetLastError()); log::error("amd-nr", error_); return false; }
+    if (!module_) { error_ = std::format("{} load failed win32={}", path.filename().string(), GetLastError()); log::error("amd-nr", error_); return false; }
+    const auto modelMode = reinterpret_cast<uint32_t (*)()>(GetProcAddress(module_, "VeyraLmxxfModelMode"));
+    const auto assetsReady = reinterpret_cast<uint32_t (*)(const wchar_t*)>(GetProcAddress(module_, "VeyraLmxxfModelAssetsReady"));
+    if (!modelMode || !assetsReady || modelMode() != (performance ? 0u : 1u)) {
+        error_ = "AMD NR model module mismatch: install the complete Veyra lmxxf 0.44 runtime";
+        log::error("amd-nr", error_); close(); return false;
+    }
+    const auto assets = directory / L"assets";
+    if (!assetsReady(assets.c_str())) {
+        error_ = "AMD NR Small model assets are incomplete; refusing silent fallback to the original model";
+        log::error("amd-nr", error_); close(); return false;
+    }
     const auto getApi = reinterpret_cast<decltype(&LmxxfNrGetApi)>(GetProcAddress(module_, "LmxxfNrGetApi"));
     if (!getApi) { error_ = "LmxxfNrGetApi export is missing"; log::error("amd-nr",error_); close(); return false; }
     api_.struct_size = sizeof(api_);
@@ -43,17 +54,23 @@ bool LmxxfNrBackend::open(const std::filesystem::path& directory, ID3D12Device* 
     // override still reaches the upstream codec. Do not silently change it.
     const auto* srgb=std::getenv("DLSS5_CODEC_SRGB");
     const auto* adaptive=std::getenv("DLSS5_VIT_ADAPTIVE");
-    if((srgb&&std::string_view(srgb)=="1") || (!caps_.history_supported&&adaptive&&std::string_view(adaptive)!="0"&&*adaptive)){
-        error_="Veyra AMD NR requires DLSS5_CODEC_SRGB=0 and DLSS5_VIT_ADAPTIVE=0: linear input and source-reset isolation";
+    const auto hiddenHistory=[] {
+        for(const auto* key:{"DLSS5_TEMPORAL_MODE","DLSS5_FAST_HISTORY","DLSS5_TEMPORAL_HISTORY_EXPERIMENT"}){
+            const auto* value=std::getenv(key);
+            if(value&&*value&&std::string_view(value)!="0")return true;
+        }
+        return false;
+    };
+    if((srgb&&std::string_view(srgb)=="1") || (!caps_.history_supported&&adaptive&&std::string_view(adaptive)!="0"&&*adaptive) || hiddenHistory()){
+        error_="Veyra AMD NR requires linear input and Veyra-owned history: set DLSS5_CODEC_SRGB, DLSS5_VIT_ADAPTIVE, DLSS5_TEMPORAL_MODE, DLSS5_FAST_HISTORY and DLSS5_TEMPORAL_HISTORY_EXPERIMENT to 0";
         log::error("amd-nr",error_);close();return false;
     }
-    const auto assets = directory / L"assets";
     LmxxfNrCreateInfo info{}; info.struct_size = sizeof(info); info.device = device; info.queue = queue;
     info.assets_directory = assets.c_str(); // flags=0: a failed network is never passed off as NR
     if (!result(api_.Create(&info, &context_), "Create") || !context_ || !result(api_.PrepareSession(context_), "PrepareSession")) { close(); return false; }
     queue_ = queue;
     static std::atomic<uint64_t> next{1}; session_ = next++;
-    log::info("amd-nr", std::format("lmxxf ABI={} session={} maxInput={}x{}; module metadata admitted, HIP inference initializes on first frame", api_.abi_version, session_, caps_.max_input_width, caps_.max_input_height));
+    log::info("amd-nr", std::format("lmxxf 0.44 model={} ABI={} session={} maxInput={}x{}; module metadata admitted, HIP inference initializes on first frame", performance ? "Small" : "Original", api_.abi_version, session_, caps_.max_input_width, caps_.max_input_height));
     return true;
 }
 bool LmxxfNrBackend::admits(uint32_t w, uint32_t h) const {

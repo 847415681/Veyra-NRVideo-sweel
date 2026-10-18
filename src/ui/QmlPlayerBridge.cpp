@@ -5652,7 +5652,7 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
         else if(key=="style"&&value<=2)n.model.style=int(value);
         else if(key=="autoMask"&&value<=1)n.model.autoMask=int(value);
         else if(key=="uiCorrection"&&value<=1)n.model.uiCorrection=int(value);
-        else if(key=="performance"&&value<=1&&engine::currentNrRuntime(n.runtime)==engine::NrRuntime::Ampere)n.model.performance=value!=0;
+        else if(key=="performance"&&value<=1&&engine::nrUsesPerformanceModel(n.runtime))n.model.performance=value!=0;
         else if(key=="temporal"&&value<=1)n.temporal=value!=0;
         else if(key=="correctionEnabled"&&value<=1)n.residual.correction.enabled=value!=0;
         else if(key=="correctionAuto"&&value<=1)n.residual.correction.automatic=value!=0;

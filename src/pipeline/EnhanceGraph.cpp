@@ -1328,7 +1328,7 @@ bool EnhanceGraph::initNgxFeatures()
                 if(desc_.hdrWorking()){veyra::log::error("amd-nr","HDR input is not yet validated for this adapter; NR disabled by backend fallback");return false;}
                 instance->amd=std::make_unique<LmxxfNrBackend>();
                 const auto directory=std::filesystem::path(desc_.runtimeAbsPath)/L".."/L"amd-nr";
-                if(!instance->amd->open(directory.lexically_normal(),context_.device(),ring_.queue(),context_.adapter().vendorId) || !instance->amd->admits(extent.width,extent.height))return false;
+                if(!instance->amd->open(directory.lexically_normal(),context_.device(),ring_.queue(),context_.adapter().vendorId,instance->model.performance) || !instance->amd->admits(extent.width,extent.height))return false;
             }
             veyra::log::info("resolution",std::format("NR layer={} internal={}x{} composite={}x{} sharedMotion={}",
                 index+1,extent.width,extent.height,fullW,fullH,motion!=nullptr));
@@ -3219,8 +3219,8 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
         if(s.activeNrLayerCount()!=nrInstances_.size())return false;
         for(size_t i=0;i<nrInstances_.size();++i){
             const auto& model=i<nextNr.nrLayersModel.size()?nextNr.nrLayersModel[i]:nextNr.model;
-            if(!lmxxfNr_&&engine::nrRenderPreset(s.nrRuntime,model)!=
-                engine::nrRenderPreset(desc_.nrRuntime,nrInstances_[i]->model))return false;
+            if(engine::nrModelSelection(s.nrRuntime,model)!=
+                engine::nrModelSelection(desc_.nrRuntime,nrInstances_[i]->model))return false;
             const bool temporal=i<nextNr.nrLayersTemporal.size()?nextNr.nrLayersTemporal[i]:nextNr.nrTemporal;
             if(temporal!=nrInstances_[i]->temporalEnabled)return false;
             const auto tier=i<nextNr.nrLayersAntiFlicker.size()?nextNr.nrLayersAntiFlicker[i]:nextNr.nrAntiFlicker;

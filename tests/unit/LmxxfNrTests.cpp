@@ -19,6 +19,15 @@ int main(){
     pipeline::LmxxfNrBackend nr;
     check(!nr.open(directory,ctx.device(),ctx.directQueue(),0x10DE),"NVIDIA path does not load AMD runtime");
     check(!nr.open(directory/"missing",ctx.device(),ctx.directQueue(),0x1002),"missing runtime refuses NR");
+    SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",L"wrong-model");
+    check(!nr.open(directory,ctx.device(),ctx.directQueue(),0x1002),"swapped model module refuses NR");
+    SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",L"missing-small");
+    check(!nr.open(directory,ctx.device(),ctx.directQueue(),0x1002),"missing Small assets cannot silently fall back");
+    SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",nullptr);
+    pipeline::LmxxfNrBackend original;
+    check(nr.open(directory,ctx.device(),ctx.directQueue(),0x1002,true)&&
+        original.open(directory,ctx.device(),ctx.directQueue(),0x1002,false),"Small and Original sessions coexist");
+    original.close();nr.close();
     SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",L"bad-table");
     check(!nr.open(directory,ctx.device(),ctx.directQueue(),0x1002),"incomplete ABI is rejected");
     SetEnvironmentVariableW(L"VEYRA_TEST_LMXXF_MODE",nullptr);
