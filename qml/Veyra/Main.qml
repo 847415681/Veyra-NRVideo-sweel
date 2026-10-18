@@ -495,6 +495,10 @@ Window {
     // top-level window (FullscreenBar.qml), because the native video window draws
     // above everything in this one.
     property bool fullControls: true
+    // Also consumed by the native video HWND: a QML cursor alone cannot hide
+    // the class cursor of the foreign child window under a stationary pointer.
+    readonly property bool fullscreenCursorHidden: fullscreen && (!fullControls || fullLocked)
+        && !quickPanelShown && dialogs.dialog === ""
     function pointerActivity() {
         if (!fullscreen || fullLocked || root.test.fullBar === "hidden") return
         if (root.test.fullDebug === true) veyra.logUi("ui-fullscreen-debug", "pointer activity")
@@ -516,7 +520,7 @@ Window {
     // hides with the controls, as in AppShell.
     HoverHandler {
         id: pointerWatch
-        cursorShape: root.fullscreen && (!root.fullControls || root.fullLocked) && !root.quickPanelShown ? Qt.BlankCursor : Qt.ArrowCursor
+        cursorShape: root.fullscreenCursorHidden ? Qt.BlankCursor : Qt.ArrowCursor
         // Qt re-sends hover while anything animates under a still pointer; only a
         // real change of position counts as movement.
         property point last: Qt.point(-1, -1)
@@ -569,10 +573,17 @@ Window {
         enabled: !root.fullLocked && !veyra.gameInputActive
         // Judged where the press landed: by the release the page may already have changed.
         property bool pressOnCover: false
-        onPressedChanged: if (pressed) pressOnCover = root.overVideoCover(point.scenePosition)
+        property bool pressOnPicture: false
+        onPressedChanged: if (pressed) {
+            pressOnCover = root.overVideoCover(point.scenePosition)
+            pressOnPicture = root.pictureContains(point.scenePosition)
+        }
         onTapped: (eventPoint, button) => {
             const p = eventPoint.position
-            if (pressOnCover) return
+            // A transport button can enter fullscreen before this handler sees
+            // release. Its press still belongs to the transport, not the newly
+            // enlarged picture underneath it.
+            if (pressOnCover || !pressOnPicture) return
             if (root.page !== "min" && root.page !== "pro" && root.page !== "node" && !root.fullscreen) return
             if (dialogs.dialog !== "" || !veyra.hasSource) return
             if (root.fullscreen && root.quickPanelShown && (proPage.overlayContains(p.x, p.y) || nodePage.overlayContains(p.x, p.y))) return
@@ -588,10 +599,14 @@ Window {
     TapHandler {
         enabled: !root.fullLocked && !veyra.gameInputActive
         property bool pressOnCover: false
-        onPressedChanged: if (pressed) pressOnCover = root.overVideoCover(point.scenePosition)
+        property bool pressOnPicture: false
+        onPressedChanged: if (pressed) {
+            pressOnCover = root.overVideoCover(point.scenePosition)
+            pressOnPicture = root.pictureContains(point.scenePosition)
+        }
         onDoubleTapped: (eventPoint, button) => {
             const p = eventPoint.position
-            if (pressOnCover) return
+            if (pressOnCover || !pressOnPicture) return
             if (root.fullscreen) {
                 if (root.quickPanelShown && (proPage.overlayContains(p.x, p.y) || nodePage.overlayContains(p.x, p.y))) return
                 root.toggleFullscreen()
@@ -610,10 +625,14 @@ Window {
     TapHandler {
         enabled: veyra.moonlight && veyra.moonlight.state.streaming === true && !veyra.moonlightCaptured && dialogs.dialog === ""
         property bool pressOnCover: false
-        onPressedChanged: if (pressed) pressOnCover = root.overVideoCover(point.scenePosition)
+        property bool pressOnPicture: false
+        onPressedChanged: if (pressed) {
+            pressOnCover = root.overVideoCover(point.scenePosition)
+            pressOnPicture = root.pictureContains(point.scenePosition)
+        }
         onTapped: eventPoint => {
             const p = eventPoint.position
-            if (pressOnCover) return
+            if (pressOnCover || !pressOnPicture) return
             if (root.page !== "min" && root.page !== "pro" && root.page !== "node") return
             if (p.x < videoHost.x || p.y < videoHost.y || p.x > videoHost.x + videoHost.width
                 || p.y > videoHost.y + videoHost.height) return

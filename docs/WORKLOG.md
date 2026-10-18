@@ -1,5 +1,9 @@
 # WORKLOG
 
+## 2026-10-18 全屏点击与指针修复开工
+
+基于AMD0.44 f6c4fd9开codex/fullscreen-input-20261018，不改main/Claude树。基线独立GTA4K真实点击已复现按钮全屏后立刻pause，Qt BlankCursor请求后实际指针仍可见；日志logs/fullscreen-input-20261018/baseline。按下时记录画面归属，原生HWND同步Qt隐藏策略且尊重浮层区域；不加Timer/重绘、不改33ms/250ms。计划FULLSCREEN_INPUT_PLAN_2026-10-18.md。首次文档patch因WORKLOG标题匹配错误失败，原子回退该文档patch，正确标题重施；无产品数据影响。接下来独立构建/定向回归/实际鼠标验收，无发布授权。
+
 ## 2026-10-17 采集格式与旧版入口（Linux 源码候选）
 
 按用户“全部修复掉，再添加老版本采集格式选择入口”，在窗口修复 1295d6b 之上隔离实施 `codex/capture-format-fixes-20261017`。修复 DirectShow 能力回退、尺寸/帧率范围候选、±1 tick 显示分组漏掉像素项、精确媒体类型恢复与连接校验；增加可搜索虚拟化旧版组合列表、自定义尺寸检查和查询错误诊断。原低延迟回调/队列、BMD 原生、增强/音频/渲染/运行库与配置保持。详见 docs/CAPTURE_FORMAT_FIXES_2026-10-17.md。

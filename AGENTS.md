@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-18 全屏输入修复授权**：用户明确专业模式全屏误暂停/恢复、极简全屏指针不隐藏一起修。按 docs/FULLSCREEN_INPUT_PLAN_2026-10-18.md 在 codex/fullscreen-input-20261018（基于 AMD0.44 f6c4fd9）隔离修改 QML 画面点击与 apps/veyra-qml 原生窗口指针接点，覆盖本范围历史冻结；不改引擎/媒体/效果/刷新频率，不干扰 Claude。全 E盘、私有配置、限并发构建与真实原生 UI 回归；不合 main/push/发布/关机，不派 Agent。
+
 
 > **2026-10-18 AMD NR0.44隔离接入授权**：用户提供Magpie-DLSS5-AMD-0.44.zip并要求开分支接入，明确Claude同时工作、不得互相影响。从main26c0d61在codex/amd-nr-044-20261018实施，计划docs/AMD_NR_044_PLAN_2026-10-18.md。允许AMD独立C ABI runtime0.44固定4764e4f1、原样权重/HIP资源、必要Small/Original模型参数/设置/UI/共享图及构建部署/定向回归接点，覆盖这些历史冻结；NVIDIA现行路径、33ms/250ms、采集/补帧/颜色合同保持。源包447952711bytes/SHA CF812FE7909FBD53B38F54DA8ABD584698525F81F7EA71CAB19BA14BAB48E030与作者热修相符，875条内部SHA已验证。88原树/101分支/509脏文件及source-before.bundle已独立存档；Claude可正常推进其分支，不重置/覆盖/锁住其工作，不发送跨任务消息、不派Agent。所有产物E盘独立amd-nr-044-20261018，CPU构建限并发，GPU回归前核对空闲，不停止他人进程。测试≤300秒、构建≤900秒。无本轮main合并/push/Release/正式包/关机授权；原SDK/专有DLL/权重/驱动及真实配置不改，不进源码Git。无RX9000实卡须明确未验，不把fake ABI或5070测量冒充AMD推理。
 
