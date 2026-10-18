@@ -71,6 +71,7 @@ struct AverMediaVendorAudio::Impl {
     std::mutex decodeMutex;
     bool tearingDown=true;
     std::unique_ptr<AverMediaAudioCarrier> carrier;
+    AverMediaAudioSwitch nonPcmSwitch;
     PcmCallback onPcm;
     struct Dealer final:avermedia::AudioDealer {
         Impl* owner=nullptr;
@@ -123,11 +124,17 @@ struct AverMediaVendorAudio::Impl {
         {std::lock_guard lock(decodeMutex);tearingDown=false;carrier=std::make_unique<AverMediaAudioCarrier>(onPcm);}
         storage.fill(0);constructed=call(Ctor,nullptr,nullptr,false);
         if(!constructed){recordError("vendor AudioDevice constructor failed");return false;}
-        if(!call(Reset)){recordError("vendor ResetGraph failed");return false;}
         std::vector<avermedia::DeviceInfo> devices;if(!call(DeviceList,&devices,nullptr,false))return false;
         const auto selected=avermedia::selectDevice(devices,preferName,preferPath);
         if(!selected){recordError("selected AVerMedia audio device not found or ambiguous; refusing another card");return false;}
         const auto& chosen=devices[*selected];
+        // AudioDevice only drives the capture graph. As in the public OBS
+        // Activate path, DeviceOpener must also arm/monitor non-PCM on this
+        // exact card. Keep its potentially slow SDK initialization on our STA.
+        if(!nonPcmSwitch.apply(chosen.friendlyName,chosen.devicePath))
+            log::warn("capture-audio-vendor",std::string("non-PCM switch unavailable; PCM capture remains possible: ")+nonPcmSwitch.status().detail);
+        if(stopRequested)return false;
+        if(!call(Reset)){recordError("vendor ResetGraph failed");return false;}
         if(!call(Update,const_cast<std::wstring*>(&chosen.friendlyName),const_cast<std::wstring*>(&chosen.devicePath))
             ||!call(Connect)||!call(SetCallback,&dealer)||!call(Start)){
             recordError("vendor audio graph setup/start failed");return false;
@@ -187,6 +194,7 @@ struct AverMediaVendorAudio::Impl {
             }
         }catch(...){recordError("vendor audio worker exception");ok=false;}
         try{teardown();}catch(...){ok=false;}
+        nonPcmSwitch.stop();
         if(module&&!quarantine){FreeLibrary(module);module=nullptr;}
         for(auto cookie:directories)RemoveDllDirectory(cookie);directories.clear();api.fill(nullptr);
         {std::lock_guard lock(mutex);state.starting=state.started=state.running=false;state.failed=!ok&&!stopRequested;
