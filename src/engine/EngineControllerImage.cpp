@@ -1,4 +1,5 @@
 #include "veyra/engine/EngineController.h"
+#include "veyra/engine/GraphDescription.h"
 #include "veyra/engine/TiledImageProcessor.h"
 #include "veyra/engine/VideoPresenter.h"
 #include "veyra/gfx/CommandSlotRing.h"
@@ -67,6 +68,7 @@ void EngineController::runLargeImage(HWND window,const sink::RgbaImage& original
             pipeline::EnhanceGraphDesc desc;desc.enableNr=requested.nr;desc.nrRuntime=requested.nrRuntime;desc.noFeatures=!requested.nr;
             desc.model=requested.model;desc.nrTemporal=requested.nrTemporal;desc.residual=requested.residual;desc.protection=requested.protection;desc.color=requested.color;desc.settingsRevision=requested.revision;
             desc.additionalColors=requested.additionalColors;desc.additionalColorCount=requested.additionalColorCount;
+            describeAntiAlias(requested,desc);
             desc.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
             sink::RgbaImage candidate;TiledImageProcessor::Stats stats;
             status(L"正在分块增强大图，保留完整输出尺寸…");

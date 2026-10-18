@@ -2121,6 +2121,7 @@ void QmlPlayerBridge::resetCurrentPage() {
     s.protection = engine::ProtectionSettings{};
     s.color = engine::ColorSettings{};
     s.additionalColors = {}; s.additionalColorCount = 0;
+    s.antiAlias = engine::AntiAliasSettings{}; s.additionalAntiAlias = {}; s.additionalAntiAliasCount = 0;
     s.videoHdr = engine::VideoHdrSettings{};
     const auto before=impl_->chain; const auto selected=impl_->selectedNr;
     const auto oldLayout = impl_->layout;
@@ -5600,7 +5601,7 @@ QString QmlPlayerBridge::nrAutoSelectionReason(int index) const {
     }
     if(first!=index||count>2||otherAuto)return tr("自动 NR 仅支持一至两层列表的第一层");
     if(impl_->chain.mode!=engine::ChainMode::List||engine::currentNrRuntime(s.nrRuntime)!=engine::NrRuntime::Ampere||s.sr||s.multiplier>1||temporal||
-       s.nrHoldStrength>0||s.color.enabled||s.additionalColorCount||s.videoHdr.enabled||
+       s.nrHoldStrength>0||s.color.enabled||s.additionalColorCount||s.antiAlias.enabled||s.additionalAntiAliasCount||s.videoHdr.enabled||
        s.opticalFlowBackend!=engine::OpticalFlowBackend::Nvidia||s.nrMotion!=engine::MotionSource::OpticalFlow||snapshot.capture||snapshot.image||snapshot.sourceHdr||
        (snapshot.sourceWidth&& (snapshot.sourceWidth!=1920||snapshot.sourceHeight!=1080)))
         return tr("需 1080p SDR 文件、SF 和 NVIDIA 光流；关闭超分、补帧、抗闪烁、调色及 HDR");
@@ -5669,6 +5670,7 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
 QVariantList QmlPlayerBridge::effectCatalog() const {
     QVariantList out;
     for (const auto& info : engine::effectCatalog()) {
+        if (info.hidden) continue;
         if (impl_->chain.mode == engine::ChainMode::Node && info.type == engine::EffectType::Protection) continue;
         if (impl_->chain.mode == engine::ChainMode::Node && info.type == engine::EffectType::FrameGeneration) {
             for(const auto& choice : fgBackendChoices()) {
@@ -6845,7 +6847,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
         const engine::EffectInfo* info = nullptr;
         for (const auto& item : engine::effectCatalog())
             if ((fg && item.type == engine::EffectType::FrameGeneration) || utf8Of(item.id) == type) info = &item;
-        if (!info || info->type == engine::EffectType::Protection) {
+        if (!info || info->hidden || info->type == engine::EffectType::Protection) {
             emit notice(tr("节点模式不支持该效果类型"), true); return -1;
         }
         auto& c = impl_->chain;
@@ -6921,7 +6923,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
     engine::EffectType wanted = engine::EffectType::NrEnhance;
     bool found = false;
     for (const auto& info : engine::effectCatalog()) {
-        if (utf8Of(info.id) == type) {
+        if (!info.hidden && utf8Of(info.id) == type) {
             wanted = info.type;
             found = true;
             break;

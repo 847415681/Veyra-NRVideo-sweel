@@ -1098,6 +1098,12 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # cannot ship without it. scripts/i18n/ builds it from the source strings.
   qt_add_resources(veyra_qml_ui "veyra_i18n" PREFIX "/i18n" BASE "${CMAKE_CURRENT_SOURCE_DIR}/i18n" FILES i18n/catalog.json)
   target_compile_features(veyra_qml_ui PRIVATE cxx_std_20)
+  # Every thread without an explicit size (UI, engine, export worker) reserves the
+  # image default. The 32-node EffectChain is 45 KB and the bridge, preset and
+  # engine frames hold several (2026-10-18: bridge constructor 400 KB,
+  # EngineController::run 385 KB), so 1 MB no longer leaves a safe margin.
+  # Reserve only: pages are committed as they are touched.
+  target_link_options(veyra_qml_ui PRIVATE /STACK:8388608)
   # Qt6::CorePrivate only for QUnifiedTimer's slow mode behind --slow-animations.
   target_link_libraries(veyra_qml_ui PRIVATE veyra_qml_bridge veyra_engine Qt6::CorePrivate dbghelp ole32)
 
@@ -1442,6 +1448,7 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
   target_link_libraries(veyra_hdr_color_tests PRIVATE veyra_engine)
   add_executable(veyra WIN32 apps/veyra/main.cpp apps/veyra/ui/AppShell.cpp apps/veyra/ui/CapturePanel.cpp apps/veyra/ui/SubtitleOverlay.cpp apps/veyra/SettingsWindow.cpp apps/veyra/TelemetryWindow.cpp)
   target_sources(veyra PRIVATE apps/veyra/ui/ScreenCapturePanel.cpp)
+  target_link_options(veyra PRIVATE /STACK:8388608) # same 32-node chain frames as veyra_qml_ui
   add_executable(veyra_slider_reset_tests tests/integration/SliderResetTests.cpp apps/veyra/SettingsWindow.cpp)
   target_compile_features(veyra_slider_reset_tests PRIVATE cxx_std_20)
   target_compile_options(veyra_slider_reset_tests PRIVATE /utf-8)

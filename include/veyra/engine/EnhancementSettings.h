@@ -9,9 +9,13 @@
 #include "veyra/pipeline/ResolutionPlan.h"
 #include "veyra/source/CaptureBuffer.h"
 #include "veyra/engine/ColorSettings.h"
+#include "veyra/engine/AntiAliasSettings.h"
 namespace veyra::engine {
 inline constexpr uint32_t kMaxColorInstances = 6;
 inline constexpr uint32_t kMaxNrInstances = 4;
+// Beauty nodes (face restore + skin smoothing). Reserved by the effect-chain
+// extension; the effect itself is not available yet (hidden in the catalog).
+inline constexpr uint32_t kMaxBeautyInstances = 6;
 // Anti-flicker route for the NR temporal pass. The tiers come from Magpie's
 // DLSSNRTemporal (GPL-3.0, commit 3841698): see shaders/NrTemporal.hlsl.
 //   Off        - no temporal accumulation at all.
@@ -343,6 +347,11 @@ struct EnhancementSettings {
     // Fixed capacity preserves the export shared-memory POD contract.
     std::array<ColorSettings,kMaxColorInstances-1> additionalColors{};
     uint32_t additionalColorCount=0;
+    // Spatial anti-aliasing (#53). Instance zero is the list card; a node chain may
+    // hold a second instance. Fixed capacity for the export shared-memory POD.
+    AntiAliasSettings antiAlias;
+    std::array<AntiAliasSettings,kMaxAntiAliasInstances-1> additionalAntiAlias{};
+    uint32_t additionalAntiAliasCount=0;
     // Stage-5 output stabiliser (anti-flicker). Holds the previous output where
     // the source has not visibly changed. 0 is off, and off is the default: the
     // graph then skips the dispatch entirely, so a build with this feature
@@ -401,6 +410,9 @@ struct EnhancementSettings {
         for(size_t i=0;i<active.additionalColors.size();++i)
             if(i>=additionalColorCount||!additionalColors[i].enabled)active.additionalColors[i]={};
         if(!videoHdr.enabled)active.videoHdr=defaults.videoHdr;
+        active.antiAlias=antiAlias.active();
+        for(size_t i=0;i<active.additionalAntiAlias.size();++i)
+            active.additionalAntiAlias[i]=i<additionalAntiAliasCount?additionalAntiAlias[i].active():AntiAliasSettings{};
         if(nrHoldStrength==0)active.nrHoldTolerance=defaults.nrHoldTolerance;
         if(!hdrCurve.enabled){
             active.hdrCurve=defaults.hdrCurve;
@@ -454,6 +466,11 @@ struct EnhancementSettings {
         }
         video.videoHdr=target.videoHdr;
         video.videoHdr.enabled=videoHdr.enabled;
+        // Anti-aliasing thresholds and history weights are uniforms; the method,
+        // tier and temporal mode decide which passes exist.
+        if(video.antiAlias.sameStructure(target.antiAlias))video.antiAlias=target.antiAlias;
+        for(size_t i=0;i<additionalAntiAlias.size();++i)
+            if(video.additionalAntiAlias[i].sameStructure(target.additionalAntiAlias[i]))video.additionalAntiAlias[i]=target.additionalAntiAlias[i];
         return video==target;
     }
     void rejectVideoRequest(const EnhancementSettings& attempted,const EnhancementSettings& previous) {
@@ -524,6 +541,10 @@ struct EnhancementSettings {
         if(additionalColorCount>additionalColors.size())return "too many color instances";
         for(uint32_t i=0;i<additionalColorCount;++i)
             if(auto error=additionalColors[i].validate();!error.empty())return error;
+        if(auto error=antiAlias.validate();!error.empty())return error;
+        if(additionalAntiAliasCount>additionalAntiAlias.size())return "too many anti-aliasing instances";
+        for(uint32_t i=0;i<additionalAntiAliasCount;++i)
+            if(auto error=additionalAntiAlias[i].validate();!error.empty())return error;
         if(!pipeline::validNrSizePolicy(nrPolicy))return "invalid NR size policy";
         if(flow<FlowQuality::Performance||flow>FlowQuality::Quality||content<ContentRate::Transport||content>ContentRate::Capture60To30)return "invalid flow/content mode";
         return {};

@@ -60,5 +60,14 @@
 2. `E0:` 效果器扩展基础（回归通过后建 `claude/effects-infra-20261017` 指向它，不再移动；后续修正用 `[E0-fix]` 前缀单独提交并记入 WORKLOG）。
 3. `AA:` 抗锯齿（着色器、AntiAliasPass、图接入、桥接/QML/翻译、预设/会话/导出、许可、测试与报告）。
 
-## 7. 未验证项（预先声明）
+## 7. 进度
+
+### E0（2026-10-18，子会话额度用尽后由协调会话完成）
+- 实现与 3.1/3.2 一致，差异：槽判定接口名为 `EnhanceGraphDesc::slotOfStep(step)`（返回 `PassSlot`），图内槽列表为 `sourcePostPasses_/preNrPasses_/preSrPasses_/interNrPasses_[]/tailPasses_`（`SlotPass`）；抗锯齿在本提交中由 `EnhanceGraphDesc::antiAliasExecutor=false` 拒绝执行、目录隐藏，美颜同样隐藏且不进入运行顺序。
+- 设置接点：`describeAntiAlias()`（图描述、图片与分块路径）、`applySettings` 结构变化重建/阈值类为统一量、导出冻结计数校验、预览计算队列与自动 NR 池及最近图缓存的准入排除抗锯齿、“重置本页”清空抗锯齿、桥接目录与 `addEffect` 拒绝隐藏类型、整链预设替换的类型排序包含新类型。
+- 32 节点使 `EffectChain` 22,416→45,584 字节；汇编清单统计的栈帧随之约翻倍（`QmlPlayerBridge` 构造 214→400 KB，`EngineController::run` 385 KB，`PresetLibrary::parse` 78→147 KB）。`veyra_qml_ui`（含界面、引擎与导出 worker 线程）与旧 `veyra` 链接 `/STACK:8388608`（只保留地址空间，按需提交）；已核对 PE 头 8,388,608。
+- 旧 Win32 遥测阶段名表补齐：原表缺 `Fg6/Fg7` 两项（其后名称整体错位、末两项为空指针），现按枚举逐项对齐并以 `static_assert` 固定长度。
+- 验证：`veyra_effect_chain_tests` 全部通过（新增 E0 断言 33 条：默认无新节点、溢出拒绝、双实例往返与校验、重建规则、列表位置、节点 SourcePost/PreNr/PreSr/InterNr/Tail 与混合槽、美颜不入图、21 节点链）；`veyra_preset_library_tests` 全部通过（新增 14 条：v14 独立文件且旧库字节不变、精确重载与应用、v13 头夹带新类型拒绝、未知新版本拒绝、18 节点链、会话 v9）；`veyra_nr_model_settings_tests` 26/26；`veyra_ui_i18n_tests` 0 失败；调色切片回归 `slot_regression.py app-e0b … --compare golden-baseline.json` **12/12 逐字节相同**（`tests/claude-aa-53-20261017/slot-e0-final.json`）。
+
+## 8. 未验证项（预先声明）
 AMD/Intel 实卡、用户 Switch 素材、长时间运行、光学延迟均不在本轮验证范围；本机 RTX 结果不外推其它硬件。
