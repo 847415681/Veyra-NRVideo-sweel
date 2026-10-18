@@ -5,6 +5,8 @@
 - 授权与方案：AGENTS.md 顶部同日条目；docs/NETWORK_BUFFER_48_PLAN_2026-10-17.md。分支 claude/network-buffer-48-20261017（main 26c0d61），存档 checkpoint/pre-claude-network-buffer-48-20261017 与 archives/claude-network-buffer-48-20261017（bundle 已 verify，88 工作树 / 108 脏文件）。产物 {build,tests,logs,tmp,reports,archives}/claude-network-buffer-48-20261017。
 - 核对：计划所述“字幕加载器对网络地址再开连接”与代码不符（网络地址不扫描字幕）；实际问题是 NAS 路径整文件扫描与点播无内嵌字幕。设计改为一套共享解复用会话（含 HLS/RTSP/HTTP/NAS），理由见方案 §2。
 - 进度随实施追加在方案 §5。
+- 2026-10-18 子会话额度用尽，由协调会话接手：核对未提交的最后一批修正（HLS 主列表最佳变体、直播重连短探测与 0.5 s 起播缓冲、带宽判定证据、码率历史老化、音轨切换锁、重连退避、40 s 打开期限）后，`tmp/claude-network-buffer-48-20261017/build.py`（无改动增量，0.7 s）+ `make_app.py`，完整矩阵 `py -3.11 -I tests/network/run_network_tests.py --out tests/claude-network-buffer-48-20261017/results/matrix-claude-verify` 19/19 通过（日志 `logs/claude-network-buffer-48-20261017/matrix-claude-verify.log`）。
+- 发现并补上隔行分支的损坏帧仍会停止播放（1080i 网络电视常见）：改为与逐行同一容错策略；新素材 `av-1080i25-60s.ts` 与用例 `ts-flip-1pct-interlaced`。重新编译 3 个目标 14.8 s，`--only ts-flip-1pct-interlaced,ts-flip-1pct-10min-decode,local-ab` 3/3 通过（`results/claude-interlaced`）。
 
 ## 2026-10-17 采集格式与旧版入口（Linux 源码候选）
 

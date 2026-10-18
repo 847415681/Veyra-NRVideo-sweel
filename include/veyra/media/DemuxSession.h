@@ -213,6 +213,7 @@ private:
     bool gateKeyframe_ = false;            // live reconnect or restarted timeline: wait for a video keyframe
     int64_t lastAnchorNs_ = 0;             // when the timeline was last re-anchored (late audio of the old one is dropped for a while)
     bool videoDiscontinuityPending_ = false, audioDiscontinuityPending_ = false;
+    double liveBackCap_ = 0.0;             // seconds: the start buffer of a live stream that just reconnected (0: not applied)
     bool videoStarved_ = false;            // the video consumer found its queue empty: reading more is always right
     int timestampJumpLogs_ = 0;            // diagnostics: leaps in the stream's timestamps, logged a few times per session
     std::vector<Item> pendingAudio_;       // audio read before the live gate opened

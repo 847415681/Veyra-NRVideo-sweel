@@ -234,6 +234,108 @@ void DemuxSession::closeContext() {
     file_.reset();
 }
 
+// ---------------------------------------------------------------------------
+// HLS master playlists. FFmpeg's HLS demuxer opens every variant (its playlist and the start of its first
+// segment) before the first picture: on a Twitch VOD that is seven playlists of 180 KB and about 20 MB of
+// segments, longer than a slow link can deliver in the connect deadline, and all of it thrown away. The best
+// variant is chosen here, like other players do (mpv: hls-bitrate=max), and only that one is opened.
+// ---------------------------------------------------------------------------
+namespace {
+
+struct HlsVariant {
+    int64_t bandwidth = 0;
+    int64_t pixels = 0;
+    bool audioGroup = false;
+    std::string uri;
+};
+
+std::string hlsAttribute(const std::string& line, const char* key) {
+    const std::string needle = std::string(key) + "=";
+    for (size_t at = line.find(needle); at != std::string::npos; at = line.find(needle, at + 1)) {
+        if (at != 0 && line[at - 1] != ',' && line[at - 1] != ':') continue;   // not a longer name that ends the same way
+        size_t begin = at + needle.size(), end;
+        if (begin < line.size() && line[begin] == '"') {
+            ++begin;
+            end = line.find('"', begin);
+        } else {
+            end = line.find(',', begin);
+        }
+        return line.substr(begin, end == std::string::npos ? std::string::npos : end - begin);
+    }
+    return {};
+}
+
+std::string absoluteUrl(const std::string& base, const std::string& ref) {
+    if (ref.starts_with("http://") || ref.starts_with("https://")) return ref;
+    const auto scheme = base.find("://");
+    if (scheme == std::string::npos) return {};
+    const auto authorityEnd = base.find('/', scheme + 3);
+    const std::string origin = authorityEnd == std::string::npos ? base : base.substr(0, authorityEnd);
+    if (ref.starts_with("//")) return base.substr(0, scheme + 1) + ref;
+    if (ref.starts_with("/")) return origin + ref;
+    std::string directory = base.substr(0, std::min(base.find('?'), base.find('#')));
+    const auto slash = directory.rfind('/');
+    directory = slash > scheme + 2 ? directory.substr(0, slash + 1) : origin + "/";
+    return directory + ref;
+}
+
+// The URL of the best variant when `url` is a master playlist whose variants carry their own audio; empty when it is
+// not (a media playlist, another protocol, separate audio renditions, a failed fetch): the caller opens `url` itself.
+std::string bestHlsVariant(const std::string& url, AVDictionary* networkOptions, const AVIOInterruptCB& interrupt, std::string* note) {
+    const std::string path = url.substr(0, url.find('?'));
+    std::string lower = path;
+    for (auto& ch : lower) ch = char(std::tolower(static_cast<unsigned char>(ch)));
+    if (!lower.ends_with(".m3u8")) return {};
+    AVDictionary* options = nullptr;
+    av_dict_copy(&options, networkOptions, 0);
+    AVIOContext* io = nullptr;
+    const int opened = avio_open2(&io, url.c_str(), AVIO_FLAG_READ, &interrupt, &options);
+    av_dict_free(&options);
+    if (opened < 0) return {};
+    std::string text;
+    uint8_t buffer[16384];
+    for (int n; (n = avio_read(io, buffer, sizeof buffer)) > 0 && text.size() < (512u << 10);) text.append(reinterpret_cast<const char*>(buffer), size_t(n));
+    avio_closep(&io);
+    std::vector<HlsVariant> variants;
+    bool separateAudio = false;
+    HlsVariant pending;
+    bool expectUri = false;
+    size_t begin = 0;
+    while (begin < text.size()) {
+        size_t end = text.find('\n', begin);
+        if (end == std::string::npos) end = text.size();
+        std::string line = text.substr(begin, end - begin);
+        begin = end + 1;
+        while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
+        if (line.starts_with("#EXT-X-STREAM-INF:")) {
+            pending = {};
+            const auto bandwidth = hlsAttribute(line, "BANDWIDTH");
+            pending.bandwidth = bandwidth.empty() ? 0 : std::atoll(bandwidth.c_str());
+            const auto resolution = hlsAttribute(line, "RESOLUTION");
+            if (const auto x = resolution.find('x'); x != std::string::npos) pending.pixels = std::atoll(resolution.c_str()) * std::atoll(resolution.c_str() + x + 1);
+            pending.audioGroup = !hlsAttribute(line, "AUDIO").empty();
+            expectUri = true;
+        } else if (line.starts_with("#EXT-X-MEDIA:")) {
+            if (hlsAttribute(line, "TYPE") == "AUDIO" && !hlsAttribute(line, "URI").empty()) separateAudio = true;
+        } else if (expectUri && !line.empty() && line[0] != '#') {
+            pending.uri = line;
+            variants.push_back(pending);
+            expectUri = false;
+        }
+    }
+    if (variants.size() < 2 || separateAudio) return {};
+    const HlsVariant* best = nullptr;
+    for (const auto& v : variants)
+        if (!best || v.pixels > best->pixels || (v.pixels == best->pixels && v.bandwidth > best->bandwidth)) best = &v;
+    if (!best || best->audioGroup) return {};
+    const std::string chosen = absoluteUrl(url, best->uri);
+    if (chosen.empty()) return {};
+    if (note) *note = std::format("hls master playlist: {} variants, opening only the best ({} bit/s, {} pixels)", variants.size(), best->bandwidth, best->pixels);
+    return chosen;
+}
+
+}  // namespace
+
 bool DemuxSession::openContext(std::wstring* error, bool initial) {
     closeContext();
     AVFormatContext* context = avformat_alloc_context();
@@ -243,7 +345,7 @@ bool DemuxSession::openContext(std::wstring* error, bool initial) {
     }
     context->interrupt_callback = {&Interrupt::callback, irq_.get()};
     AVDictionary* options = nullptr;
-    const std::string name = utf8(path_);
+    std::string name = utf8(path_);
     if (network_) {
         networkMediaOptions(&options);
         // Short drops are retried inside FFmpeg's HTTP layer first; this session's
@@ -254,6 +356,13 @@ bool DemuxSession::openContext(std::wstring* error, bool initial) {
         av_dict_set(&options, "reconnect_delay_max", "2", 0);
         av_dict_set(&options, "seg_max_retry", "3", 0);   // HLS segments
         av_dict_set(&options, "multiple_requests", "1", 0);
+        if (!initial && live_) {
+            // A live stream that comes back is probed briefly: the streams are known from the first open, and the
+            // full analysis (20 pictures for the frame rate) only delayed the first picture by a second or more.
+            av_dict_set(&options, "analyzeduration", "400000", 0);
+            av_dict_set(&options, "probesize", "1048576", 0);
+            av_dict_set(&options, "fpsprobesize", "0", 0);
+        }
     } else {
         file_ = std::make_unique<FileAvio>();
         if (!file_->open(path_, irq_.get())) {
@@ -267,6 +376,14 @@ bool DemuxSession::openContext(std::wstring* error, bool initial) {
         context->flags |= AVFMT_FLAG_CUSTOM_IO;
     }
     irq_->arm(kConnectTimeoutMs);
+    if (network_) {
+        std::string note;
+        const std::string best = bestHlsVariant(name, options, {&Interrupt::callback, irq_.get()}, &note);
+        if (!best.empty()) {
+            log::info("net-session", note);
+            name = best;
+        }
+    }
     int result = avformat_open_input(&context, name.c_str(), nullptr, &options);
     av_dict_free(&options);
     const bool timedOut = irq_->timedOut();
@@ -274,7 +391,7 @@ bool DemuxSession::openContext(std::wstring* error, bool initial) {
     if (result < 0) {   // avformat_open_input freed the context
         log::error("net-session", std::format("open failed code={} text={} timedOut={} initial={}", result, errorText(result), timedOut, initial));
         file_.reset();
-        if (error) *error = irq_->cancelled() ? L"已取消" : timedOut ? L"连接服务器超时（15 秒内没有响应），请检查地址和网络" : L"无法连接到服务器或地址不可用，请检查网络";
+        if (error) *error = irq_->cancelled() ? L"已取消" : timedOut ? L"连接服务器超时（40 秒内没有完成），请检查地址和网络" : L"无法连接到服务器或地址不可用，请检查网络";
         return false;
     }
     irq_->arm(kProbeTimeoutMs);
@@ -464,6 +581,8 @@ double DemuxSession::resumeTargetLocked() const {
     // A slow server needs as long to fill a big window as to play it: cap the wait per level.
     const double cap = settings_.level == NetworkBufferLevel::Large ? 45.0 : 20.0;
     target = std::min(target, std::max(cap, plan_.startSeconds));
+    // A live stream that has just come back restarts with half a second: the jitter buffer refills while it plays.
+    if (liveBackCap_ > 0) target = std::min(target, liveBackCap_);
     return std::min(target, std::max(1.0, aheadSecondsLocked() - 0.5));
 }
 
@@ -475,6 +594,7 @@ void DemuxSession::enterPhaseLocked(Phase phase, const char* why) {
         phase == Phase::Playing ? "playing" : phase == Phase::Buffering ? "buffering" : "prebuffering", why,
         leadSecondsLocked(), targetSeconds_, bandwidthLow_, stalls_));
     phase_ = phase;
+    if (phase == Phase::Playing) liveBackCap_ = 0.0;
     phaseSinceNs_ = now;
     consumerCv_.notify_all();
     producerCv_.notify_all();
@@ -484,7 +604,8 @@ void DemuxSession::updatePhaseLocked() {
     // Bandwidth verdict (hysteresis): the server delivers less than the stream needs.
     {
         const double bitrate = bitrateLocked(nullptr), server = serverRateLocked();
-        if (bitrate > 0 && readSecondsDecayed_ >= 3.0) {
+        // Judged on enough evidence: 3 s of reading that delivered at least two seconds of the stream.
+        if (bitrate > 0 && readSecondsDecayed_ >= 3.0 && readBytesDecayed_ >= 2.0 * bitrate) {
             if (!bandwidthLow_ && server < bitrate * 0.95) {
                 bandwidthLow_ = true;
                 log::warn("net-session", std::format("server slower than the stream: server {:.2f} MB/s < bitrate {:.2f} MB/s", server / 1048576.0, bitrate / 1048576.0));
@@ -756,7 +877,8 @@ bool DemuxSession::verifyStreams() {
     }
     const auto* now = context_->streams[videoIndex_]->codecpar;
     const auto* before = streams_[size_t(videoIndex_)].parameters.get();
-    if (before && (now->width != before->width || now->height != before->height)) {
+    // (a short probe may not have seen the picture size yet: only a size that is known can differ)
+    if (before && now->width > 0 && now->height > 0 && (now->width != before->width || now->height != before->height)) {
         log::warn("net-session", std::format("reconnected source changed picture size {}x{} -> {}x{}", before->width, before->height, now->width, now->height));
         return false;
     }
@@ -846,12 +968,12 @@ void DemuxSession::threadMain() {
         if (result >= 0) {
             {
                 std::lock_guard lock(m_);
-                const int64_t now = nowNs();
-                const double dt = lastRateNs_ ? double(now - lastRateNs_) / 1e9 : 0.0;
-                const double keep = std::exp(-dt / 6.0);
+                // The history ages with reading time, not with the idle time while the window is full: after a
+                // pause one slow call (the first byte of a new HLS segment can take seconds) must not outweigh
+                // everything read before it.
+                const double keep = std::exp(-seconds / 6.0);
                 readBytesDecayed_ = readBytesDecayed_ * keep + double(packet->size);
                 readSecondsDecayed_ = readSecondsDecayed_ * keep + seconds;
-                lastRateNs_ = now;
             }
             onPacket(packet);
             continue;
@@ -943,13 +1065,18 @@ void DemuxSession::onPacket(AVPacket* pkt) {
     // Live streams are re-anchored like a reconnect: the next video keyframe continues the old timeline, so the
     // consumers (picture clock, audio) never see time run backwards or jump ahead; before this a restarted stream
     // froze the picture until its new timestamps caught up with the clock.
-    if (!gateKeyframe_ && dtsUs != AV_NOPTS_VALUE && queue.lastDtsUs != INT64_MIN) {
-        const int64_t step = dtsUs + offsetUs_ - queue.lastDtsUs;
+    int64_t lastDtsUs;
+    {
+        std::lock_guard lock(m_);   // a consumer's selectAudioStream() clears the audio queue
+        lastDtsUs = queue.lastDtsUs;
+    }
+    if (!gateKeyframe_ && dtsUs != AV_NOPTS_VALUE && lastDtsUs != INT64_MIN) {
+        const int64_t step = dtsUs + offsetUs_ - lastDtsUs;
         if (step < -1000000 || step > 3000000) {
             if (timestampJumpLogs_ < 24) {
                 ++timestampJumpLogs_;
                 log::warn("net-session", std::format("timestamp jump {} {:.3f}s -> {:.3f}s (step {:.3f}s) key={} corrupt={} size={} live={}", isVideo ? "video" : "audio",
-                    double(queue.lastDtsUs) / 1e6, double(dtsUs + offsetUs_) / 1e6, double(step) / 1e6, (pkt->flags & AV_PKT_FLAG_KEY) != 0,
+                    double(lastDtsUs) / 1e6, double(dtsUs + offsetUs_) / 1e6, double(step) / 1e6, (pkt->flags & AV_PKT_FLAG_KEY) != 0,
                     (pkt->flags & AV_PKT_FLAG_CORRUPT) != 0, pkt->size, live_));
             }
             if (live_) {
@@ -1215,6 +1342,7 @@ bool DemuxSession::recover(int code, const char* why) {
             reconnectAttempt_ = 0;
             ++reconnects_;
             eof_ = false;
+            liveBackCap_ = live_ && plan_.holds ? 0.5 : 0.0;
             log::info("net-session", std::format("reconnected after {} attempt(s), {} ms; reconnects={} live={}", attempt,
                 std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - begin).count(), reconnects_, live_));
             updatePhaseLocked();
@@ -1222,9 +1350,9 @@ bool DemuxSession::recover(int code, const char* why) {
         }
         closeContext();
         gateKeyframe_ = false;
-        // 1 s, then every 2 s: whenever the server comes back, the next try is at most 2 s away, which
-        // leaves room for the keyframe wait and the start buffer inside 5 s of an outage's end.
-        delayMs = std::min(delayMs * 2, 2000);
+        // Every second for the first 15 s, then every 2 s: whenever the server comes back, the next try is at most
+        // a second away, which leaves room for the keyframe wait and the start buffer inside 5 s of an outage's end.
+        delayMs = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - begin).count() < 15000 ? 1000 : 2000;
     }
     if (stop_.load() || (cancelled_ && cancelled_->load())) return false;
     fail(std::format(L"网络连接中断，已重试 {} 秒仍无法恢复", reconnectBudgetMs_ / 1000));

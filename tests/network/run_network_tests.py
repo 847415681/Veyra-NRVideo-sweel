@@ -292,6 +292,27 @@ def ts_drop_decode(out, a):
     return finish(name, out, checks, data)
 
 
+def ts_flip_interlaced(out, a):
+    """1 % damaged packets in an interlaced 1080i25 TS (IPTV-like) with the player's deinterlacing on: damaged
+    pictures on the interlaced path follow the same policy as progressive ones instead of stopping the source."""
+    checks, data = [], {}
+    name = 'ts-flip-1pct-interlaced'
+    with Server(out / f'{name}-srv', ts_flip=0.01) as s:
+        rc, res, sec = run_exe('source', s.url('av-1080i25-60s.ts'), out / name, dict(tolerant=1, deinterlace=1), timeout=290)
+        st = server_stats(s)
+    data.update(result=res, server=st, wallSeconds=sec)
+    check(checks, 'plays the whole minute through the deinterlacer', rc == 0 and res and res['status'] == 'eos' and res['lastPts'] > 58,
+          f"rc={rc} status={res and res['status']} lastPts={res and res['lastPts']} error={res and res['error']}")
+    if res:
+        check(checks, 'the deinterlacer was in use', res.get('deinterlaced') is True, str(res.get('deinterlaced')))
+        check(checks, 'damage was really injected and noticed', res['corruptPackets'] + res['corruptFrames'] > 10,
+              f"packets={res['corruptPackets']} frames={res['corruptFrames']}")
+        check(checks, 'about 3000 fields (1 % damage may drop a few)', 2700 <= res['frames'] <= 3010, str(res['frames']))
+        check(checks, 'no error, no reconnect', res['status'] != 'error' and not res['error'] and res['reconnects'] == 0,
+              f"{res['error']} reconnects={res['reconnects']}")
+    return finish(name, out, checks, data)
+
+
 def live_restart(out, a):
     """A live stream that starts over (timestamps jump back) every 20 s: the picture and the sound go on."""
     checks, data = [], {}
@@ -463,7 +484,7 @@ def subtitle_scan(out, a):
 
 ORDER = [('selftest', selftest), ('local-ab', local_ab), ('local-engine', local_engine), ('vod-fast', vod_fast), ('vod-slow', vod_slow),
          ('vod-big-4k-mkv', vod_big_4k), ('vod-stall', vod_stall), ('vod-outage-8s', vod_outage), ('vod-reconnect-off', vod_reconnect_off),
-         ('live-outage-8s', live_outage), ('stop-latency', stop_latency), ('ts-flip-1pct-10min-decode', ts_loss_decode), ('ts-drop-1pct-10min-decode', ts_drop_decode), ('ts-loss-1pct-realtime', ts_loss_realtime), ('live-restart', live_restart),
+         ('live-outage-8s', live_outage), ('stop-latency', stop_latency), ('ts-flip-1pct-10min-decode', ts_loss_decode), ('ts-drop-1pct-10min-decode', ts_drop_decode), ('ts-loss-1pct-realtime', ts_loss_realtime), ('ts-flip-1pct-interlaced', ts_flip_interlaced), ('live-restart', live_restart),
          ('hls', hls), ('rtsp', rtsp), ('nas-slow-io', nas_slow), ('subtitle-scan-nas', subtitle_scan)]
 
 

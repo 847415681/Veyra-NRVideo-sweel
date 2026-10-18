@@ -149,7 +149,7 @@ int sourceTest(const std::wstring& path, const std::filesystem::path& out, const
     desc.path = path;
     desc.cancelled = &cancel;
     desc.preferHardwareDecode = num(o, "hw", 0) != 0;
-    desc.deinterlace = false;
+    desc.deinterlace = num(o, "deinterlace", 0) != 0;   // playback default is on; offline readers keep it off
     desc.network = networkSettings(o);
     desc.nonBlocking = num(o, "nonblocking", 0) != 0;
     desc.tolerateCorruption = num(o, "tolerant", 0) != 0;
@@ -229,6 +229,7 @@ int sourceTest(const std::wstring& path, const std::filesystem::path& out, const
          << "\",\"error\":\"" << jsonEscape(narrow(input.errorMessage())) << "\",\"elapsedSeconds\":" << elapsed
          << ",\"maxFrameGapMs\":" << maxGapMs << ",\"gapsOver500ms\":" << bigGaps << ",\"waits\":" << waits << ",\"nonMonotonic\":" << nonMonotonic
          << ",\"discontinuities\":" << discontinuities << ",\"hash\":\"" << std::hex << overall << std::dec << "\""
+         << ",\"deinterlaced\":" << (input.info().deinterlaced ? "true" : "false")
          << ",\"session\":" << (stats.active ? "true" : "false") << ",\"live\":" << (stats.live ? "true" : "false")
          << ",\"corruptPackets\":" << stats.corruptPackets << ",\"corruptFrames\":" << stats.corruptFrames << ",\"skippedFrames\":" << stats.skippedFrames
          << ",\"reconnects\":" << stats.reconnects << ",\"connections\":" << stats.connections << ",\"stalls\":" << stats.stalls

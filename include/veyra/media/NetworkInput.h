@@ -14,7 +14,7 @@ namespace veyra::media {
 // read alike, so a slow server or a Wi-Fi hiccup was reported as a failed source.
 // Opening a connection and reading media now have separate limits; the owner's
 // cancel flag (stop / source switch) still aborts every blocking call at once.
-constexpr int kConnectTimeoutMs = 15000;     // avformat_open_input
+constexpr int kConnectTimeoutMs = 40000;     // avformat_open_input as a whole (a dead connection is cut at 15 s by rw_timeout)
 constexpr int kProbeTimeoutMs = 30000;       // avformat_find_stream_info
 constexpr int kReadTimeoutVodMs = 20000;     // one av_read_frame / seek on a seekable source
 constexpr int kReadTimeoutLiveMs = 10000;    // one av_read_frame on a live source

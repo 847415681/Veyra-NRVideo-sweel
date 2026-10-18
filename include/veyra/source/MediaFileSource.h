@@ -55,6 +55,7 @@ private:
     void resetCorruptionState();
     void startKeyframeWait();
     bool tolerateDecoderError();
+    bool keepDamagedPicture(const AVFrame* frame);
 
     media::FFmpegDemuxer demuxer_;
     media::FFmpegVideoDecoder decoder_;

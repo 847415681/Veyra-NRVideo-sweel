@@ -339,9 +339,13 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
         frame = decoder_.receiveFrame();
         if(frame){
             if(deinterlaceEnabled_&&((frame->flags&AV_FRAME_FLAG_INTERLACED)||deinterlacer_.active())){
-                if(frame->width!=int(info_.width)||frame->height!=int(info_.height)||frame->decode_error_flags||(frame->flags&AV_FRAME_FLAG_CORRUPT)){
+                const bool damaged=frame->decode_error_flags||(frame->flags&AV_FRAME_FLAG_CORRUPT);
+                if(frame->width!=int(info_.width)||frame->height!=int(info_.height)||(damaged&&!tolerant_)){
                     errorMessage_=L"隔行视频画面损坏或尺寸改变，已停止处理";return SourceReadStatus::Error;
                 }
+                // Interlaced network TV (1080i IPTV) loses packets like any other stream:
+                // the same damaged-picture policy applies before the picture reaches the filter.
+                if(damaged&&!keepDamagedPicture(frame))continue;
                 const auto* surface=decoder_.usingD3D11Frames()?&decoder_.hardwareSurface():nullptr;
                 if(!deinterlacer_.active()){
                     AVRational rate{demuxer_.nominalRateNum(),demuxer_.nominalRateDen()};
@@ -481,25 +485,15 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
         return SourceReadStatus::Error;
     }
 
-    if ((frame->flags & AV_FRAME_FLAG_CORRUPT) || frame->decode_error_flags) {
+    // Deinterlaced output inherits the flags of a picture the policy already accepted
+    // before the filter; checking it again would count the same loss once per field.
+    if (!deinterlacer_.active() && ((frame->flags & AV_FRAME_FLAG_CORRUPT) || frame->decode_error_flags)) {
         if (!tolerant_) {
             veyra::log::error("source-file", std::format("corrupt decoded frame flags={} decodeErrors={}", frame->flags, frame->decode_error_flags));
             errorMessage_ = L"源视频包含损坏画面，已停止处理";
             return SourceReadStatus::Error;
         }
-        // Network loss: FFmpeg has concealed what it could. Show that picture, or drop it
-        // and wait for the next keyframe, as the user chose.
-        ++corruptFramesSeen_;
-        const bool drop = corruptPolicy_ == media::CorruptPolicy::WaitKeyframe;
-        if (const auto& session = demuxer_.session()) session->addCorruptFrames(1, drop ? 1 : 0);
-        const auto now = std::chrono::steady_clock::now();
-        if (now - lastCorruptLog_ >= std::chrono::seconds(1)) {
-            lastCorruptLog_ = now;
-            veyra::log::warn("source-file", std::format("damaged picture flags={} decodeErrors={} policy={} picturesSoFar={}",
-                frame->flags, frame->decode_error_flags, drop ? "wait-keyframe" : "conceal", corruptFramesSeen_));
-        }
-        if (drop) {
-            startKeyframeWait();
+        if (!keepDamagedPicture(frame)) {
             goto readAgain;
         }
     }
@@ -698,6 +692,23 @@ void MediaFileSource::startKeyframeWait()
     decoder_.flushBuffers();
     waitKeyframe_ = true;
     waitKeyframeSince_ = std::chrono::steady_clock::now();
+}
+
+// Network loss: FFmpeg has concealed what it could. Keep that picture, or drop it and
+// wait for the next keyframe, as the user chose. Only called for tolerant sources.
+bool MediaFileSource::keepDamagedPicture(const AVFrame* frame)
+{
+    ++corruptFramesSeen_;
+    const bool drop = corruptPolicy_ == media::CorruptPolicy::WaitKeyframe;
+    if (const auto& session = demuxer_.session()) session->addCorruptFrames(1, drop ? 1 : 0);
+    const auto now = std::chrono::steady_clock::now();
+    if (now - lastCorruptLog_ >= std::chrono::seconds(1)) {
+        lastCorruptLog_ = now;
+        veyra::log::warn("source-file", std::format("damaged picture flags={} decodeErrors={} policy={} picturesSoFar={}",
+            frame->flags, frame->decode_error_flags, drop ? "wait-keyframe" : "conceal", corruptFramesSeen_));
+    }
+    if (drop) startKeyframeWait();
+    return !drop;
 }
 
 bool MediaFileSource::seek(const pipeline::Rational& targetSeconds)

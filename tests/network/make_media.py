@@ -7,6 +7,7 @@
   av-720p30-10min.ts               10 minutes of MPEG-TS for the packet-loss runs
   av-720p30-60s-subs.mkv           the 60 s MKV with two embedded SRT tracks (subtitle scan of a NAS-style file)
   live-src.ts                      20 s loop source for the real-time /live.ts relay
+  av-1080i25-60s.ts                one minute of interlaced 1080i25 MPEG-TS (IPTV-like) for the damaged-interlaced run
   hls/vod, hls/multi               HLS playlists + segments (single rendition and three renditions)
 
 usage: py -3.11 -I make_media.py --out <dir> --ffmpeg <ffmpeg.exe> --big-source <4k mp4> [--skip-big]
@@ -63,6 +64,14 @@ def main():
         run(common + synthetic + ['-t', '600'] + encode + ['-f', 'mpegts', out / 'av-720p30-10min.ts'])
     if not (out / 'live-src.ts').exists():
         run(common + synthetic + ['-t', '20'] + encode + ['-f', 'mpegts', out / 'live-src.ts'])
+    if not (out / 'av-1080i25-60s.ts').exists():
+        # IPTV-like 1080i25: two real fields per frame (50p folded by the interlace filter), interlaced x264 coding
+        run(common + ['-f', 'lavfi', '-i', 'testsrc2=size=1920x1080:rate=50',
+                      '-f', 'lavfi', '-i', 'sine=frequency=1000:beep_factor=4:sample_rate=48000', '-t', '60',
+                      '-vf', 'interlace=scan=tff', '-c:v', 'libx264', '-preset', 'veryfast', '-b:v', '6M', '-maxrate', '8M',
+                      '-bufsize', '12M', '-g', '50', '-keyint_min', '50', '-sc_threshold', '0', '-flags', '+ildct+ilme',
+                      '-x264-params', 'tff=1', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-f', 'mpegts',
+                      out / 'av-1080i25-60s.ts'])
 
     hls = out / 'hls'
     vod = hls / 'vod'
