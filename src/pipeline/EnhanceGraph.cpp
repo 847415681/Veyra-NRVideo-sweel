@@ -2474,7 +2474,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             beauty::FaceTracker::Frame frameFaces;
             frameFaces.source=faces;frameFaces.width=srcW_;frameFaces.height=srcH_;frameFaces.hdr=desc_.hdrWorking();
             frameFaces.slot=slot;frameFaces.frameId=sourceFrameId;frameFaces.ptsMs=ptsMs;frameFaces.reset=reset;
-            frameFaces.still=desc_.stillImage;frameFaces.everyFrame=desc_.beautyDetectEveryFrame;
+            frameFaces.still=desc_.stillImage;
             if(!faceTracker_->record(list,tracker_,frameFaces)){
                 if(!beautyDetectFailureLogged_)veyra::log::error("beauty-detect","face tracking could not be recorded; beauty nodes keep the last faces");
                 beautyDetectFailureLogged_=true;

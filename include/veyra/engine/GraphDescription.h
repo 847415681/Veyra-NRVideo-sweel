@@ -140,7 +140,6 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     describeBeauty(settings,desc);
     // A still picture or an export frame is judged on its own faces, never on a
     // detection that is a few frames old.
-    desc.beautyDetectEveryFrame=request.stillImage||request.exportJob;
     // An export never writes a file that silently lacks a selected effect.
     desc.beautyRequireDetector=request.exportJob;
     desc.videoHdr=settings.videoHdr;

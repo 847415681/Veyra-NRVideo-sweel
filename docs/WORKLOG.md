@@ -9750,3 +9750,4 @@ Branch claude/aa-53-20261017 from main 26c0d61. Archive E:/项目/Veyra/archives
 - 测试（RTX 5070，一次运行）：检测器与 OpenCV 5.0.0 在 8 图 × 3 尺寸 × 2 模型上一致；`veyra_beauty_gpu_tests` 11 例（关闭即逐位相同、保护逐位回到原画、HDR、两节点、跟踪、无模型、四张图的磨皮）；耗时 1080p 0.093 + 检测 0.13 ms、4K 0.321 + 0.16 ms；GUI 验收 `scripts/acceptance/beauty-gui.py` 59 项（实播放识别到人脸，实时参数不重建，日志无人脸坐标）；`ExportWorkflowTests beauty`；QML 编辑器 10 项。
 - 最终汇总（`logs/claude-beauty-20261017/final-sweep-20261018-210951`，同一构建、新临时目录）：29 项中 28 项通过（含调色逐字节回归 12/12、抗锯齿 GPU 17/17、抗锯齿 GUI 39 项、QML 99 项）；image-dimension 的尺寸 / 分块用例全部通过，只有 NR 分块用例因源码路径含非 ASCII 找不到 `ngx-local.json`（与 #53 汇总相同，需 ASCII 路径构建）。
 - 没有验证：AMD / Intel、真实采集卡与游戏画面的肉眼评价、长时间运行、CPU 渲染线程增量；打包尚未把模型放进 `runtime/models`。没有合并 main、推送、发布或打包。
+- 用户试用 r1 反馈跟踪落后、回弹：改为每帧识别 + One Euro 平滑（无预测、无过冲）、漏检外推 120 ms、新脸淡入、分数滞回；`tracking` 误差 9.8 → 3.4 px，新增 `tracking-motion`（每帧 16 px）落后 1.5% 脸宽、过冲 0.25%。详见实施文档第 7 节。

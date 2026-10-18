@@ -13,10 +13,10 @@ namespace veyra::beauty {
 // staged tests next to the executable in models/. Empty when none is present.
 std::filesystem::path locateFaceModel();
 
-// Faces for every beauty node of one graph: the YuNet detector on the frame
-// before any effect, at a bounded rate, followed by the GPU tracking pass
-// (shaders/BeautyTrack.hlsl). All of it is recorded into the frame's own command
-// list; the node passes read the faces buffer later in the same frame. Only a
+// Faces for every beauty node of one graph: the YuNet detector on every new frame,
+// before any effect, followed by the GPU tracking pass (shaders/BeautyTrack.hlsl).
+// All of it is recorded into the frame's own command list; the node passes read the
+// faces buffer later in the same frame, so the faces belong to that frame. Only a
 // 64-byte status header is read back, a few frames late, for the UI.
 class FaceTracker {
 public:
@@ -28,14 +28,13 @@ public:
         uint64_t frameId = 0;               // the same source frame is never detected twice
         double ptsMs = 0.0;
         bool reset = false;                 // seek, scene cut, timeline break, new source
-        bool still = false;                 // a picture: fresh faces, no smoothing or prediction
-        bool everyFrame = false;            // detect on every frame (export)
+        bool still = false;                 // a picture: fresh faces, no smoothing
     };
 
     bool initialize(ID3D12Device* device, const std::filesystem::path& model, uint32_t ringSlots, std::string& error);
     void shutdown();
     bool ready() const { return ready_; }
-    // Live: input size, rate, face count and smoothing, and the lowest confidence any node accepts.
+    // Live: input size, face count and smoothing, and the lowest confidence any node accepts.
     void configure(const engine::BeautyDetection& detection, float minConfidence);
     // Detection when due, then tracking. Leaves the faces buffer in the non-pixel SRV state.
     bool record(ID3D12GraphicsCommandList* list, pipeline::StateTracker& tracker, const Frame& frame);
@@ -57,11 +56,12 @@ private:
     std::vector<pipeline::ComPtr<ID3D12Resource>> readbacks_;
     std::vector<bool> pending_;
     engine::BeautyDetection detection_{};
-    float threshold_ = 0.6f;
+    float threshold_ = 0.6f;      // a new face needs this score
+    float keepThreshold_ = 0.45f; // a tracked face continues down to this one (the detector's own threshold)
     uint32_t slots_ = 0;
-    bool ready_ = false, haveFrame_ = false, detectedOnce_ = false, detectedNow_ = false;
+    bool ready_ = false, haveFrame_ = false, detectedNow_ = false;
     uint64_t lastFrameId_ = 0, detections_ = 0;
-    double lastPts_ = 0.0, lastDetectPts_ = 0.0;
+    double lastPts_ = 0.0;
     uint32_t faceCount_ = 0, candidates_ = 0;
 };
 } // namespace veyra::beauty

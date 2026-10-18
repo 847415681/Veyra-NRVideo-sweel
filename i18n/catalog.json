@@ -638,13 +638,6 @@
    "ja": "2X はネイティブ動作、3X / 4X は実験的なアンロックです。失敗の理由は診断を参照してください"
   },
   {
-   "zh": "320 像素，每秒 10 次，最省",
-   "src": "qml/BeautyEditor.qml",
-   "zh-TW": "320 像素，每秒 10 次，最省",
-   "en": "320 px, 10 times a second, lightest",
-   "ja": "320 px、毎秒 10 回、最も軽い"
-  },
-  {
    "zh": "4 项",
    "src": "qml/ProPage.qml",
    "zh-TW": "4 項",
@@ -659,25 +652,11 @@
    "ja": "5 項目"
   },
   {
-   "zh": "512 像素，每秒 15 次",
-   "src": "qml/BeautyEditor.qml",
-   "zh-TW": "512 像素，每秒 15 次",
-   "en": "512 px, 15 times a second",
-   "ja": "512 px、毎秒 15 回"
-  },
-  {
    "zh": "6 项",
    "src": "qml/ProPage.qml",
    "zh-TW": "6 項",
    "en": "6 items",
    "ja": "6 項目"
-  },
-  {
-   "zh": "640 像素，每秒 30 次，小脸也能识别",
-   "src": "qml/BeautyEditor.qml",
-   "zh-TW": "640 像素，每秒 30 次，小臉也能識別",
-   "en": "640 px, 30 times a second, finds small faces too",
-   "ja": "640 px、毎秒 30 回、小さな顔も検出"
   },
   {
    "zh": "8 位配对码",
@@ -11252,6 +11231,27 @@
    "ja": "マスタリングのピークが低い作品（旧作・変換版）"
   },
   {
+   "zh": "每帧识别 · 320 像素，最省；远处的小脸可能识别不到",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "每幀識別 · 320 像素，最省；遠處的小臉可能識別不到",
+   "en": "Every frame · 320 px, lightest; small distant faces may be missed",
+   "ja": "毎フレーム検出 · 320 px、最も軽量。遠くの小さな顔は検出されないことがあります"
+  },
+  {
+   "zh": "每帧识别 · 512 像素",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "每幀識別 · 512 像素",
+   "en": "Every frame · 512 px",
+   "ja": "毎フレーム検出 · 512 px"
+  },
+  {
+   "zh": "每帧识别 · 640 像素，小脸也能识别",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "每幀識別 · 640 像素，小臉也能識別",
+   "en": "Every frame · 640 px, finds small faces too",
+   "ja": "毎フレーム検出 · 640 px、小さな顔も検出"
+  },
+  {
    "zh": "比较源画面与上一帧：没有明显变化的像素沿用上一帧输出，明显变化的位置直接用新结果。",
    "src": "qml/ProPage.qml",
    "zh-TW": "比較源畫面與上一幀：沒有明顯變化的像素沿用上一幀輸出，明顯變化的位置直接用新結果。",
@@ -14745,13 +14745,6 @@
    "ja": "小さいほど敏感、大きいほど安定させる範囲が広がります"
   },
   {
-   "zh": "越高人脸区域越稳，快速移动时跟得越慢",
-   "src": "qml/BeautyEditor.qml",
-   "zh-TW": "越高人臉區域越穩，快速移動時跟得越慢",
-   "en": "Higher keeps the face area steadier but follows fast movement more slowly",
-   "ja": "高いほど顔の範囲が安定しますが、速い動きへの追従は遅くなります"
-  },
-  {
    "zh": "越高越保留五官和发丝",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "越高越保留五官和髮絲",
@@ -14771,6 +14764,13 @@
    "zh-TW": "越高越穩，過高會顯得發悶",
    "en": "Higher is steadier; too high looks dull",
    "ja": "高いほど安定しますが、高すぎるとこもった印象になります"
+  },
+  {
+   "zh": "越高静止时越稳；人物移动时都会紧跟",
+   "src": "qml/BeautyEditor.qml",
+   "zh-TW": "越高靜止時越穩；人物移動時都會緊跟",
+   "en": "Higher is steadier at rest; moving faces are followed closely either way",
+   "ja": "高いほど静止時に安定します。動く顔はどの設定でもしっかり追従します"
   },
   {
    "zh": "跟踪平滑",

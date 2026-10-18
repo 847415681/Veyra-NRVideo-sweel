@@ -604,8 +604,8 @@ int trackingCase() {
     std::printf("METRIC case=tracking frames=%d detections=%llu worstCentreErrorPx=%.2f faceWidthPx=%.1f\n", frames,
                 (unsigned long long)detections, worst, p.faces.empty() ? 0.0 : p.faces[0].w);
     check(ok, "tracking: the face is tracked on every frame");
-    check(detections >= 10 && detections <= 16, "tracking: balanced detection runs at about 15 Hz of a 60 fps video");
-    check(ok && worst < 0.08 * p.faces[0].w, "tracking: the tracked centre stays within 8% of the face width of the moving face");
+    check(detections == uint64_t(frames), "tracking: every frame of the video is detected");
+    check(ok && worst < 0.03 * p.faces[0].w, "tracking: the tracked centre stays within 3% of the face width of the moving face");
     // A reset (seek) detects on the very next frame.
     AVFrame* frame = rgbaFrame(p.image);
     sink::RgbaImage out;
@@ -614,6 +614,61 @@ int trackingCase() {
     check(ok && gpu->graph->beautyDetections() == before + 1, "tracking: a reset frame detects immediately");
     av_frame_free(&frame);
     return finish(*gpu, "tracking");
+}
+
+// A face that rests, crosses the picture fast (16 px a frame at 60 fps, about six face
+// widths a second) and stops. The tracked centre has to follow within a few percent of
+// the face width and must not overshoot where the face stops: the 15 Hz predicting
+// filter this replaces trailed by more than half a face and overshot by as much.
+int trackingMotionCase() {
+    Picture p;
+    check(loadPicture("lena", p), "tracking-motion: picture and reference faces");
+    const unsigned width = 1280, height = 640, x0 = 64, y0 = 64;
+    sink::RgbaImage canvas; canvas.width = width; canvas.height = height; canvas.pixels.assign(size_t(width) * height * 4, 96);
+    for (size_t i = 3; i < canvas.pixels.size(); i += 4) canvas.pixels[i] = 255;
+    for (unsigned y = 0; y < p.image.height && y0 + y < height; ++y)
+        std::memcpy(canvas.pixels.data() + (size_t(y0 + y) * width + x0) * 4, p.image.pixels.data() + size_t(y) * p.image.width * 4,
+                    size_t(p.image.width) * 4);
+    auto gpu = std::make_unique<Gpu>();
+    auto settings = withBeauty(restoreNode(1.0f));
+    settings.beautyDetection.quality = 2;
+    settings.beautyDetection.stability = 0.5f;
+    bool ok = gpu->start(settings, width, height, false, false);
+    check(ok, "tracking-motion: video-timed graph runs");
+    const int rest = 12, move = 30, after = 30, speed = 16;
+    std::vector<double> error;   // tracked centre minus the true one, pixels
+    std::vector<float> faces;
+    const double reference = p.faces[0].x + p.faces[0].w / 2 + x0;
+    for (int i = 0; ok && i < rest + move + after; ++i) {
+        const int dx = std::clamp(i - rest, 0, move) * speed;
+        AVFrame* frame = rgbaFrame(shifted(canvas, dx, 0));
+        sink::RgbaImage out;
+        ok = frame && gpu->render(frame, i == 0, out) && gpu->readFaces(faces) && trackedCount(faces) >= 1;
+        av_frame_free(&frame);
+        if (ok) error.push_back(double(faces[16]) * width - (reference + dx));
+    }
+    check(ok, "tracking-motion: the face is tracked on every frame");
+    if (!ok) return finish(*gpu, "tracking-motion");
+    // The detector's own offset at this size, measured at rest, is not tracking error.
+    double bias = 0;
+    for (int i = 4; i < rest; ++i) bias += error[i];
+    bias /= double(rest - 4);
+    double lag = 0, overshoot = 0, settled = -1;
+    for (int i = rest + 4; i < rest + move; ++i) lag = std::max(lag, -(error[i] - bias));
+    for (int i = rest + move; i < rest + move + after; ++i) overshoot = std::max(overshoot, error[i] - bias);
+    for (int i = rest + move; i < rest + move + after; ++i) {
+        bool calm = true;
+        for (int k = i; k < rest + move + after; ++k) calm = calm && std::abs(error[k] - bias) < 0.015 * p.faces[0].w;
+        if (calm) { settled = i - (rest + move); break; }
+    }
+    const double w = p.faces[0].w;
+    std::printf("METRIC case=tracking-motion faceWidthPx=%.1f speedPxPerFrame=%d detections=%llu lagFaceWidths=%.4f overshootFaceWidths=%.4f "
+                "settleFrames=%.0f\n", w, speed, (unsigned long long)gpu->graph->beautyDetections(), lag / w, overshoot / w, settled);
+    check(gpu->graph->beautyDetections() == uint64_t(rest + move + after), "tracking-motion: every frame is detected");
+    check(lag < 0.06 * w, "tracking-motion: a fast face is followed within 6% of its width");
+    check(overshoot < 0.025 * w, "tracking-motion: the region does not overshoot where the face stops");
+    check(settled >= 0 && settled <= 8, "tracking-motion: the region settles within 8 frames of the stop");
+    return finish(*gpu, "tracking-motion");
 }
 
 int noModelCase() {
@@ -741,6 +796,7 @@ std::vector<Case> cases() {
     c.push_back({"two-nodes", [] { return twoNodeCase(); }});
     c.push_back({"hdr", [] { return hdrCase(); }});
     c.push_back({"tracking", [] { return trackingCase(); }});
+    c.push_back({"tracking-motion", [] { return trackingMotionCase(); }});
     c.push_back({"no-model", [] { return noModelCase(); }});
     c.push_back({"tune", [] { return tuneCase(); }});
     c.push_back({"timing-1080p", [] { return timingCase("timing-1080p", 1920, 1080); }});

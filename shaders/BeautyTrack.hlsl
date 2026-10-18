@@ -1,35 +1,44 @@
 // Beauty node: shared face tracking, entirely on the GPU, once per source frame.
 //
-// On a detection frame the YuNet candidates (BeautyYuNetDecode.hlsl) go through
-// the same non-maximum suppression as OpenCV's FaceDetectorYN (whole-pixel boxes,
-// highest score first, ties in anchor order, IoU above tNms drops a box), keeping
-// at most tMaxFaces faces. Those faces update up to eight tracks: stable ids, an
-// alpha-beta filter (position weight tAlpha, velocity weight kBeta) so a face
-// does not jitter between detections or lag behind on steady motion, and a
-// grace period followed by a fade when a face is lost. Every other frame only
-// advances the tracks by their velocity. Nothing is read back for the picture.
+// The detector runs on every new frame. Its candidates (BeautyYuNetDecode.hlsl) go
+// through the same non-maximum suppression as OpenCV's FaceDetectorYN (whole-pixel
+// boxes, highest score first, ties in anchor order, IoU above tNms drops a box),
+// keeping at most tMaxFaces faces. Those faces update up to eight tracks with stable
+// ids. Each track is smoothed by a One Euro filter (Casiez, Roussel and Vogel 2012):
+// a low-pass whose cutoff rises with the face's speed, so a face at rest does not
+// jitter and a moving face is followed within about a frame, without the overshoot
+// a predicting filter has where the motion stops. Speeds are in face widths per
+// second, so the behaviour does not depend on the picture size. A face the detector
+// misses keeps moving at its measured speed for the grace period, then fades out
+// where it stopped; a new face fades in, except after a reset or in a picture. A
+// track continues at a lower score than a new one needs (tKeepThreshold against
+// tStartThreshold), so a face near the threshold does not flicker. Nothing is read
+// back for the picture.
 #include "BeautyFaces.hlsli"
 
 cbuffer TrackParams : register(b0) {
     uint tDetWidth; uint tDetHeight;    // detector content size, pixels
     uint tCapacity;                     // candidate list capacity
-    uint tFlags;                        // bit 0 detected this frame, bit 1 reset, bit 2 still picture, bit 3 no prediction
+    uint tFlags;                        // bit 0 detected this frame, bit 1 reset, bit 2 still picture
     float tDtMs;                        // time since the previous frame (source timestamps)
-    float tAlpha;                       // weight of a new detection, 1 = follow it exactly
+    float tMinCutoff;                   // One Euro cutoff of a face at rest, Hz
     float tNms;                         // suppression IoU
-    float tGraceMs;                     // a lost face stays this long
+    float tGraceMs;                     // a missed face keeps moving this long
     float tFadeMs;                      // then fades out over this long
     uint tMaxFaces;                     // 1 .. 8
-    float tScoreThreshold;
-    uint tReserved0; uint tReserved1; uint tReserved2; uint tReserved3; uint tReserved4;
+    float tKeepThreshold;               // score that keeps a track (the candidate list's own threshold)
+    float tBeta;                        // cutoff increase per face width per second of speed
+    float tDerivativeCutoff;            // Hz: smoothing of the measured speed
+    float tFadeInMs;                    // a new face fades in over this long
+    float tStartThreshold;              // score a new track needs
+    uint tReserved0;
 };
 RWStructuredBuffer<BeautyFace> Faces : register(u0);
 RWByteAddressBuffer Candidates : register(u1);
 
 static const uint kGroup = 1024u;
-static const float kBeta = 0.25;          // velocity correction per detection
-static const float kMaxSpeed = 0.004;     // frame fractions per ms
-static const float kMatchIou = 0.15;
+static const float kMatchIou = 0.2;       // against the track moved on to this frame
+static const float kScoreDecay = 0.97;    // per matched frame: the track's confidence is its recent peak
 
 // 24 KB of the 32 KB limit: boxes are whole pixels as 16-bit pairs, a removed
 // candidate has a negative score.
@@ -60,6 +69,12 @@ float overlap(float4 a, float4 b) {
     const float uni = 4.0 * (a.z * a.w + b.z * b.w) - inter;
     return uni > 0.0 ? inter / uni : 0.0;
 }
+// Exponential smoothing factor of a first-order low-pass with this cutoff over dtMs.
+float lowpass(float cutoffHz, float dtMs) {
+    const float tauMs = 1000.0 / (6.2831853 * max(cutoffHz, 1e-3));
+    return 1.0 / (1.0 + tauMs / max(dtMs, 1e-3));
+}
+float2 lastCentre(BeautyFace f) { return float2(asfloat(f.meta.z), asfloat(f.meta.w)); }
 
 [numthreads(1024, 1, 1)]
 void main(uint t : SV_GroupIndex) {
@@ -73,7 +88,7 @@ void main(uint t : SV_GroupIndex) {
         const float4 box = asfloat(Candidates.Load4(o));
         const uint4 tail = Candidates.Load4(o + 48u);
         const float score = asfloat(tail.z);
-        const bool valid = score >= tScoreThreshold && box.z > 0.0 && box.w > 0.0 && !any(isnan(box)) && !any(isinf(box)) &&
+        const bool valid = score >= tKeepThreshold && box.z > 0.0 && box.w > 0.0 && !any(isnan(box)) && !any(isinf(box)) &&
             all(abs(box) < 16384.0);
         const int4 b = int4(box);   // truncation toward zero, like OpenCV's Rect2i
         gScore[t] = valid ? score : -1.0;
@@ -105,20 +120,26 @@ void main(uint t : SV_GroupIndex) {
     }
     if (t != 0) return;
 
-    const bool reset = (tFlags & 2u) != 0, still = (tFlags & 4u) != 0, predict = (tFlags & 8u) == 0 && !still;
+    const bool reset = (tFlags & 2u) != 0, still = (tFlags & 4u) != 0;
+    const float dt = still ? 0.0 : max(tDtMs, 0.0);
+    // A frame without a step on the timeline (reset, picture) shows its faces at once.
+    const bool instant = reset || still || dt <= 0.0;
     BeautyFace header = Faces[0];
     uint count = (reset || still) ? 0u : min(header.meta.x, kBeautyMaxFaces);
     uint nextId = reset ? 1u : max(header.meta.y, 1u);
     BeautyFace tracks[kBeautyMaxFaces];
+    float4 predicted[kBeautyMaxFaces];
     bool matched[kBeautyMaxFaces];
-    for (uint i = 0; i < kBeautyMaxFaces; ++i) { tracks[i] = Faces[1 + i]; matched[i] = false; }
-
-    // 1. Advance every track to this frame.
-    for (uint a = 0; a < count; ++a) {
-        tracks[a].motion.z += tDtMs;
-        if (predict && tracks[a].motion.z <= tGraceMs) tracks[a].box.xy += tracks[a].motion.xy * tDtMs;
+    for (uint i = 0; i < kBeautyMaxFaces; ++i) {
+        tracks[i] = Faces[1 + i];
+        matched[i] = false;
+        if (i < count) tracks[i].motion.z += dt;
+        // Where the face is now if it kept its speed since its last detection (for the grace period at most).
+        predicted[i] = tracks[i].box;
+        predicted[i].xy = lastCentre(tracks[i]) + tracks[i].motion.xy * min(tracks[i].motion.z, tGraceMs);
     }
-    // 2. Detections, best first, update the closest unmatched track or start one.
+
+    // 1. Detections, best first, update the best-overlapping unmatched track or start one.
     const float2 det = float2(max(tDetWidth, 1u), max(tDetHeight, 1u));
     for (uint d = 0; d < gKeptCount; ++d) {
         const uint o = 16u + gKept[d] * 64u;
@@ -132,47 +153,60 @@ void main(uint t : SV_GroupIndex) {
         int best = -1; float bestOverlap = kMatchIou;
         for (uint j = 0; j < count; ++j) {
             if (matched[j]) continue;
-            const float v = overlap(tracks[j].box, box);
+            const float v = overlap(predicted[j], box);
             if (v > bestOverlap) { bestOverlap = v; best = int(j); }
         }
         if (best >= 0) {
             BeautyFace f = tracks[best];
-            const float2 innovation = box.xy - f.box.xy;
-            // A jump of more than half a face is a new position, not noise.
-            const bool jump = length(innovation / max(f.box.zw, 1e-4)) > 1.0;
-            const float alpha = (still || jump) ? 1.0 : tAlpha;
-            if (predict && f.motion.z > 0.0) {
-                const float2 v = f.motion.xy + kBeta * innovation / max(f.motion.z, 1.0);
-                f.motion.xy = clamp(v, -kMaxSpeed, kMaxSpeed);
+            const float since = max(f.motion.z, 1e-3);    // ms since this track's last detection
+            const float width = max(2.0 * f.box.z, 1e-4);
+            const float2 from = lastCentre(f);             // filtered centre at that detection: speeds
+            const float2 shown = f.box.xy;                  // where it is drawn now (moved on after a miss): blends
+            if (instant || length(box.xy - shown) > width) {
+                // A cut or a jump of more than a face width: the filter restarts there.
+                f.box = box;
+                f.shape.xy = roll;
+                f.motion = float4(0.0, 0.0, 0.0, 0.0);
+            } else {
+                // One Euro: the measured speed (centre and half width, per ms), low-passed,
+                // sets the cutoff for the position, size and roll.
+                const float3 measured = float3(box.xy - from, box.z - f.box.z) / since;
+                const float3 speed = lerp(float3(f.motion.xy, f.motion.w), measured, lowpass(tDerivativeCutoff, since));
+                const float facesPerSecond = (length(speed.xy) / width + abs(speed.z) / max(f.box.z, 1e-4)) * 1000.0;
+                const float a = lowpass(tMinCutoff + tBeta * facesPerSecond, since);
+                f.box.xy = lerp(shown, box.xy, a);
+                f.box.zw = lerp(f.box.zw, box.zw, a);
+                const float2 r = lerp(f.shape.xy, roll, a);
+                f.shape.xy = dot(r, r) > 1e-6 ? normalize(r) : roll;
+                f.motion = float4(speed.xy, 0.0, speed.z);
             }
-            if (jump) f.motion.xy = 0.0;
-            f.box = lerp(f.box, box, alpha);
-            const float2 r = lerp(f.shape.xy, roll, alpha);
-            f.shape.xy = dot(r, r) > 1e-6 ? normalize(r) : roll;
-            f.shape.z = score;
-            f.shape.w = 1.0;
+            f.shape.z = max(score, f.shape.z * kScoreDecay);
+            f.shape.w = instant ? 1.0 : saturate(f.shape.w + dt / max(tFadeInMs, 1.0));
             f.motion.z = 0.0;
             f.meta.y += 1u;
+            f.meta.zw = asuint(f.box.xy);
             tracks[best] = f;
             matched[best] = true;
-        } else if (count < min(tMaxFaces, kBeautyMaxFaces)) {
+        } else if (score >= tStartThreshold && count < min(tMaxFaces, kBeautyMaxFaces)) {
             BeautyFace f;
             f.box = box;
-            f.shape = float4(roll, score, 1.0);
+            f.shape = float4(roll, score, instant ? 1.0 : saturate(dt / max(tFadeInMs, 1.0)));
             f.motion = 0.0;
-            f.meta = uint4(nextId++, 1u, 0u, 0u);
+            f.meta = uint4(nextId++, 1u, asuint(box.x), asuint(box.y));
             tracks[count] = f;
             matched[count] = true;
             ++count;
         }
     }
-    // 3. Presence: full during the grace period after the last match, then a fade.
+    // 2. Missed faces: they keep their speed during the grace period, then fade out where they stopped.
     uint kept = 0;
     for (uint m = 0; m < count; ++m) {
         BeautyFace f = tracks[m];
-        f.shape.w = saturate(1.0 - max(f.motion.z - tGraceMs, 0.0) / max(tFadeMs, 1.0));
-        if (f.motion.z > tGraceMs) f.motion.xy = 0.0;
-        if (f.shape.w <= 0.0) continue;
+        if (!matched[m]) {
+            f.box.xy = predicted[m].xy;
+            if (f.motion.z > tGraceMs) f.shape.w = saturate(f.shape.w - dt / max(tFadeMs, 1.0));
+            if (f.shape.w <= 0.0) continue;
+        }
         tracks[kept++] = f;
     }
     header.meta = uint4(kept, nextId, header.meta.z + 1u, n);

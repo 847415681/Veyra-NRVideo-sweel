@@ -52,7 +52,7 @@ bool FaceTracker::initialize(ID3D12Device* device, const std::filesystem::path& 
     YuNetConfig config;
     config.ringSlots = ringSlots;
     config.readback = false;              // the tracking pass consumes the candidates on the GPU
-    config.scoreThreshold = threshold_;
+    config.scoreThreshold = keepThreshold_;
     if (!detector_.initialize(device, model, config, error)) { shutdown(); return false; }
     std::vector<uint8_t> cs;
     if (!pipeline::loadShaderBytes("BeautyTrack.dxil", cs) ||
@@ -109,9 +109,9 @@ void FaceTracker::shutdown()
     readbacks_.clear();
     pending_.clear();
     slots_ = 0;
-    ready_ = haveFrame_ = detectedOnce_ = detectedNow_ = false;
+    ready_ = haveFrame_ = detectedNow_ = false;
     lastFrameId_ = detections_ = 0;
-    lastPts_ = lastDetectPts_ = 0.0;
+    lastPts_ = 0.0;
     faceCount_ = candidates_ = 0;
 }
 
@@ -119,7 +119,9 @@ void FaceTracker::configure(const engine::BeautyDetection& detection, float minC
 {
     detection_ = detection;
     threshold_ = std::clamp(minConfidence, 0.3f, 0.95f);
-    detector_.setScoreThreshold(threshold_);
+    // Hysteresis: a tracked face may dip a little below the score that starts one.
+    keepThreshold_ = std::max(0.3f, threshold_ - 0.15f);
+    detector_.setScoreThreshold(keepThreshold_);
 }
 
 bool FaceTracker::record(ID3D12GraphicsCommandList* list, pipeline::StateTracker& tracker, const Frame& f)
@@ -130,10 +132,9 @@ bool FaceTracker::record(ID3D12GraphicsCommandList* list, pipeline::StateTracker
     const bool sameFrame = haveFrame_ && !f.reset && f.frameId == lastFrameId_;
     double dt = 0.0;
     if (haveFrame_ && !f.reset && !sameFrame) dt = std::clamp(f.ptsMs - lastPts_, 0.0, 250.0);
-    const double interval = 1000.0 / std::max(detection_.rateHz(), 1.0f);
-    const bool due = f.everyFrame || f.still || f.reset || !detectedOnce_ || f.ptsMs < lastDetectPts_ ||
-                     f.ptsMs - lastDetectPts_ >= interval - 0.5;
-    const bool detect = !sameFrame && due;
+    // Every new frame is detected (about 0.3 ms at the balanced size on an RTX 5070):
+    // the faces are this frame's, so the region never trails the picture.
+    const bool detect = !sameFrame;
     const double scale = double(detection_.inputLongSide()) / double(std::max(f.width, f.height));
     const uint32_t width = std::clamp(uint32_t(std::lround(f.width * scale)), 32u, 640u);
     const uint32_t height = std::clamp(uint32_t(std::lround(f.height * scale)), 32u, 640u);
@@ -142,20 +143,26 @@ bool FaceTracker::record(ID3D12GraphicsCommandList* list, pipeline::StateTracker
         source.texture = f.source; source.width = f.width; source.height = f.height; source.hdr = f.hdr;
         if (!detector_.record(list, f.slot, source, width, height)) return false;
         ++detections_;
-        lastDetectPts_ = f.ptsMs;
-        detectedOnce_ = detectedNow_ = true;
+        detectedNow_ = true;
     }
     uint32_t c[kTrackConstants]{};
     c[0] = width; c[1] = height; c[2] = detector_.candidateCapacity();
     c[3] = (detect ? 1u : 0u) | (f.reset ? 2u : 0u) | (f.still ? 4u : 0u);
     c[4] = bitsOf(float(dt));
-    c[5] = bitsOf(1.0f - 0.8f * detection_.stability);
+    // One Euro smoothing (shaders/BeautyTrack.hlsl): the stability sets the cutoff of a
+    // face at rest (3 -> 0.3 Hz) and how fast it rises with speed (20 -> 6 Hz per face
+    // width per second); tuned in docs/BEAUTY_IMPLEMENTATION_PLAN_2026-10-17.md.
+    const float stability = std::clamp(detection_.stability, 0.0f, 1.0f);
+    c[5] = bitsOf(3.0f + (0.3f - 3.0f) * stability);
     c[6] = bitsOf(0.3f);
-    // Between detections a face is kept a little longer than one detection interval.
-    c[7] = bitsOf(float(std::max(50.0, (f.everyFrame || f.still ? 1000.0 / 60.0 : interval) * 1.5)));
-    c[8] = bitsOf(150.0f);
+    c[7] = bitsOf(120.0f);      // a missed face keeps moving this long
+    c[8] = bitsOf(120.0f);      // then fades out over this long
     c[9] = detection_.maxFaces;
-    c[10] = bitsOf(threshold_);
+    c[10] = bitsOf(keepThreshold_);
+    c[11] = bitsOf(20.0f + (6.0f - 20.0f) * stability);
+    c[12] = bitsOf(4.0f);       // speed estimate cutoff, Hz
+    c[13] = bitsOf(80.0f);      // a new face fades in over this long
+    c[14] = bitsOf(threshold_);
     tracker.transition(list, faces_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     const auto gpu = [&](UINT index) { return track_.heap->GetGPUDescriptorHandleForHeapStart().ptr + UINT64(index) * track_.increment; };
     track_.bind(list, reinterpret_cast<const float*>(c), gpu(f.slot * kDescriptorsPerSlot), gpu(f.slot * kDescriptorsPerSlot + 1));

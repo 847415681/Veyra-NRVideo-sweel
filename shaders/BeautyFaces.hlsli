@@ -4,9 +4,10 @@
 #define VEYRA_BEAUTY_FACES_HLSLI
 struct BeautyFace {
     float4 box;     // centre x, centre y, half width, half height: fractions of the source frame
-    float4 shape;   // cos roll, sin roll (eye line), detector score, presence 0..1
-    float4 motion;  // velocity x, y (fractions per ms), ms since the last detection match, reserved
-    uint4 meta;     // header: count, next id, frame counter, raw candidates; face: id, hits, 0, 0
+    float4 shape;   // cos roll, sin roll (eye line), recent peak detector score, presence 0..1
+    float4 motion;  // filtered speed x, y (fractions per ms), ms since the last detection match, half-width speed
+    uint4 meta;     // header: count, next id, frame counter, raw candidates;
+                    // face: id, hits, filtered centre x, y at the last match (float bits)
 };
 static const uint kBeautyMaxFaces = 8u;
 #endif

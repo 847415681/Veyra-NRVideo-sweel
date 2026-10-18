@@ -193,9 +193,9 @@ ColumnLayout {
         label: qsTr("人脸识别 · 全部美颜节点共用"); count: 3
         VRow {
             label: qsTr("识别档位")
-            hint: editor.detection.quality === 0 ? qsTr("320 像素，每秒 10 次，最省")
-                : editor.detection.quality === 2 ? qsTr("640 像素，每秒 30 次，小脸也能识别")
-                : qsTr("512 像素，每秒 15 次")
+            hint: editor.detection.quality === 0 ? qsTr("每帧识别 · 320 像素，最省；远处的小脸可能识别不到")
+                : editor.detection.quality === 2 ? qsTr("每帧识别 · 640 像素，小脸也能识别")
+                : qsTr("每帧识别 · 512 像素")
             VSeg {
                 objectName: editor.namePrefix + "-quality"
                 options: [{id: "0", label: qsTr("性能")}, {id: "1", label: qsTr("均衡")}, {id: "2", label: qsTr("精细")}]
@@ -218,7 +218,7 @@ ColumnLayout {
         }
         VRow {
             label: qsTr("跟踪平滑")
-            hint: qsTr("越高人脸区域越稳，快速移动时跟得越慢")
+            hint: qsTr("越高静止时越稳；人物移动时都会紧跟")
             value: Math.round(Number(editor.detection.stability ?? 0.5) * 100) + "%"
             VSlider {
                 objectName: editor.namePrefix + "-stability"

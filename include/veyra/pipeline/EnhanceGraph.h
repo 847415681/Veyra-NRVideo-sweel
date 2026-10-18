@@ -180,7 +180,6 @@ struct EnhanceGraphDesc {
     // Beauty nodes by parameter ordinal, plus the chain's shared face detection.
     std::array<engine::BeautySettings,engine::kMaxBeautyInstances> beauty{};
     engine::BeautyDetection beautyDetection{};
-    bool beautyDetectEveryFrame=false;   // still pictures / export: detect on every frame
     bool beautyRequireDetector=false;    // export: a missing face detector fails the job before it starts
     std::wstring beautyModelPath;        // empty: the shipped YuNet file (beauty::locateFaceModel)
     static constexpr bool beautyExecutor=true;

@@ -85,13 +85,13 @@ struct BeautySettings {
 
 // One face detector serves every beauty node of a chain: these values are the
 // chain's (list and node mode keep their own), saved with it and frozen for export.
+// The detector runs on every new frame at any quality.
 struct BeautyDetection {
-    uint8_t quality = 1;                   // 0 performance (320 px, 10 Hz), 1 balanced (512 px, 15 Hz), 2 fine (640 px, 30 Hz)
+    uint8_t quality = 1;                   // detector input: 0 performance (320 px), 1 balanced (512 px), 2 fine (640 px)
     uint8_t maxFaces = 4;                  // 1 .. 8
-    float stability = 0.5f;                // 0 .. 1: smoothing of the tracked faces (0 follows every detection)
+    float stability = 0.5f;                // 0 .. 1: smoothing of a face at rest (a moving face is followed closely at any value)
     bool operator==(const BeautyDetection&) const = default;
     uint32_t inputLongSide() const { return quality == 0 ? 320u : quality == 2 ? 640u : 512u; }
-    float rateHz() const { return quality == 0 ? 10.0f : quality == 2 ? 30.0f : 15.0f; }
     std::string validate() const {
         if (quality > 2) return "invalid beauty detection quality";
         if (maxFaces < 1 || maxFaces > 8) return "beauty face count out of range";

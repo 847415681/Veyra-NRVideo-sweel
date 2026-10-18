@@ -1222,7 +1222,7 @@ __declspec(noinline) void testBeautySettingsChain() {
           refused([](BeautySettings& v) { v.restoreStrength = std::nanf(""); }),
           "beauty: out-of-range values are refused");
     BeautyDetection d;
-    check(d.validate().empty() && d.inputLongSide() == 512 && d.rateHz() == 15.0f, "beauty: balanced detection by default");
+    check(d.validate().empty() && d.inputLongSide() == 512, "beauty: balanced detection by default");
     d.maxFaces = 0; check(!d.validate().empty(), "beauty: a detector needs at least one face");
     // Sub-functions are independent: strength 0 skips only the smoothing.
     b.enabled = true; b.restore = true; b.smooth = true; b.strength = 0.0f;
@@ -1268,12 +1268,12 @@ __declspec(noinline) void testBeautySettingsChain() {
           "beauty: NR-first preview runs the group between NR and SR");
     StageRequest still = request; still.stillImage = true; still.sr = false;
     describeStages(still, *s, *desc);
-    check(desc->beautyDetectEveryFrame && !desc->beautyRequireDetector, "beauty: a picture is detected on its own frame");
+    check(!desc->beautyRequireDetector, "beauty: a picture runs without requiring the detector");
     StageRequest exportJob = request; exportJob.exportJob = true;
     auto masked = std::make_unique<EnhancementSettings>(*s); masked->beauty.showMask = true;
     describeStages(exportJob, *masked, *desc);
-    check(desc->beautyRequireDetector && desc->beautyDetectEveryFrame && !desc->beauty[0].showMask,
-          "beauty: export needs the detector, detects every frame and never writes the mask view");
+    check(desc->beautyRequireDetector && !desc->beauty[0].showMask,
+          "beauty: export needs the detector and never writes the mask view");
 
     // Only the master switch (and the instance count) rebuilds; every value is live.
     auto live = std::make_unique<EnhancementSettings>(*s);
