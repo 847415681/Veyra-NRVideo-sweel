@@ -39,6 +39,21 @@ std::vector<uint8_t> burst(const std::vector<uint8_t>& packet,unsigned type){
     const size_t pd=type==0x15?packet.size():packet.size()*8;out[6]=uint8_t(pd);out[7]=uint8_t(pd>>8);
     for(size_t i=0;i<packet.size();i+=2){out[8+i]=i+1<packet.size()?packet[i+1]:0;out[9+i]=packet[i];}return out;
 }
+struct CodecFormat {unsigned channels=0,rate=0;uint32_t mask=0;};
+CodecFormat referenceFormat(AVCodecID id,const std::vector<std::vector<uint8_t>>& packets){
+    // AC3 records acmod, not Windows' side/back speaker mask. Obtain the codec's
+    // canonical decoded layout independently, rather than expecting the input
+    // encoder's Windows mask to survive the compressed format unchanged.
+    auto* ctx=avcodec_alloc_context3(avcodec_find_decoder(id));
+    require(ctx&&avcodec_open2(ctx,ctx->codec,nullptr)>=0,"reference decoder");
+    auto* f=av_frame_alloc();auto* p=av_packet_alloc();CodecFormat result;
+    for(const auto& bytes:packets){
+        av_new_packet(p,int(bytes.size()));std::copy(bytes.begin(),bytes.end(),p->data);
+        require(avcodec_send_packet(ctx,p)>=0,"reference packet");
+        while(avcodec_receive_frame(ctx,f)>=0){result={unsigned(f->ch_layout.nb_channels),unsigned(f->sample_rate),uint32_t(f->ch_layout.u.mask)};av_frame_unref(f);}av_packet_unref(p);
+    }
+    av_packet_free(&p);av_frame_free(&f);avcodec_free_context(&ctx);return result;
+}
 }
 int main(){try{
     using source::avermedia::DeviceInfo;
@@ -70,7 +85,9 @@ int main(){try{
             if(pos<wire.size()){require(carrier.feed(std::span(wire).subspan(pos),stereo,start+double(total)/192000),"IEC remainder");total+=wire.size()-pos;}
         }
         require(outputs.size()>before+2,"real decoded audio exists");
-        const auto& last=outputs.back();require(last.channels==unsigned(std::popcount(mask))&&last.rate==unsigned(rate)&&last.mask==mask,"decoded channel layout/rate matches real codec");
+        const auto& last=outputs.back();const auto expected=referenceFormat(codec,encoded);
+        std::cout<<"CODEC "<<avcodec_get_name(codec)<<" encoderMask=0x"<<std::hex<<mask<<" decodedMask=0x"<<last.mask<<std::dec<<" channels="<<last.channels<<" rate="<<last.rate<<'\n';
+        require(last.channels==expected.channels&&last.rate==expected.rate&&last.mask==expected.mask,"decoded channel layout/rate matches independent codec reference");
         require(!last.codec.empty(),"diagnostics name compressed input");
         for(float v:last.pcm)require(std::isfinite(v)&&std::abs(v)<1,"decoded PCM finite and bounded");
         for(unsigned ch=0;ch<last.channels;++ch){double energy=0;for(size_t i=ch;i<last.pcm.size();i+=last.channels)energy+=last.pcm[i]*last.pcm[i];require(energy>0.001,"every decoded channel contains signal");}

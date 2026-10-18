@@ -32,7 +32,7 @@ int wmain(int argc,wchar_t** argv){try{
         require(std::wstring_view(argv[3])==L"--missing-export","known test scenario");mode(L"normal");
         {AverMediaVendorAudio audio;audio.start([](const VendorPcmBlock&){return true;},name,path);
          require(wait([&]{return audio.state().failed;}),"missing export fails asynchronously without crash");
-         require(audio.state().error.find(L"missing vendor export")!=std::wstring::npos,"missing ABI export diagnostic");audio.stop();}
+         require(audio.state().error.find(L"missing vendor export ?Start@AudioDevice")!=std::wstring::npos,"missing ABI export diagnostic");audio.stop();}
         require(count(3)==0&&count(0)==0,"no graph constructed on incomplete ABI");FreeLibrary(module);
         std::cout<<"PASS "<<checks<<" missing-export checks\n";return 0;
     }
