@@ -4,6 +4,7 @@
 #include "veyra/engine/BackendRecovery.h"
 #include "veyra/pipeline/ColorGradeTables.h"
 #include "veyra/pipeline/ColorGradeInstance.h"
+#include "veyra/pipeline/AntiAliasPass.h"
 #include "veyra/pipeline/NrInstance.h"
 #include "veyra/pipeline/ResolutionPlan.h"
 #include "veyra/pipeline/NrTemporalPass.h"
@@ -169,7 +170,7 @@ struct EnhanceGraphDesc {
     // instances with a step in fixedExecutionPlan run; the settings carry the values.
     std::array<engine::AntiAliasSettings,engine::kMaxAntiAliasInstances> antiAlias{};
     // The anti-aliasing executor is compiled into this build (EnhanceGraph).
-    static constexpr bool antiAliasExecutor=false;
+    static constexpr bool antiAliasExecutor=true;
     bool antiAliasActive() const {
         for(const auto& a:antiAlias)if(a.enabled)return true;
         return false;
@@ -353,7 +354,9 @@ struct EnhanceGraphDesc {
     }
     // Where a plan step runs. `interTarget` receives the NR resource of an InterNr step.
     bool sourcePostActive() const {
-        if(!fixedExecutionPlan)return false;
+        // Without a compiled plan (tiled full-resolution images) enabled
+        // anti-aliasing instances run at source size, like the list chain.
+        if(!fixedExecutionPlan)return antiAliasActive();
         for(uint32_t i=0;i<fixedExecutionPlan->stepCount&&i<fixedExecutionPlan->steps.size();++i)
             if(slotOfStep(i)==PassSlot::SourcePost)return true;
         return false;
@@ -882,7 +885,10 @@ private:
     unsigned tailColorActiveCount_=0,preNrColorActiveCount_=0,preSrColorActiveCount_=0,interNrColorActiveCount_=0,sourcePostColorActiveCount_=0;
     // Same-size passes per insertion slot, in plan order (EnhanceGraphDesc::slotOfStep).
     // Each pass reads the previous pass's output; the slot output is the last one.
-    struct SlotPass {uint32_t step=0;engine::EffectType type=engine::EffectType::Color;uint32_t parameter=0;ID3D12Resource* output=nullptr;};
+    struct SlotPass {
+        uint32_t step=0;engine::EffectType type=engine::EffectType::Color;uint32_t parameter=0;ID3D12Resource* output=nullptr;
+        uint32_t width=0,height=0,resource=0; // output extent; resource ordinal of the plan step
+    };
     std::vector<SlotPass> sourcePostPasses_,preSrPasses_,preNrPasses_,tailPasses_;
     std::array<std::vector<SlotPass>,engine::kMaxNrInstances> interNrPasses_{};
     ID3D12Resource* sourcePostOutput_=nullptr; // source size, after the input conversion
@@ -893,7 +899,11 @@ private:
     }
     ID3D12Resource* chainSlotViews(const std::vector<SlotPass>& passes,ID3D12Resource* input,const char* where);
     bool dispatchSlotPasses(ID3D12GraphicsCommandList* list,const std::vector<SlotPass>& passes,unsigned slot,
-                            const char* where,bool log);
+                            const char* where,bool log,bool reset);
+    // Indexed by anti-aliasing parameter ordinal, like the node Color instances.
+    std::array<std::unique_ptr<AntiAliasPass>,engine::kMaxAntiAliasInstances> antiAliasPasses_{};
+    std::array<ComPtr<ID3D12Resource>,engine::kMaxAntiAliasInstances> antiAliasOutputs_{};
+    bool createAntiAlias(uint32_t parameter,uint32_t width,uint32_t height);
     bool tailColorExecutionLogged_=false,preNrColorExecutionLogged_=false;
     bool preSrColorExecutionLogged_=false;
     bool interNrColorExecutionLogged_=false;

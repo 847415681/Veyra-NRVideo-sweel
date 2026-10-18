@@ -60,6 +60,10 @@ int wmain(int argc,wchar_t** argv){
             settings.model.style=2;settings.nrPolicy=veyra::pipeline::NrSizePolicy::P480;
             settings.flow=FlowQuality::Performance;settings.content=ContentRate::Transport;
         }
+        // Anti-aliasing (#53): the frozen settings cross the worker protocol and the
+        // worker's graph runs the pass (its log names the instance).
+        const bool antiAlias=mode==L"aa"||mode==L"aa-mkv";
+        if(antiAlias){settings.antiAlias.enabled=true;settings.antiAlias.method=AntiAliasMethod::Smaa;settings.antiAlias.quality=2;}
         if(mode==L"queue"){
             std::filesystem::create_directories(output);
             ExportQueue queue(manager);
@@ -170,6 +174,13 @@ int wmain(int argc,wchar_t** argv){
                 std::wcout<<L"FSR_TEXTURE_EXPORT source="<<s.sourceFrames<<L" encoded="<<s.encoded<<L" validGenerated="<<s.generated<<L" holds="<<s.holds<<L"\n";
             }
             if(mode.find(L"skip")!=std::wstring::npos)require(s.message.find(L"未保留")!=std::wstring::npos,"skipped tracks not reported");
+            if(antiAlias){
+                require(s.frozen.antiAlias==settings.antiAlias,"frozen job lost the anti-aliasing settings");
+                std::ifstream log(s.workerLog);const std::string text((std::istreambuf_iterator<char>(log)),{});
+                require(text.find("[anti-alias] instance=0 SMAA high")!=std::string::npos,"export worker did not create the anti-aliasing pass");
+                // The log path may hold non-ASCII folders, which would fail the narrow console stream.
+                std::wcout<<L"ANTI_ALIAS_EXPORT encoded="<<s.encoded<<L" passCreated=1\n";
+            }
         }
         passed=true;
     }catch(const std::exception& e){std::cerr<<"FAILED: "<<e.what()<<'\n';}

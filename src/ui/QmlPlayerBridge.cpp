@@ -1764,6 +1764,8 @@ QVariantList QmlPlayerBridge::stageTimings() const {
     struct Row { const char* label; Stage stage; const char* color; };
     const Row rows[] = {
         {"输入", Stage::Color, "#A8A8B8"},
+        {"抗锯齿", Stage::AaNode0, "#7FD4FF"},
+        {"抗锯齿 2", Stage::AaNode1, "#A9E2FF"},
         {"超分", Stage::Sr, "#6EA8FF"},
         {"光流", Stage::Flow, "#9A85FF"},
         {"NR采样", Stage::Nr, "#FF8A3D"},
@@ -1783,6 +1785,7 @@ QVariantList QmlPlayerBridge::stageTimings() const {
     static const char* const layerLabels[] = {"NR 第1层", "NR 第2层", "NR 第3层", "NR 第4层"};
     static const char* const layerColors[] = {"#FF8A3D", "#FFA866", "#FFC28F", "#FFD9B8"};
     for (const auto& r : rows) {
+        if ((r.stage == Stage::AaNode0 || r.stage == Stage::AaNode1) && s.metrics.flow.gpuTiming[size_t(r.stage)].samples == 0) continue;
         if (r.stage == Stage::Nr && measuredLayers >= 2) {
             for (unsigned i = 0; i < diagnostics::kTimedNrLayers; ++i)
                 if (s.metrics.flow.gpuTiming[size_t(diagnostics::nrLayerStage(i))].samples > 0)
@@ -1863,7 +1866,7 @@ QVariantMap QmlPlayerBridge::nodeTimings() const {
     for (const int i : path) onPath[size_t(i)] = true;
     for (uint32_t i = 0; i < c.nodeCount; ++i)
         if (!onPath[i]) publish(i, draft ? QStringLiteral("draft") : QStringLiteral("idle"), std::nullopt);
-    unsigned enabledNr = 0, colour = 0;
+    unsigned enabledNr = 0, colour = 0, antiAlias = 0;
     for (const int index : path) {
         const auto i = uint32_t(index);
         const auto& n = c.nodes[i];
@@ -1881,6 +1884,11 @@ QVariantMap QmlPlayerBridge::nodeTimings() const {
             if (colour < diagnostics::kTimedColorNodes) stage = diagnostics::colorNodeStage(colour);
             if (colour == 0) waiting = live ? QStringLiteral("fused") : waiting;
             ++colour;
+            break;
+        case engine::EffectType::AntiAliasing:
+            // Indexed by parameter ordinal, like Color: every anti-aliasing node on the path counts.
+            if (antiAlias < diagnostics::kTimedAaNodes) stage = diagnostics::aaNodeStage(antiAlias);
+            ++antiAlias;
             break;
         case engine::EffectType::SuperResolution: stage = Stage::Sr; break;
         case engine::EffectType::VideoHdr:
@@ -5312,6 +5320,129 @@ void QmlPlayerBridge::setVideoHdr(bool enabled) {
 }
 // RTX Video HDR tuning lives on the chain's HDR node, like NR parameters on
 // NR nodes: the same values AppShell's settings sliders edited.
+namespace {
+// Spatial anti-aliasing (#53): one node's values for the editors, and the edits they send.
+QString antiAliasSummary(const engine::AntiAliasSettings& a) {
+    using engine::AntiAliasMethod;
+    if (a.method == AntiAliasMethod::Mlaa)
+        return QStringLiteral("MLAA · ") + QmlPlayerBridge::tr("阈值 %1").arg(double(a.mlaaThreshold), 0, 'f', 2);
+    const QStringList fxaa{QmlPlayerBridge::tr("中"), QmlPlayerBridge::tr("高"), QmlPlayerBridge::tr("极高")};
+    const QStringList smaa{QmlPlayerBridge::tr("低"), QmlPlayerBridge::tr("中"), QmlPlayerBridge::tr("高"), QmlPlayerBridge::tr("极高")};
+    QString text = a.method == AntiAliasMethod::Fxaa ? QStringLiteral("FXAA · ") + fxaa.value(int(a.quality))
+                                                     : QStringLiteral("SMAA · ") + smaa.value(int(a.quality));
+    if (a.usesTemporal())
+        text += a.temporal == engine::AntiAliasTemporal::T2x ? QmlPlayerBridge::tr(" · 时域 T2x（实验）") : QmlPlayerBridge::tr(" · 时域 4x（实验）");
+    return text;
+}
+QVariantMap antiAliasMap(const engine::ChainNode* node, int index) {
+    const engine::AntiAliasSettings a = node ? node->aa : engine::AntiAliasSettings{};
+    return {{"index", index}, {"present", node != nullptr}, {"enabled", node && node->enabled},
+            {"method", int(a.method)}, {"quality", int(a.quality)},
+            {"mlaaThreshold", double(a.mlaaThreshold)}, {"mlaaStrength", double(a.mlaaStrength)},
+            {"temporal", int(a.temporal)}, {"historyWeight", double(a.historyWeight)},
+            {"historyRejection", double(a.historyRejection)}, {"summary", antiAliasSummary(a)}};
+}
+// A method change starts from its high tier; the experimental modes keep Magpie's
+// history defaults (T2x 0.5, 4x 0.75) unless the weight was tuned.
+uint8_t defaultAntiAliasQuality(engine::AntiAliasMethod method) {
+    return method == engine::AntiAliasMethod::Fxaa ? 1 : method == engine::AntiAliasMethod::Smaa ? 2 : 0;
+}
+float defaultHistoryWeight(engine::AntiAliasTemporal temporal) {
+    return temporal == engine::AntiAliasTemporal::X4 ? 0.75f : 0.5f;
+}
+bool applyAntiAliasKey(engine::AntiAliasSettings& a, bool& enabled, const QString& key, double value) {
+    using engine::AntiAliasMethod; using engine::AntiAliasTemporal;
+    if (!std::isfinite(value)) return false;
+    const int whole = int(std::lround(value));
+    if (key == "enabled") { enabled = value != 0; return true; }
+    if (key == "method") {
+        if (whole < 0 || whole > 2) return false;
+        const auto method = AntiAliasMethod(whole);
+        if (method != a.method) { a.method = method; a.quality = defaultAntiAliasQuality(method); }
+        if (method != AntiAliasMethod::Smaa) a.temporal = AntiAliasTemporal::Off;
+        return true;
+    }
+    if (key == "quality") {
+        if (whole < 0 || whole >= int(engine::antiAliasQualityCount(a.method))) return false;
+        a.quality = uint8_t(whole); return true;
+    }
+    if (key == "temporal") {
+        if (whole < 0 || whole > 2 || (whole && a.method != AntiAliasMethod::Smaa)) return false;
+        const auto next = AntiAliasTemporal(whole);
+        if (next != a.temporal && a.historyWeight == defaultHistoryWeight(a.temporal)) a.historyWeight = defaultHistoryWeight(next);
+        a.temporal = next; return true;
+    }
+    if (key == "mlaaThreshold") { a.mlaaThreshold = float(value); return true; }
+    if (key == "mlaaStrength") { a.mlaaStrength = float(value); return true; }
+    if (key == "historyWeight") { a.historyWeight = float(value); return true; }
+    if (key == "historyRejection") { a.historyRejection = float(value); return true; }
+    return false;
+}
+}
+bool QmlPlayerBridge::antiAliasEnabled() const {
+    const auto* node = impl_->chain.firstOf(engine::EffectType::AntiAliasing);
+    return node && node->enabled;
+}
+void QmlPlayerBridge::setAntiAliasEnabled(bool enabled) {
+    if (enabled != antiAliasEnabled()) (void)setAntiAliasParameter(QStringLiteral("enabled"), enabled ? 1 : 0);
+}
+QVariantMap QmlPlayerBridge::antiAliasParams() const {
+    for (uint32_t i = 0; i < impl_->chain.nodeCount; ++i)
+        if (impl_->chain.nodes[i].type == engine::EffectType::AntiAliasing) return antiAliasMap(&impl_->chain.nodes[i], int(i));
+    return antiAliasMap(nullptr, -1);
+}
+QVariantMap QmlPlayerBridge::antiAliasParamsAt(int index) const {
+    if (index < 0 || uint32_t(index) >= impl_->chain.nodeCount ||
+        impl_->chain.nodes[index].type != engine::EffectType::AntiAliasing) return antiAliasMap(nullptr, -1);
+    return antiAliasMap(&impl_->chain.nodes[index], index);
+}
+bool QmlPlayerBridge::setAntiAliasParameter(const QString& key, double value) {
+    auto& c = impl_->chain;
+    for (uint32_t i = 0; i < c.nodeCount; ++i)
+        if (c.nodes[i].type == engine::EffectType::AntiAliasing) return setAntiAliasParameterAt(int(i), key, value);
+    if (c.mode != engine::ChainMode::List) { emit notice(tr("请先添加抗锯齿节点"), true); return false; }
+    // The list card's instance exists once it is used: after the grades, in
+    // front of SR, where toChain() puts it.
+    engine::ChainNode node; node.type = engine::EffectType::AntiAliasing;
+    bool enabled = false;
+    if (!applyAntiAliasKey(node.aa, enabled, key, value)) return false;
+    node.enabled = node.aa.enabled = enabled;
+    if (!node.aa.validate().empty()) return false;
+    if (c.nodeCount >= engine::kMaxChainNodes) { emit notice(tr("效果链已满"), true); return false; }
+    uint32_t insertAt = 0;
+    while (insertAt < c.nodeCount && c.nodes[insertAt].type == engine::EffectType::Color) ++insertAt;
+    const auto before = std::make_unique<engine::EffectChain>(c);
+    const int selected = impl_->selectedNr, colourSelected = impl_->selectedColour;
+    for (uint32_t i = c.nodeCount; i > insertAt; --i) c.nodes[i] = c.nodes[i - 1];
+    c.nodes[insertAt] = node; ++c.nodeCount;
+    if (impl_->selectedNr >= int(insertAt)) ++impl_->selectedNr;
+    if (impl_->selectedColour >= int(insertAt)) ++impl_->selectedColour;
+    if (!impl_->revalidate(true)) {
+        const auto error = impl_->validation.message;
+        c = *before; impl_->selectedNr = selected; impl_->selectedColour = colourSelected; impl_->revalidate();
+        emit notice(uiText(error), true); return false;
+    }
+    emit settingsChanged(); emitChainChanged();
+    return true;
+}
+bool QmlPlayerBridge::setAntiAliasParameterAt(int index, const QString& key, double value) {
+    auto& c = impl_->chain;
+    if (index < 0 || uint32_t(index) >= c.nodeCount || c.nodes[index].type != engine::EffectType::AntiAliasing) return false;
+    auto& node = c.nodes[index];
+    const auto before = node; const bool wasValid = chainValid();
+    bool enabled = node.enabled;
+    if (!applyAntiAliasKey(node.aa, enabled, key, value)) return false;
+    node.enabled = node.aa.enabled = enabled;
+    if (!node.aa.validate().empty()) { node = before; return false; }
+    if (node == before) return true;
+    const bool accepted = impl_->revalidate(true);
+    if (!accepted) { const auto error = impl_->validation.message; node = before; impl_->revalidate(); emit notice(uiText(error), true); }
+    emit settingsChanged();
+    // The switch also strikes the chip through; parameters notify only their group.
+    if (before.enabled != node.enabled) emitChainChanged();
+    else emitParameterChanged(&QmlPlayerBridge::antiAliasChanged, wasValid);
+    return accepted;
+}
 QVariantMap QmlPlayerBridge::videoHdrParams() const {
     for (uint32_t i = 0; i < impl_->chain.nodeCount; ++i)
         if (impl_->chain.nodes[i].type == engine::EffectType::VideoHdr) {
@@ -5708,7 +5839,7 @@ QVariantList QmlPlayerBridge::effectCatalog() const {
 QString QmlPlayerBridge::chainError() const { return uiText(impl_->validation.message); }
 void QmlPlayerBridge::emitChainChanged() {
     emit chainChanged(); emit nrLayersChanged(); emit videoHdrParamsChanged();
-    emit colourParamsChanged(); emit protectionChanged();
+    emit antiAliasChanged(); emit colourParamsChanged(); emit protectionChanged();
 }
 // Every chainChanged re-evaluated all chain-bound bindings on every page (the pro
 // and node pages stay loaded) and repainted the node wires: 65-80 ms of interface

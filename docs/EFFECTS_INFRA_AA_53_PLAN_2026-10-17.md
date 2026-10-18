@@ -69,5 +69,26 @@
 - 旧 Win32 遥测阶段名表补齐：原表缺 `Fg6/Fg7` 两项（其后名称整体错位、末两项为空指针），现按枚举逐项对齐并以 `static_assert` 固定长度。
 - 验证：`veyra_effect_chain_tests` 全部通过（新增 E0 断言 33 条：默认无新节点、溢出拒绝、双实例往返与校验、重建规则、列表位置、节点 SourcePost/PreNr/PreSr/InterNr/Tail 与混合槽、美颜不入图、21 节点链）；`veyra_preset_library_tests` 全部通过（新增 14 条：v14 独立文件且旧库字节不变、精确重载与应用、v13 头夹带新类型拒绝、未知新版本拒绝、18 节点链、会话 v9）；`veyra_nr_model_settings_tests` 26/26；`veyra_ui_i18n_tests` 0 失败；调色切片回归 `slot_regression.py app-e0b … --compare golden-baseline.json` **12/12 逐字节相同**（`tests/claude-aa-53-20261017/slot-e0-final.json`）。
 
+### #53 抗锯齿（2026-10-18）
+- 着色器（14 个 `.dxil`）：`AntiAlias.hlsli`/`AaLuma`（感知亮度）、`AaFxaa`（预设 3/4/5，补回 NVIDIA 2011 声明）、`Smaa.hlsli` + `AaSmaaEdges`/`AaSmaaWeights`（低/中/高/极高四个变体）/`AaSmaaBlend`、`AaTemporalResolve`（实验不抖动 T2x/4x）、`AaMlaa*` 三个 pass；CMake 新增 `veyra_add_compute_shader_variant`；`ComputePass::create` 可选静态采样器（点/双线性，clamp，默认关，既有根签名不变）。SMAA 查找表由 `scripts/generate-smaa-lookup-tables.py` 从 Magpie 同一提交的 DDS 生成 `src/pipeline/SmaaLookupTables.cpp`（校验载荷 SHA256），不新增随包文件。
+- **与方案的一处差异**：HDR 边缘检测没有用 PQ。PQ 把 SDR 亮度区间的对比压缩约 3–4 倍（100→200 nit 的 PQ 差约 0.07，sRGB 相对白约 0.27），用这些算法按 SDR 调好的阈值会漏检大部分边缘。改为“相对参考白的 sRGB 传递，白以上以同斜率对数延伸”（SDR 白=1.0，HDR scRGB 以 203 nit 为白），SDR 与 HDR 片源在同一亮度段得到同样的检测，高光仍能形成边缘；所有混合仍在线性光完成。
+- `AntiAliasPass`（`include/veyra/pipeline/AntiAliasPass.h`）：各方式的 pass、中间纹理、查找表上传、时域历史（seek/切镜/时间线断点/重建即丢弃）；方式/档位/时域模式改变重建，MLAA 阈值/强度与历史权重/拒绝为实时统一量（`applySettings`）。图内经 E0 槽列表执行：列表模式在源尺寸槽（输入转换之后、超分之前），节点模式按位置进入 SourcePost/PreNr/PreSr/InterNr/Tail；无编译计划的分块大图路径在源尺寸逐实例执行。GPU 计时 `AaNode0/1`，列表“GPU 阶段耗时”与节点耗时条显示。
+- 界面：“画质”页最上方（超分辨率之上）“抗锯齿”卡片（方式、质量、MLAA 阈值/强度、实验时域累积与历史权重/拒绝，摘要显示当前方式），处理顺序条出现“抗锯齿”芯片并可点击定位；节点“添加节点”出现“抗锯齿”（最多 2 个），节点卡片用同一编辑组件 `AntiAliasEditor.qml`。桥接 `antiAliasEnabled/antiAliasParams/antiAliasParamsAt/setAntiAliasParameter(At)`；列表实例首次使用时插入在调色之后、超分之前。四语言翻译 22 条补齐。美颜仍隐藏。
+- 许可：`THIRD_PARTY_NOTICES.md` 新增条目（Magpie d687997 文件对照、FXAA NVIDIA 声明、SMAA/MLAA MIT、DDS 与生成表 SHA256、Veyra 改动、未移植项）。
+
+### 验收（2026-10-18，本机 RTX 5070，每项一次）
+- 合成锯齿图（旋转矩形、圆、1 像素细线，640×360，与 16×16 超采样线性光参考比较）：所有方式平坦区与关闭时逐位相同（208,229 像素）；形状边缘平均误差（8 位）关闭 32.19 → FXAA 8.00、SMAA 低 7.01 / 中 7.31 / 高与极高 6.76、MLAA 10.47；细线 50.54 → FXAA 34.85、SMAA 低/中 10.58、高/极高 15.80、MLAA 39.13。
+- HDR（P010 PQ BT.2020 → scRGB FP16）：FXAA/SMAA/MLAA 无 NaN/无穷，平坦高光、背景与 709 外绿色色块（2080 像素全部保持负分量）逐位不变，1000 nit 高光 12.547 保持，边缘被处理。
+- 时域 T2x/4x：重置帧确定（历史被忽略），之后帧累积历史；历史权重 0 实时生效。MLAA 强度实时修改等于以该值重建。
+- 节点（真实 NGX SR+NR）：SR→抗锯齿→NR 在 PreNr 槽 2560×1440 执行；抗锯齿→SR→NR→抗锯齿 两实例分别在源尺寸 640×360 与链尾 2560×1440 执行，GPU 计时两项都有数据。
+- 分块大图（2900×1700，6 块，无编译计划）：MLAA 与整图逐位相同；SMAA 在 1,479 万字节中 620 字节相差 ≤3（双线性归一化坐标随纹理尺寸取整，分布均匀、不集中于接缝）。
+- D3D12 调试层：SDR 四种、HDR SMAA、时域 4x 均无错误。
+- 导出 worker（真实子进程）：冻结设置携带抗锯齿，worker 日志创建 `SMAA high` 并记录源尺寸派发，30 帧完成。
+- 真实界面（隔离配置、自己的进程、播放合成片源）：39 项检查通过，列表开关/方式/档位/时域规则、节点添加与上限、模式切换后列表配置保留；播放中每次结构修改都重建并执行抗锯齿，阈值类修改不重建；截图 `logs/claude-aa-53-20261017/gui-*/pro-quality-anti-alias.png`。
+- GPU 耗时（中位数，ms；稀疏合成内容 / 4K 密集细条纹最坏情况）：1080p FXAA 0.031、SMAA 0.074–0.075、时域 0.126、MLAA 0.073；1440p 0.051 / 0.124–0.126 / 0.215 / 0.124；4K 0.146 / 0.294–0.299 / 0.549 / 0.296；4K 密集 FXAA 0.355、SMAA 低中 0.547、高极高 0.726、时域 1.21–1.26、MLAA 0.536。测时前确认无其他 Veyra 进程。
+- 回归：调色切片回归仍 12/12 逐字节相同；单元/GPU/QML/翻译各套件见下方“最终核对”。
+- 顺带修复（main `26c0d61` 已有）：`TiledImageProcessor` 把整图编译的执行计划原样带进分块，图以“fixed execution plan output/count mismatch”拒绝，`veyra_image_dimension_tests` 的 6 个分块调色用例在 main 上全部失败。产品路径（`EngineControllerImage`）本来不带计划，分块现在明确丢弃整图计划、按列表基础顺序执行，6 个用例与整图逐位相同（maxError8=0）。
+- 最终核对（2026-10-18，同一份构建 `tests/claude-aa-53-20261017/app-final2`，全新临时目录，日志 `logs/claude-aa-53-20261017/final-sweep-20261018-155900`）：15 套中 14 套通过——effect-chain、preset-library、nr-model-settings、ui-i18n、pipeline-contract（52 项）、color-grade-gpu 与 lifecycle、video-hdr、nr-temporal-gpu、QML quick、导出 aa、调色切片回归 12/12、抗锯齿 GPU（不含测时）、真实界面 39 项。image-dimension 的 11 个尺寸/分块用例全部通过，唯一失败的 NR 分块用例找不到 `runtime_local/config/ngx-local.json`：测试把源码根目录作为窄字符串编译进去，`E:/项目` 非 ASCII 路径无法解析（与本改动无关，ASCII 路径构建才能跑）。preset-library 在同一临时目录连跑第二次会失败（`testDlssSrModels` 留下 sidecar，main 同样如此），每次全新临时目录则通过。`veyra_amd_nr_graph_tests` 仅编译通过，未运行（需要假 AMD 运行库布置）。
+
 ## 8. 未验证项（预先声明）
 AMD/Intel 实卡、用户 Switch 素材、长时间运行、光学延迟均不在本轮验证范围；本机 RTX 结果不外推其它硬件。

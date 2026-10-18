@@ -14,8 +14,8 @@ constexpr std::array<EffectInfo, effectTypeCount> kCatalog{{
     {EffectType::Protection, effectTypeName(EffectType::Protection), "NR 保护区域", 1, false, false, false, false, false},
     {EffectType::VideoHdr, effectTypeName(EffectType::VideoHdr), "RTX Video HDR", 1, false, false, true, false, false},
     {EffectType::FrameGeneration, effectTypeName(EffectType::FrameGeneration), "补帧", 1, false, true, false, false, false},
-    // Hidden until their executors ship; the engine and file formats already know them.
-    {EffectType::AntiAliasing, effectTypeName(EffectType::AntiAliasing), "抗锯齿", kMaxAntiAliasInstances, true, false, false, false, false, true},
+    // Beauty stays hidden until its executor ships; the engine and file formats already know it.
+    {EffectType::AntiAliasing, effectTypeName(EffectType::AntiAliasing), "抗锯齿", kMaxAntiAliasInstances, true, false, false, false, false, false},
     {EffectType::Beauty, effectTypeName(EffectType::Beauty), "美颜", kMaxBeautyInstances, true, false, false, false, false, true},
 }};
 } // namespace

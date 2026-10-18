@@ -369,6 +369,8 @@ add_library(veyra_pipeline STATIC
   src/pipeline/ColorGradeTables.cpp
   src/pipeline/ColorGradeInstance.cpp
   src/pipeline/ColorDetailPass.cpp
+  src/pipeline/AntiAliasPass.cpp
+  src/pipeline/SmaaLookupTables.cpp
   src/pipeline/NrInstance.cpp
   src/pipeline/LmxxfNrBackend.cpp
   src/pipeline/VfgBackend.cpp
@@ -397,6 +399,27 @@ target_compile_features(veyra_lmxxf_nr_tests PRIVATE cxx_std_20)
 target_link_libraries(veyra_lmxxf_nr_tests PRIVATE veyra_pipeline)
 add_dependencies(veyra_lmxxf_nr_tests veyra_lmxxf_fake_runtime)
 add_dependencies(veyra_pipeline veyra_shader_color_grade veyra_shader_color_detail_reduce veyra_shader_color_detail_blur veyra_shader_color_detail_apply)
+# Spatial anti-aliasing (#53): FXAA / SMAA / MLAA ported from SAOG0721/Magpie
+# d687997 (sources and notices: THIRD_PARTY_NOTICES.md). Quality tiers of one
+# source are separate .dxil variants.
+veyra_add_compute_shader(veyra_shader_aa_luma AaLuma)
+veyra_add_compute_shader_variant(veyra_shader_aa_fxaa3 AaFxaa AaFxaa3 FXAA_PRESET=3)
+veyra_add_compute_shader_variant(veyra_shader_aa_fxaa4 AaFxaa AaFxaa4 FXAA_PRESET=4)
+veyra_add_compute_shader_variant(veyra_shader_aa_fxaa5 AaFxaa AaFxaa5 FXAA_PRESET=5)
+veyra_add_compute_shader(veyra_shader_aa_smaa_edges AaSmaaEdges)
+veyra_add_compute_shader_variant(veyra_shader_aa_smaa_weights_low AaSmaaWeights AaSmaaWeightsLow SMAA_PRESET_LOW)
+veyra_add_compute_shader_variant(veyra_shader_aa_smaa_weights_medium AaSmaaWeights AaSmaaWeightsMedium SMAA_PRESET_MEDIUM)
+veyra_add_compute_shader_variant(veyra_shader_aa_smaa_weights_high AaSmaaWeights AaSmaaWeightsHigh SMAA_PRESET_HIGH)
+veyra_add_compute_shader_variant(veyra_shader_aa_smaa_weights_ultra AaSmaaWeights AaSmaaWeightsUltra SMAA_PRESET_ULTRA)
+veyra_add_compute_shader(veyra_shader_aa_smaa_blend AaSmaaBlend)
+veyra_add_compute_shader(veyra_shader_aa_temporal AaTemporalResolve)
+veyra_add_compute_shader(veyra_shader_aa_mlaa_edges AaMlaaEdges)
+veyra_add_compute_shader(veyra_shader_aa_mlaa_counts AaMlaaCounts)
+veyra_add_compute_shader(veyra_shader_aa_mlaa_blend AaMlaaBlend)
+add_dependencies(veyra_pipeline veyra_shader_aa_luma veyra_shader_aa_fxaa3 veyra_shader_aa_fxaa4 veyra_shader_aa_fxaa5
+  veyra_shader_aa_smaa_edges veyra_shader_aa_smaa_weights_low veyra_shader_aa_smaa_weights_medium
+  veyra_shader_aa_smaa_weights_high veyra_shader_aa_smaa_weights_ultra veyra_shader_aa_smaa_blend veyra_shader_aa_temporal
+  veyra_shader_aa_mlaa_edges veyra_shader_aa_mlaa_counts veyra_shader_aa_mlaa_blend)
 
 add_executable(veyra_pipeline_tests
   tests/unit/PipelineContractTests.cpp
@@ -1360,6 +1383,12 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
   # effects later): one frame per configuration through the real graph, printed
   # as SHA-256 so a build from before a change can be compared with one after it.
   add_executable(veyra_effect_slot_regression_tests tests/integration/EffectSlotRegressionTests.cpp)
+  # GPU quality / HDR / temporal / slot / tiled / timing checks of the anti-aliasing effect (#53).
+  add_executable(veyra_anti_alias_gpu_tests tests/integration/AntiAliasGpuTests.cpp)
+  target_compile_features(veyra_anti_alias_gpu_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_anti_alias_gpu_tests PRIVATE /utf-8)
+  target_compile_definitions(veyra_anti_alias_gpu_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_link_libraries(veyra_anti_alias_gpu_tests PRIVATE veyra_engine)
   target_compile_features(veyra_effect_slot_regression_tests PRIVATE cxx_std_20)
   target_compile_options(veyra_effect_slot_regression_tests PRIVATE /utf-8)
   target_compile_definitions(veyra_effect_slot_regression_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)

@@ -309,6 +309,10 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(double nrHoldTolerance READ nrHoldTolerance WRITE setNrHoldTolerance NOTIFY settingsChanged)
     Q_PROPERTY(bool videoHdr READ videoHdr WRITE setVideoHdr NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap videoHdrParams READ videoHdrParams NOTIFY videoHdrParamsChanged)
+    // Spatial anti-aliasing (#53): the list card edits the first instance, created
+    // on first use; node cards edit their own node by chain index.
+    Q_PROPERTY(bool antiAliasEnabled READ antiAliasEnabled WRITE setAntiAliasEnabled NOTIFY antiAliasChanged)
+    Q_PROPERTY(QVariantMap antiAliasParams READ antiAliasParams NOTIFY antiAliasChanged)
     // Custom: static HDR output tuning (globals, every field live).
     Q_PROPERTY(bool hdrCurve READ hdrCurve WRITE setHdrCurve NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap hdrCurveParams READ hdrCurveParams NOTIFY settingsChanged)
@@ -943,6 +947,12 @@ public:
     void syncHdrDisplayProfile();
     QVariantMap videoHdrParams() const;
     Q_INVOKABLE bool setVideoHdrParameter(const QString& key, double value);
+    bool antiAliasEnabled() const;
+    void setAntiAliasEnabled(bool enabled);
+    QVariantMap antiAliasParams() const;
+    Q_INVOKABLE QVariantMap antiAliasParamsAt(int index) const;
+    Q_INVOKABLE bool setAntiAliasParameter(const QString& key, double value);
+    Q_INVOKABLE bool setAntiAliasParameterAt(int index, const QString& key, double value);
     int nrStyle() const;
     void setNrStyle(int value);
     double nrIntensity() const;
@@ -1300,6 +1310,7 @@ signals:
     // labels or positions; only that group notifies (audit 2026-10-15 B1).
     void nrLayersChanged();
     void videoHdrParamsChanged();
+    void antiAliasChanged();
     void colourParamsChanged();
     void protectionChanged();
     void recentFilesChanged();

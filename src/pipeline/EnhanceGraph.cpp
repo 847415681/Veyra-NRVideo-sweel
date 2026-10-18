@@ -55,8 +55,9 @@ extern "C" {
 
 namespace veyra::pipeline {
 using diagnostics::GpuStage;
-static_assert(diagnostics::kTimedNrLayers==engine::kMaxNrInstances&&diagnostics::kTimedColorNodes==engine::kMaxColorInstances,
-              "every NR layer / Color instance needs its own node timing slot");
+static_assert(diagnostics::kTimedNrLayers==engine::kMaxNrInstances&&diagnostics::kTimedColorNodes==engine::kMaxColorInstances&&
+              diagnostics::kTimedAaNodes==engine::kMaxAntiAliasInstances,
+              "every NR layer / Color / anti-aliasing instance needs its own node timing slot");
 
 namespace {
 
@@ -344,7 +345,19 @@ bool EnhanceGraph::createNodeColorResources(){
     interNrColorOutputs_={};
     sourcePostPasses_.clear();preSrPasses_.clear();preNrPasses_.clear();tailPasses_.clear();
     for(auto& passes:interNrPasses_)passes.clear();
-    if(!desc_.fixedExecutionPlan)return true;
+    if(!desc_.fixedExecutionPlan){
+        // Graphs built without a compiled plan (the tiled full-resolution image
+        // path) run their enabled anti-aliasing instances at source size, in
+        // parameter order, like the list chain.
+        for(uint32_t parameter=0;parameter<desc_.antiAlias.size();++parameter){
+            if(!desc_.antiAlias[parameter].enabled)continue;
+            if(!createAntiAlias(parameter,srcW_,srcH_))return false;
+            sourcePostPasses_.push_back({engine::kMaxChainNodes,engine::EffectType::AntiAliasing,parameter,
+                antiAliasOutputs_[parameter].Get(),srcW_,srcH_,parameter});
+        }
+        if(!sourcePostPasses_.empty())sourcePostOutput_=sourcePostPasses_.back().output;
+        return true;
+    }
     const auto& plan=*desc_.fixedExecutionPlan;
     for(uint32_t i=0;i<plan.stepCount;++i){
         const auto& step=plan.steps[i];
@@ -353,7 +366,7 @@ bool EnhanceGraph::createNodeColorResources(){
         // Ingress: the fused / in-place grade of the input conversion (createColorResources).
         if(where==PassSlot::None||where==PassSlot::Ingress)continue;
         const auto parameter=step.parameterIndex;
-        SlotPass pass{i,step.type,parameter,nullptr};
+        SlotPass pass{i,step.type,parameter,nullptr,step.output.width,step.output.height,step.resourceIndex};
         if(step.type==engine::EffectType::Color){
             const auto& settings=parameter?desc_.additionalColors[parameter-1]:desc_.color;
             auto& instance=nodeColorInstances_[parameter];
@@ -377,6 +390,9 @@ bool EnhanceGraph::createNodeColorResources(){
             else if(where==PassSlot::InterNr)++interNrColorActiveCount_;
             else if(where==PassSlot::SourcePost)++sourcePostColorActiveCount_;
             else ++tailColorActiveCount_;
+        }else if(step.type==engine::EffectType::AntiAliasing&&parameter<antiAliasPasses_.size()){
+            if(!createAntiAlias(parameter,step.output.width,step.output.height))return false;
+            pass.output=antiAliasOutputs_[parameter].Get();
         }else{
             veyra::log::error("graph",std::format("no executor for same-size {} step={}",engine::effectTypeName(step.type),i));
             return false;
@@ -395,29 +411,40 @@ bool EnhanceGraph::createNodeColorResources(){
     return true;
 }
 
+bool EnhanceGraph::createAntiAlias(uint32_t parameter,uint32_t width,uint32_t height){
+    auto& pass=antiAliasPasses_[parameter];
+    pass=std::make_unique<AntiAliasPass>();
+    antiAliasOutputs_[parameter]=makeTexture(context_.device(),width,height,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
+    const bool created=antiAliasOutputs_[parameter]&&pass->initialize(context_.device(),desc_.antiAlias[parameter],width,height);
+    if(created)veyra::log::info("anti-alias",std::format("instance={} {} extent={}x{} hdr={}",parameter,pass->describe(),width,height,desc_.hdrWorking()));
+    else veyra::log::error("anti-alias",std::format("instance={} {} extent={}x{}: creation failed",parameter,pass->describe(),width,height));
+    return created;
+}
+
 // Binds one slot's passes in plan order: each reads the previous output.
 ID3D12Resource* EnhanceGraph::chainSlotViews(const std::vector<SlotPass>& passes,ID3D12Resource* input,const char* where){
-    const auto& plan=*desc_.fixedExecutionPlan;
     for(const auto& pass:passes){
-        const auto& step=plan.steps[pass.step];
         if(pass.type==engine::EffectType::Color)nodeColorInstances_[pass.parameter]->createViews(context_.device(),stager_,input,pass.output);
+        else if(pass.type==engine::EffectType::AntiAliasing)antiAliasPasses_[pass.parameter]->createViews(context_.device(),stager_,input,pass.output);
         input=pass.output;
         veyra::log::info("node-dispatch",std::format("{} {} step={} parameter={} resource={} input={}x{} output={}x{}",
-            where,engine::effectTypeName(pass.type),pass.step,pass.parameter,step.resourceIndex,step.input.width,step.input.height,step.output.width,step.output.height));
+            where,engine::effectTypeName(pass.type),pass.step,pass.parameter,pass.resource,pass.width,pass.height,pass.width,pass.height));
     }
     return input;
 }
 
-bool EnhanceGraph::dispatchSlotPasses(ID3D12GraphicsCommandList* list,const std::vector<SlotPass>& passes,unsigned slot,const char* where,bool log){
-    const auto& plan=*desc_.fixedExecutionPlan;
+bool EnhanceGraph::dispatchSlotPasses(ID3D12GraphicsCommandList* list,const std::vector<SlotPass>& passes,unsigned slot,const char* where,bool log,bool reset){
     for(const auto& pass:passes){
-        const auto& step=plan.steps[pass.step];
         if(pass.type==engine::EffectType::Color){
             gpuTimer_.mark(list,diagnostics::colorNodeStage(pass.parameter));
-            if(!nodeColorInstances_[pass.parameter]->dispatch(list,tracker_,slot,step.output.width,step.output.height,desc_.hdrWorking()))return false;
+            if(!nodeColorInstances_[pass.parameter]->dispatch(list,tracker_,slot,pass.width,pass.height,desc_.hdrWorking()))return false;
             gpuTimer_.mark(list,diagnostics::colorNodeStage(pass.parameter),true);
+        }else if(pass.type==engine::EffectType::AntiAliasing){
+            gpuTimer_.mark(list,diagnostics::aaNodeStage(pass.parameter));
+            if(!antiAliasPasses_[pass.parameter]->dispatch(list,tracker_,desc_.hdrWorking(),reset))return false;
+            gpuTimer_.mark(list,diagnostics::aaNodeStage(pass.parameter),true);
         }
-        if(log)veyra::log::info("node-dispatch",std::format("recorded {} {} step={} parameter={} resource={}",where,engine::effectTypeName(pass.type),pass.step,pass.parameter,step.resourceIndex));
+        if(log)veyra::log::info("node-dispatch",std::format("recorded {} {} step={} parameter={} resource={}",where,engine::effectTypeName(pass.type),pass.step,pass.parameter,pass.resource));
     }
     return true;
 }
@@ -2366,7 +2393,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     if (desc_.stageMark) desc_.stageMark("yuv");
     cpuTrace.mark("color");
     if(!sourcePostPasses_.empty()){
-        if(!dispatchSlotPasses(list,sourcePostPasses_,slot,"source-size",!sourcePostExecutionLogged_))return false;
+        if(!dispatchSlotPasses(list,sourcePostPasses_,slot,"source-size",!sourcePostExecutionLogged_,reset))return false;
         tracker_.transition(list,sourcePostOutput_,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         sourcePostExecutionLogged_=true;
         if (desc_.stageMark) desc_.stageMark("source-size-pass");
@@ -2603,7 +2630,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     const auto& passes=beforeSr?preSrPasses_:preNrPasses_;
     if(!passes.empty()){
         auto& logged=beforeSr?preSrColorExecutionLogged_:preNrColorExecutionLogged_;
-        if(!dispatchSlotPasses(list,passes,slot,beforeSr?"pre-SR":"pre-NR",!logged))return false;
+        if(!dispatchSlotPasses(list,passes,slot,beforeSr?"pre-SR":"pre-NR",!logged,reset))return false;
         if(desc_.stageMark)desc_.stageMark(beforeSr?"pre-sr-color":"pre-nr-color");
         logged=true;
     }
@@ -2696,7 +2723,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             const uint32_t sourceW=layer->fullWidth(),sourceH=layer->fullHeight();
             if ((layer->handle() == nullptr && !layer->amd) || !layer->enabled) continue;
             if(size_t(layerIndex)<interNrPasses_.size()&&!interNrPasses_[layerIndex].empty()){
-                if(!dispatchSlotPasses(list,interNrPasses_[layerIndex],slot,"inter-NR",!interNrColorExecutionLogged_))return false;
+                if(!dispatchSlotPasses(list,interNrPasses_[layerIndex],slot,"inter-NR",!interNrColorExecutionLogged_,reset))return false;
                 if(desc_.stageMark)desc_.stageMark("inter-nr-color");
             }
             const uint32_t nrW=layer->width(),nrH=layer->height();
@@ -2906,7 +2933,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     if(!desc_.splitNrAcrossSr()&&!runBoundaryColor(true))return false;
     if(desc_.nrBeforeSr&&!desc_.splitNrAcrossSr()&&!runSr())return false;
     if(!tailPasses_.empty()){
-        if(!dispatchSlotPasses(list,tailPasses_,slot,"tail",!tailColorExecutionLogged_))return false;
+        if(!dispatchSlotPasses(list,tailPasses_,slot,"tail",!tailColorExecutionLogged_,reset))return false;
         if(desc_.stageMark)desc_.stageMark("tail-color");
         tailColorExecutionLogged_=true;
         cpuTrace.mark("tailColor");
@@ -3295,6 +3322,7 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
         }
     }
     desc_.antiAlias=nextNr.antiAlias;
+    for(size_t i=0;i<antiAliasPasses_.size();++i)if(antiAliasPasses_[i])antiAliasPasses_[i]->refresh(desc_.antiAlias[i]);
     desc_.contentRate=s.content;desc_.model=s.model;desc_.residual=s.residual;desc_.protection=s.protection;desc_.settingsRevision=s.revision;
     desc_.nrHoldStrength=s.nrHoldStrength;desc_.nrHoldTolerance=s.nrHoldTolerance;
     desc_.nrLayersModel=std::move(nextNr.nrLayersModel);
@@ -3521,6 +3549,8 @@ void EnhanceGraph::shutdown()
     nodeColorOutputs_={};tailColorActiveCount_=preNrColorActiveCount_=preSrColorActiveCount_=interNrColorActiveCount_=sourcePostColorActiveCount_=0;
     sourcePostPasses_.clear();preSrPasses_.clear();preNrPasses_.clear();tailPasses_.clear();
     for(auto& passes:interNrPasses_)passes.clear();
+    for(auto& pass:antiAliasPasses_)pass.reset();
+    antiAliasOutputs_={};
     sourcePostOutput_=nullptr;
     preSrColorOutput_=nullptr;preSrColorExecutionLogged_=false;
     interNrColorOutputs_={};interNrColorExecutionLogged_=false;
