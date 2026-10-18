@@ -32,6 +32,7 @@ def audit_amd_source(directory):
         assert amd['upstream'] == '4764e4f1a24f5234b8e29952dc41f493b2d77c90'
         assert amd['archiveSha256'] == 'cf812fe7909fbd53b38f54da8abd584698525f81f7ea71cab19ba14bab48e030'
         assert amd['smallWeightFiles'] == 93 and amd['hipModules'] == 80
+        assert AMD_044_RUNTIME_IDS.keys() <= {row['path'] for row in amd['files']}
         for name, digest in AMD_044_RUNTIME_IDS.items():
             assert pkg.digest(directory / name) == digest, name
     else:
@@ -83,6 +84,9 @@ def check_vendor(stage, flavor):
                                      'runtime/experimental/fallback-dlssg', 'runtime/experimental/dlssg-kernels/',
                                      'runtime/experimental/dlssg-lite/')) for n in names)
         assert 'runtime/amd-nr/LmxxfNrRuntime.dll' in names
+        metadata = stage / 'runtime/amd-nr/runtime-manifest.json'
+        if metadata.exists() and json.loads(metadata.read_text(encoding='utf8')).get('version') == '0.44':
+            assert 'runtime/amd-nr/LmxxfNrRuntime-Original.dll' in names
         assert 'runtime_local/amd/fidelityfx/amd_fidelityfx_framegeneration_dx12.dll' in names
     assert not any(Path(n).name.lower() in {'nvcuda.dll', 'nvopticalflow64.dll', 'amdhip64.dll', 'amdhip64_6.dll', 'amdhip64_7.dll'} for n in names)
     manifest = json.loads((stage / 'release-runtime-manifest.json').read_text(encoding='utf8'))
