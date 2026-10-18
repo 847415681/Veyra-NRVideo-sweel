@@ -15,7 +15,7 @@ using Logger=void(*)(const char*,char*);Logger logger=nullptr;
 struct Graph {AudioDealer* dealer=nullptr;std::atomic<bool> stop=false;std::thread thread;};
 Graph*& graph(void* self){return *reinterpret_cast<Graph**>(self);}
 void trace(const char* format,...){va_list args;va_start(args,format);if(logger)logger(format,args);va_end(args);}
-void apartment(){APTTYPE type;APTTYPEQUALIFIER qualifier;sta=sta&&SUCCEEDED(CoGetApartmentType(&type,&qualifier))&&type==APTTYPE_STA;}
+void apartment(){APTTYPE type;APTTYPEQUALIFIER qualifier;sta=sta&&SUCCEEDED(CoGetApartmentType(&type,&qualifier))&&(type==APTTYPE_STA||type==APTTYPE_MAINSTA);}
 }
 extern "C" {
 __declspec(dllexport) void FakeMode(const wchar_t* value){mode=value;starts=stops=callbacks=live=0;sta=true;}
