@@ -4,6 +4,12 @@
 
 基于AMD0.44 f6c4fd9开codex/fullscreen-input-20261018，不改main/Claude树。基线独立GTA4K真实点击已复现按钮全屏后立刻pause，Qt BlankCursor请求后实际指针仍可见；日志logs/fullscreen-input-20261018/baseline。按下时记录画面归属，原生HWND同步Qt隐藏策略且尊重浮层区域；不加Timer/重绘、不改33ms/250ms。计划FULLSCREEN_INPUT_PLAN_2026-10-18.md。首次文档patch因WORKLOG标题匹配错误失败，原子回退该文档patch，正确标题重施；无产品数据影响。接下来独立构建/定向回归/实际鼠标验收，无发布授权。
 
+### 2026-10-18 全屏输入修复完成
+
+代码33ec229/2065efb，5目标从零258.6秒、最终增量17.6秒构建通过。首次Quick缺Qt模块为staging漏拷，修正后最终82Quick/384布局/18D3D12几何/2449翻译通过。真实点击证明专业模式播放/暂停两态全屏无误切换，补齐双击退出时第二tap的几何误判后，两态双击保持原状态。极简静止/活动、暂停、Home、锁定/解锁及软件UI实测通过；系统GetCursorInfo在实际视频区域隐藏false/showing恢复true，不能只看Qt请求值。
+
+命令与失败记录见FULLSCREEN_INPUT_REPORT_2026-10-18.md；工具在E:/项目/Veyra/tmp/fullscreen-input-20261018/{build,stage,checks,launch,verify}.py，最终logs/.../checks-153313、gpu-pro-153358、software-min-153508，reports/.../final.json核验源/构建/5EXE/2014依赖及main26c0d61。生产只改2文件，Timer数量及33ms/250ms保持，无媒体/效果/调度修改，无NR性能收益宣称。所有测试实例正常退出；本轮未写Claude/旧脏树、未合main/push/发布/关机，未验实卡/串流/混合DPI与Esc工具输入如实保留边界。
+
 ## 2026-10-17 采集格式与旧版入口（Linux 源码候选）
 
 按用户“全部修复掉，再添加老版本采集格式选择入口”，在窗口修复 1295d6b 之上隔离实施 `codex/capture-format-fixes-20261017`。修复 DirectShow 能力回退、尺寸/帧率范围候选、±1 tick 显示分组漏掉像素项、精确媒体类型恢复与连接校验；增加可搜索虚拟化旧版组合列表、自定义尺寸检查和查询错误诊断。原低延迟回调/队列、BMD 原生、增强/音频/渲染/运行库与配置保持。详见 docs/CAPTURE_FORMAT_FIXES_2026-10-17.md。
