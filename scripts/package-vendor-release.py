@@ -20,8 +20,8 @@ spec.loader.exec_module(pkg)
 VFG_KEEP = {'cudart64_12.dll', 'NVCVImage.dll', 'nvngxruntime.dll', 'NVVideoEffects.dll', 'nvVFXVideoFrameGeneration.dll'}
 AMD_RUNTIME_SHA = '2693cdb760db564ec6f34b39b8a7e554d35cbab5df2366bff030e1611756e3d8'
 AMD_044_RUNTIME_IDS = {
-    'LmxxfNrRuntime.dll': '27210f49e977d6a0391822d8d3cb04cb837ce5aaffa78ed76f3b7462cc93e615',
-    'LmxxfNrRuntime-Original.dll': '924c772c05c46b326619e4cc337ab4c6ab8eef36ad607e12a136446e10f2a4ec',
+    'LmxxfNrRuntime.dll': 'be83772a75f317a5243d4c67a0e09d0e6c6bb9b687a07f2af866bd43911867c2',
+    'LmxxfNrRuntime-Original.dll': 'dbeb6dea7afcac922d5c2cce83d96e5c42b27d165967b171be21482c40d6af68',
 }
 
 
