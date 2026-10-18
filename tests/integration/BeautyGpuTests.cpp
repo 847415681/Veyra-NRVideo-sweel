@@ -313,6 +313,26 @@ struct Gpu {
         D3D12_RANGE empty{}; readback->Unmap(0, &empty);
         return true;
     }
+    // The face outlines after the last frame: 8 slots x 128 float2 (BeautyFaces.hlsli kShape*).
+    bool readShapes(std::vector<float>& shapes) {
+        auto* buffer = graph->beautyShapesBuffer();
+        constexpr UINT64 bytes = 8 * 128 * 8;
+        auto readback = buffer ? readbackBuffer(bytes) : nullptr;
+        Status st = Status::Ok; const auto slot = ring.slotCount() - 1; auto* list = readback ? ring.acquire(slot, st) : nullptr;
+        if (!list) return false;
+        D3D12_RESOURCE_BARRIER b{}; b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        b.Transition = {buffer, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE};
+        list->ResourceBarrier(1, &b);
+        list->CopyBufferRegion(readback.Get(), 0, buffer, 0, bytes);
+        std::swap(b.Transition.StateBefore, b.Transition.StateAfter); list->ResourceBarrier(1, &b);
+        if (!ring.submitAndSignal(slot) || !ring.waitIdle()) return false;
+        void* data = nullptr; D3D12_RANGE range{0, SIZE_T(bytes)};
+        if (FAILED(readback->Map(0, &range, &data))) return false;
+        shapes.resize(bytes / 4);
+        std::memcpy(shapes.data(), data, size_t(bytes));
+        D3D12_RANGE empty{}; readback->Unmap(0, &empty);
+        return true;
+    }
     std::optional<double> stageMs(diagnostics::GpuStage stage) {
         const auto m = graph->gpuMetrics();
         const auto& s = m.gpu[size_t(stage)];
@@ -671,6 +691,176 @@ int trackingMotionCase() {
     return finish(*gpu, "tracking-motion");
 }
 
+// --- face mesh -------------------------------------------------------------------
+// MediaPipe face_mesh_connections (v0.8.9) as closed outlines, as BeautyMeshDecode.hlsl:
+// contour 36, lips 20, left eye 16, right eye 16, left brow 10, right brow 10.
+constexpr int kOutline[108] = {
+    10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149,
+    150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
+    61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185,
+    263, 249, 390, 373, 374, 380, 381, 382, 362, 398, 384, 385, 386, 387, 388, 466,
+    33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246,
+    276, 283, 282, 295, 285, 336, 296, 334, 293, 300,
+    46, 53, 52, 65, 55, 107, 66, 105, 63, 70};
+constexpr int kOutlineFirst[6] = {0, 36, 56, 72, 88, 98}, kOutlineCount[6] = {36, 20, 16, 16, 10, 10};
+using Point = std::array<double, 2>;
+// The reference points of one face (scripts/beauty/facemesh-reference.py), picture pixels.
+bool loadMesh(const std::string& stem, int index, std::vector<Point>& points) {
+    std::ifstream in(gRefs / "mesh" / (stem + "-" + std::to_string(index)) / "landmarks.txt");
+    points.clear();
+    Point p;
+    while (in >> p[0] >> p[1]) points.push_back(p);
+    return points.size() == 468;
+}
+std::vector<Point> outline(const std::vector<Point>& points, int part) {
+    std::vector<Point> out;
+    for (int k = 0; k < kOutlineCount[part]; ++k) out.push_back(points[size_t(kOutline[kOutlineFirst[part] + k])]);
+    return out;
+}
+// Signed distance (negative inside) from a pixel centre to a closed outline.
+double outlineDistance(const std::vector<Point>& poly, double px, double py) {
+    double best = 1e30; bool inside = false;
+    for (size_t i = 0, j = poly.size() - 1; i < poly.size(); j = i++) {
+        const auto& a = poly[i]; const auto& b = poly[j];
+        const double ex = b[0] - a[0], ey = b[1] - a[1], wx = px - a[0], wy = py - a[1];
+        const double s = std::clamp((wx * ex + wy * ey) / std::max(ex * ex + ey * ey, 1e-12), 0.0, 1.0);
+        best = std::min(best, std::hypot(wx - ex * s, wy - ey * s));
+        if ((a[1] > py) != (b[1] > py) && px < ex * (py - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
+    }
+    return inside ? -best : best;
+}
+double outlineWidth(const std::vector<Point>& poly) {
+    double lo = 1e30, hi = -1e30;
+    for (const auto& p : poly) { lo = std::min(lo, p[0]); hi = std::max(hi, p[0]); }
+    return hi - lo;
+}
+
+// The graph's outlines against the reference points: the network in the real
+// pipeline (crop from the tracked box, decode, outline gathering).
+int meshLandmarksCase() {
+    double worstMean = 0, worstMax = 0;
+    int pictures = 0;
+    for (const char* stem : {"lena", "astronaut", "gta-f040", "gta-f052"}) {
+        Picture p;
+        std::vector<Point> reference;
+        if (!loadPicture(stem, p) || !loadMesh(stem, 0, reference)) { check(false, std::string("mesh-landmarks: references for ") + stem); continue; }
+        AVFrame* frame = rgbaFrame(p.image);
+        auto gpu = std::make_unique<Gpu>();
+        sink::RgbaImage out;
+        std::vector<float> shapes;
+        const bool ok = frame && gpu->start(withBeauty(restoreNode()), p.image.width, p.image.height, false) && gpu->render(frame, true, out) &&
+                        gpu->readShapes(shapes);
+        av_frame_free(&frame);
+        check(ok && shapes[0] > 0.5f, std::string("mesh-landmarks: ") + stem + " has a usable mesh");
+        if (!ok || shapes[0] <= 0.5f) continue;
+        const double width = outlineWidth(outline(reference, 0));
+        double sum = 0, worst = 0;
+        for (int k = 0; k < 108; ++k) {
+            const double x = shapes[size_t(8 + k) * 2] * p.image.width, y = shapes[size_t(8 + k) * 2 + 1] * p.image.height;
+            const auto& r = reference[size_t(kOutline[k])];
+            const double e = std::hypot(x - r[0], y - r[1]) / width;
+            sum += e; worst = std::max(worst, e);
+        }
+        std::printf("METRIC case=mesh-landmarks picture=%s faceWidthPx=%.1f meshScore=%.3f meanError=%.4f maxError=%.4f (face widths)\n", stem,
+                    width, shapes[1], sum / 108, worst);
+        worstMean = std::max(worstMean, sum / 108); worstMax = std::max(worstMax, worst);
+        ++pictures;
+        if (!gpu->debug) continue;
+        check(gpu->debugErrors() == 0, std::string("mesh-landmarks: D3D12 debug layer for ") + stem);
+    }
+    check(pictures == 4, "mesh-landmarks: every picture ran");
+    check(worstMean < 0.025, "mesh-landmarks: outline points within 2.5% of the face width on average");
+    check(worstMax < 0.08, "mesh-landmarks: every outline point within 8% of the face width");
+    return failures ? 1 : 0;
+}
+
+// Full face restore under a grade follows the face contour: the original inside it,
+// the graded picture outside it - also where the old oval reached (hair, hat brim).
+int meshContourCase() {
+    Picture p;
+    std::vector<Point> reference;
+    check(loadPicture("lena", p) && loadMesh("lena", 0, reference), "mesh-contour: picture and reference points");
+    AVFrame* frame = rgbaFrame(p.image);
+    auto gpu = std::make_unique<Gpu>();
+    sink::RgbaImage original, grade, restored;
+    const BeautySettings node = restoreNode(1.0f);
+    bool ok = frame && gpu->start(engine::EnhancementSettings{}, p.image.width, p.image.height, false) && gpu->render(frame, true, original) &&
+              gpu->start(graded({}), p.image.width, p.image.height, false) && gpu->render(frame, true, grade) &&
+              gpu->start(graded(withBeauty(node)), p.image.width, p.image.height, false) && gpu->render(frame, true, restored);
+    av_frame_free(&frame);
+    check(ok, "mesh-contour: ungraded, graded and graded + restore graphs run");
+    if (!ok) return finish(*gpu, "mesh-contour");
+    const auto contour = outline(reference, 0);
+    const Face& f = p.faces[0];
+    const double width = f.w;      // the node's unit: the detector's box width
+    const double grow = node.regionExpand * width, soft = std::max(node.feather * width, 1.5);
+    const double tolerance = 0.03 * width + 2.0;   // the graph's points against the reference ones
+    const auto inside = compare(restored, original, [&](unsigned x, unsigned y) {
+        return outlineDistance(contour, x + 0.5, y + 0.5) < grow - soft / 2 - tolerance;
+    });
+    const auto outside = compare(restored, grade, [&](unsigned x, unsigned y) {
+        return outlineDistance(contour, x + 0.5, y + 0.5) > grow + soft / 2 + tolerance;
+    });
+    // Where the oval from the box (Beauty.hlsli BeautyFaceOval, the mask before the mesh) restored
+    // at least half way, but the contour does not reach.
+    const double ex = f.lm[2] - f.lm[0], ey = f.lm[3] - f.lm[1], el = std::max(std::hypot(ex, ey), 1e-9);
+    const double rc = (ex < 0 ? -ex : ex) / el, rs = (ex < 0 ? -ey : ey) / el;
+    const double ocx = f.x + f.w / 2 + rs * 0.06 * f.h, ocy = f.y + f.h / 2 - rc * 0.06 * f.h;
+    const double ax = f.w / 2 * (1.0 + node.regionExpand), ay = f.h / 2 * 1.12 * (1.0 + node.regionExpand);
+    const auto oldOval = [&](unsigned x, unsigned y) {
+        const double dx = x + 0.5 - ocx, dy = y + 0.5 - ocy;
+        const double u = dx * rc + dy * rs, v = -dx * rs + dy * rc;
+        return std::hypot(u / ax, v / ay) < 1.0;
+    };
+    const auto between = compare(restored, grade, [&](unsigned x, unsigned y) {
+        return oldOval(x, y) && outlineDistance(contour, x + 0.5, y + 0.5) > grow + soft / 2 + tolerance;
+    });
+    std::printf("METRIC case=mesh-contour insidePixels=%zu insideDiffering=%zu outsidePixels=%zu outsideDiffering=%zu ovalOnlyPixels=%zu ovalOnlyDiffering=%zu\n",
+                inside.pixels, inside.differing, outside.pixels, outside.differing, between.pixels, between.differing);
+    check(inside.pixels > 5000 && inside.differing == 0, "mesh-contour: inside the face contour the picture is the ungraded original");
+    check(outside.pixels > 5000 && outside.differing == 0, "mesh-contour: outside the contour the graded picture is untouched");
+    check(between.pixels > 500 && between.differing == 0, "mesh-contour: hair and background the old oval covered keep the grade");
+    save("mesh-contour-restored", restored);
+    return finish(*gpu, "mesh-contour");
+}
+
+// Smoothing leaves the eyes, brows and lips exactly as they were and still smooths the skin.
+int meshFeaturesCase() {
+    Picture p;
+    std::vector<Point> reference;
+    check(loadPicture("lena", p) && loadMesh("lena", 0, reference), "mesh-features: picture and reference points");
+    AVFrame* frame = rgbaFrame(p.image);
+    auto gpu = std::make_unique<Gpu>();
+    sink::RgbaImage plain, smoothed;
+    bool ok = frame && gpu->start(engine::EnhancementSettings{}, p.image.width, p.image.height, false) && gpu->render(frame, true, plain) &&
+              gpu->start(withBeauty(strongNode()), p.image.width, p.image.height, false) && gpu->render(frame, true, smoothed);
+    av_frame_free(&frame);
+    check(ok, "mesh-features: plain and smoothing graphs run");
+    if (!ok) return finish(*gpu, "mesh-features");
+    // The graph's points are within 1% of the face width of the reference ones (mesh-landmarks).
+    const double width = p.faces[0].w, tolerance = 0.012 * width + 1.0;
+    std::vector<std::vector<Point>> features;
+    for (int part = 1; part < 6; ++part) features.push_back(outline(reference, part));
+    const auto inFeature = [&](unsigned x, unsigned y) {
+        for (const auto& poly : features) if (outlineDistance(poly, x + 0.5, y + 0.5) < -tolerance) return true;
+        return false;
+    };
+    const auto kept = compare(smoothed, plain, inFeature);
+    const auto contour = outline(reference, 0);
+    const auto skin = [&](unsigned x, unsigned y) {
+        if (outlineDistance(contour, x + 0.5, y + 0.5) > -0.08 * width) return false;
+        for (const auto& poly : features) if (outlineDistance(poly, x + 0.5, y + 0.5) < 0.06 * width) return false;
+        return true;
+    };
+    const double before = texture(plain, skin), after = texture(smoothed, skin);
+    std::printf("METRIC case=mesh-features featurePixels=%zu featureDiffering=%zu skinTexture=%.3f->%.3f (%.1f%%)\n", kept.pixels, kept.differing,
+                before, after, 100.0 * (after / std::max(before, 1e-9) - 1.0));
+    check(kept.pixels > 400 && kept.differing == 0, "mesh-features: eyes, brows and lips are not smoothed at all");
+    check(after < before * 0.92, "mesh-features: the skin between them is still smoothed");
+    save("mesh-features-smoothed", smoothed);
+    return finish(*gpu, "mesh-features");
+}
+
 int noModelCase() {
     Picture p;
     check(loadPicture("lena", p), "no-model: picture");
@@ -797,6 +987,9 @@ std::vector<Case> cases() {
     c.push_back({"hdr", [] { return hdrCase(); }});
     c.push_back({"tracking", [] { return trackingCase(); }});
     c.push_back({"tracking-motion", [] { return trackingMotionCase(); }});
+    c.push_back({"mesh-landmarks", [] { return meshLandmarksCase(); }});
+    c.push_back({"mesh-contour", [] { return meshContourCase(); }});
+    c.push_back({"mesh-features", [] { return meshFeaturesCase(); }});
     c.push_back({"no-model", [] { return noModelCase(); }});
     c.push_back({"tune", [] { return tuneCase(); }});
     c.push_back({"timing-1080p", [] { return timingCase("timing-1080p", 1920, 1080); }});

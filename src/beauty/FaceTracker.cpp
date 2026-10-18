@@ -61,7 +61,9 @@ bool FaceTracker::initialize(ID3D12Device* device, const std::filesystem::path& 
     }
     faces_ = makeBuffer(device, kFaceEntries * kFaceBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
                         D3D12_RESOURCE_STATE_COMMON);
-    if (!faces_) { error = "face buffer allocation failed"; shutdown(); return false; }
+    shapes_ = makeBuffer(device, FaceMeshGpu::kShapeBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                         D3D12_RESOURCE_STATE_COMMON);
+    if (!faces_ || !shapes_) { error = "face buffer allocation failed"; shutdown(); return false; }
     D3D12_DESCRIPTOR_HEAP_DESC sd{};
     sd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; sd.NumDescriptors = 1; sd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     if (FAILED(device->CreateDescriptorHeap(&sd, IID_PPV_ARGS(&staging_)))) { error = "face tracker descriptor heap failed"; shutdown(); return false; }
@@ -95,6 +97,12 @@ bool FaceTracker::initialize(ID3D12Device* device, const std::filesystem::path& 
     pending_.assign(ringSlots, false);
     slots_ = ringSlots;
     ready_ = true;
+    // The face mesh is optional: without it every face keeps the oval from its box.
+    std::string meshError;
+    meshReady_ = mesh_.initialize(device, locateFaceMeshModel(), faces_.Get(), shapes_.Get(), ringSlots, meshError);
+    shapesClear_ = makeBuffer(device, FaceMeshGpu::kShapeBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON);
+    meshReady_ = meshReady_ && shapesClear_;
+    if (!meshReady_) log::warn("beauty-mesh", "face mesh unavailable (" + meshError + "); faces keep the oval from their box");
     log::info("beauty-detect", std::format("face tracker ready: {}; model {}; slots {}", detector_.modelDescription(),
                                            model.filename().string(), ringSlots));
     return true;
@@ -102,6 +110,10 @@ bool FaceTracker::initialize(ID3D12Device* device, const std::filesystem::path& 
 
 void FaceTracker::shutdown()
 {
+    mesh_.shutdown();
+    shapes_.Reset();
+    shapesClear_.Reset();
+    meshReady_ = meshCleared_ = false;
     detector_.shutdown();
     track_ = {};
     staging_.Reset();
@@ -172,6 +184,29 @@ bool FaceTracker::record(ID3D12GraphicsCommandList* list, pipeline::StateTracker
     list->CopyBufferRegion(readbacks_[f.slot].Get(), 0, faces_.Get(), 0, kFaceBytes);
     tracker.transition(list, faces_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     pending_[f.slot] = true;
+    // The outlines of this frame's tracks, smoothed like the tracks themselves. While the
+    // status of the last frames reports no face, the mesh's ~45 dispatches would find
+    // only empty slots: its outlines are cleared once instead, and a face that appears
+    // meanwhile keeps the oval from its box until the mesh runs again (a few frames,
+    // during its fade-in). Resets and pictures always run it.
+    const bool meshWanted = f.reset || f.still || faceCount_ > 0 || detections_ <= slots_;
+    if (meshReady_ && detect && !meshWanted && !meshCleared_) {
+        tracker.transition(list, shapes_.Get(), D3D12_RESOURCE_STATE_COPY_DEST);
+        tracker.transition(list, shapesClear_.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
+        list->CopyBufferRegion(shapes_.Get(), 0, shapesClear_.Get(), 0, FaceMeshGpu::kShapeBytes);
+        tracker.transition(list, shapes_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        meshCleared_ = true;
+    }
+    if (meshReady_ && detect && meshWanted) {
+        meshCleared_ = false;
+        FaceMeshGpu::Frame m;
+        m.source = f.source; m.width = f.width; m.height = f.height; m.hdr = f.hdr; m.slot = f.slot;
+        m.maxFaces = detection_.maxFaces; m.dtMs = float(dt); m.reset = f.reset; m.still = f.still;
+        m.restCutoff = 3.0f + (0.3f - 3.0f) * stability;
+        m.speedFactor = 20.0f + (6.0f - 20.0f) * stability;
+        m.speedCutoff = 4.0f;
+        if (!mesh_.record(list, tracker, m)) log::warn("beauty-mesh", "face mesh could not be recorded for this frame");
+    }
     if (!sameFrame) { lastPts_ = f.ptsMs; lastFrameId_ = f.frameId; }
     haveFrame_ = true;
     return true;

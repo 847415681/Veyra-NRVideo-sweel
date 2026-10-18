@@ -732,6 +732,8 @@ public:
     uint64_t beautyDetections() const { return faceTracker_?faceTracker_->detections():0; }
     // Tests: the tracked faces (non-pixel SRV state between frames).
     ID3D12Resource* beautyFacesBuffer() const { return beautyNodesActive_?beautyFaces():nullptr; }
+    ID3D12Resource* beautyShapesBuffer() const { return beautyNodesActive_?beautyShapes():nullptr; }
+    bool beautyMeshReady() const { return faceTracker_&&faceTracker_->meshReady(); }
     // True when the colour stage exists in this graph (master switch on and not
     // neutral). The encoder uses it to dither its 8/10-bit conversion output.
     bool colorGradeActive() const { return colorActive_||additionalColorActiveCount_!=0||tailColorActiveCount_!=0||preNrColorActiveCount_!=0||preSrColorActiveCount_!=0||interNrColorActiveCount_!=0||sourcePostColorActiveCount_!=0; }
@@ -945,6 +947,7 @@ private:
     bool createBeauty(uint32_t parameter,uint32_t width,uint32_t height);
     bool createBeautyShared();
     ID3D12Resource* beautyFaces() const { return faceTracker_&&faceTracker_->ready()?faceTracker_->faces():beautyFacesFallback_.Get(); }
+    ID3D12Resource* beautyShapes() const { return faceTracker_&&faceTracker_->ready()?faceTracker_->shapes():beautyShapesFallback_.Get(); }
     bool beautyRestoreRequested() const {
         for(const auto& b:desc_.beauty)if(b.restoreActive())return true;
         return false;
@@ -957,7 +960,7 @@ private:
     // Re-points one slot pass at a new input (chainSlotViews, NR bypass).
     void bindSlotPassInput(const SlotPass& pass,ID3D12Resource* input);
     std::unique_ptr<beauty::FaceTracker> faceTracker_;
-    ComPtr<ID3D12Resource> beautyOriginal_,beautyFacesFallback_;
+    ComPtr<ID3D12Resource> beautyOriginal_,beautyFacesFallback_,beautyShapesFallback_;
     ID3D12Resource* beautyOriginalSource_=nullptr;
     bool beautyNodesActive_=false,beautyOriginalValid_=false,beautyDetectFailureLogged_=false;
     std::wstring beautyNotice_;

@@ -1,4 +1,5 @@
 #pragma once
+#include "veyra/beauty/FaceMeshGpu.h"
 #include "veyra/beauty/YuNetGpu.h"
 #include "veyra/engine/BeautySettings.h"
 #include "veyra/pipeline/GpuPassUtils.h"
@@ -14,7 +15,8 @@ namespace veyra::beauty {
 std::filesystem::path locateFaceModel();
 
 // Faces for every beauty node of one graph: the YuNet detector on every new frame,
-// before any effect, followed by the GPU tracking pass (shaders/BeautyTrack.hlsl).
+// before any effect, followed by the GPU tracking pass (shaders/BeautyTrack.hlsl)
+// and the face mesh of every track (FaceMeshGpu: contour, eyes, brows, lips).
 // All of it is recorded into the frame's own command list; the node passes read the
 // faces buffer later in the same frame, so the faces belong to that frame. Only a
 // 64-byte status header is read back, a few frames late, for the UI.
@@ -39,6 +41,10 @@ public:
     // Detection when due, then tracking. Leaves the faces buffer in the non-pixel SRV state.
     bool record(ID3D12GraphicsCommandList* list, pipeline::StateTracker& tracker, const Frame& frame);
     ID3D12Resource* faces() const { return faces_.Get(); }
+    // Face outlines (FaceMeshGpu layout); all "no mesh" when the mesh model is missing.
+    ID3D12Resource* shapes() const { return shapes_.Get(); }
+    bool meshReady() const { return meshReady_; }
+    const std::string& meshDescription() const { return mesh_.description(); }
     // Reads the status this slot carried last time (its fence has completed when the ring hands the slot out).
     void collect(uint32_t slot);
     uint32_t faceCount() const { return faceCount_; }
@@ -50,6 +56,9 @@ public:
 
 private:
     YuNetGpu detector_;
+    FaceMeshGpu mesh_;
+    pipeline::ComPtr<ID3D12Resource> shapes_, shapesClear_;
+    bool meshReady_ = false, meshCleared_ = false;
     pipeline::ComputePass track_;
     pipeline::ComPtr<ID3D12DescriptorHeap> staging_;
     pipeline::ComPtr<ID3D12Resource> faces_;

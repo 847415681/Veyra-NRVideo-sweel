@@ -13,6 +13,7 @@
 //           detector size: faces must overlap the reference.
 // timing  : (--timing) GPU milliseconds per layer kind at 320 / 512 / 640 wide.
 // VEYRA_BEAUTY_GPU_DEBUG=1 enables the D3D12 debug layer and fails on its errors.
+#include "veyra/beauty/FaceMeshGpu.h"
 #include "veyra/beauty/YuNetGpu.h"
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
@@ -362,6 +363,59 @@ void timing(Gpu& gpu, beauty::YuNetGpu& det, const fs::path& originals) {
 }
 } // namespace
 
+// Face mesh network against scripts/beauty/facemesh-reference.py: the same 192 x 192
+// crops in, the 1404 landmark values and the face flag out, for every reference face.
+void meshCases(Gpu& gpu, const fs::path& dir) {
+    const auto modelPath = beauty::locateFaceMeshModel();
+    check(!modelPath.empty(), "mesh: model next to the test (models/face_landmark.tflite)");
+    if (modelPath.empty()) return;
+    // The buffers the mesh binds; the network test reads neither.
+    auto faces = gpu.buffer(64 * 9, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON);
+    ComPtr<ID3D12Resource> shapes;    // written by the mesh: unordered access
+    {
+        D3D12_HEAP_PROPERTIES heap{}; heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC d{}; d.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER; d.Width = beauty::FaceMeshGpu::kShapeBytes; d.Height = 1;
+        d.DepthOrArraySize = 1; d.MipLevels = 1; d.SampleDesc.Count = 1; d.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        d.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+        if (FAILED(gpu.ctx.device()->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &d, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&shapes))))
+            shapes.Reset();
+    }
+    beauty::FaceMeshGpu mesh;
+    std::string error;
+    const bool ready = faces && shapes && mesh.initialize(gpu.ctx.device(), modelPath, faces.Get(), shapes.Get(), 1, error);
+    check(ready, "mesh: initialise " + error);
+    if (!ready) return;
+    std::printf("MESH %s\n", mesh.description().c_str());
+    std::vector<fs::path> cases;
+    for (const auto& f : fs::directory_iterator(dir))
+        if (f.is_directory() && fs::exists(f.path() / "input.bin")) cases.push_back(f.path());
+    std::sort(cases.begin(), cases.end());
+    constexpr size_t kInput = 192 * 192 * 3, kOutput = 1404 + 1;
+    double worstPoint = 0, worstFlag = 0;
+    size_t compared = 0;
+    for (size_t first = 0; first < cases.size(); first += beauty::FaceMeshGpu::kMaxFaces) {
+        const size_t n = std::min<size_t>(beauty::FaceMeshGpu::kMaxFaces, cases.size() - first);
+        std::vector<float> input, expected, output;
+        for (size_t k = 0; k < n; ++k) {
+            const auto in = readFloats(cases[first + k] / "input.bin"), out = readFloats(cases[first + k] / "output.bin");
+            if (in.size() != kInput || out.size() != kOutput) { check(false, "mesh: reference " + cases[first + k].filename().string()); return; }
+            input.insert(input.end(), in.begin(), in.end());
+            expected.insert(expected.end(), out.begin(), out.end());
+        }
+        if (!mesh.runNetwork(gpu.ctx.directQueue(), input, uint32_t(n), output, error)) { check(false, "mesh: run " + error); return; }
+        for (size_t k = 0; k < n; ++k) {
+            for (size_t v = 0; v < 1404; ++v)
+                worstPoint = std::max(worstPoint, double(std::abs(output[k * kOutput + v] - expected[k * kOutput + v])));
+            worstFlag = std::max(worstFlag, double(std::abs(output[k * kOutput + 1404] - expected[k * kOutput + 1404])));
+        }
+        compared += n;
+    }
+    std::printf("METRIC mesh faces=%zu worstLandmarkErrorCropPx=%.5f worstFlagLogitError=%.5f\n", compared, worstPoint, worstFlag);
+    check(compared >= 8, "mesh: reference faces found");
+    check(worstPoint < 0.02, "mesh: every landmark within 0.02 crop pixels of the reference");
+    check(worstFlag < 0.02, "mesh: face flag within 0.02 of the reference logit");
+}
+
 int wmain(int argc, wchar_t** argv) {
     if (argc < 3) { std::printf("usage: veyra_beauty_detector_tests <model.onnx> <reference-dir> [--timing]\n"); return 2; }
     const fs::path model = argv[1], refs = argv[2];
@@ -388,6 +442,7 @@ int wmain(int argc, wchar_t** argv) {
         if (!loadReference(dir, r)) { check(false, "reference " + dir.filename().string()); continue; }
         runCase(gpu, det, r, refs / "originals");
     }
+    if (fs::exists(refs / "mesh")) meshCases(gpu, refs / "mesh");
     if (withTiming) timing(gpu, det, refs / "originals");
     const unsigned debugErrors = gpu.debugErrors();
     check(debugErrors == 0, "D3D12 debug layer");

@@ -7,7 +7,7 @@
 
 namespace veyra::pipeline {
 namespace {
-constexpr UINT kSrvs = 5, kSet = kSrvs + 1;   // t0..t4, u0
+constexpr UINT kSrvs = 6, kSet = kSrvs + 1;   // t0..t5, u0
 constexpr DXGI_FORMAT kColorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 constexpr UINT kRegionBytes = 64;              // shaders/Beauty.hlsli kRoiBytes
 constexpr UINT kFullArgs = 0, kLowArgs = 12;
@@ -53,9 +53,9 @@ bool BeautyPass::initialize(ID3D12Device* device, const engine::BeautySettings& 
 }
 
 void BeautyPass::createViews(ID3D12Device* device, DescriptorStager& stager, ID3D12Resource* input, ID3D12Resource* output,
-                             ID3D12Resource* original, ID3D12Resource* faces)
+                             ID3D12Resource* original, ID3D12Resource* faces, ID3D12Resource* shapes)
 {
-    input_ = input; output_ = output; original_ = original; faces_ = faces;
+    input_ = input; output_ = output; original_ = original; faces_ = faces; shapes_ = shapes;
     D3D12_SHADER_RESOURCE_VIEW_DESC texture{};
     texture.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     texture.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -77,9 +77,13 @@ void BeautyPass::createViews(ID3D12Device* device, DescriptorStager& stager, ID3
     raw.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     raw.Buffer.NumElements = kRegionBytes / 4;
     raw.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+    D3D12_SHADER_RESOURCE_VIEW_DESC outlines = structured;
+    outlines.Buffer.NumElements = 8 * 128;      // FaceMeshGpu::kMaxFaces x kShapeEntries
+    outlines.Buffer.StructureByteStride = 8;
     const auto common = [&](Stage& stage, UINT set) {
         stager.stageSrv(faces_, &structured, stage.pass.heap.Get(), set * kSet + 2);
         stager.stageSrv(region_.Get(), &raw, stage.pass.heap.Get(), set * kSet + 3);
+        stager.stageSrv(shapes_, &outlines, stage.pass.heap.Get(), set * kSet + 5);
     };
     const auto uav = [&](Stage& stage, UINT set, ID3D12Resource* resource) {
         makeUav(device, resource, kColorFormat, cpuHandleOf(stage.pass, set * kSet + kSrvs));
@@ -137,7 +141,7 @@ void BeautyPass::constants(uint32_t* c, bool hdrWorking, bool originalValid) con
 
 bool BeautyPass::dispatch(ID3D12GraphicsCommandList* list, StateTracker& tracker, bool hdrWorking, bool originalValid)
 {
-    if (!list || !input_ || !output_ || input_ == output_ || !faces_) return false;
+    if (!list || !input_ || !output_ || input_ == output_ || !faces_ || !shapes_) return false;
     // The output starts as the input: outside this frame's region nothing changes.
     tracker.transition(list, input_, D3D12_RESOURCE_STATE_COPY_SOURCE);
     tracker.transition(list, output_, D3D12_RESOURCE_STATE_COPY_DEST);
@@ -158,6 +162,7 @@ bool BeautyPass::dispatch(ID3D12GraphicsCommandList* list, StateTracker& tracker
     tracker.transition(list, input_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     if (original_) tracker.transition(list, original_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     tracker.transition(list, faces_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    tracker.transition(list, shapes_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     // Region of this frame, as dispatch arguments.
     tracker.transition(list, region_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     bind(roi_, 0);

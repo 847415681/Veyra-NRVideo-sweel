@@ -41,6 +41,9 @@ SamplerState bLinearSampler : register(s1); // bilinear, clamp
 
 #include "BeautyFaces.hlsli"
 
+// Face outlines from the face mesh (kShape* layout), one block per face slot.
+StructuredBuffer<float2> Shapes : register(t5);
+
 // Restore uses the estimated face oval; smoothing reaches a little further
 // (forehead, chin, neck) and relies on the skin selection for its edge.
 static const float kBeautyOvalX = 1.0, kBeautyOvalY = 1.12, kBeautyOvalLift = 0.06;
@@ -105,14 +108,107 @@ float BeautyFaceOval(BeautyFace f, float2 p, float expand, float feather) {
     const float edge = max(width * 0.5, 0.002);
     return 1.0 - smoothstep(1.0 - edge, 1.0 + edge, rho);
 }
-// Largest mask over the faces this node accepts.
+// Signed distance in node pixels from p to a closed outline of the face mesh
+// (negative inside, even-odd rule).
+float BeautyOutlineDistance(uint first, uint count, float2 p) {
+    const float2 size = float2(bWidth, bHeight);
+    float2 previous = Shapes[first + count - 1] * size;
+    float nearest = 1e30;
+    bool inside = false;
+    for (uint i = 0; i < count; ++i) {
+        const float2 v = Shapes[first + i] * size;
+        const float2 edge = previous - v, w = p - v;
+        const float2 b = w - edge * saturate(dot(w, edge) / max(dot(edge, edge), 1e-12));
+        nearest = min(nearest, dot(b, b));
+        if ((v.y > p.y) != (previous.y > p.y) && p.x < edge.x * (p.y - v.y) / (previous.y - v.y) + v.x) inside = !inside;
+        previous = v;
+    }
+    return inside ? -sqrt(nearest) : sqrt(nearest);
+}
+// Face width in node pixels (the detector's box), the unit of every margin below.
+float BeautyFaceWidth(BeautyFace f) { return max(2.0 * f.box.z * bWidth, 1.0); }
+// Soft region of face slot `slot` in node pixels: the mesh contour when the face has a
+// usable mesh, grown by `expand` and softened over `feather` (fractions of the face
+// width, the edge centred on the grown contour); otherwise the oval from its box.
+float BeautyFaceRegion(uint slot, BeautyFace f, float2 p, float expand, float feather) {
+    const uint base = slot * kShapeEntries;
+    if (Shapes[base].x < 0.5) return BeautyFaceOval(f, p, expand, feather);
+    const float2 size = float2(bWidth, bHeight);
+    const float width = BeautyFaceWidth(f);
+    const float grow = expand * width, soft = max(feather * width, 1.5);
+    const float reach = max(grow, 0.0) + soft;
+    if (any(p < Shapes[base + 2] * size - reach) || any(p > Shapes[base + 3] * size + reach)) return 0.0;
+    const float d = BeautyOutlineDistance(base + kShapeContour, kShapeContourCount, p) - grow;
+    return 1.0 - smoothstep(-0.5 * soft, 0.5 * soft, d);
+}
+// Eyes, brows and lips of face slot `slot` (grown a little, soft edge): 1 where the
+// smoothing must not reach. Faces without a usable mesh have none.
+float BeautyFeatures(uint slot, BeautyFace f, float2 p) {
+    const uint base = slot * kShapeEntries;
+    if (Shapes[base].x < 0.5) return 0.0;
+    const float2 size = float2(bWidth, bHeight);
+    const float width = BeautyFaceWidth(f);
+    const float margin = 0.02 * width, soft = max(0.04 * width, 1.5);
+    const float reach = margin + soft;
+    if (any(p < Shapes[base + 4] * size - reach) || any(p > Shapes[base + 5] * size + reach)) return 0.0;
+    float d = BeautyOutlineDistance(base + kShapeLips, kShapeLipsCount, p);
+    d = min(d, BeautyOutlineDistance(base + kShapeLeftEye, kShapeEyeCount, p));
+    d = min(d, BeautyOutlineDistance(base + kShapeRightEye, kShapeEyeCount, p));
+    d = min(d, BeautyOutlineDistance(base + kShapeLeftBrow, kShapeBrowCount, p));
+    d = min(d, BeautyOutlineDistance(base + kShapeRightBrow, kShapeBrowCount, p));
+    return 1.0 - smoothstep(-0.5 * soft, 0.5 * soft, d - margin);
+}
+// Largest region over the faces this node accepts.
 float BeautyFaces(StructuredBuffer<BeautyFace> faces, float2 p, float expand, float feather) {
     const uint count = min(faces[0].meta.x, kBeautyMaxFaces);
     float mask = 0.0;
     for (uint i = 0; i < count; ++i) {
         const BeautyFace f = faces[1 + i];
         if (f.shape.z < bMinConfidence || f.shape.w <= 0.0) continue;
-        mask = max(mask, f.shape.w * BeautyFaceOval(f, p, expand, feather));
+        mask = max(mask, f.shape.w * BeautyFaceRegion(i, f, p, expand, feather));
+    }
+    return mask;
+}
+// Restore region, smoothing region and the eyes / brows / lips over the faces this
+// node accepts, with one contour distance per face (the regions differ only in how
+// far they grow and how soft their edge is).
+struct BeautyMaskSet { float restore; float smooth; float features; };
+BeautyMaskSet BeautyFaceMasks(StructuredBuffer<BeautyFace> faces, float2 p, bool smoothing) {
+    BeautyMaskSet m;
+    m.restore = 0.0; m.smooth = 0.0; m.features = 0.0;
+    const uint count = min(faces[0].meta.x, kBeautyMaxFaces);
+    const float2 size = float2(bWidth, bHeight);
+    for (uint i = 0; i < count; ++i) {
+        const BeautyFace f = faces[1 + i];
+        if (f.shape.z < bMinConfidence || f.shape.w <= 0.0) continue;
+        const uint base = i * kShapeEntries;
+        if (Shapes[base].x < 0.5) {
+            m.restore = max(m.restore, f.shape.w * BeautyFaceOval(f, p, bRegionExpand, bFeather));
+            if (smoothing) m.smooth = max(m.smooth, f.shape.w * BeautyFaceOval(f, p, kSmoothExpand + bRegionExpand, kSmoothFeather));
+            continue;
+        }
+        const float width = BeautyFaceWidth(f);
+        const float restoreGrow = bRegionExpand * width, restoreSoft = max(bFeather * width, 1.5);
+        const float smoothGrow = (kSmoothExpand + bRegionExpand) * width, smoothSoft = max(kSmoothFeather * width, 1.5);
+        const float reach = max(max(restoreGrow, 0.0) + restoreSoft, smoothing ? max(smoothGrow, 0.0) + smoothSoft : 0.0);
+        if (any(p < Shapes[base + 2] * size - reach) || any(p > Shapes[base + 3] * size + reach)) continue;
+        const float d = BeautyOutlineDistance(base + kShapeContour, kShapeContourCount, p);
+        m.restore = max(m.restore, f.shape.w * (1.0 - smoothstep(-0.5 * restoreSoft, 0.5 * restoreSoft, d - restoreGrow)));
+        if (smoothing) {
+            m.smooth = max(m.smooth, f.shape.w * (1.0 - smoothstep(-0.5 * smoothSoft, 0.5 * smoothSoft, d - smoothGrow)));
+            m.features = max(m.features, f.shape.w * BeautyFeatures(i, f, p));
+        }
+    }
+    return m;
+}
+// The eyes, brows and lips of the faces this node accepts.
+float BeautyFeatureMask(StructuredBuffer<BeautyFace> faces, float2 p) {
+    const uint count = min(faces[0].meta.x, kBeautyMaxFaces);
+    float mask = 0.0;
+    for (uint i = 0; i < count; ++i) {
+        const BeautyFace f = faces[1 + i];
+        if (f.shape.z < bMinConfidence || f.shape.w <= 0.0) continue;
+        mask = max(mask, f.shape.w * BeautyFeatures(i, f, p));
     }
     return mask;
 }
@@ -124,13 +220,14 @@ static const uint kRoiFullArgs = 0u, kRoiLowArgs = 12u, kRoiOrigin = 24u, kRoiSi
 static const uint kRoiLowOrigin = 40u, kRoiLowSize = 48u, kRoiFaces = 56u, kRoiBytes = 64u;
 
 // The face-restored picture P at node pixel p: the node input C with the same
-// frame's original blended in. Restore masks use the estimated oval; the skin
-// scope keeps only the original's skin inside it.
-float3 BeautyRestored(Texture2D<float4> input, Texture2D<float4> original, StructuredBuffer<BeautyFace> faces, int2 p, out float mask) {
+// frame's original blended in. Restore masks follow the face contour (the oval
+// without a mesh); the skin scope keeps only the original's skin inside it.
+// `region`: the restore region at p (BeautyFaceMasks), before the strength.
+float3 BeautyRestoredIn(Texture2D<float4> input, Texture2D<float4> original, int2 p, float region, out float mask) {
     const float3 c = input.Load(int3(p, 0)).rgb;
     mask = 0.0;
     if ((bFlags & kBeautyRestore) == 0 || (bFlags & kBeautyOriginal) == 0) return c;
-    mask = BeautyFaces(faces, float2(p) + 0.5, bRegionExpand, bFeather) * bRestoreStrength;
+    mask = region * bRestoreStrength;
     if (mask <= 0.0) return c;
     // Same size as the source: the original texel itself; otherwise bilinear.
     const float3 o = (bWidth == bSrcWidth && bHeight == bSrcHeight)
@@ -138,5 +235,10 @@ float3 BeautyRestored(Texture2D<float4> input, Texture2D<float4> original, Struc
         : original.SampleLevel(bLinearSampler, (float2(p) + 0.5) / float2(bWidth, bHeight), 0).rgb;
     if (bFlags & kBeautyRestoreSkin) mask *= BeautySkin(BeautyPerceptual(o));
     return mask >= 1.0 ? o : lerp(c, o, mask);   // a full restore is the original texel itself
+}
+float3 BeautyRestored(Texture2D<float4> input, Texture2D<float4> original, StructuredBuffer<BeautyFace> faces, int2 p, out float mask) {
+    const bool restoring = (bFlags & kBeautyRestore) != 0 && (bFlags & kBeautyOriginal) != 0;
+    const float region = restoring ? BeautyFaceMasks(faces, float2(p) + 0.5, false).restore : 0.0;
+    return BeautyRestoredIn(input, original, p, region, mask);
 }
 #endif

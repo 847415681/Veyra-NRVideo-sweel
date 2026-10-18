@@ -1,7 +1,8 @@
 // Beauty node: the region this node touches this frame, as indirect dispatch
-// arguments. The union of the accepted faces' ovals (restore and smoothing reach,
-// plus the smoothing filter's footprint) clamped to the node; the whole frame
-// when smoothing every skin pixel; nothing at all without faces. The passes
+// arguments. The union of the accepted faces' regions (their contour box, or the
+// oval without a mesh, grown by the restore and smoothing reach and the smoothing
+// filter's footprint) clamped to the node; the whole frame when smoothing every
+// skin pixel; nothing at all without faces. The passes
 // after this one only run on that region; the rest of the output is the input copy.
 #include "Beauty.hlsli"
 
@@ -27,6 +28,18 @@ void main() {
             if (restore) reach = max(reach, (1.0 + bRegionExpand) * (1.0 + bFeather * 2.0));
             if (smooth || (bFlags & kBeautyShowMask)) reach = max(reach, (1.0 + kSmoothExpand + bRegionExpand) * (1.0 + kSmoothFeather * 2.0));
             if (reach <= 0.0) continue;
+            if (Shapes[i * kShapeEntries].x >= 0.5) {
+                // The mesh contour's box, grown like BeautyFaceRegion.
+                const float width = max(2.0 * f.box.z * bWidth, 1.0);
+                float grow = 0.0;
+                if (restore) grow = max(grow, max(bRegionExpand, 0.0) + bFeather);
+                if (smooth || (bFlags & kBeautyShowMask)) grow = max(grow, max(kSmoothExpand + bRegionExpand, 0.0) + kSmoothFeather);
+                const float margin = grow * width + 2.0 + filter;
+                lo = min(lo, Shapes[i * kShapeEntries + 2] * size - margin);
+                hi = max(hi, Shapes[i * kShapeEntries + 3] * size + margin);
+                ++faces;
+                continue;
+            }
             // Bounding circle of the (rotated, lifted) oval.
             const float2 axes = f.box.zw * size * float2(kBeautyOvalX, kBeautyOvalY) * reach;
             const float radius = max(axes.x, axes.y) * 1.05 + kBeautyOvalLift * f.box.w * 2.0 * bHeight + filter + 2.0;

@@ -57,7 +57,7 @@ ColumnLayout {
         spacing: 6
         Text {
             Layout.fillWidth: true
-            text: qsTr("人脸原画保护：在识别到的人脸里混回本帧原画（没有经过任何效果）。磨皮：柔化皮肤，保留眼睛、睫毛和嘴唇的细节。两项可分别开关。")
+            text: qsTr("人脸原画保护：按人脸轮廓混回本帧原画（没有经过任何效果）。磨皮：柔化皮肤，眼睛、眉毛和嘴唇不参与。两项可分别开关。")
             color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11; wrapMode: Text.WordWrap
         }
         VRow {

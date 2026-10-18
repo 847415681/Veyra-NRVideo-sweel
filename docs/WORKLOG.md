@@ -9751,3 +9751,4 @@ Branch claude/aa-53-20261017 from main 26c0d61. Archive E:/项目/Veyra/archives
 - 最终汇总（`logs/claude-beauty-20261017/final-sweep-20261018-210951`，同一构建、新临时目录）：29 项中 28 项通过（含调色逐字节回归 12/12、抗锯齿 GPU 17/17、抗锯齿 GUI 39 项、QML 99 项）；image-dimension 的尺寸 / 分块用例全部通过，只有 NR 分块用例因源码路径含非 ASCII 找不到 `ngx-local.json`（与 #53 汇总相同，需 ASCII 路径构建）。
 - 没有验证：AMD / Intel、真实采集卡与游戏画面的肉眼评价、长时间运行、CPU 渲染线程增量；打包尚未把模型放进 `runtime/models`。没有合并 main、推送、发布或打包。
 - 用户试用 r1 反馈跟踪落后、回弹：改为每帧识别 + One Euro 平滑（无预测、无过冲）、漏检外推 120 ms、新脸淡入、分数滞回；`tracking` 误差 9.8 → 3.4 px，新增 `tracking-motion`（每帧 16 px）落后 1.5% 脸宽、过冲 0.25%。详见实施文档第 7 节。
+- 10-19 用户反馈遮罩只是椭圆：按同意接入 MediaPipe 468 点人脸网格（v0.8.9，Apache-2.0，自写 TFLite 读取 + 45 个 GPU 层），原画保护按真实轮廓、磨皮排除双眼双眉嘴唇；网络与参考 62 张脸一致（最大差 0.00014 裁剪像素），新增 `mesh-landmarks` / `mesh-contour` / `mesh-features`；1080p 一张脸约 0.93 ms、4K 约 1.42 ms。详见实施文档第 8 节。

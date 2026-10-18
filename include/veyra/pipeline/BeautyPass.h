@@ -21,7 +21,7 @@ public:
                     uint32_t sourceWidth, uint32_t sourceHeight);
     void refresh(const engine::BeautySettings& settings) { settings_ = settings; }
     void createViews(ID3D12Device* device, DescriptorStager& stager, ID3D12Resource* input, ID3D12Resource* output,
-                     ID3D12Resource* original, ID3D12Resource* faces);
+                     ID3D12Resource* original, ID3D12Resource* faces, ID3D12Resource* shapes);
     // `originalValid`: the original texture holds this frame (face restore needs it).
     bool dispatch(ID3D12GraphicsCommandList* list, StateTracker& tracker, bool hdrWorking, bool originalValid);
     const engine::BeautySettings& settings() const { return settings_; }
@@ -42,5 +42,6 @@ private:
     ID3D12Resource* output_ = nullptr;
     ID3D12Resource* original_ = nullptr;
     ID3D12Resource* faces_ = nullptr;
+    ID3D12Resource* shapes_ = nullptr;
 };
 }

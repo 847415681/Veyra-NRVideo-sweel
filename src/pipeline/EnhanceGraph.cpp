@@ -455,15 +455,22 @@ bool EnhanceGraph::createBeautyShared(){
         if(desc_.beautyRequireDetector)return false;
         beautyNotice_=model.empty()?L"美颜：人脸模型文件缺失，人脸原画保护与人脸区域美颜暂不生效"
                                    :L"美颜：人脸识别初始化失败，人脸原画保护与人脸区域美颜暂不生效";
-    }else faceTracker_->configure(desc_.beautyDetection,beautyMinConfidence());
+    }else{
+        faceTracker_->configure(desc_.beautyDetection,beautyMinConfidence());
+        if(!faceTracker_->meshReady())beautyNotice_=L"美颜：人脸网格模型缺失，人脸区域按椭圆近似，五官不单独排除";
+    }
     if(!faceTracker_){
+        // Zeroed stand-ins: no faces, no outlines.
         D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_DEFAULT;
         D3D12_RESOURCE_DESC bd{};bd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;bd.Width=beauty::FaceTracker::kFaceEntries*64;
         bd.Height=1;bd.DepthOrArraySize=1;bd.MipLevels=1;bd.SampleDesc.Count=1;bd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
         if(FAILED(context_.device()->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&beautyFacesFallback_))))return false;
+        bd.Width=beauty::FaceMeshGpu::kShapeBytes;
+        if(FAILED(context_.device()->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&beautyShapesFallback_))))return false;
     }
-    veyra::log::info("beauty",std::format("shared: original={} detector={} quality={} faces<={} stability={:.2f}",
+    veyra::log::info("beauty",std::format("shared: original={} detector={} mesh={} quality={} faces<={} stability={:.2f}",
         colorActive_?"ungraded copy":preGradeRgba_?"pre-grade input":"converted input",faceTracker_?"ready":"unavailable",
+        faceTracker_&&faceTracker_->meshReady()?"ready":"unavailable",
         int(desc_.beautyDetection.quality),int(desc_.beautyDetection.maxFaces),desc_.beautyDetection.stability));
     return true;
 }
@@ -472,7 +479,7 @@ void EnhanceGraph::bindSlotPassInput(const SlotPass& pass,ID3D12Resource* input)
     if(pass.type==engine::EffectType::Color)nodeColorInstances_[pass.parameter]->createViews(context_.device(),stager_,input,pass.output);
     else if(pass.type==engine::EffectType::AntiAliasing)antiAliasPasses_[pass.parameter]->createViews(context_.device(),stager_,input,pass.output);
     else if(pass.type==engine::EffectType::Beauty)
-        beautyPasses_[pass.parameter]->createViews(context_.device(),stager_,input,pass.output,beautyOriginalSource_,beautyFaces());
+        beautyPasses_[pass.parameter]->createViews(context_.device(),stager_,input,pass.output,beautyOriginalSource_,beautyFaces(),beautyShapes());
 }
 
 // Binds one slot's passes in plan order: each reads the previous output.
@@ -3650,7 +3657,7 @@ void EnhanceGraph::shutdown()
     for(auto& pass:beautyPasses_)pass.reset();
     beautyOutputs_={};
     if(faceTracker_)faceTracker_->shutdown();
-    faceTracker_.reset();beautyOriginal_.Reset();beautyFacesFallback_.Reset();beautyOriginalSource_=nullptr;
+    faceTracker_.reset();beautyOriginal_.Reset();beautyFacesFallback_.Reset();beautyShapesFallback_.Reset();beautyOriginalSource_=nullptr;
     beautyNodesActive_=beautyOriginalValid_=beautyDetectFailureLogged_=false;beautyNotice_.clear();
     sourcePostOutput_=nullptr;
     preSrColorOutput_=nullptr;preSrColorExecutionLogged_=false;

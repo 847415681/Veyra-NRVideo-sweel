@@ -3207,11 +3207,11 @@
    "ja": "顔のオリジナル保護"
   },
   {
-   "zh": "人脸原画保护：在识别到的人脸里混回本帧原画（没有经过任何效果）。磨皮：柔化皮肤，保留眼睛、睫毛和嘴唇的细节。两项可分别开关。",
+   "zh": "人脸原画保护：按人脸轮廓混回本帧原画（没有经过任何效果）。磨皮：柔化皮肤，眼睛、眉毛和嘴唇不参与。两项可分别开关。",
    "src": "qml/BeautyEditor.qml",
-   "zh-TW": "人臉原畫保護：在識別到的人臉裡混回本幀原畫（沒有經過任何效果）。磨皮：柔化皮膚，保留眼睛、睫毛和嘴唇的細節。兩項可分別開關。",
-   "en": "Original face restore: blends this frame's original (before any effect) back into the detected faces. Skin smoothing: softens skin and keeps the detail of eyes, lashes and lips. Each can be switched on its own.",
-   "ja": "顔のオリジナル保護：検出した顔の中に、このフレームの元の画像（どの効果も通す前）を戻して合成します。美肌：目・まつ毛・唇のディテールを残したまま肌をなめらかにします。それぞれ個別にオン／オフできます。"
+   "zh-TW": "人臉原畫保護：按人臉輪廓混回本幀原畫（沒有經過任何效果）。磨皮：柔化皮膚，眼睛、眉毛和嘴唇不參與。兩項可分別開關。",
+   "en": "Original face restore: blends this frame's original (before any effect) back in along the face outline. Skin smoothing: softens skin and leaves the eyes, brows and lips out. Each can be switched on its own.",
+   "ja": "顔のオリジナル保護：顔の輪郭に沿って、このフレームの元の画像（どの効果も通す前）を戻して合成します。美肌：肌をなめらかにし、目・眉・唇は対象外です。それぞれ個別にオン／オフできます。"
   },
   {
    "zh": "人脸置信度",
@@ -12888,6 +12888,13 @@
    "zh-TW": "美顏：人臉模型檔案缺失，人臉原畫保護與人臉區域美顏暫不生效",
    "en": "Beauty: the face model file is missing; original face restore and face-area beauty are not applied",
    "ja": "美顔：顔モデルファイルがないため、顔のオリジナル保護と顔の範囲の美顔は適用されません"
+  },
+  {
+   "zh": "美颜：人脸网格模型缺失，人脸区域按椭圆近似，五官不单独排除",
+   "src": "src/pipeline/EnhanceGraph.cpp",
+   "zh-TW": "美顏：人臉網格模型缺失，人臉區域按橢圓近似，五官不單獨排除",
+   "en": "Beauty: the face mesh model is missing; face areas are approximated by ovals and the eyes, brows and lips are not left out",
+   "ja": "美顔：顔メッシュモデルがないため、顔の範囲は楕円で近似され、目・眉・唇は除外されません"
   },
   {
    "zh": "美颜：人脸识别初始化失败，人脸原画保护与人脸区域美颜暂不生效",

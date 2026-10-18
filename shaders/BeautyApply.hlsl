@@ -4,7 +4,8 @@
 //   B  = a * I + b, the guided-filter result of P's perceptual copy I (coefficients
 //        from the statistics grid, bilinear)
 //   SkinSoft (yasunari01/obs-filters fd5690f, GPL-2.0-or-later) then decides how
-//   much of B to take: skin selection x face region, detail protection
+//   much of B to take: skin selection x face region (minus the eyes, brows and lips
+//   of the face mesh), detail protection
 //   1 - smoothstep(0.02, 0.22, |I - B| * detail * 3), texture restore back to I.
 //   Brightening lifts the skin's perceptual luma (gamma 1 / (1 + 0.6 k), only
 //   below white). The result goes back to linear and mixes with P by the
@@ -25,14 +26,18 @@ void main(uint3 id : SV_DispatchThreadID) {
     if (any(id.xy >= extent)) return;
     const int2 p = int2(Roi.Load2(kRoiOrigin) + id.xy);
     const float4 c = Input.Load(int3(p, 0));
+    const bool smoothing = (bFlags & (kBeautySmooth | kBeautyShowMask)) != 0;
+    const BeautyMaskSet masks = BeautyFaceMasks(Faces, float2(p) + 0.5, smoothing);
     float restoreMask;
-    const float3 restored = BeautyRestored(Input, Original, Faces, p, restoreMask);
+    const float3 restored = BeautyRestoredIn(Input, Original, p, masks.restore, restoreMask);
     float3 result = restored;
     float smoothMask = 0.0;
-    if (bFlags & (kBeautySmooth | kBeautyShowMask)) {
+    if (smoothing) {
         const float3 i = BeautyPerceptual(restored);
-        const float region = (bFlags & kBeautyAllSkin) ? 1.0 : BeautyFaces(Faces, float2(p) + 0.5, kSmoothExpand + bRegionExpand, kSmoothFeather);
-        smoothMask = region > 0.0 ? region * BeautySkin(i) : 0.0;
+        // Every skin pixel, or the faces' regions; the eyes, brows and lips of the faces stay out.
+        const float region = (bFlags & kBeautyAllSkin) ? 1.0 : masks.smooth;
+        const float features = (bFlags & kBeautyAllSkin) ? BeautyFeatureMask(Faces, float2(p) + 0.5) : masks.features;
+        smoothMask = region > 0.0 ? region * BeautySkin(i) * (1.0 - features) : 0.0;
         if ((bFlags & kBeautySmooth) && smoothMask > 0.0) {
             // Statistics cell centres sit at (cell + 0.5) * bScale; stay inside this frame's cells.
             const float2 lowOrigin = float2(Roi.Load2(kRoiLowOrigin)), lowExtent = float2(Roi.Load2(kRoiLowSize));

@@ -5,8 +5,8 @@ usage: py -3.11 -I scripts/acceptance/beauty-gui.py <staged-app-name>
 Runs a private copy of the staged app (tests/claude-beauty-20261017/<name>, with the
 face model in its models/ folder) with an isolated profile, injects beauty-gui.qml
 into that copy's Main.qml (restored afterwards), plays a clip with a face, and
-checks the console and engine log: the node and the shared face tracker are created,
-live values never rebuild them, and the log carries no face positions. Other Veyra
+checks the console and engine log: the node, the shared face tracker and the face
+mesh are created, live values never rebuild them, and the log carries no face positions. Other Veyra
 processes are left alone; nothing outside the task folders is written.
 """
 from pathlib import Path
@@ -55,9 +55,10 @@ tracker = re.findall(r'face tracker ready[^\r\n]*', edits)
 rebuiltLive = re.findall(r'\[beauty\] instance=\d+ [^\r\n]*', live)
 detectErrors = [l for l in engine.splitlines() if 'beauty-detect' in l and re.search(r'unavailable|failed|could not', l)]
 # AGENTS.md: the log never records face crops, landmark tracks or pixels.
-positions = [l for l in engine.splitlines() if 'beauty' in l and re.search(r'landmark|\bbox\b|\bcx=|\bcy=|score=', l)]
+positions = [l for l in engine.splitlines() if 'beauty' in l and re.search(r'landmarks?\s*[=:]|\bbox\s*[=:]|\bcx=|\bcy=|score=|points?\s*[=:]', l)]
 if not created: errors.append('the live player never created a beauty node')
 if not tracker: errors.append('the shared face tracker never started')
+if 'mesh=ready' not in edits: errors.append('the face mesh (contour, eyes, brows, lips) was not active')
 if rebuiltLive: errors.append('live beauty values rebuilt the node: ' + rebuiltLive[0])
 if detectErrors: errors.append('face detection reported a problem: ' + detectErrors[0])
 if positions: errors.append('the log records face positions: ' + positions[0])

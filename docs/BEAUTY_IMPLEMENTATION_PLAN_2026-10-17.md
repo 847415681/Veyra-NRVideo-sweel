@@ -30,6 +30,7 @@
 | 设置、校验、预设编码 | `include/veyra/engine/BeautySettings.h`；`EnhancementSettings`、`EffectChain`（`toChain`/`fromChain`/节点顺序）、`GraphDescription`、`ExportFeaturePolicy` |
 | 存储 | 预设库 v15、链会话 v10，写入独立的 `.beauty` 文件，旧文件逐字节不变；导出协议 11 |
 | 人脸检测 | `src/beauty/OnnxLite.cpp`（只读解析 ONNX 权重）、`src/beauty/YuNetGpu.cpp` + `shaders/BeautyYuNet*.hlsl`（YuNet 全网络手写 D3D12 compute） |
+| 人脸网格 | `src/beauty/TfliteLite.cpp`（只读解析 TFLite）、`src/beauty/FaceMeshGpu.cpp` + `shaders/BeautyMesh*.hlsl`（MediaPipe 468 点网络、裁剪、轮廓输出），见第 8 节 |
 | 跟踪 | `src/beauty/FaceTracker.cpp` + `shaders/BeautyTrack.hlsl`：GPU 上 NMS（与 OpenCV FaceDetectorYN 相同的整像素框规则）、α-β 滤波、稳定 id、丢失后宽限再淡出；画面路径不回读，只每槽读回 64 字节计数头给界面 |
 | 节点 | `src/pipeline/BeautyPass.cpp` + `shaders/Beauty{Roi,Stats,Blur,Apply}.hlsl`、`Beauty.hlsli`、`BeautyFaces.hlsli` |
 | 图 | `EnhanceGraph`：E0 插入槽（源尺寸 SourcePost、PreSr、PreNr、链尾 Tail），`bindSlotPassInput` 同时修正 NR 旁路时只重绑调色的问题 |
@@ -115,3 +116,34 @@ Codex 预算为 1080p 平均 ≤1 ms / P95 ≤2 ms、4K 平均 ≤2.5 ms / P95 �
 新增 `tracking-motion`（每帧 16 px，约 6.6 脸宽/秒，停下）落后 1.5% 脸宽、过冲 0.25%、停下当帧即稳定。
 每帧识别的成本即原先“识别帧”的成本：1080p 约 0.43 ms、4K 约 0.52 ms（节点 + 识别，一张脸，来自之前的计时；
 本轮用户的测试程序在运行，没有重新计时）。
+
+## 8. 人脸网格：真实脸型轮廓与五官排除（2026-10-19）
+
+用户试用后指出遮罩只是一个椭圆。原因：YuNet 只给人脸框和 5 个点，遮罩只能由框推一个椭圆，原画保护会把头发、帽檐、背景一起
+恢复，磨皮也只能靠肤色和细节保护避开五官（嘴唇颜色接近肤色，常被磨到）。按用户同意改用 MediaPipe 468 点人脸网格：
+
+- 模型：`face_landmark.tflite`（MediaPipe v0.8.9 仓库内文件，Apache-2.0，SHA256 `c603fa61…26d1`），与 YuNet 一样运行时从
+  模型目录加载、不进源码库；`TfliteLite` 读取（fp16 权重展开、DEQUANTIZE 折叠，不认识的一律拒绝）。
+- 网络：97 个算子融合成 45 个 GPU 层（逐点卷积带残差 / 最大池化 + 通道补零 / PReLU 融合），全部人脸一次批处理；裁剪按
+  MediaPipe：以跟踪框为中心、眼线放平、边长为框长边的 1.44 倍（MediaPipe 对其检测框用 1.5 倍；48 张参考脸上 YuNet 框
+  换算出的裁剪是 MediaPipe 跟踪裁剪的 1/0.96，取中位数校准），192×192、显示编码 0…1、双线性复制边缘。
+- 输出：468 点映射回画面，按轨迹 id 做 One Euro 平滑（与人脸跟踪同参数），取出轮廓 36 点、外唇 20 点、双眼各 16 点、
+  双眉各 10 点。网格分数 logit > −4（保持 > −5.5）且轮廓与检测框一致（中心偏差 < 0.35 脸宽、宽度 0.6…1.8 倍）才使用，
+  否则该脸回退到椭圆。
+- 遮罩：原画保护 = 轮廓按“区域扩展”外扩、按“边缘羽化”柔化；磨皮 = 轮廓外扩 10% × 肤色 ×（1 − 五官），五官 = 双眼、
+  双眉、嘴唇外扩 2% 脸宽、4% 柔边；全部肤色模式同样排除检测到的五官。每像素每张脸只算一次轮廓距离。
+- 成本控制：跟踪状态连续报告无人脸时不跑网格（轮廓清空一次），新出现的人脸在淡入的头几帧用椭圆。
+
+实测（RTX 5070）：
+- 网络与参考（OpenCV TFLite + 按 TensorFlow 规则的 numpy 实现，两者互差 1e-4）在 62 张脸上一致：坐标最大差 0.00014 裁剪像素、
+  分数最大差 0.00002；D3D12 调试层无错误。
+- 图中实测（`mesh-landmarks`）：lena / astronaut / 两张 GTA 帧的轮廓点与参考平均差 0.4–0.8% 脸宽，最大 2.3%。
+- `mesh-contour`：调色下全强度保护，轮廓内 20071 像素逐位等于原画，轮廓外 227172 像素逐位保持调色；原椭圆会覆盖、轮廓外的
+  2787 像素（头发、帽檐）不再被恢复。
+- `mesh-features`：强档磨皮下双眼、双眉、嘴唇内部 608 像素逐位不变，皮肤细纹理仍降 21.4%。
+- 原有 15 个用例全部通过。耗时（节点中位数 + 识别/跟踪/网格均值）：1080p 一张脸 0.148 + 0.783 ≈ 0.93 ms，四张脸
+  0.139 + 0.913 ms，无脸 0.033 + 0.427 ms；4K 一张脸 0.556 + 0.868 ≈ 1.42 ms。均在预算内（1080p 平均 ≤1 ms 已接近上限）。
+
+限制：侧脸、低头、远处小脸常被网格分数否决，回退到椭圆（人群图 62 张脸中 48 张可用）；网格本身约 0.3 ms 固定开销来自约 45 次
+小调度，后续可把 6×6 以下各层合并成一次调度；没有虹膜点；新出现的人脸头几帧是椭圆。
+
