@@ -581,6 +581,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     src/source/ElgatoHdrControl.cpp
     src/source/ScreenCaptureSource.cpp
     src/source/AverMediaAudioSwitch.cpp
+    src/source/AverMediaVendorAudio.cpp
     src/source/CaptureCompressedDecoder.cpp
     src/source/WasapiAudioInput.cpp
     src/source/MagewellCapture.cpp
