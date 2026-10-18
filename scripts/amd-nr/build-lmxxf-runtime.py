@@ -2,7 +2,7 @@
 import argparse, hashlib, json, os, re, subprocess
 from pathlib import Path
 
-PIN = '78f548749e74824327b8458c57be31a1df78376a'
+PIN = '4764e4f1a24f5234b8e29952dc41f493b2d77c90' #0.44 F9 hotfix; source stays outside Git.
 p = argparse.ArgumentParser()
 p.add_argument('--source', type=Path, required=True)
 p.add_argument('--build', type=Path, required=True)

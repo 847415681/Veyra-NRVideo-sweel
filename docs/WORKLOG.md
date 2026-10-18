@@ -9715,3 +9715,7 @@ final-audit.py pre已通过82旧树/94旧分支/509脏文件与main b571a44不�
 - 所有命令、失败夹具修正、实际路径和边界见docs/PR57_INTEGRATION_REPORT_2026-10-17.md及E:/项目/Veyra/reports/pr57-capture-window-20261017。合并前verify通过：84旧树、96分支、509脏文件与1524共享组件保持。用户请求PR合并，不发布/改包/关机。
 
 - PR57远端合并确认：2026-10-17T14:09:26Z，state=MERGED，merge=9c7b342，main正常推送7e2157d；保留云端源分支。本补充仅文档回执，不改已验收代码；最终保护与source-after.bundle回执在E:/项目/Veyra/reports/pr57-capture-window-20261017/final.json。
+
+
+## 2026-10-18 AMD NR0.44隔离接入开工
+用户下载并提供0.44 Magpie包，要求新分支接入且Claude同时施工不得干扰。main26c0d61→codex/amd-nr-044-20261018；88原树/101分支/509脏文件和已verify source-before.bundle在archives/amd-nr-044-20261018。用户ZIP447952711bytes/SHA cf812fe7…48e030与作者热修一致，875内部SHA全部匹配，80模块/93Small权重加manifest；原件只读，提取到独立deps。固定MIT源码4764e4f1（与release.json一致），C ABI头与旧Veyra逐字节相同，开始审计/独立重编译。首次提取夹具误写Python编码utf8-sig，在读清单前失败，改utf-8-sig后全验证成功，无产品修改。Claude当前AA工作只读核对，不碰其分支/运行目录，不派Agent或发跨任务消息。计划AMD_NR_044_PLAN_2026-10-18.md；新产物全E盘，CPU限并发、GPU测试前核对空闲。不合main/push/发布/改驱动或用户配置/关机。真实AMD推理与画质性能未验。

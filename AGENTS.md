@@ -1,5 +1,8 @@
 # Veyra 项目 Agent 执行规则
 
+
+> **2026-10-18 AMD NR0.44隔离接入授权**：用户提供Magpie-DLSS5-AMD-0.44.zip并要求开分支接入，明确Claude同时工作、不得互相影响。从main26c0d61在codex/amd-nr-044-20261018实施，计划docs/AMD_NR_044_PLAN_2026-10-18.md。允许AMD独立C ABI runtime0.44固定4764e4f1、原样权重/HIP资源、必要Small/Original模型参数/设置/UI/共享图及构建部署/定向回归接点，覆盖这些历史冻结；NVIDIA现行路径、33ms/250ms、采集/补帧/颜色合同保持。源包447952711bytes/SHA CF812FE7909FBD53B38F54DA8ABD584698525F81F7EA71CAB19BA14BAB48E030与作者热修相符，875条内部SHA已验证。88原树/101分支/509脏文件及source-before.bundle已独立存档；Claude可正常推进其分支，不重置/覆盖/锁住其工作，不发送跨任务消息、不派Agent。所有产物E盘独立amd-nr-044-20261018，CPU构建限并发，GPU回归前核对空闲，不停止他人进程。测试≤300秒、构建≤900秒。无本轮main合并/push/Release/正式包/关机授权；原SDK/专有DLL/权重/驱动及真实配置不改，不进源码Git。无RX9000实卡须明确未验，不把fake ABI或5070测量冒充AMD推理。
+
 > **2026-10-17 PR57本机接入授权**：用户要求合入其云端Agent的PR57并做好测试。按docs/PR57_INTEGRATION_PLAN_2026-10-17.md，从main d68d6be在codex/pr57-capture-window-20261017保留原head09ac54b/1295d6b整合；允许窗口捕获游戏输入/缩放/resize及采集能力/精确格式/旧版选择入口的必要适配、源/引擎快照/bridge/QML/CMake/翻译/回归接点，覆盖这些范围历史冻结。本机Windows构建/实测通过后允许本地main正常合并与普通GitHub同步以完成PR57；不发布新版本、不改已发2.0.9资产/标签、不代发评论/关闭无关issue/派Agent/关机。84旧树/96旧分支/509脏文件与PR/源码bundle先存档；全E盘，测试≤300秒/构建≤900秒，UI33ms/250ms、既有低延迟/运行组件/模型/驱动/真实配置保持。云端测试待办不扩展当前授权，实卡未覆盖项须明示。
 
 > **2026-10-17 2.0.9 正式发布授权**：用户明确“发布吧，老样子发好给我群公告”。按docs/RELEASE_2.0.9_PLAN_2026-10-17.md从已验bfce70b建立codex/release-2.0.9-20261017，允许已验代码main正常快进/普通push nrvideo/main、新v2.0.9与v2.0.9-sources标签、正式Release及对应源码上传。NVIDIA/AMD沿用已交付2.0.9-test ZIP，外部正式命名，包内字节/test标识保持，不重编译重封包。中英README和完整更新报告覆盖全部2.0.8后改动，保留六群/赞助width220、Discord/Ko-fi/知识库；主仅两包，源归档上传应用源与新增去隔行源，旧FFmpeg/依赖源保留固定链接。83旧树/95旧分支/509脏文件/六原归档与旧Release保护，全E盘，无子Agent/代发/关闭issue/关机。最新授权覆盖此前本轮no-main/no-push/no-Release，不扩展为修改专有二进制、驱动或用户配置。
