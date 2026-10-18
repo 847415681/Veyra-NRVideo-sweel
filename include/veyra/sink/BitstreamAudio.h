@@ -95,6 +95,8 @@ public:
     bool opened() const;
     unsigned channels() const;
     unsigned sampleRate() const;
+    uint32_t channelMask() const;
+    uint64_t formatRevision() const;
     uint64_t decodedFrames() const;
     uint64_t decodedBytesIn() const;
     const std::string& lastError() const;

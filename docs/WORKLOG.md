@@ -1,5 +1,9 @@
 # WORKLOG
 
+## 2026-10-18 PR63 圆刚5.1厂商图接入开工
+
+已存档90旧工作树/103分支/509旧脏文件，source-before.bundle verify通过；原PR4db24da及patch在archives/pr63-avermedia-audio-20261018。nrvideo/main f0cbbbf仅星图更新，隔离合并8147496保留PR57新枚举/精确连接接口。公开厂商头7d1250b4固定归档至deps/.../reference，ABI为12字节AUDIO_SAMPLE_INFO按值回调；原PR签名/日志varargs/私有offset/设备误路由/格式切换/断流监测存在缺口，按PR63_AVERMEDIA_AUDIO_PLAN_2026-10-18.md补齐。全E盘、无子Agent、不碰Claude/旧树/真实配置，验收后只合并同步PR63不发布。
+
 ## 2026-10-17 采集格式与旧版入口（Linux 源码候选）
 
 按用户“全部修复掉，再添加老版本采集格式选择入口”，在窗口修复 1295d6b 之上隔离实施 `codex/capture-format-fixes-20261017`。修复 DirectShow 能力回退、尺寸/帧率范围候选、±1 tick 显示分组漏掉像素项、精确媒体类型恢复与连接校验；增加可搜索虚拟化旧版组合列表、自定义尺寸检查和查询错误诊断。原低延迟回调/队列、BMD 原生、增强/音频/渲染/运行库与配置保持。详见 docs/CAPTURE_FORMAT_FIXES_2026-10-17.md。

@@ -582,6 +582,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     src/source/ScreenCaptureSource.cpp
     src/source/AverMediaAudioSwitch.cpp
     src/source/AverMediaVendorAudio.cpp
+    src/source/AverMediaAudioCarrier.cpp
     src/source/CaptureCompressedDecoder.cpp
     src/source/WasapiAudioInput.cpp
     src/source/MagewellCapture.cpp
@@ -790,6 +791,23 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_features(veyra_avermedia_switch_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_avermedia_switch_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
   target_link_libraries(veyra_avermedia_switch_tests PRIVATE veyra_sources)
+  add_executable(veyra_avermedia_carrier_tests tests/unit/AverMediaCarrierTests.cpp)
+  target_compile_features(veyra_avermedia_carrier_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_avermedia_carrier_tests PRIVATE /utf-8)
+  target_compile_definitions(veyra_avermedia_carrier_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
+  target_include_directories(veyra_avermedia_carrier_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
+  target_link_libraries(veyra_avermedia_carrier_tests PRIVATE veyra_sources ${FFMPEG_LIBRARIES})
+  add_library(veyra_avermedia_fake_vendor SHARED tests/fixtures/FakeAverMediaVendor.cpp tests/fixtures/FakeAverMediaVendor.def)
+  target_compile_features(veyra_avermedia_fake_vendor PRIVATE cxx_std_20)
+  target_compile_options(veyra_avermedia_fake_vendor PRIVATE /utf-8)
+  target_compile_definitions(veyra_avermedia_fake_vendor PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
+  target_include_directories(veyra_avermedia_fake_vendor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(veyra_avermedia_fake_vendor PRIVATE ole32)
+  add_executable(veyra_avermedia_vendor_tests tests/unit/AverMediaVendorAudioTests.cpp)
+  target_compile_features(veyra_avermedia_vendor_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_avermedia_vendor_tests PRIVATE /utf-8)
+  target_compile_definitions(veyra_avermedia_vendor_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
+  target_link_libraries(veyra_avermedia_vendor_tests PRIVATE veyra_sources)
   add_executable(veyra_iec61937_probe_tests tests/unit/Iec61937ProbeTests.cpp)
   target_compile_features(veyra_iec61937_probe_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_iec61937_probe_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
