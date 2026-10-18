@@ -1,8 +1,15 @@
 # WORKLOG
 
+## 2026-10-18 PR63 适配验收完成，准备合并
+
+原PR提交4db24da保留；验收代码3a77635。按官方固定ABI补精确设备、non-PCM arming、STA/150ms初始等待/有限恢复、格式切换与回调生命周期、载波有界/坏流无进展、实际声道mask及FFmpeg padding/reset。最终14目标MSVC构建通过；12组音频/采集回归全过；本机T911 1080p60含重连60.049599/60.050652FPS、HDMI音频48kHz/16bit/63块/0underruns通过。无圆刚实卡，不能代替GC553G2等实机验收；厂商Stop失败隔离保留和同步调用无法硬取消的边界见报告。
+
+命令（Python311）：`tmp/pr63-avermedia-audio-20261018/build.py` → `stage.py` → `checks.py` → `card.py` → `verify.py`；源码763文件/共用运行文件1374哈希检查，旧桌面509脏文件未变；Claude美颜在改文件变化单独记载未写入。各脚本绝对根为E:/项目/Veyra，构建日志E:\项目\Veyra\logs\pr63-avermedia-audio-20261018\build-20261018-201338\receipt.json，12组E:\项目\Veyra\logs\pr63-avermedia-audio-20261018\checks-20261018-201448\receipt.json，实卡E:\项目\Veyra\logs\pr63-avermedia-audio-20261018\card-20261018-201630\final.json，审查reports/pr63-avermedia-audio-20261018/verification.json。完整实现/测试/首次失败与基线复测见docs/PR63_AVERMEDIA_AUDIO_REPORT_2026-10-18.md。此前CMake测试包含路径、PE/COM夹具误判、首轮模拟同步失败均保留原日志且写明修正，不修改通过门槛。只合本PR及适配到main和普通GitHub同步，不夹AMD/全屏/Claude工作，不发布或关机。
+
+
 ## 2026-10-18 PR63 圆刚5.1厂商图接入开工
 
-已存档90旧工作树/103分支/509旧脏文件，source-before.bundle verify通过；原PR4db24da及patch在archives/pr63-avermedia-audio-20261018。nrvideo/main f0cbbbf仅星图更新，隔离合并8147496保留PR57新枚举/精确连接接口。公开厂商头7d1250b4固定归档至deps/.../reference，ABI为12字节AUDIO_SAMPLE_INFO按值回调；原PR签名/日志varargs/私有offset/设备误路由/格式切换/断流监测存在缺口，按PR63_AVERMEDIA_AUDIO_PLAN_2026-10-18.md补齐。全E盘、无子Agent、不碰Claude/旧树/真实配置，验收后只合并同步PR63不发布。
+已存档90旧工作树/103分支状态哈希、旧桌面509脏文件ZIP及Claude美颜21在改文件哈希，source-before.bundle verify通过；原PR4db24da及patch在archives/pr63-avermedia-audio-20261018。nrvideo/main f0cbbbf仅星图更新，隔离合并8147496保留PR57新枚举/精确连接接口。公开厂商头7d1250b4固定归档至deps/.../reference，ABI为12字节AUDIO_SAMPLE_INFO按值回调；原PR签名/日志varargs/私有offset/设备误路由/格式切换/断流监测存在缺口，按PR63_AVERMEDIA_AUDIO_PLAN_2026-10-18.md补齐。全E盘、无子Agent、不碰Claude/旧树/真实配置，验收后只合并同步PR63不发布。
 
 ## 2026-10-17 采集格式与旧版入口（Linux 源码候选）
 
