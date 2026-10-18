@@ -13,7 +13,7 @@ bool supported(sink::BitstreamKind k){return k==sink::BitstreamKind::Ac3||k==sin
 AverMediaAudioCarrier::AverMediaAudioCarrier(Callback callback):callback_(std::move(callback)){}
 void AverMediaAudioCarrier::reset(){
     buffer_.clear();packet_.clear();pcm_.clear();decoder_.reset();state_={};
-    kind_=candidate_=sink::BitstreamKind::None;confirmations_=0;compressed_=false;discontinuity_=true;lastIec_=0;revision_=0;input_={};
+    kind_=candidate_=sink::BitstreamKind::None;confirmations_=undecodedBursts_=0;compressed_=false;discontinuity_=true;lastIec_=0;revision_=0;input_={};
 }
 bool AverMediaAudioCarrier::emitPcm(std::span<const uint8_t> bytes,avermedia::SampleInfo info){
     // The public callback describes the samples. Never guess 16-bit/48k from
@@ -48,13 +48,16 @@ bool AverMediaAudioCarrier::emitBurst(std::span<const uint8_t> words,size_t payl
     if(!decoder_||kind!=kind_){
         decoder_=std::make_unique<sink::BitstreamDecoder>();
         if(!decoder_->open(kind,false)){state_.error=decoder_->lastError();return false;}
-        kind_=kind;revision_=0;discontinuity_=true;
+        kind_=kind;revision_=0;undecodedBursts_=0;discontinuity_=true;
     }
     packet_.resize(words.size());
     for(size_t i=0;i+1<words.size();i+=2){packet_[i]=words[i+1];packet_[i+1]=words[i];}
     packet_.resize(payloadBytes); // Odd byte payloads include a padded carrier word.
     pcm_.clear();
     if(!decoder_->push(packet_.data(),packet_.size(),pcm_)){state_.error=decoder_->lastError();return false;}
+    if(pcm_.empty()){
+        if(++undecodedBursts_>=64){state_.error="no decoded audio after 64 carrier bursts";return false;}
+    }else undecodedBursts_=0;
     state_.codec=sink::bitstreamKindName(kind);state_.bitstream=true;
     const auto channels=decoder_->channels(),rate=decoder_->sampleRate();
     if(!pcm_.empty()&&channels&&rate){

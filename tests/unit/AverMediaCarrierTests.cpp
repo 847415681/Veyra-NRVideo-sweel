@@ -114,6 +114,10 @@ int main(){try{
     require(outputs.back().rate==96000&&outputs.back().pcm[0]==0.5f&&outputs.back().pcm[1]==-0.5f,"actual 24-bit sample conversion");
     std::vector<uint8_t> tooLarge(source::AverMediaAudioCarrier::kMaxBytes+1);require(!carrier.feed(tooLarge,stereo,0),"oversized callback rejected");
     source::AverMediaAudioCarrier rejected([](const source::VendorPcmBlock&){return false;});require(!rejected.feed(pcm,stereo,0),"session error requests recovery");
+    carrier.reset();outputs.clear();bool progress=true;
+    const auto invalidAc3=burst(std::vector<uint8_t>(256,0),1);
+    for(unsigned n=0;n<80&&progress;++n)progress=carrier.feed(invalidAc3,stereo,n*.032);
+    require(!progress&&outputs.empty(),"continuous undecodable carrier has a bounded recovery trigger");
     carrier.reset();outputs.clear();
     for(unsigned n=0;n<2000;++n){std::vector<uint8_t> noise(511,0);require(carrier.feed(noise,stereo,n*.01),"continuous quiet PCM");require(carrier.state().retainedBytes<=12,"bounded persistent PCM buffer");}
     std::cout<<"PASS "<<checks<<" checks: identity, real AC3/EAC3, fragmented carriers, 6/2ch and rate changes, PCM transitions, malformed input\n";return 0;

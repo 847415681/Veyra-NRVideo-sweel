@@ -42,7 +42,7 @@ private:
     std::vector<float> pcm_;
     std::unique_ptr<sink::BitstreamDecoder> decoder_;
     sink::BitstreamKind kind_=sink::BitstreamKind::None,candidate_=sink::BitstreamKind::None;
-    unsigned confirmations_=0;
+    unsigned confirmations_=0,undecodedBursts_=0;
     bool compressed_=false,discontinuity_=true;
     double lastIec_=0;
     uint64_t revision_=0;
