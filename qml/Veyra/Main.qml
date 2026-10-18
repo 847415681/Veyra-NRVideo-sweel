@@ -589,7 +589,8 @@ Window {
             if (root.fullscreen && root.quickPanelShown && (proPage.overlayContains(p.x, p.y) || nodePage.overlayContains(p.x, p.y))) return
             // 游戏模式: a click on the picture beside the panel returns to the game.
             if (root.fullscreen && root.quickPanelShown && veyra.gameMode) { root.closeQuickPanel(); return }
-            if (!root.fullscreen && !root.pictureContains(p)) return
+            // Do not re-test geometry on release: a picture double click may
+            // already have left fullscreen before this second tap restores play.
             root.contentItem.forceActiveFocus()
             if (veyra.isCapture || veyra.duration <= 0) return
             if (veyra.protectionDrawShape.length > 0 || veyra.compareMode === 2) return
