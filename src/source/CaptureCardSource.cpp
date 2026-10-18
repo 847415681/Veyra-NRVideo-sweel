@@ -16,6 +16,7 @@
 #include "veyra/source/CaptureCodec.h"
 #include "veyra/source/CaptureCompressedDecoder.h"
 #include "veyra/source/AverMediaAudioSwitch.h"
+#include "veyra/source/AverMediaVendorAudio.h"
 #include "veyra/source/ElgatoHdrControl.h"
 #include "veyra/pipeline/ColorMetadata.h"
 #include "veyra/Log.h"
@@ -208,6 +209,16 @@ bool bind(unsigned index,bool audio,ComPtr<IBaseFilter>& filter){auto list=monik
 bool bindPath(std::wstring_view wanted,bool audio,ComPtr<IBaseFilter>& filter){
     if(wanted.empty())return false;for(auto& moniker:monikers(audio))if(monikerPath(moniker.Get())==wanted)return SUCCEEDED(moniker->BindToObject(nullptr,nullptr,IID_PPV_ARGS(&filter)));return false;
 }
+// AVerMedia's USB vendor id as it appears in every DirectShow device path
+// ("\\?\usb#vid_07ca&pid_2553&mi_00#..."). The capture filter Veyra adds is
+// registered as "Capture card", so the filter name cannot identify the card;
+// the moniker path can.
+bool isAverMediaUsbPath(std::wstring_view path){
+    if(path.empty())return false;
+    std::wstring lower(path.begin(),path.end());
+    std::transform(lower.begin(),lower.end(),lower.begin(),[](wchar_t c){return wchar_t(towlower(c));});
+    return lower.find(L"vid_07ca")!=std::wstring::npos;
+}
 std::wstring captureDeviceName(std::wstring_view path){
     for(auto& moniker:monikers(false))if(monikerPath(moniker.Get())==path)return propertyString(moniker.Get(),L"FriendlyName");
     return {};
@@ -321,6 +332,10 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
     ComPtr<IBaseFilter> audioSink;ComPtr<IReferenceClock> referenceClock;
     std::unique_ptr<ElgatoHdrControl> elgatoHdr;
     std::unique_ptr<sink::CaptureAudioSession> audioSession;
+    // AVerMedia cards expose no usable DirectShow audio pin: the console's
+    // compressed multichannel stream only leaves the vendor's own audio graph,
+    // which this object drives in-process while it is bound to the source.
+    std::unique_ptr<AverMediaVendorAudio> vendorAudio;
     // Dolby/DTS passthrough: when the device offers only compressed media types
     // the raw bursts are decoded here and the session is configured with the
     // decoded layout on the first frame (that is why its start is deferred).
@@ -1184,6 +1199,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
         if(!p.wasapi->configure(selection.audioPath)){p.wasapi.reset();p.audioError=L"WASAPI 音频端点ID无效；视频继续运行";}
         log::info("capture-audio","binding=wasapi shared=1 explicitEndpoint=1 videoClock=ingress-host-estimate");
     }else if(audio!=kCaptureAudioDisabled){
+        bool vendorConnected=false;
         if(audio>=0){
             // Resolve the DirectShow device identity before the graph is built.
             // The AVerMedia switch is keyed on the device path, and it has to
@@ -1198,8 +1214,28 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
             }
             p.pendingAudioName=audioName;
             if(!audioPath.empty())applyVendorAudioSwitch(audioName,audioPath);
+            // The vendor graph is tried first: it is the only path that can
+            // deliver the console's compressed stream, and it falls back to
+            // plain PCM on its own when the console sends Linear PCM.
+            if(!AverMediaAudioSwitch::locateComponentRoot().empty())
+                vendorConnected=connectVendorAudio(audioName,audioName,audioPath);
+        }else if(audio==kCaptureAudioFromVideoDevice){
+            // Audio from the card's own function. An AVerMedia card only hands
+            // the compressed stream to the process that runs the component's
+            // audio graph; its pin alone stays linear PCM.
+            std::wstring videoPath=selection.videoPath;
+            if(!selection.stable){
+                auto list=monikers(false);
+                if(selection.videoIndex<list.size())videoPath=monikerPath(list[selection.videoIndex].Get());
+            }
+            const std::wstring videoName=captureDeviceName(videoPath);
+            const bool avermedia=isAverMediaUsbPath(videoPath);
+            log::info("capture-audio-vendor",std::format("embedded audio: device=\"{}\" avermediaPath={} component={}",
+                narrowForLog(videoName),avermedia?1:0,AverMediaAudioSwitch::locateComponentRoot().empty()?0:1));
+            if(avermedia&&!AverMediaAudioSwitch::locateComponentRoot().empty())
+                vendorConnected=connectVendorAudio(videoName,videoName,videoPath);
         }
-        const bool audioReady=connectDirectShowAudio(desc);
+        const bool audioReady=vendorConnected||connectDirectShowAudio(desc);
         if(!audioReady){
             p.audioError=L"采集音频设备或 PCM 格式不可用；视频继续运行";
             log::warn("capture-audio","audio connection unavailable; retaining video capture");
@@ -1359,6 +1395,60 @@ bool CaptureCardSource::applyVendorAudioSwitch(const std::wstring& audioName,con
             narrowForLog(name),status.componentFound?1:0,status.dllsLoaded?1:0,status.detail));
     }
     return applied;
+}
+bool CaptureCardSource::connectVendorAudio(const std::wstring& deviceName,const std::wstring& preferName,const std::wstring& preferPath){
+    auto& p=*p_;
+    if(AverMediaAudioSwitch::locateComponentRoot().empty()){
+        log::info("capture-audio-vendor","multichannel component not installed; falling back to DirectShow PCM");
+        return false;
+    }
+    auto session=std::make_unique<sink::CaptureAudioSession>();
+    auto vendor=std::make_unique<AverMediaVendorAudio>();
+    auto* target=session.get();
+    auto clock=std::make_shared<CaptureAudioClock>();
+    auto began=std::make_shared<bool>(false);
+    auto failed=std::make_shared<bool>(false);
+    const bool started=vendor->start([target,clock,began,failed](const float* interleaved,size_t frames,unsigned channels,uint32_t rate){
+        if(*failed||interleaved==nullptr||frames==0||channels==0||rate==0)return;
+        if(!*began){
+            WAVEFORMATEXTENSIBLE wfx{};
+            wfx.Format.wFormatTag=WAVE_FORMAT_EXTENSIBLE;
+            wfx.Format.nChannels=WORD(channels);
+            wfx.Format.nSamplesPerSec=rate;
+            wfx.Format.wBitsPerSample=32;
+            wfx.Format.nBlockAlign=WORD(channels*4);
+            wfx.Format.nAvgBytesPerSec=rate*channels*4;
+            wfx.Format.cbSize=sizeof(WAVEFORMATEXTENSIBLE)-sizeof(WAVEFORMATEX);
+            wfx.Samples.wValidBitsPerSample=32;
+            // 5.1 side layout as the component reports it.
+            wfx.dwChannelMask=channels==6?0x60Fu:channels==8?0x63Fu:channels==2?0x3u:0x60Fu;
+            wfx.SubFormat=KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
+            if(!target->configure(wfx.Format,sizeof(wfx))||!target->start()){
+                *failed=true;
+                log::warn("capture-audio-vendor",std::format("audio session refused {}ch at {} Hz",channels,rate));
+                return;
+            }
+            *began=true;
+            log::info("capture-audio-vendor",std::format("decoded carrier started channels={} mask=0x{:X} rate={} float=1",channels,unsigned(wfx.dwChannelMask),rate));
+        }
+        const double arrival=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        const double pts=clock->observe(std::nullopt,arrival,1000.0*double(frames)/double(rate),false);
+        if(!target->push(interleaved,frames*channels*sizeof(float),pts,false)){
+            *failed=true;
+            log::warn("capture-audio-vendor","audio session stopped accepting decoded PCM");
+        }
+    },preferName,preferPath);
+    const auto state=vendor->state();
+    if(!started||*failed){
+        log::warn("capture-audio-vendor",std::format("vendor graph unavailable device=\"{}\" error=\"{}\" callbacks={}",
+            narrowForLog(deviceName),std::string(state.error.begin(),state.error.end()),state.callbacks));
+        return false;
+    }
+    log::info("capture-audio-vendor",std::format("binding=vendor-graph device=\"{}\" carrier=\"{}\" bitstream={} channels={} rate={}",
+        narrowForLog(deviceName),state.carrier,state.bitstream?1:0,state.channels,state.sampleRate));
+    p.audioSession=std::move(session);
+    p.vendorAudio=std::move(vendor);
+    return true;
 }
 bool CaptureCardSource::connectDirectShowAudio(const SourceOpenDesc& desc){
     auto& p=*p_;CaptureSelection selection;if(!parseCapturePath(desc.path,selection))return false;
@@ -1605,7 +1695,8 @@ if(audioTypes.empty()&&(!allowBitstream||bitstreamTypes.empty())){log::warn("cap
 }
 bool CaptureCardSource::start(){
     auto& p=*p_;if(p.info.opened)return true;if(!p.configured||(!p.control&&!p.decklink))return false;
-    if(p.audioSession&&p.audioSessionDeferred)log::info("capture-audio-bitstream","audio session starts with the first decoded bitstream frame");
+    if(p.vendorAudio)log::info("capture-audio-vendor","audio session is fed by the AVerMedia graph; no DirectShow audio start");
+    else if(p.audioSession&&p.audioSessionDeferred)log::info("capture-audio-bitstream","audio session starts with the first decoded bitstream frame");
     else if(p.audioSession&&!p.audioSession->start())log::warn("capture-audio","audio start failed; retaining video capture");
     p.audioRecovery.reset(GetTickCount64());
     if(p.decklink){
@@ -1645,6 +1736,13 @@ bool CaptureCardSource::start(){
 }
 void CaptureCardSource::recoverAudio(float gain,unsigned syncMode,int offsetMs){
     auto& p=*p_;if(!p.info.opened||!p.control||p.wasapi)return;
+    // The vendor graph notices a silent carrier by itself and rebuilds; the
+    // DirectShow recovery would only fight it.
+    if(p.vendorAudio){
+        static bool reported=false;
+        if(!reported){reported=true;log::info("capture-audio-vendor","DirectShow audio recovery skipped: the vendor graph rebuilds itself");}
+        return;
+    }
     CaptureSelection selection;if(!parseCapturePath(reconnectDesc_.path,selection)||!selection.stable||selection.audio==kCaptureAudioDisabled||selection.audio==kCaptureAudioWasapi)return;
     // A video filter without an audio pin can never recover: in the field log
     // this retried seven times over twenty seconds with an identical failure.
@@ -1795,6 +1893,7 @@ void CaptureCardSource::close()noexcept{
     if(p.magewell){p.magewell->stop();p.magewell.reset();}if(p.control){const HRESULT hr=p.control->Stop();if(FAILED(hr))log::error("capture-close",std::format("Stop failed hr=0x{:08X}; releasing graph",uint32_t(hr)));}if(p.grab){const HRESULT hr=p.grab->SetCallback(nullptr,0);if(FAILED(hr))log::error("capture-close",std::format("detach callback hr=0x{:08X}",uint32_t(hr)));}
     if(p.wasapi)p.wasapi->stop();p.wasapi.reset();
     p.elgatoHdr.reset();
+    if(p.vendorAudio){p.vendorAudio->stop();p.vendorAudio.reset();}
     p.averMediaSwitch.stop();p.embeddedAudioUnavailable=false;
     if(p.audioSession)p.audioSession->stop();p.audioError.clear();
     if(p.audioPassthrough)p.audioPassthrough->close();

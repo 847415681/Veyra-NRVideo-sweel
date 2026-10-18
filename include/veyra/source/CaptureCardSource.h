@@ -83,6 +83,8 @@ private:
     std::wstring error_;
     bool configureDeckLink(const SourceOpenDesc&);
     bool connectDirectShowAudio(const SourceOpenDesc&);
+    // Starts AVerMedia's in-process audio graph; false means "use DirectShow".
+    bool connectVendorAudio(const std::wstring& deviceName,const std::wstring& preferName=std::wstring(),const std::wstring& preferPath=std::wstring());
     // AVerMedia capture cards need their installed vendor component to arm
     // non-PCM (Dolby/DTS) passthrough before the audio pin is negotiated.
     bool applyVendorAudioSwitch(const std::wstring& audioName,const std::wstring& audioPath);
