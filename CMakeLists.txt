@@ -1389,6 +1389,8 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
   target_compile_options(veyra_anti_alias_gpu_tests PRIVATE /utf-8)
   target_compile_definitions(veyra_anti_alias_gpu_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_link_libraries(veyra_anti_alias_gpu_tests PRIVATE veyra_engine)
+  # Beauty node: face detector, passes and their tests.
+  include(cmake/VeyraBeauty.cmake)
   target_compile_features(veyra_effect_slot_regression_tests PRIVATE cxx_std_20)
   target_compile_options(veyra_effect_slot_regression_tests PRIVATE /utf-8)
   target_compile_definitions(veyra_effect_slot_regression_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)

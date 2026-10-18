@@ -749,18 +749,25 @@ bool YuNetGpu::recordNetwork(ID3D12GraphicsCommandList* list, uint32_t slot, uin
     return impl_->recordLayers(list, slot, nullptr, detWidth, detHeight);
 }
 
+// Same rule as OpenCV's FaceDetectorYN (dnn::NMSBoxes on Rect2i): boxes truncated
+// to whole pixels, scores sorted descending with ties in anchor order, a box is
+// dropped when its overlap with a kept box exceeds the threshold.
 void YuNetGpu::nonMaxSuppression(std::vector<FaceBox>& boxes, float iouThreshold)
 {
     std::sort(boxes.begin(), boxes.end(), [](const FaceBox& a, const FaceBox& b) { return a.score != b.score ? a.score > b.score : a.id < b.id; });
+    struct Rect { int x, y, w, h; };
+    const auto rect = [](const FaceBox& b) { return Rect{int(b.x), int(b.y), int(b.w), int(b.h)}; };
     std::vector<FaceBox> kept;
     for (const FaceBox& b : boxes) {
+        const Rect r = rect(b);
         bool suppressed = false;
         for (const FaceBox& k : kept) {
-            const float x1 = std::max(b.x, k.x), y1 = std::max(b.y, k.y);
-            const float x2 = std::min(b.x + b.w, k.x + k.w), y2 = std::min(b.y + b.h, k.y + k.h);
-            const float inter = std::max(0.0f, x2 - x1) * std::max(0.0f, y2 - y1);
-            const float uni = b.w * b.h + k.w * k.h - inter;
-            if (uni > 0 && inter / uni > iouThreshold) { suppressed = true; break; }
+            const Rect q = rect(k);
+            const int x1 = std::max(r.x, q.x), y1 = std::max(r.y, q.y);
+            const int x2 = std::min(r.x + r.w, q.x + q.w), y2 = std::min(r.y + r.h, q.y + q.h);
+            const int inter = x2 > x1 && y2 > y1 ? (x2 - x1) * (y2 - y1) : 0;
+            const int uni = r.w * r.h + q.w * q.h - inter;
+            if (uni > 0 && float(inter) / float(uni) > iouThreshold) { suppressed = true; break; }
         }
         if (!suppressed) kept.push_back(b);
     }
