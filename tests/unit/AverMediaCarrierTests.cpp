@@ -100,6 +100,11 @@ int main(){try{
     require(outputs.size()==before+1&&outputs.back().codec.empty()&&outputs.back().channels==2,"switch to PCM session");
     require(outputs.back().pcm.size()<=960*2&&outputs.back().discontinuity,"only newest 20ms after compressed loss");
     feedCodec(AV_CODEC_ID_EAC3,0x3f,48000,0x15,9);
+    before=outputs.size();require(carrier.feed(std::span(pcm).first(pcm.size()-1),stereo,15),"PCM return with split sample frame");
+    require(outputs.size()==before+1&&outputs.back().discontinuity,"fragmented PCM return is one fresh epoch");
+    require(std::all_of(outputs.back().pcm.begin(),outputs.back().pcm.end(),[](float v){return v==0.25f;}),"PCM fallback preserves frame alignment");
+    require(carrier.feed(std::span(pcm).last(1),stereo,15.01)&&carrier.feed(pcm,stereo,15.02),"remaining partial sample retained");
+    require(std::all_of(outputs.back().pcm.begin(),outputs.back().pcm.end(),[](float v){return v==0.25f;}),"later PCM remains aligned");
     carrier.reset();outputs.clear();
     std::vector<uint8_t> unsupported(6144,0);unsupported[0]=0x72;unsupported[1]=0xf8;unsupported[2]=0x1f;unsupported[3]=0x4e;unsupported[4]=0x16;unsupported[6]=0x10;
     require(carrier.feed(unsupported,stereo,0)&&carrier.feed(unsupported,stereo,0.1),"unknown HD carrier detected");

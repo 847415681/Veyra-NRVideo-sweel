@@ -70,6 +70,9 @@ bool AverMediaAudioCarrier::feed(std::span<const uint8_t> bytes,avermedia::Sampl
     if(input_.channels!=info.channels||input_.bits!=info.bits||input_.rate!=info.rate){reset();input_=info;}
     const size_t align=size_t(info.channels)*(info.bits/8);
     if(!align||align>32||bytes.size()>kMaxBytes){state_.error="invalid or oversized vendor callback";return false;}
+    if(buffer_.size()+bytes.size()>kMaxBytes){
+        state_.droppedBytes+=buffer_.size();state_.error="vendor carrier buffer limit reached";return false;
+    }
     // Only 16-bit stereo is an IEC carrier. Other declared PCM is converted
     // using its actual metadata and still goes through the shared session.
     if(info.bits!=16||info.channels!=2){
@@ -79,7 +82,6 @@ bool AverMediaAudioCarrier::feed(std::span<const uint8_t> bytes,avermedia::Sampl
         const bool ok=emitPcm(std::span(buffer_).first(complete),info);
         buffer_.erase(buffer_.begin(),buffer_.begin()+complete);state_.retainedBytes=buffer_.size();return ok;
     }
-    if(buffer_.size()+bytes.size()>kMaxBytes){state_.droppedBytes+=buffer_.size();buffer_.clear();discontinuity_=true;}
     buffer_.insert(buffer_.end(),bytes.begin(),bytes.end());
     size_t cursor=0;bool sawIec=false;
     while(cursor+8<=buffer_.size()){
@@ -109,9 +111,11 @@ bool AverMediaAudioCarrier::feed(std::span<const uint8_t> bytes,avermedia::Sampl
         if(!sawIec&&now-lastIec_>=4.0){
             // The source changed to real PCM. Retain only its newest 20 ms,
             // reset codec history and reconfigure the same playback session.
-            const size_t tail=std::min(buffer_.size()/align*align,size_t(info.rate/50)*align);
+            const size_t complete=buffer_.size()/align*align;
+            const size_t tail=std::min(complete,size_t(info.rate/50)*align);
             decoder_.reset();kind_=candidate_=sink::BitstreamKind::None;confirmations_=0;compressed_=false;discontinuity_=true;
-            const bool ok=emitPcm(std::span(buffer_).last(tail),info);buffer_.clear();state_.retainedBytes=0;return ok;
+            const bool ok=emitPcm(std::span(buffer_).first(complete).last(tail),info);
+            buffer_.erase(buffer_.begin(),buffer_.begin()+complete);state_.retainedBytes=buffer_.size();return ok;
         }
         // Preserve only a partial payload, or at most seven sync/header bytes.
         cursor=cursor/align*align;
