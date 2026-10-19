@@ -1515,7 +1515,11 @@ bool CaptureCardSource::connectVendorAudio(const std::wstring& deviceName,const 
         const bool discontinuity=changed||block.discontinuity;
         const double arrival=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
         const double pts=format->clock.observe(std::nullopt,arrival,1000.0*double(block.frames)/block.rate,discontinuity);
-        return target->push(block.samples,block.frames*block.channels*sizeof(float),pts,discontinuity);
+        const size_t bytes=block.frames*block.channels*sizeof(float);
+        if(!target->push(block.samples,bytes,pts,discontinuity)){
+            log::warn("capture-audio-vendor",std::format("audio session rejected one block bytes={} channels={} rate={}; keeping the stream",bytes,block.channels,block.rate));
+        }
+        return true;
     },preferName,preferPath);
     const auto state=vendor->state();
     if(!started){
