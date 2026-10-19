@@ -801,6 +801,20 @@ The user-approved, unmodified NVIDIA-signed 310.8.0.0 NR (SHA256 E16BCF15E16E13F
 
 ## lmxxf AMD NR local integration (2026-10-03)
 
+2026-10-18 local upgrade: fixed MIT source `4764e4f1a24f5234b8e29952dc41f493b2d77c90`
+(0.44 F9 hotfix). User-provided archive SHA256
+`cf812fe7909fbd53b38f54da8abd584698525f81f7ea71cab19ba14bab48e030`.
+The public C ABI header is unchanged. `third_party/lmxxf/veyra-model-isolation.patch`
+adapts `src/native_model_mode.h` and `src/native_hot_flags.h` to select Small or
+Original per independently built module and disable add-on hotkeys/config polling.
+Veyra's model-query/asset-preflight exports use upstream's actual selector and
+Small asset validator. Inference/codec math and weights/kernels are unchanged.
+Build/staging recipes, changed host files and limits are documented in
+`third_party/lmxxf/VEYRA_ORIGIN.md` and `docs/AMD_NR_044_PLAN_2026-10-18.md`.
+NVIDIA-derived weights and HIP modules remain external binary assets, not MIT
+source. No AMD inference, quality or performance claim follows from host tests.
+The following 0.39 identity is preserved as historical provenance.
+
 Veyra calls the independent MIT C ABI from
 [lmxxf/dlss5-on-amd-9070xt-porting](https://github.com/lmxxf/dlss5-on-amd-9070xt-porting),
 fixed commit `78f548749e74824327b8458c57be31a1df78376a`, Copyright (c) 2026 Kien.

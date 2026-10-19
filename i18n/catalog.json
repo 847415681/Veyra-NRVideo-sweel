@@ -7352,6 +7352,13 @@
    "ja": "スイッチ、進行状況、選択状態"
   },
   {
+   "zh": "开启使用 Small 模型；关闭使用原模型。每层独立选择，切换会重建 NR，画面可能有所不同。",
+   "src": "qml/NrLayerEditor.qml",
+   "zh-TW": "開啟使用 Small 模型；關閉使用原模型。每層獨立選擇，切換會重建 NR，畫面可能有所不同。",
+   "en": "On: Small model. Off: Original model. Each layer selects independently. Switching rebuilds NR and may change the picture.",
+   "ja": "オン：Small モデル。オフ：元のモデル。各レイヤーで個別に選択します。切り替えると NR を再構築し、画面が変わる場合があります。"
+  },
+  {
    "zh": "开启使用新版模型 B；关闭使用旧版模型 A。切换会重建 NR，画面可能有所不同。",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "開啟使用新版模型 B；關閉使用舊版模型 A。切換會重建 NR，畫面可能有所不同。",

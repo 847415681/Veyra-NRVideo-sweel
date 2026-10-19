@@ -23,6 +23,16 @@
 
 已存档90旧工作树/103分支状态哈希、旧桌面509脏文件ZIP及Claude美颜21在改文件哈希，source-before.bundle verify通过；原PR4db24da及patch在archives/pr63-avermedia-audio-20261018。nrvideo/main f0cbbbf仅星图更新，隔离合并8147496保留PR57新枚举/精确连接接口。公开厂商头7d1250b4固定归档至deps/.../reference，ABI为12字节AUDIO_SAMPLE_INFO按值回调；原PR签名/日志varargs/私有offset/设备误路由/格式切换/断流监测存在缺口，按PR63_AVERMEDIA_AUDIO_PLAN_2026-10-18.md补齐。全E盘、无子Agent、不碰Claude/旧树/真实配置，验收后只合并同步PR63不发布。
 
+## 2026-10-18 全屏点击与指针修复开工
+
+基于AMD0.44 f6c4fd9开codex/fullscreen-input-20261018，不改main/Claude树。基线独立GTA4K真实点击已复现按钮全屏后立刻pause，Qt BlankCursor请求后实际指针仍可见；日志logs/fullscreen-input-20261018/baseline。按下时记录画面归属，原生HWND同步Qt隐藏策略且尊重浮层区域；不加Timer/重绘、不改33ms/250ms。计划FULLSCREEN_INPUT_PLAN_2026-10-18.md。首次文档patch因WORKLOG标题匹配错误失败，原子回退该文档patch，正确标题重施；无产品数据影响。接下来独立构建/定向回归/实际鼠标验收，无发布授权。
+
+### 2026-10-18 全屏输入修复完成
+
+代码33ec229/2065efb，5目标从零258.6秒、最终增量17.6秒构建通过。首次Quick缺Qt模块为staging漏拷，修正后最终82Quick/384布局/18D3D12几何/2449翻译通过。真实点击证明专业模式播放/暂停两态全屏无误切换，补齐双击退出时第二tap的几何误判后，两态双击保持原状态。极简静止/活动、暂停、Home、锁定/解锁及软件UI实测通过；系统GetCursorInfo在实际视频区域隐藏false/showing恢复true，不能只看Qt请求值。
+
+命令与失败记录见FULLSCREEN_INPUT_REPORT_2026-10-18.md；工具在E:/项目/Veyra/tmp/fullscreen-input-20261018/{build,stage,checks,launch,verify}.py，最终logs/.../checks-153313、gpu-pro-153358、software-min-153508，reports/.../final.json核验源/构建/5EXE/2014依赖及main26c0d61。生产只改2文件，Timer数量及33ms/250ms保持，无媒体/效果/调度修改，无NR性能收益宣称。所有测试实例正常退出；本轮未写Claude/旧脏树、未合main/push/发布/关机，未验实卡/串流/混合DPI与Esc工具输入如实保留边界。
+
 ## 2026-10-17 采集格式与旧版入口（Linux 源码候选）
 
 按用户“全部修复掉，再添加老版本采集格式选择入口”，在窗口修复 1295d6b 之上隔离实施 `codex/capture-format-fixes-20261017`。修复 DirectShow 能力回退、尺寸/帧率范围候选、±1 tick 显示分组漏掉像素项、精确媒体类型恢复与连接校验；增加可搜索虚拟化旧版组合列表、自定义尺寸检查和查询错误诊断。原低延迟回调/队列、BMD 原生、增强/音频/渲染/运行库与配置保持。详见 docs/CAPTURE_FORMAT_FIXES_2026-10-17.md。
@@ -9738,3 +9748,21 @@ final-audit.py pre已通过82旧树/94旧分支/509脏文件与main b571a44不�
 - 所有命令、失败夹具修正、实际路径和边界见docs/PR57_INTEGRATION_REPORT_2026-10-17.md及E:/项目/Veyra/reports/pr57-capture-window-20261017。合并前verify通过：84旧树、96分支、509脏文件与1524共享组件保持。用户请求PR合并，不发布/改包/关机。
 
 - PR57远端合并确认：2026-10-17T14:09:26Z，state=MERGED，merge=9c7b342，main正常推送7e2157d；保留云端源分支。本补充仅文档回执，不改已验收代码；最终保护与source-after.bundle回执在E:/项目/Veyra/reports/pr57-capture-window-20261017/final.json。
+
+
+## 2026-10-18 AMD NR0.44隔离接入开工
+用户下载并提供0.44 Magpie包，要求新分支接入且Claude同时施工不得干扰。main26c0d61→codex/amd-nr-044-20261018；88原树/101分支/509脏文件和已verify source-before.bundle在archives/amd-nr-044-20261018。用户ZIP447952711bytes/SHA cf812fe7…48e030与作者热修一致，875内部SHA全部匹配，80模块/93Small权重加manifest；原件只读，提取到独立deps。固定MIT源码4764e4f1（与release.json一致），C ABI头与旧Veyra逐字节相同，开始审计/独立重编译。首次提取夹具误写Python编码utf8-sig，在读清单前失败，改utf-8-sig后全验证成功，无产品修改。Claude当前AA工作只读核对，不碰其分支/运行目录，不派Agent或发跨任务消息。计划AMD_NR_044_PLAN_2026-10-18.md；新产物全E盘，CPU限并发、GPU测试前核对空闲。不合main/push/发布/改驱动或用户配置/关机。真实AMD推理与画质性能未验。
+
+
+### 2026-10-18 AMD NR0.44模型接入与首轮构建
+- 同一既有performance参数接入AMD，默认Small/关闭Original；列表/节点/设置重建与关闭效果编辑合同统一，NVIDIA NGX preset不变。公共C ABI逐字节不变，两个独立MIT源码模块固定实际model selector，共享原样权重/内核，禁上游F9与配置轮询，不逐帧改全局环境。真实Small资源预检拒绝缺权重时静默回原模型。
+- 上游直接MSVC构建失败：Windows rpcndr small宏与新版bool small冲突、缺utf8。兼容头含D3D12后undef small，增加/utf-8；原源码只在本任务build/source副本施加可复现patch，外部固定checkout不改。初版patch CRLF导致git apply不匹配，规范LF后通过。两模块真实编译通过：logs/amd-nr-044-20261018/runtime-small-03.json、runtime-original-01.json；上游现有C4244告警保留。
+- 新stage-044-runtime.py只读验证用户ZIP875条SHA，再部署280个.f16/.f32参数文件（含辅助参数）、80HIP模块及必要codec/许可证；未提取执行Magpie/proxy/driver/add-on。两个真实模块同时加载检查其实际selector和上游Small structural preflight，正式模型与fake合同测试物理分开。0.39脚本保留作历史。
+- 增加混合模型真实D3D12合同计数（fake）、磁盘AMD预设/会话恢复、真实runtime元数据/缺资源/错模块测试；这些均不等同HIP推理。四语言新增Small提示。不提高UI33ms/250ms刷新率，Claude树不动。接下来提交输入、限-j2构建13目标并定向执行。
+
+### 2026-10-18 AMD NR0.44接入完成
+- 最终代码94861a0，13目标构建与12程序/13次有效验证通过；66ABI、20图/4K场景、82Quick、2449i18n、预设/会话/导出/关闭效果编辑及RTX5070实际GTA NR切换通过。真实模块10元数据检查与2项冲突配置拒绝通过，不等同AMD HIP推理。最终索引reports/amd-nr-044-20261018/checks.json；源码/二进制复用与重新链接目标复测回执在同目录。
+- 首轮3图失败是10-07测试仍预期4次FSR，与10-10既有108cbaab全帧重建修复冲突，像素输出已正确；纠正为6次，未改FSR产品实现。配置注入真实暴露跨CRT环境不可见，增加运行库内部有效参数导出，Create前/后均检查；fake注入也必须由其自身CRT清理，已定向回归。失败日志全部保留，详见AMD_NR_044_REPORT_2026-10-18.md。
+- 当前真实Small/Original DLL为runtime-small-04与runtime-original-02构建；publisher配方核验两模块身份，拒绝漏原模型/误放fake。只做本地审计，没有正式包/上传/发布。527文件对应源码归档覆盖实际构建输入，无专有二进制；最终源码bundle另见final.json。
+- 88原树/101原分支/main核对：87树未变；Claude AA树12 shader的正常并行施工已记录，不阻塞或回滚。509既有脏文件内容未改。所有新构建/测试/日志/源码和资源都在E:/项目/Veyra对应任务目录，未关他人进程或修改用户配置。
+- 自动审批拦截了本任务冗余解压目录清理（仅返回blocked by policy），没有换工具绕过，目录保留；原用户ZIP、旧0.39和已发布包未改。AMD实卡执行/画质/性能/长期显存、HDR及其他硬件未验；本轮未合main/push/发布/关机。
