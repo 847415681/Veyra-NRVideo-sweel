@@ -2,8 +2,9 @@ import QtQuick
 import QtTest
 import Veyra
 
-// 设置 → 赞助作者: every platform card and the Ko-fi button name their page, and the
-// brand tiles and both sponsor codes load (SVGs need the qsvg plugin beside the app).
+// 设置 → 赞助作者: every platform card and the Ko-fi button name their page, Ko-fi comes
+// before the mainland China codes, and the brand tiles and both codes load (SVGs need
+// the qsvg plugin beside the app).
 Item {
     width: 760; height: 1000
     SponsorPanel { id: panel; width: 720 }
@@ -42,6 +43,15 @@ Item {
                 // Shown 220 px wide: large enough for a phone to read.
                 compare(Math.round(code.paintedWidth), 220, id)
             }
+        }
+        // Ko-fi first, then 中国大陆用户 with the two codes.
+        function test_kofiBeforeMainlandCodes() {
+            panel.width = 720
+            wait(50)
+            const y = name => findChild(panel, name).mapToItem(panel, 0, 0).y
+            verify(y("sponsor-link-kofi") < y("sponsor-mainland"), "Ko-fi above the mainland block")
+            verify(y("sponsor-mainland") < y("sponsor-code-wechat"), "the mainland title above the codes")
+            compare(y("sponsor-code-wechat"), y("sponsor-code-alipay"))
         }
         function test_narrowWraps() {
             panel.width = 410

@@ -1,4 +1,5 @@
-// 设置 → 赞助作者: the author's pages, the WeChat / Alipay sponsor codes and Ko-fi.
+// 设置 → 赞助作者: the author's pages, then Ko-fi, then the WeChat / Alipay codes for
+// users in mainland China (the order the author asked for, 2026-10-19).
 //
 // The page names a link by id only; the bridge owns the addresses
 // (QmlPlayerBridge::openSponsorLink), so no URL is shown or editable here.
@@ -24,14 +25,17 @@ ColumnLayout {
     ]
 
     component SectionTitle: ColumnLayout {
+        id: section
         property alias text: title.text
         property alias hint: hintText.text
+        // A block inside a section (中国大陆用户) rather than a section of its own.
+        property bool small: false
         property real motionDy: 0
         transform: Translate { y: motionDy }
         Layout.fillWidth: true
-        Layout.topMargin: 10
+        Layout.topMargin: small ? 6 : 10
         spacing: 3
-        VH3 { id: title }
+        VH3 { id: title; font.pixelSize: section.small ? 13.5 : Theme.fsH3 }
         Text {
             id: hintText
             Layout.fillWidth: true
@@ -188,7 +192,57 @@ ColumnLayout {
 
     SectionTitle {
         text: qsTr("请作者喝杯咖啡")
-        hint: qsTr("微信或支付宝扫码，金额随意")
+        hint: qsTr("金额随意，每一份支持都是很大的鼓励")
+    }
+
+    // Ko-fi first, for everyone: drawn as its official "Buy me a coffee" button (the
+    // one in the README).
+    Flow {
+        id: kofiRow
+        property real motionDy: 0
+        transform: Translate { y: kofiRow.motionDy }
+        Layout.fillWidth: true
+        spacing: 14
+        Rectangle {
+            id: kofi
+            objectName: "sponsor-link-kofi"
+            width: kofiContent.implicitWidth + 40
+            height: 46
+            radius: height / 2
+            color: kofiHover.hovered ? "#83AFF5" : "#72A4F2"
+            Behavior on color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
+            scale: kofiTap.pressed ? 0.96 : 1.0
+            Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
+            Row {
+                id: kofiContent
+                anchors.centerIn: parent
+                spacing: 9
+                Image {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 34; height: 34
+                    source: "sponsor/kofi.svg"
+                    sourceSize.width: Math.ceil(34 * panel.dpr)
+                    sourceSize.height: Math.ceil(34 * panel.dpr)
+                }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Buy me a coffee"
+                    color: "#FFFFFF"
+                    font.family: Theme.fontUi
+                    font.pixelSize: 16
+                    font.weight: Font.Bold
+                }
+            }
+            HoverHandler { id: kofiHover; cursorShape: Qt.PointingHandCursor }
+            TapHandler { id: kofiTap; onTapped: panel.openLink("kofi") }
+        }
+    }
+
+    SectionTitle {
+        objectName: "sponsor-mainland"
+        small: true
+        text: qsTr("中国大陆用户")
+        hint: qsTr("可以用微信或支付宝扫码")
     }
 
     // The two codes side by side at one size; a narrow window stacks them.
@@ -250,57 +304,6 @@ ColumnLayout {
                     }
                 }
             }
-        }
-    }
-
-    // Ko-fi, drawn as its official "Buy me a coffee" button (the one in the README).
-    Flow {
-        id: kofiRow
-        property real motionDy: 0
-        transform: Translate { y: kofiRow.motionDy }
-        Layout.fillWidth: true
-        Layout.topMargin: 4
-        spacing: 14
-        Rectangle {
-            id: kofi
-            objectName: "sponsor-link-kofi"
-            width: kofiContent.implicitWidth + 40
-            height: 46
-            radius: height / 2
-            color: kofiHover.hovered ? "#83AFF5" : "#72A4F2"
-            Behavior on color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
-            scale: kofiTap.pressed ? 0.96 : 1.0
-            Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
-            Row {
-                id: kofiContent
-                anchors.centerIn: parent
-                spacing: 9
-                Image {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 34; height: 34
-                    source: "sponsor/kofi.svg"
-                    sourceSize.width: Math.ceil(34 * panel.dpr)
-                    sourceSize.height: Math.ceil(34 * panel.dpr)
-                }
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "Buy me a coffee"
-                    color: "#FFFFFF"
-                    font.family: Theme.fontUi
-                    font.pixelSize: 16
-                    font.weight: Font.Bold
-                }
-            }
-            HoverHandler { id: kofiHover; cursorShape: Qt.PointingHandCursor }
-            TapHandler { id: kofiTap; onTapped: panel.openLink("kofi") }
-        }
-        Text {
-            height: kofi.height
-            verticalAlignment: Text.AlignVCenter
-            text: qsTr("海外用户可以通过 Ko-fi 支持")
-            color: Theme.t2
-            font.family: Theme.fontUi
-            font.pixelSize: Theme.fsBody
         }
     }
 

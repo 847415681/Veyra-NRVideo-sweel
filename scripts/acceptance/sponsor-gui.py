@@ -70,6 +70,8 @@ cases = [('zh-CN', 1280, 900, '1', False), ('en', 1280, 900, '1', False), ('ja',
          ('zh-TW', 900, 800, '1', False), ('en', 900, 800, '1.5', False), ('zh-CN', 1280, 900, '1', True)]
 if sys.argv[2:] == ['one']:
     cases = cases[:1]
+elif sys.argv[2:] == ['software']:
+    cases = cases[-1:]
 results = []
 try:
     for language, width, height, scale, software in cases:

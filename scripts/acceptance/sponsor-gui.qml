@@ -89,6 +89,9 @@ Item {
                     test.require(test.find(panel, "sponsor-qr-" + id).status === Image.Ready, id + " code loaded")
                 }
                 test.fits(panel, "sponsor panel")
+                const y = name => test.find(panel, name).mapToItem(panel, 0, 0).y
+                test.require(y("sponsor-link-kofi") < y("sponsor-mainland") && y("sponsor-mainland") < y("sponsor-code-wechat"),
+                             "Ko-fi comes first, then 中国大陆用户 and the codes")
                 test.waitUntil = test.ticks + 2
                 test.shot(test.window(), "settings", 3); return
             }
@@ -136,7 +139,10 @@ Item {
                 Qt.quit()
             }
         } catch (e) {
-            console.log("SPONSOR_UI_FAIL", e.message)
+            const root = test.appRoot
+            console.log("SPONSOR_UI_FAIL", e.message, "step=" + test.step, "link=" + test.linkIndex,
+                        "page=" + (root ? root.page : "?"), "section=" + (test.settings ? test.settings.section : "?"),
+                        "window=" + !!test.Window.window, "panel=" + !!test.find(test.window(), "set-sponsor"))
             test.step = 99
             Qt.quit()
         } }

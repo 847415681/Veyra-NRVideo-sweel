@@ -1268,6 +1268,13 @@
    "ja": "K は従来モデル、M・L は DLSS 4.5 です。L は低い入力解像度向けです。画質と処理時間は映像により異なります。"
   },
   {
+   "zh": "Ko-fi、微信与支付宝",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "Ko-fi、微信與支付寶",
+   "en": "Ko-fi, WeChat and Alipay",
+   "ja": "Ko-fi・WeChat・Alipay"
+  },
+  {
    "zh": "LUT 不可用：%1",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "LUT 不可用：%1",
@@ -2680,6 +2687,13 @@
    "zh-TW": "中+低",
    "en": "Medium+Low",
    "ja": "中+低"
+  },
+  {
+   "zh": "中国大陆用户",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "中國大陸用戶",
+   "en": "Users in mainland China",
+   "ja": "中国本土の方"
   },
   {
    "zh": "中延迟",
@@ -4830,6 +4844,13 @@
    "zh-TW": "可以儲存",
    "en": "Can be saved",
    "ja": "保存可能"
+  },
+  {
+   "zh": "可以用微信或支付宝扫码",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "可以用微信或支付寶掃碼",
+   "en": "Scan with WeChat or Alipay",
+   "ja": "WeChat または Alipay でスキャンできます"
   },
   {
    "zh": "可变刷新",
@@ -7875,20 +7896,6 @@
    "zh-TW": "待機",
    "en": "Standby",
    "ja": "待機"
-  },
-  {
-   "zh": "微信、支付宝与 Ko-fi",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "微信、支付寶與 Ko-fi",
-   "en": "WeChat, Alipay and Ko-fi",
-   "ja": "WeChat・Alipay・Ko-fi"
-  },
-  {
-   "zh": "微信或支付宝扫码，金额随意",
-   "src": "qml/SponsorPanel.qml",
-   "zh-TW": "微信或支付寶掃碼，金額隨意",
-   "en": "Scan with WeChat or Alipay, any amount",
-   "ja": "WeChat または Alipay でスキャン。金額は自由です"
   },
   {
    "zh": "微信扫码",
@@ -11089,13 +11096,6 @@
    "zh-TW": "淺綠色",
    "en": "Light green",
    "ja": "ライトグリーン"
-  },
-  {
-   "zh": "海外用户可以通过 Ko-fi 支持",
-   "src": "qml/SponsorPanel.qml",
-   "zh-TW": "海外用戶可以透過 Ko-fi 支持",
-   "en": "Outside China? Support on Ko-fi",
-   "ja": "中国国外の方は Ko-fi から支援できます"
   },
   {
    "zh": "深黑底上的极轻渐变与抖动（防色带）",
@@ -15681,6 +15681,13 @@
    "zh-TW": "重連中",
    "en": "Reconnecting",
    "ja": "再接続中"
+  },
+  {
+   "zh": "金额随意，每一份支持都是很大的鼓励",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "金額隨意，每一份支持都是很大的鼓勵",
+   "en": "Any amount is welcome, and every bit of support means a lot",
+   "ja": "金額は自由です。どんな支援も大きな励みになります"
   },
   {
    "zh": "链路中固定为最后一步；画布上可移动",
