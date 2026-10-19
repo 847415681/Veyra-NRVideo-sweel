@@ -318,6 +318,10 @@ struct QmlPlayerBridge::Impl {
     uint64_t playlistSession = 0, playlistCompletedSession = 0;
     // --- subtitles (ported from the Win32 shell, same semantics) ---
     std::unique_ptr<engine::SubtitleLoader> subLoader;
+    // Embedded-subtitle scan of a file on a server (#48): reads only while playback has its own
+    // buffer. The gate follows the engine's network statistics (tickSubtitles); null for local files.
+    std::shared_ptr<std::atomic<bool>> subScanGate;
+    bool subScanOpen = false;
     std::unique_ptr<engine::SubtitleLoader> subFileLoader;
     uint64_t subFileGeneration = 0;
     std::wstring subFilePath;
@@ -381,6 +385,11 @@ struct QmlPlayerBridge::Impl {
     // ran smoothly again. A second GPU failure within ten minutes is left to the user.
     uint64_t gpuReconnectSession = 0;
     std::chrono::steady_clock::time_point gpuReconnectDue{}, gpuReconnectLast{};
+    // Network sources (#48): damaged data is concealed or skipped without a word per packet;
+    // the user hears about it once in a while, and about a successful reconnect.
+    uint64_t netNoticeSession = 0, netLossReported = 0;
+    uint32_t netReconnectsReported = 0;
+    std::chrono::steady_clock::time_point netLossNoticeAt{};
     struct CaptureListCache { bool valid = false; uint64_t generation = 0; QString language; std::wstring a, b; QVariantList list; };
     CaptureListCache captureFormatsCache, captureResolutionCache, captureRateCache, capturePixelCache;
     // Settings → 组件与许可. Read once and on refreshComponentList(): the property used to
@@ -1545,6 +1554,28 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             }
             // Engine watchdog (field logs(15)): a frozen picture says why, once.
             if (had && !wasEngineHung && s.status == engine::kEngineHangStatus) emit notice(uiText(s.status), true);
+            // Network sources (#48): a recovered connection and now-and-then loss summaries.
+            if (s.sessionId != impl_->netNoticeSession) {
+                impl_->netNoticeSession = s.sessionId;
+                impl_->netLossReported = 0;
+                impl_->netReconnectsReported = 0;
+                impl_->netLossNoticeAt = {};
+            }
+            if (s.network.active) {
+                const auto now = std::chrono::steady_clock::now();
+                if (s.network.reconnects > impl_->netReconnectsReported) {
+                    impl_->netReconnectsReported = s.network.reconnects;
+                    emit notice(tr("网络已重新连接，继续播放"), false);
+                }
+                const uint64_t lost = std::max(s.network.corruptPackets, s.network.corruptFrames);
+                if (lost > impl_->netLossReported &&
+                    (impl_->netLossNoticeAt == std::chrono::steady_clock::time_point{} ||
+                     now - impl_->netLossNoticeAt >= std::chrono::seconds(20))) {
+                    emit notice(tr("检测到网络丢包，已自动跳过 %1 处").arg(qulonglong(lost - impl_->netLossReported)), false);
+                    impl_->netLossReported = lost;
+                    impl_->netLossNoticeAt = now;
+                }
+            }
             emit snapshotChanged();
         }
         // The reconnect waits for the failed session's teardown (the GPU reset can hold it for
@@ -4324,12 +4355,34 @@ void QmlPlayerBridge::refreshSubtitles(const std::wstring& media) {
     if (i.subAlignWorker.joinable()) { i.subAlignWorker.request_stop(); i.subAlignWorker = {}; }
     i.subAligning = false; i.subAlignReady = false;
     if (!i.subLoader) i.subLoader = std::make_unique<engine::SubtitleLoader>();
+    // A file on a server is scanned only while playback has its buffer (#48): a second reader
+    // that takes the same share's bandwidth would starve the picture it is meant to subtitle.
+    const bool server = !media.empty() && engine::subtitleServerFile(media);
+    i.subScanGate = server ? std::make_shared<std::atomic<bool>>(false) : nullptr;
+    i.subScanOpen = false;
+    i.subLoader->setReadGate(i.subScanGate);
+    if (server) i.subStatus = tr("字幕将在视频缓冲好后读取");
     i.subGeneration = i.subLoader->request(media);
     emit subtitlesChanged();
 }
 void QmlPlayerBridge::tickSubtitles() {
     auto& i = *impl_;
     bool changed = false;
+    if (i.subScanGate) {
+        // Opens once playback holds a few seconds ahead (or has read the whole file), closes when
+        // it runs short, and never opens for a server too slow for the stream itself.
+        const auto& n = i.snapshot.network;
+        const bool ended = n.active && n.state == media::NetworkStats::State::Ended;
+        const bool healthy = n.active && !n.bandwidthLow && n.state == media::NetworkStats::State::Playing;
+        const bool open = i.subScanOpen ? (ended || (healthy && n.bufferedSeconds >= 1.0))
+                                        : (ended || (healthy && n.bufferedSeconds >= 3.0));
+        if (open != i.subScanOpen) {
+            i.subScanOpen = open;
+            i.subScanGate->store(open);
+            veyra::log::info("subtitle", std::format("server scan gate {} (buffer {:.1f}s)", open ? "open" : "closed", n.bufferedSeconds));
+            if (open && i.subStatus == tr("字幕将在视频缓冲好后读取")) { i.subStatus = tr("正在读取字幕"); changed = true; }
+        }
+    }
     if (i.subLoader) {
         if (auto result = i.subLoader->poll(); result && result->generation == i.subGeneration) {
             // Replace the loader's tracks, keep user-loaded files and per-track offsets.
@@ -4341,7 +4394,7 @@ void QmlPlayerBridge::tickSubtitles() {
             i.subTracks.insert(i.subTracks.begin() + std::ptrdiff_t(i.subExternal),
                                std::make_move_iterator(result->tracks.begin()), std::make_move_iterator(result->tracks.end()));
             i.subLoaded = count;
-            if(result->complete&&i.subStatus==tr("正在读取字幕"))i.subStatus.clear();
+            if(result->complete&&(i.subStatus==tr("正在读取字幕")||i.subStatus==tr("字幕将在视频缓冲好后读取")))i.subStatus.clear();
             int firstUsable = -1, firstChinese = -1;
             for (size_t k = 0; k < i.subTracks.size(); ++k) {
                 if (!i.subTracks[k].usable()) continue;
@@ -6158,6 +6211,11 @@ void QmlPlayerBridge::openPath(const QString& path) {
     options.softwareDecode = impl_->prefString("decode") == QLatin1String("software");
     options.hardwareDecodeOnly = impl_->prefString("decode") == QLatin1String("hardware");
     options.deinterlace=deinterlaceAvailable()&&impl_->prefBool("deinterlace",true);
+    // Network / server playback (#48): read at open, like the decode choice above.
+    options.network.level=media::networkBufferLevelFromId(impl_->prefString("networkBuffer").toStdString());
+    options.network.startupPrebufferSeconds=impl_->prefs.value(QStringLiteral("networkPrebuffer"),-1).toInt();
+    options.network.autoReconnect=impl_->prefBool("networkAutoReconnect",true);
+    options.network.corrupt=media::corruptPolicyFromId(impl_->prefString("networkCorrupt").toStdString());
     impl_->engine.open(impl_->videoWindow, wide, options);
     impl_->openingSessionId = impl_->engine.snapshot().sessionId;
     impl_->playlistSession = network?0:impl_->openingSessionId;
@@ -6323,10 +6381,12 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"subtitleSize", {16, 56}}, {"subtitleFont", {0, 5}}, {"subtitleOutline", {0, 3}},
         {"subtitleMargin", {0, 240}}, {"subtitleLines", {0, 8}},
         // 列表模式 parameter panel width (ProPage splitter); QML clamps it to the window.
-        {"listInspectorWidth", {376, 4000}}};
+        {"listInspectorWidth", {376, 4000}},
+        // Network sources (#48): seconds to collect before the first picture; -1 follows the buffer level.
+        {"networkPrebuffer", {-1, 60}}};
     static const QStringList flags{"subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
-                                   "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace"};
+                                   "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -6370,6 +6430,17 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     } else if (key == QLatin1String("decode")) {
         const QString v = value.toString();
         if (v != QLatin1String("auto") && v != QLatin1String("software") && v != QLatin1String("hardware")) return false;
+        stored = v;
+    } else if (key == QLatin1String("networkBuffer")) {
+        // Network buffer level (#48): the ids of media::NetworkBufferLevel.
+        const QString v = value.toString();
+        static const QStringList levels{"auto", "off", "small", "medium", "large"};
+        if (!levels.contains(v)) return false;
+        stored = v;
+    } else if (key == QLatin1String("networkCorrupt")) {
+        // What to do with pictures damaged by packet loss (network sources only).
+        const QString v = value.toString();
+        if (v != QLatin1String("conceal") && v != QLatin1String("keyframe")) return false;
         stored = v;
     } else if (key == QLatin1String("rememberPosition") || key == QLatin1String("dockPinned")) {
         stored = value.toBool();
@@ -7586,6 +7657,10 @@ void QmlPlayerBridge::updateRunStatus() {
     QString status = tr("待机"), level = QStringLiteral("idle");
     if (s.failed) { status = tr("错误"); level = QStringLiteral("err"); }
     else if (s.remoteRecovering) { status = tr("恢复中"); level = QStringLiteral("warn"); }
+    // Paused to buffer a network source (#48): no pictures are due, so the output rate is not judged.
+    else if (s.running && s.network.active && (s.network.holding() || s.network.state == media::NetworkStats::State::Reconnecting)) {
+        status = tr("缓冲中"); level = QStringLiteral("warn");
+    }
     else if (active && !s.applying && f.rateWindowReady) {
         // Judged on the engine's own words, shown in the interface language.
         const std::wstring rate = i.history.rateStatus(s);
@@ -8528,6 +8603,28 @@ QString QmlPlayerBridge::liveOpeningText() const {
     if (impl_->liveKind == QLatin1String("screen")) return tr("正在开始屏幕捕获…");
     if (s.capture) return tr("正在打开采集设备…");
     return {};
+}
+
+// ---- network / server playback (#48) ------------------------------------------------
+bool QmlPlayerBridge::networkActive() const { return impl_->snapshot.network.active; }
+bool QmlPlayerBridge::networkHolding() const {
+    const auto& n = impl_->snapshot.network;
+    return n.active && (n.holding() || n.state == media::NetworkStats::State::Reconnecting);
+}
+QString QmlPlayerBridge::networkSummary() const {
+    const auto& n = impl_->snapshot.network;
+    if (!n.active) return {};
+    QStringList parts;
+    parts << tr("缓冲 %1 s").arg(n.bufferedSeconds, 0, 'f', 1);
+    parts << (n.downloadBytesPerSecond > 0 ? tr("下载 %1 MB/s").arg(n.downloadBytesPerSecond / 1048576.0, 0, 'f', 1)
+                                           : tr("下载 —"));
+    parts << tr("重连 %1").arg(n.reconnects);
+    if (const uint64_t lost = std::max(n.corruptPackets, n.corruptFrames); lost > 0) parts << tr("丢包 %1").arg(qulonglong(lost));
+    return parts.join(QStringLiteral(" · "));
+}
+QString QmlPlayerBridge::networkNotice() const {
+    const auto& n = impl_->snapshot.network;
+    return n.active ? uiText(n.message) : QString();
 }
 
 } // namespace veyra::ui

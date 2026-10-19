@@ -33,6 +33,14 @@
 
 命令与失败记录见FULLSCREEN_INPUT_REPORT_2026-10-18.md；工具在E:/项目/Veyra/tmp/fullscreen-input-20261018/{build,stage,checks,launch,verify}.py，最终logs/.../checks-153313、gpu-pro-153358、software-min-153508，reports/.../final.json核验源/构建/5EXE/2014依赖及main26c0d61。生产只改2文件，Timer数量及33ms/250ms保持，无媒体/效果/调度修改，无NR性能收益宣称。所有测试实例正常退出；本轮未写Claude/旧脏树、未合main/push/发布/关机，未验实卡/串流/混合DPI与Esc工具输入如实保留边界。
 
+## 2026-10-17 #48 网络稳定与服务器视频缓冲（Claude 子会话）
+
+- 授权与方案：AGENTS.md 顶部同日条目；docs/NETWORK_BUFFER_48_PLAN_2026-10-17.md。分支 claude/network-buffer-48-20261017（main 26c0d61），存档 checkpoint/pre-claude-network-buffer-48-20261017 与 archives/claude-network-buffer-48-20261017（bundle 已 verify，88 工作树 / 108 脏文件）。产物 {build,tests,logs,tmp,reports,archives}/claude-network-buffer-48-20261017。
+- 核对：计划所述“字幕加载器对网络地址再开连接”与代码不符（网络地址不扫描字幕）；实际问题是 NAS 路径整文件扫描与点播无内嵌字幕。设计改为一套共享解复用会话（含 HLS/RTSP/HTTP/NAS），理由见方案 §2。
+- 进度随实施追加在方案 §5。
+- 2026-10-18 子会话额度用尽，由协调会话接手：核对未提交的最后一批修正（HLS 主列表最佳变体、直播重连短探测与 0.5 s 起播缓冲、带宽判定证据、码率历史老化、音轨切换锁、重连退避、40 s 打开期限）后，`tmp/claude-network-buffer-48-20261017/build.py`（无改动增量，0.7 s）+ `make_app.py`，完整矩阵 `py -3.11 -I tests/network/run_network_tests.py --out tests/claude-network-buffer-48-20261017/results/matrix-claude-verify` 19/19 通过（日志 `logs/claude-network-buffer-48-20261017/matrix-claude-verify.log`）。
+- 发现并补上隔行分支的损坏帧仍会停止播放（1080i 网络电视常见）：改为与逐行同一容错策略；新素材 `av-1080i25-60s.ts` 与用例 `ts-flip-1pct-interlaced`。重新编译 3 个目标 14.8 s，`--only ts-flip-1pct-interlaced,ts-flip-1pct-10min-decode,local-ab` 3/3 通过（`results/claude-interlaced`）。
+
 ## 2026-10-17 采集格式与旧版入口（Linux 源码候选）
 
 按用户“全部修复掉，再添加老版本采集格式选择入口”，在窗口修复 1295d6b 之上隔离实施 `codex/capture-format-fixes-20261017`。修复 DirectShow 能力回退、尺寸/帧率范围候选、±1 tick 显示分组漏掉像素项、精确媒体类型恢复与连接校验；增加可搜索虚拟化旧版组合列表、自定义尺寸检查和查询错误诊断。原低延迟回调/队列、BMD 原生、增强/音频/渲染/运行库与配置保持。详见 docs/CAPTURE_FORMAT_FIXES_2026-10-17.md。

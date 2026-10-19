@@ -463,6 +463,12 @@ class QmlPlayerBridge : public QObject {
     // A live source (PS5 / capture) that is still opening: what the picture area
     // says meanwhile ("" once it plays or when nothing is opening).
     Q_PROPERTY(QString liveOpeningText READ liveOpeningText NOTIFY snapshotChanged)
+    // Network / server playback (#48): the signal-panel line ("缓冲 18.2 s · 下载 12.4 MB/s · 重连 0"),
+    // whether playback is paused to buffer, and the reason text shown while it is.
+    Q_PROPERTY(bool networkActive READ networkActive NOTIFY snapshotChanged)
+    Q_PROPERTY(bool networkHolding READ networkHolding NOTIFY snapshotChanged)
+    Q_PROPERTY(QString networkSummary READ networkSummary NOTIFY snapshotChanged)
+    Q_PROPERTY(QString networkNotice READ networkNotice NOTIFY snapshotChanged)
     // Protection regions as the engine holds them: [{left,top,right,bottom,ellipse}].
     Q_PROPERTY(QVariantList protectionRegions READ protectionRegions NOTIFY protectionChanged)
     Q_PROPERTY(QString protectionDrawShape READ protectionDrawShape NOTIFY protectionDrawChanged)
@@ -1059,6 +1065,10 @@ public:
     QString captureSignalText() const;
     QString captureSignalLevel() const;
     QString liveOpeningText() const;
+    bool networkActive() const;
+    bool networkHolding() const;
+    QString networkSummary() const;
+    QString networkNotice() const;
     Q_INVOKABLE void importPresetDialog();
     Q_INVOKABLE bool importPreset(const QString& path);
     Q_INVOKABLE void exportPresetDialog(int index);
