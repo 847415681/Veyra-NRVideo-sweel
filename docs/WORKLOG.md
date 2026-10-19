@@ -9837,3 +9837,6 @@ Branch claude/aa-53-20261017 from main 26c0d61. Archive E:/项目/Veyra/archives
 人工核对Claude/Codex产品报告并生成v2.0.9..d91ec9f的86提交（74非merge）/223路径索引；完成AMD0.44、AA、美颜/468点、PR57格式/窗口、PR63/64音频、#48网络、全屏与发行资料说明，区分实测、夹具、未验硬件和旧问题。原图复制新6群码SHA c41c67f0732462ded8a9d1956d0e2f1c4621b986d9e70f166f6c0039a8e1825f，赞助码220宽/Discord/Ko-fi/知识库保留；README仅更新相关区块/过时AMD模型说明/下载/构建链接。
 
 命令：python -X utf8 -B scripts/acceptance/release-2.1.0.py prepare；逐原ZIP及晋升硬链接SHA/CRC/EXE检查通过，原包未改字节，内部2.1.0-test保留，未构建/重压缩。reports/.../local.json记录两GPU包/应用源/AMD源大小与SHA；原DELIVERY与旧Release元数据存archives。三个不变依赖源的远端digest逐项核对通过（dependency-digests.json）；README/更新说明本地链接、编码、双图尺寸及群码日期检查通过；git diff --check通过。相对精确应用源66b3210没有产品文件变化，无SDK/运行库/模型新增Git。群公告只拟稿，不代发/关机。后续按计划上传草稿、核验远端资产后发布并追加回执。
+
+
+2.1.0发布完成：https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.0，published_at 2026-10-19T07:43:22Z，主版ID417022047、源码ID417022025，latest经API确认。全部远端digest/size/state及两个标签、支持图片区块核对通过；无重建/重封包。完整资产SHA、命令及回执见docs/RELEASE_2.1.0_REPORT_2026-10-19.md与reports/release-2.1.0-20261019/final.json。追加本回执后仅普通push main，不移动发布标签或改包。
