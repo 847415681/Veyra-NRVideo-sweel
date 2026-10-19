@@ -256,6 +256,18 @@ Source: https://github.com/lucide-icons/lucide/tree/a537cb6eb323b885f4c60baf3cec
 
 The Qt/QML interface (2026-09-26) draws the Lucide geometry that the approved prototype carries in `prototypes/ui-redesign-2026-09-25/icons.js`. `tools/qt_probe/make-icons.py` converts those SVG elements to path data in `qml/Veyra/IconData.js`, rendered by `qml/Veyra/VIcon.qml`; the same Lucide ISC / Feather MIT notices in `assets/icons/lucide/LICENSE` apply. `back10`, `fwd10`, `playfill` and `pausefill` in that file are the prototype's own inline SVGs, not Lucide.
 
+The sponsor page (2026-10-19) adds Lucide `coffee` and `external-link` (as `external`) from lucide-static 1.51.0 to the same
+`icons.js`, under the same ISC notice.
+
+## Simple Icons brand glyphs (sponsor page, 2026-10-19)
+
+设置 → 赞助作者 draws the Bilibili, TikTok (Douyin uses the same mark), X, GitHub, YouTube, Ko-fi, WeChat and Alipay
+glyphs from [Simple Icons](https://github.com/simple-icons/simple-icons) 16.34.0 (npm `simple-icons`, CC0-1.0).
+`tools/qt_probe/make-sponsor-icons.py` places the unmodified path data on coloured tiles in `qml/Veyra/sponsor/*.svg`;
+the Ko-fi glyph is split into its subpaths to colour the cup the way Ko-fi's own button does. CC0 covers the
+drawings only: the logos remain trademarks of their owners and are used solely to link to the author's own
+pages; no endorsement is implied.
+
 ## RTX Video SDK 1.1 local VSR adapter
 
 User-provided official SDK from https://developer.nvidia.com/rtx-video-sdk/getting-started, kept under ignored third_party_local/nvidia/RTX_Video_SDK_1.1.0. Its NVIDIA RTX SDK license remains applicable. VideoSrBackend is independently authored against the documented VSR parameter ABI; no SDK sample implementation or proprietary header is copied into the repository. Local nvngx_vsr.dll remains excluded from Git. Under the user-authorized 2026-09-09 Release Runtime Pack policy, its pinned signed release copy may be included only as a Release asset alongside the applicable SDK license and manifest; it is never committed to source control.
@@ -316,6 +328,7 @@ Thank you to these projects and their contributors. Integrated code, dependencie
 | [SDL](https://github.com/libsdl-org/SDL) | PC controller input, DualSense support and haptic audio output. |
 | [AMD FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK) | Optical flow and its D3D12 backend. |
 | [Lucide](https://github.com/lucide-icons/lucide) | UI icons, retaining Lucide and Feather-derived license notices. |
+| [Simple Icons](https://github.com/simple-icons/simple-icons) | Brand glyphs on the sponsor page (CC0; the logos stay their owners' trademarks). |
 | [Intel XeSS / XeLL](https://github.com/intel/xess) | Experimental XeSS frame generation and related runtime interfaces. |
 | [NVIDIA DLSS](https://github.com/NVIDIA/DLSS), [RTX Video SDK](https://developer.nvidia.com/rtx-video-sdk), [Optical Flow SDK](https://developer.nvidia.com/opticalflow-sdk), [Video Codec SDK](https://developer.nvidia.com/video-codec-sdk) | Upscaling, optical flow, encoding and enhancement interfaces. Experimental NR components have separate identities and boundaries in [Runtime Components](docs/RUNTIME_COMPONENTS_1.1.0.md); this is not vendor certification. |
 | [vcpkg](https://github.com/microsoft/vcpkg) | Dependency builds, version records and license provenance. |

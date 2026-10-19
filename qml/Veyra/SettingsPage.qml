@@ -1,7 +1,7 @@
 // 设置, rebuilt from the design (pages-b.js PAGES.set + pages.css .set).
 //
 // Design: a 220px nav column (外观 / 启动与窗口 / 播放 / 音频 / 性能 / 兼容 /
-// PS5 串流 / 快捷键 / 组件与许可 / 关于; split 2026-10-05 because one page held
+// PS5 串流 / 快捷键 / 组件与许可 / 关于 / 赞助作者; split 2026-10-05 because one page held
 // almost every setting) and a large body. The design deliberately has NO
 // capture-card section here: capture settings live in the capture dialog.
 //
@@ -25,7 +25,7 @@ VPage {
         // render(true): 480 ms, i*40 ms, y 12).
         Qt.callLater(() => stagger(sectionColumns[section] || null))
     }
-    readonly property var sectionColumns: ({ look: secLook, window: secWindow, play: secPlay, audio: secAudio, perf: secPerf, compat: secCompat, ps5: secPs5, keys: secKeys, comp: secComp, about: secAbout })
+    readonly property var sectionColumns: ({ look: secLook, window: secWindow, play: secPlay, audio: secAudio, perf: secPerf, compat: secCompat, ps5: secPs5, keys: secKeys, comp: secComp, about: secAbout, sponsor: secSponsor })
     Component { id: staggerComp; VRise.Stagger {} }
     function stagger(col) {
         if (Theme.reduced || !col) return
@@ -48,7 +48,9 @@ VPage {
         { id: "ps5",   label: qsTr("PS5 串流"), icon: "gamepad" },
         { id: "keys",  label: qsTr("快捷键"), icon: "zap" },
         { id: "comp",  label: qsTr("组件与许可"), icon: "box" },
-        { id: "about", label: qsTr("关于"), icon: "info" }
+        { id: "about", label: qsTr("关于"), icon: "info" },
+        // The one entry with a coloured icon, so it can be found.
+        { id: "sponsor", label: qsTr("赞助作者"), icon: "heart", tint: "#FF6B81" }
     ]
 
     // --- nav ---------------------------------------------------------------
@@ -92,7 +94,7 @@ VPage {
                             anchors.verticalCenter: parent.verticalCenter
                             name: modelData.icon
                             size: 15
-                            color: navLabel.color
+                            color: modelData.tint !== undefined ? modelData.tint : navLabel.color
                         }
                         Text {
                             id: navLabel
@@ -995,8 +997,13 @@ VPage {
                             VButton { text: qsTr("打开"); onClicked: veyra.openFeedbackPage() }
                         }
                         VRow {
-                            label: qsTr("交流群与赞助")
-                            hint: qsTr("项目主页 README 里的二维码")
+                            label: qsTr("赞助作者")
+                            hint: qsTr("微信、支付宝与 Ko-fi")
+                            VButton { objectName: "about-sponsor"; text: qsTr("前往"); onClicked: root.section = "sponsor" }
+                        }
+                        VRow {
+                            label: qsTr("交流群")
+                            hint: qsTr("群二维码在项目主页 README 里")
                             VButton { text: qsTr("查看"); onClicked: veyra.openProjectPage() }
                         }
                         VRow {
@@ -1039,6 +1046,15 @@ VPage {
                             }
                         }
                     }
+                }
+
+                // --- 赞助作者 ------------------------------------------------
+                SponsorPanel {
+                    id: secSponsor
+                    objectName: "set-sponsor"
+                    Layout.fillWidth: true
+                    visible: root.section === "sponsor"
+                    onOpenLink: id => veyra.openSponsorLink(id)
                 }
 
                 Item { Layout.preferredHeight: 12 }

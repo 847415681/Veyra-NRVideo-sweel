@@ -9738,3 +9738,9 @@ final-audit.py pre已通过82旧树/94旧分支/509脏文件与main b571a44不�
 - 所有命令、失败夹具修正、实际路径和边界见docs/PR57_INTEGRATION_REPORT_2026-10-17.md及E:/项目/Veyra/reports/pr57-capture-window-20261017。合并前verify通过：84旧树、96分支、509脏文件与1524共享组件保持。用户请求PR合并，不发布/改包/关机。
 
 - PR57远端合并确认：2026-10-17T14:09:26Z，state=MERGED，merge=9c7b342，main正常推送7e2157d；保留云端源分支。本补充仅文档回执，不改已验收代码；最终保护与source-after.bundle回执在E:/项目/Veyra/reports/pr57-capture-window-20261017/final.json。
+
+## 2026-10-19 首页文案与赞助作者页（Claude）
+
+- 用户要求首页“今天看点什么？”改为“Veyra NR Video”，小字改为“本软件开源免费，如果对你有帮助，你可以 → 请作者喝杯咖啡”并可点到设置新增的赞助页；页内放作者 B站/抖音/X/GitHub/YouTube（图标 + 前往主页，不显示链接）、微信/支付宝收款码和 Ko-fi 咖啡按钮。分支 `claude/sponsor-20261019`（main 1dc8c18），工作树 `E:/项目/Veyra/worktrees/sponsor-20261019`。
+- 新增 `SponsorPanel.qml`、`qml/Veyra/sponsor/`（Simple Icons 16.34.0 CC0 品牌图形，`tools/qt_probe/make-sponsor-icons.py` 生成；两张收款码统一 572 px 宽、圆角做进像素，处理后与缩到 216 px 时解码内容均与原图一致）、桥接 `openSponsorLink`（链接只在 C++）。“关于”里从未接通的“交流群与赞助”拆为“赞助作者 → 前往”和“交流群 → 查看”（打开项目 README）。翻译新增 19 条全部补齐。
+- 构建 `E:/项目/Veyra/build/claude-sponsor-20261019`（118 秒）；Qt Quick 组件测试 87/87（新增 3 项）；真实程序 `scripts/acceptance/sponsor-gui.py` 6 组（四种语言、150%、软件渲染界面）真实点击全部通过，日志 `E:/项目/Veyra/logs/claude-sponsor-20261019/gui-20261019-105518`。六个网址 2026-10-19 均 HTTP 200。详见 docs/SPONSOR_PAGE_2026-10-19.md。没有合并 main、推送或发布。
