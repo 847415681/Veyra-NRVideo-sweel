@@ -309,6 +309,16 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(double nrHoldTolerance READ nrHoldTolerance WRITE setNrHoldTolerance NOTIFY settingsChanged)
     Q_PROPERTY(bool videoHdr READ videoHdr WRITE setVideoHdr NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap videoHdrParams READ videoHdrParams NOTIFY videoHdrParamsChanged)
+    // Spatial anti-aliasing (#53): the list card edits the first instance, created
+    // on first use; node cards edit their own node by chain index.
+    // Beauty nodes of the active chain in chain order (list mode: the group's layers).
+    Q_PROPERTY(QVariantList beautyLayers READ beautyLayers NOTIFY beautyChanged)
+    // The chain's shared face detection: quality, maxFaces, stability.
+    Q_PROPERTY(QVariantMap beautyDetection READ beautyDetection NOTIFY beautyChanged)
+    Q_PROPERTY(QString beautyStatus READ beautyStatus NOTIFY snapshotChanged)
+    Q_PROPERTY(bool beautyAnyEnabled READ beautyAnyEnabled NOTIFY beautyChanged)
+    Q_PROPERTY(bool antiAliasEnabled READ antiAliasEnabled WRITE setAntiAliasEnabled NOTIFY antiAliasChanged)
+    Q_PROPERTY(QVariantMap antiAliasParams READ antiAliasParams NOTIFY antiAliasChanged)
     // Custom: static HDR output tuning (globals, every field live).
     Q_PROPERTY(bool hdrCurve READ hdrCurve WRITE setHdrCurve NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap hdrCurveParams READ hdrCurveParams NOTIFY settingsChanged)
@@ -949,6 +959,29 @@ public:
     void syncHdrDisplayProfile();
     QVariantMap videoHdrParams() const;
     Q_INVOKABLE bool setVideoHdrParameter(const QString& key, double value);
+    bool antiAliasEnabled() const;
+    void setAntiAliasEnabled(bool enabled);
+    QVariantMap antiAliasParams() const;
+    Q_INVOKABLE QVariantMap antiAliasParamsAt(int index) const;
+    QVariantList beautyLayers() const;
+    QVariantMap beautyDetection() const;
+    QString beautyStatus() const;
+    // `index` is the chain node index (node mode cards, list layers alike).
+    Q_INVOKABLE QVariantMap beautyParamsAt(int index) const;
+    Q_INVOKABLE bool setBeautyParameterAt(int index, const QString& key, double value);
+    // List mode: a copy right behind the layer; a move within the beauty group.
+    Q_INVOKABLE int duplicateBeautyLayer(int index);
+    Q_INVOKABLE bool moveBeautyLayer(int index, int delta);
+    // natural / light / restore / restoreNatural: the sub-switches and values they set.
+    Q_INVOKABLE bool applyBeautyPreset(int index, const QString& preset);
+    Q_INVOKABLE bool setBeautyDetection(const QString& key, double value);
+    bool beautyAnyEnabled() const;
+    // List group switch: every layer off, and on again the layers that were on.
+    Q_INVOKABLE bool setAllBeautyEnabled(bool enabled);
+    // Back to the defaults (both sub-functions off); the switch stays as it is.
+    Q_INVOKABLE bool resetBeautyLayer(int index);
+    Q_INVOKABLE bool setAntiAliasParameter(const QString& key, double value);
+    Q_INVOKABLE bool setAntiAliasParameterAt(int index, const QString& key, double value);
     int nrStyle() const;
     void setNrStyle(int value);
     double nrIntensity() const;
@@ -1310,6 +1343,8 @@ signals:
     // labels or positions; only that group notifies (audit 2026-10-15 B1).
     void nrLayersChanged();
     void videoHdrParamsChanged();
+    void antiAliasChanged();
+    void beautyChanged();
     void colourParamsChanged();
     void protectionChanged();
     void recentFilesChanged();

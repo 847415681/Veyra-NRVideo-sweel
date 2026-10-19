@@ -185,6 +185,7 @@ static ui::EffectGpu effectGpu();
 struct QmlPlayerBridge::Impl {
     // Per-layer on/off before the NR master switch turned them all off.
     std::vector<bool> nrMasterRestore;
+    std::vector<bool> beautyMasterRestore;   // the same for the beauty group switch
     QQmlEngine* qmlEngine = nullptr;
     engine::EngineController& engine;
     PlayerUiFacade facade;
@@ -1795,6 +1796,15 @@ QVariantList QmlPlayerBridge::stageTimings() const {
     struct Row { const char* label; Stage stage; const char* color; };
     const Row rows[] = {
         {"输入", Stage::Color, "#A8A8B8"},
+        {"抗锯齿", Stage::AaNode0, "#7FD4FF"},
+        {"抗锯齿 2", Stage::AaNode1, "#A9E2FF"},
+        {"人脸识别", Stage::BeautyDetect, "#FFB3D1"},
+        {"美颜", Stage::BeautyNode0, "#FF8FBF"},
+        {"美颜 2", Stage::BeautyNode1, "#FF9DC7"},
+        {"美颜 3", Stage::BeautyNode2, "#FFABCF"},
+        {"美颜 4", Stage::BeautyNode3, "#FFB9D7"},
+        {"美颜 5", Stage::BeautyNode4, "#FFC7DF"},
+        {"美颜 6", Stage::BeautyNode5, "#FFD5E7"},
         {"超分", Stage::Sr, "#6EA8FF"},
         {"光流", Stage::Flow, "#9A85FF"},
         {"NR采样", Stage::Nr, "#FF8A3D"},
@@ -1814,6 +1824,10 @@ QVariantList QmlPlayerBridge::stageTimings() const {
     static const char* const layerLabels[] = {"NR 第1层", "NR 第2层", "NR 第3层", "NR 第4层"};
     static const char* const layerColors[] = {"#FF8A3D", "#FFA866", "#FFC28F", "#FFD9B8"};
     for (const auto& r : rows) {
+        // Anti-aliasing and beauty rows appear only while those nodes run.
+        const bool optional = r.stage == Stage::AaNode0 || r.stage == Stage::AaNode1 ||
+            (r.stage >= Stage::BeautyNode0 && r.stage <= Stage::BeautyDetect);
+        if (optional && s.metrics.flow.gpuTiming[size_t(r.stage)].samples == 0) continue;
         if (r.stage == Stage::Nr && measuredLayers >= 2) {
             for (unsigned i = 0; i < diagnostics::kTimedNrLayers; ++i)
                 if (s.metrics.flow.gpuTiming[size_t(diagnostics::nrLayerStage(i))].samples > 0)
@@ -1894,7 +1908,7 @@ QVariantMap QmlPlayerBridge::nodeTimings() const {
     for (const int i : path) onPath[size_t(i)] = true;
     for (uint32_t i = 0; i < c.nodeCount; ++i)
         if (!onPath[i]) publish(i, draft ? QStringLiteral("draft") : QStringLiteral("idle"), std::nullopt);
-    unsigned enabledNr = 0, colour = 0;
+    unsigned enabledNr = 0, colour = 0, antiAlias = 0, beauty = 0;
     for (const int index : path) {
         const auto i = uint32_t(index);
         const auto& n = c.nodes[i];
@@ -1912,6 +1926,15 @@ QVariantMap QmlPlayerBridge::nodeTimings() const {
             if (colour < diagnostics::kTimedColorNodes) stage = diagnostics::colorNodeStage(colour);
             if (colour == 0) waiting = live ? QStringLiteral("fused") : waiting;
             ++colour;
+            break;
+        case engine::EffectType::AntiAliasing:
+            // Indexed by parameter ordinal, like Color: every anti-aliasing node on the path counts.
+            if (antiAlias < diagnostics::kTimedAaNodes) stage = diagnostics::aaNodeStage(antiAlias);
+            ++antiAlias;
+            break;
+        case engine::EffectType::Beauty:
+            if (beauty < diagnostics::kTimedBeautyNodes) stage = diagnostics::beautyNodeStage(beauty);
+            ++beauty;
             break;
         case engine::EffectType::SuperResolution: stage = Stage::Sr; break;
         case engine::EffectType::VideoHdr:
@@ -2152,6 +2175,8 @@ void QmlPlayerBridge::resetCurrentPage() {
     s.protection = engine::ProtectionSettings{};
     s.color = engine::ColorSettings{};
     s.additionalColors = {}; s.additionalColorCount = 0;
+    s.antiAlias = engine::AntiAliasSettings{}; s.additionalAntiAlias = {}; s.additionalAntiAliasCount = 0;
+    s.beauty = engine::BeautySettings{}; s.additionalBeauty = {}; s.additionalBeautyCount = 0; s.beautyDetection = {};
     s.videoHdr = engine::VideoHdrSettings{};
     const auto before=impl_->chain; const auto selected=impl_->selectedNr;
     const auto oldLayout = impl_->layout;
@@ -5364,6 +5389,353 @@ void QmlPlayerBridge::setVideoHdr(bool enabled) {
 }
 // RTX Video HDR tuning lives on the chain's HDR node, like NR parameters on
 // NR nodes: the same values AppShell's settings sliders edited.
+namespace {
+// Spatial anti-aliasing (#53): one node's values for the editors, and the edits they send.
+QString antiAliasSummary(const engine::AntiAliasSettings& a) {
+    using engine::AntiAliasMethod;
+    if (a.method == AntiAliasMethod::Mlaa)
+        return QStringLiteral("MLAA · ") + QmlPlayerBridge::tr("阈值 %1").arg(double(a.mlaaThreshold), 0, 'f', 2);
+    const QStringList fxaa{QmlPlayerBridge::tr("中"), QmlPlayerBridge::tr("高"), QmlPlayerBridge::tr("极高")};
+    const QStringList smaa{QmlPlayerBridge::tr("低"), QmlPlayerBridge::tr("中"), QmlPlayerBridge::tr("高"), QmlPlayerBridge::tr("极高")};
+    QString text = a.method == AntiAliasMethod::Fxaa ? QStringLiteral("FXAA · ") + fxaa.value(int(a.quality))
+                                                     : QStringLiteral("SMAA · ") + smaa.value(int(a.quality));
+    if (a.usesTemporal())
+        text += a.temporal == engine::AntiAliasTemporal::T2x ? QmlPlayerBridge::tr(" · 时域 T2x（实验）") : QmlPlayerBridge::tr(" · 时域 4x（实验）");
+    return text;
+}
+QVariantMap antiAliasMap(const engine::ChainNode* node, int index) {
+    const engine::AntiAliasSettings a = node ? node->aa : engine::AntiAliasSettings{};
+    return {{"index", index}, {"present", node != nullptr}, {"enabled", node && node->enabled},
+            {"method", int(a.method)}, {"quality", int(a.quality)},
+            {"mlaaThreshold", double(a.mlaaThreshold)}, {"mlaaStrength", double(a.mlaaStrength)},
+            {"temporal", int(a.temporal)}, {"historyWeight", double(a.historyWeight)},
+            {"historyRejection", double(a.historyRejection)}, {"summary", antiAliasSummary(a)}};
+}
+// A method change starts from its high tier; the experimental modes keep Magpie's
+// history defaults (T2x 0.5, 4x 0.75) unless the weight was tuned.
+uint8_t defaultAntiAliasQuality(engine::AntiAliasMethod method) {
+    return method == engine::AntiAliasMethod::Fxaa ? 1 : method == engine::AntiAliasMethod::Smaa ? 2 : 0;
+}
+float defaultHistoryWeight(engine::AntiAliasTemporal temporal) {
+    return temporal == engine::AntiAliasTemporal::X4 ? 0.75f : 0.5f;
+}
+bool applyAntiAliasKey(engine::AntiAliasSettings& a, bool& enabled, const QString& key, double value) {
+    using engine::AntiAliasMethod; using engine::AntiAliasTemporal;
+    if (!std::isfinite(value)) return false;
+    const int whole = int(std::lround(value));
+    if (key == "enabled") { enabled = value != 0; return true; }
+    if (key == "method") {
+        if (whole < 0 || whole > 2) return false;
+        const auto method = AntiAliasMethod(whole);
+        if (method != a.method) { a.method = method; a.quality = defaultAntiAliasQuality(method); }
+        if (method != AntiAliasMethod::Smaa) a.temporal = AntiAliasTemporal::Off;
+        return true;
+    }
+    if (key == "quality") {
+        if (whole < 0 || whole >= int(engine::antiAliasQualityCount(a.method))) return false;
+        a.quality = uint8_t(whole); return true;
+    }
+    if (key == "temporal") {
+        if (whole < 0 || whole > 2 || (whole && a.method != AntiAliasMethod::Smaa)) return false;
+        const auto next = AntiAliasTemporal(whole);
+        if (next != a.temporal && a.historyWeight == defaultHistoryWeight(a.temporal)) a.historyWeight = defaultHistoryWeight(next);
+        a.temporal = next; return true;
+    }
+    if (key == "mlaaThreshold") { a.mlaaThreshold = float(value); return true; }
+    if (key == "mlaaStrength") { a.mlaaStrength = float(value); return true; }
+    if (key == "historyWeight") { a.historyWeight = float(value); return true; }
+    if (key == "historyRejection") { a.historyRejection = float(value); return true; }
+    return false;
+}
+}
+bool QmlPlayerBridge::antiAliasEnabled() const {
+    const auto* node = impl_->chain.firstOf(engine::EffectType::AntiAliasing);
+    return node && node->enabled;
+}
+void QmlPlayerBridge::setAntiAliasEnabled(bool enabled) {
+    if (enabled != antiAliasEnabled()) (void)setAntiAliasParameter(QStringLiteral("enabled"), enabled ? 1 : 0);
+}
+QVariantMap QmlPlayerBridge::antiAliasParams() const {
+    for (uint32_t i = 0; i < impl_->chain.nodeCount; ++i)
+        if (impl_->chain.nodes[i].type == engine::EffectType::AntiAliasing) return antiAliasMap(&impl_->chain.nodes[i], int(i));
+    return antiAliasMap(nullptr, -1);
+}
+QVariantMap QmlPlayerBridge::antiAliasParamsAt(int index) const {
+    if (index < 0 || uint32_t(index) >= impl_->chain.nodeCount ||
+        impl_->chain.nodes[index].type != engine::EffectType::AntiAliasing) return antiAliasMap(nullptr, -1);
+    return antiAliasMap(&impl_->chain.nodes[index], index);
+}
+bool QmlPlayerBridge::setAntiAliasParameter(const QString& key, double value) {
+    auto& c = impl_->chain;
+    for (uint32_t i = 0; i < c.nodeCount; ++i)
+        if (c.nodes[i].type == engine::EffectType::AntiAliasing) return setAntiAliasParameterAt(int(i), key, value);
+    if (c.mode != engine::ChainMode::List) { emit notice(tr("请先添加抗锯齿节点"), true); return false; }
+    // The list card's instance exists once it is used: after the grades, in
+    // front of SR, where toChain() puts it.
+    engine::ChainNode node; node.type = engine::EffectType::AntiAliasing;
+    bool enabled = false;
+    if (!applyAntiAliasKey(node.aa, enabled, key, value)) return false;
+    node.enabled = node.aa.enabled = enabled;
+    if (!node.aa.validate().empty()) return false;
+    if (c.nodeCount >= engine::kMaxChainNodes) { emit notice(tr("效果链已满"), true); return false; }
+    uint32_t insertAt = 0;
+    while (insertAt < c.nodeCount && c.nodes[insertAt].type == engine::EffectType::Color) ++insertAt;
+    const auto before = std::make_unique<engine::EffectChain>(c);
+    const int selected = impl_->selectedNr, colourSelected = impl_->selectedColour;
+    for (uint32_t i = c.nodeCount; i > insertAt; --i) c.nodes[i] = c.nodes[i - 1];
+    c.nodes[insertAt] = node; ++c.nodeCount;
+    if (impl_->selectedNr >= int(insertAt)) ++impl_->selectedNr;
+    if (impl_->selectedColour >= int(insertAt)) ++impl_->selectedColour;
+    if (!impl_->revalidate(true)) {
+        const auto error = impl_->validation.message;
+        c = *before; impl_->selectedNr = selected; impl_->selectedColour = colourSelected; impl_->revalidate();
+        emit notice(uiText(error), true); return false;
+    }
+    emit settingsChanged(); emitChainChanged();
+    return true;
+}
+bool QmlPlayerBridge::setAntiAliasParameterAt(int index, const QString& key, double value) {
+    auto& c = impl_->chain;
+    if (index < 0 || uint32_t(index) >= c.nodeCount || c.nodes[index].type != engine::EffectType::AntiAliasing) return false;
+    auto& node = c.nodes[index];
+    const auto before = node; const bool wasValid = chainValid();
+    bool enabled = node.enabled;
+    if (!applyAntiAliasKey(node.aa, enabled, key, value)) return false;
+    node.enabled = node.aa.enabled = enabled;
+    if (!node.aa.validate().empty()) { node = before; return false; }
+    if (node == before) return true;
+    const bool accepted = impl_->revalidate(true);
+    if (!accepted) { const auto error = impl_->validation.message; node = before; impl_->revalidate(); emit notice(uiText(error), true); }
+    emit settingsChanged();
+    // The switch also strikes the chip through; parameters notify only their group.
+    if (before.enabled != node.enabled) emitChainChanged();
+    else emitParameterChanged(&QmlPlayerBridge::antiAliasChanged, wasValid);
+    return accepted;
+}
+namespace {
+// Beauty nodes: one node's values for the editors, the edits they send and the presets.
+QString beautySummary(const engine::BeautySettings& b, bool enabled) {
+    if (!enabled) return QmlPlayerBridge::tr("已关闭");
+    QStringList parts;
+    if (b.restore) parts << QmlPlayerBridge::tr("原画保护 %1%").arg(std::lround(b.restoreStrength * 100.0f));
+    if (b.smooth) parts << QmlPlayerBridge::tr("磨皮 %1%").arg(std::lround(b.smoothAmount * 100.0f));
+    return parts.isEmpty() ? QmlPlayerBridge::tr("未启用子功能") : parts.join(QStringLiteral(" · "));
+}
+QVariantMap beautyMap(const engine::ChainNode* node, int index, int layer) {
+    const engine::BeautySettings b = node ? node->beauty : engine::BeautySettings{};
+    return {{"index", index}, {"layer", layer}, {"present", node != nullptr}, {"enabled", node && node->enabled},
+            {"restore", b.restore}, {"restoreStrength", double(b.restoreStrength)}, {"restoreScope", int(b.restoreScope)},
+            {"regionExpand", double(b.regionExpand)}, {"feather", double(b.feather)},
+            {"smooth", b.smooth}, {"strength", double(b.strength)}, {"smoothAmount", double(b.smoothAmount)},
+            {"radius", double(b.radius)}, {"detail", double(b.detail)}, {"texture", double(b.texture)},
+            {"brighten", double(b.brighten)}, {"scope", int(b.scope)},
+            {"hueCenter", double(b.hueCenter)}, {"hueRange", double(b.hueRange)}, {"satMin", double(b.satMin)},
+            {"satMax", double(b.satMax)}, {"lumaMin", double(b.lumaMin)}, {"lumaMax", double(b.lumaMax)},
+            {"softness", double(b.softness)}, {"minConfidence", double(b.minConfidence)}, {"showMask", b.showMask},
+            {"summary", beautySummary(b, node && node->enabled)}};
+}
+bool applyBeautyKey(engine::BeautySettings& b, bool& enabled, const QString& key, double value) {
+    if (!std::isfinite(value)) return false;
+    const int whole = int(std::lround(value));
+    if (key == "enabled") { enabled = value != 0; return true; }
+    if (key == "restore") { b.restore = value != 0; return true; }
+    if (key == "smooth") { b.smooth = value != 0; return true; }
+    if (key == "showMask") { b.showMask = value != 0; return true; }
+    if (key == "restoreScope") { if (whole < 0 || whole > 1) return false; b.restoreScope = engine::BeautyRestoreScope(whole); return true; }
+    if (key == "scope") { if (whole < 0 || whole > 1) return false; b.scope = engine::BeautyScope(whole); return true; }
+    const std::pair<const char*, float engine::BeautySettings::*> floats[] = {
+        {"restoreStrength", &engine::BeautySettings::restoreStrength}, {"regionExpand", &engine::BeautySettings::regionExpand},
+        {"feather", &engine::BeautySettings::feather}, {"strength", &engine::BeautySettings::strength},
+        {"smoothAmount", &engine::BeautySettings::smoothAmount}, {"radius", &engine::BeautySettings::radius},
+        {"detail", &engine::BeautySettings::detail}, {"texture", &engine::BeautySettings::texture},
+        {"brighten", &engine::BeautySettings::brighten}, {"hueCenter", &engine::BeautySettings::hueCenter},
+        {"hueRange", &engine::BeautySettings::hueRange}, {"satMin", &engine::BeautySettings::satMin},
+        {"satMax", &engine::BeautySettings::satMax}, {"lumaMin", &engine::BeautySettings::lumaMin},
+        {"lumaMax", &engine::BeautySettings::lumaMax}, {"softness", &engine::BeautySettings::softness},
+        {"minConfidence", &engine::BeautySettings::minConfidence}};
+    for (const auto& [name, field] : floats)
+        if (key == QLatin1String(name)) { b.*field = float(value); return true; }
+    return false;
+}
+// Starting points, tuned on lit photos and dark game footage; each names the
+// sub-switches it changes and leaves the skin range and the detection alone.
+bool applyBeautyPresetValues(engine::BeautySettings& b, const QString& preset) {
+    const auto natural = [&] { b.smooth = true; b.strength = 1.0f; b.smoothAmount = 0.6f; b.radius = 5.0f; b.detail = 0.6f; b.texture = 0.3f; };
+    if (preset == "natural") { natural(); b.restore = false; return true; }
+    if (preset == "light") {
+        b.smooth = true; b.restore = false; b.strength = 1.0f; b.smoothAmount = 0.35f; b.radius = 3.0f; b.detail = 0.75f; b.texture = 0.4f;
+        return true;
+    }
+    if (preset == "restore") { b.restore = true; b.restoreStrength = 1.0f; b.smooth = false; return true; }
+    if (preset == "restoreNatural") { b.restore = true; b.restoreStrength = 1.0f; natural(); return true; }
+    return false;
+}
+}
+QVariantList QmlPlayerBridge::beautyLayers() const {
+    QVariantList out;
+    int layer = 0;
+    for (uint32_t i = 0; i < impl_->chain.nodeCount; ++i)
+        if (impl_->chain.nodes[i].type == engine::EffectType::Beauty) out << beautyMap(&impl_->chain.nodes[i], int(i), layer++);
+    return out;
+}
+QVariantMap QmlPlayerBridge::beautyDetection() const {
+    const auto& d = impl_->chain.beautyDetection;
+    return {{"quality", int(d.quality)}, {"maxFaces", int(d.maxFaces)}, {"stability", double(d.stability)}};
+}
+QString QmlPlayerBridge::beautyStatus() const {
+    const auto& s = impl_->snapshot;
+    if (!s.beautyActive) return {};
+    if (!s.beautyNotice.empty()) return uiText(s.beautyNotice);
+    return s.beautyFaces ? tr("检测到 %1 张人脸").arg(s.beautyFaces) : tr("未检测到人脸");
+}
+QVariantMap QmlPlayerBridge::beautyParamsAt(int index) const {
+    const auto& c = impl_->chain;
+    if (index < 0 || uint32_t(index) >= c.nodeCount || c.nodes[index].type != engine::EffectType::Beauty) return beautyMap(nullptr, -1, -1);
+    int layer = 0;
+    for (int i = 0; i < index; ++i) layer += c.nodes[i].type == engine::EffectType::Beauty;
+    return beautyMap(&c.nodes[index], index, layer);
+}
+bool QmlPlayerBridge::setBeautyParameterAt(int index, const QString& key, double value) {
+    auto& c = impl_->chain;
+    if (index < 0 || uint32_t(index) >= c.nodeCount || c.nodes[index].type != engine::EffectType::Beauty) return false;
+    auto& node = c.nodes[index];
+    const auto before = node; const bool wasValid = chainValid();
+    bool enabled = node.enabled;
+    if (!applyBeautyKey(node.beauty, enabled, key, value)) return false;
+    node.enabled = node.beauty.enabled = enabled;
+    if (!node.beauty.validate().empty()) { node = before; return false; }
+    if (node == before) return true;
+    const bool accepted = impl_->revalidate(true);
+    if (!accepted) { const auto error = impl_->validation.message; node = before; impl_->revalidate(); emit notice(uiText(error), true); }
+    emit settingsChanged();
+    // The switch also strikes the chip through; parameters notify only their group.
+    if (before.enabled != node.enabled) emitChainChanged();
+    else emitParameterChanged(&QmlPlayerBridge::beautyChanged, wasValid);
+    return accepted;
+}
+int QmlPlayerBridge::duplicateBeautyLayer(int index) {
+    auto& c = impl_->chain;
+    if (index < 0 || uint32_t(index) >= c.nodeCount || c.nodes[index].type != engine::EffectType::Beauty) return -1;
+    if (c.mode != engine::ChainMode::List) { emit notice(tr("节点模式请用节点的复制"), true); return -1; }
+    if (c.countOf(engine::EffectType::Beauty) >= engine::kMaxBeautyInstances) {
+        emit notice(tr("%1 最多 %2 个").arg(tr("美颜")).arg(engine::kMaxBeautyInstances), true); return -1;
+    }
+    if (c.nodeCount >= engine::kMaxChainNodes) { emit notice(tr("效果链已满"), true); return -1; }
+    const auto before = std::make_unique<engine::EffectChain>(c);
+    const int selected = impl_->selectedNr, colourSelected = impl_->selectedColour;
+    const uint32_t at = uint32_t(index) + 1;
+    for (uint32_t i = c.nodeCount; i > at; --i) c.nodes[i] = c.nodes[i - 1];
+    c.nodes[at] = c.nodes[index]; ++c.nodeCount;
+    if (impl_->selectedNr >= int(at)) ++impl_->selectedNr;
+    if (impl_->selectedColour >= int(at)) ++impl_->selectedColour;
+    if (!impl_->revalidate(true)) {
+        const auto error = impl_->validation.message;
+        c = *before; impl_->selectedNr = selected; impl_->selectedColour = colourSelected; impl_->revalidate();
+        emit notice(uiText(error), true); return -1;
+    }
+    emit settingsChanged(); emitChainChanged();
+    return int(at);
+}
+bool QmlPlayerBridge::moveBeautyLayer(int index, int delta) {
+    auto& c = impl_->chain;
+    if (index < 0 || uint32_t(index) >= c.nodeCount || c.nodes[index].type != engine::EffectType::Beauty || !delta) return false;
+    int other = index;
+    do other += delta < 0 ? -1 : 1;
+    while (other >= 0 && uint32_t(other) < c.nodeCount && c.nodes[other].type != engine::EffectType::Beauty);
+    if (other < 0 || uint32_t(other) >= c.nodeCount) return false;
+    const auto before = std::make_unique<engine::EffectChain>(c);
+    const auto viewA = std::pair{c.nodes[index].viewX, c.nodes[index].viewY};
+    const auto viewB = std::pair{c.nodes[other].viewX, c.nodes[other].viewY};
+    std::swap(c.nodes[index], c.nodes[other]);
+    // Node mode keeps the canvas positions with the slot; only the parameters trade places.
+    c.nodes[index].viewX = viewA.first; c.nodes[index].viewY = viewA.second;
+    c.nodes[other].viewX = viewB.first; c.nodes[other].viewY = viewB.second;
+    if (!impl_->revalidate(true)) {
+        const auto error = impl_->validation.message; c = *before; impl_->revalidate();
+        emit notice(uiText(error), true); return false;
+    }
+    emit settingsChanged(); emitChainChanged();
+    return true;
+}
+bool QmlPlayerBridge::applyBeautyPreset(int index, const QString& preset) {
+    auto& c = impl_->chain;
+    if (index < 0 || uint32_t(index) >= c.nodeCount || c.nodes[index].type != engine::EffectType::Beauty) return false;
+    auto& node = c.nodes[index];
+    const auto before = node;
+    if (!applyBeautyPresetValues(node.beauty, preset)) return false;
+    node.enabled = node.beauty.enabled = true;
+    if (!node.beauty.validate().empty()) { node = before; return false; }
+    if (!impl_->revalidate(true)) {
+        const auto error = impl_->validation.message; node = before; impl_->revalidate();
+        emit notice(uiText(error), true); return false;
+    }
+    emit settingsChanged(); emitChainChanged();
+    return true;
+}
+bool QmlPlayerBridge::setBeautyDetection(const QString& key, double value) {
+    auto& c = impl_->chain;
+    if (!std::isfinite(value)) return false;
+    auto next = c.beautyDetection;
+    const int whole = int(std::lround(value));
+    if (key == "quality") next.quality = uint8_t(std::clamp(whole, 0, 2));
+    else if (key == "maxFaces") next.maxFaces = uint8_t(std::clamp(whole, 1, 8));
+    else if (key == "stability") next.stability = float(value);
+    else return false;
+    if (!next.validate().empty()) return false;
+    if (next == c.beautyDetection) return true;
+    const auto before = c.beautyDetection; const bool wasValid = chainValid();
+    c.beautyDetection = next;
+    if (!impl_->revalidate(true)) {
+        const auto error = impl_->validation.message; c.beautyDetection = before; impl_->revalidate();
+        emit notice(uiText(error), true); return false;
+    }
+    emit settingsChanged();
+    emitParameterChanged(&QmlPlayerBridge::beautyChanged, wasValid);
+    return true;
+}
+bool QmlPlayerBridge::beautyAnyEnabled() const {
+    const auto& c = impl_->chain;
+    for (uint32_t i = 0; i < c.nodeCount; ++i) if (c.nodes[i].type == engine::EffectType::Beauty && c.nodes[i].enabled) return true;
+    return false;
+}
+bool QmlPlayerBridge::setAllBeautyEnabled(bool enabled) {
+    auto& c = impl_->chain;
+    const auto before = std::make_unique<engine::EffectChain>(c);
+    std::vector<uint32_t> layers;
+    for (uint32_t i = 0; i < c.nodeCount; ++i) if (c.nodes[i].type == engine::EffectType::Beauty) layers.push_back(i);
+    if (layers.empty()) return false;
+    auto& restore = impl_->beautyMasterRestore;
+    if (!enabled) {
+        restore.clear();
+        for (const auto i : layers) { restore.push_back(c.nodes[i].enabled); c.nodes[i].enabled = c.nodes[i].beauty.enabled = false; }
+    } else {
+        // As the NR switch: layers added or removed meanwhile bring every layer back.
+        const bool faithful = restore.size() == layers.size() && std::find(restore.begin(), restore.end(), true) != restore.end();
+        for (size_t k = 0; k < layers.size(); ++k) c.nodes[layers[k]].enabled = c.nodes[layers[k]].beauty.enabled = faithful ? bool(restore[k]) : true;
+    }
+    if (!impl_->revalidate(true)) {
+        const auto error = impl_->validation.message; c = *before; impl_->revalidate();
+        emit notice(uiText(error), true); emitChainChanged(); return false;
+    }
+    veyra::log::info("ui-beauty", std::format("group switch {} layers={}", enabled ? "on" : "off", layers.size()));
+    emitChainChanged(); emit settingsChanged();
+    return true;
+}
+bool QmlPlayerBridge::resetBeautyLayer(int index) {
+    auto& c = impl_->chain;
+    if (index < 0 || uint32_t(index) >= c.nodeCount || c.nodes[index].type != engine::EffectType::Beauty) return false;
+    auto& node = c.nodes[index];
+    const auto before = node;
+    node.beauty = engine::BeautySettings{};
+    node.beauty.enabled = node.enabled;
+    if (node == before) return true;
+    if (!impl_->revalidate(true)) {
+        const auto error = impl_->validation.message; node = before; impl_->revalidate();
+        emit notice(uiText(error), true); return false;
+    }
+    emit settingsChanged(); emitChainChanged();
+    return true;
+}
 QVariantMap QmlPlayerBridge::videoHdrParams() const {
     for (uint32_t i = 0; i < impl_->chain.nodeCount; ++i)
         if (impl_->chain.nodes[i].type == engine::EffectType::VideoHdr) {
@@ -5653,10 +6025,10 @@ QString QmlPlayerBridge::nrAutoSelectionReason(int index) const {
     }
     if(first!=index||count>2||otherAuto)return tr("自动 NR 仅支持一至两层列表的第一层");
     if(impl_->chain.mode!=engine::ChainMode::List||engine::currentNrRuntime(s.nrRuntime)!=engine::NrRuntime::Ampere||s.sr||s.multiplier>1||temporal||
-       s.nrHoldStrength>0||s.color.enabled||s.additionalColorCount||s.videoHdr.enabled||
+       s.nrHoldStrength>0||s.color.enabled||s.additionalColorCount||s.antiAlias.enabled||s.additionalAntiAliasCount||s.beautyEnabled()||s.videoHdr.enabled||
        s.opticalFlowBackend!=engine::OpticalFlowBackend::Nvidia||s.nrMotion!=engine::MotionSource::OpticalFlow||snapshot.capture||snapshot.image||snapshot.sourceHdr||
        (snapshot.sourceWidth&& (snapshot.sourceWidth!=1920||snapshot.sourceHeight!=1080)))
-        return tr("需 1080p SDR 文件、SF 和 NVIDIA 光流；关闭超分、补帧、抗闪烁、调色及 HDR");
+        return tr("需 1080p SDR 文件、SF 和 NVIDIA 光流；关闭超分、补帧、抗闪烁、调色、美颜及 HDR");
     return {};
 }
 
@@ -5722,6 +6094,7 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
 QVariantList QmlPlayerBridge::effectCatalog() const {
     QVariantList out;
     for (const auto& info : engine::effectCatalog()) {
+        if (info.hidden) continue;
         if (impl_->chain.mode == engine::ChainMode::Node && info.type == engine::EffectType::Protection) continue;
         if (impl_->chain.mode == engine::ChainMode::Node && info.type == engine::EffectType::FrameGeneration) {
             for(const auto& choice : fgBackendChoices()) {
@@ -5759,7 +6132,7 @@ QVariantList QmlPlayerBridge::effectCatalog() const {
 QString QmlPlayerBridge::chainError() const { return uiText(impl_->validation.message); }
 void QmlPlayerBridge::emitChainChanged() {
     emit chainChanged(); emit nrLayersChanged(); emit videoHdrParamsChanged();
-    emit colourParamsChanged(); emit protectionChanged();
+    emit antiAliasChanged(); emit beautyChanged(); emit colourParamsChanged(); emit protectionChanged();
 }
 // Every chainChanged re-evaluated all chain-bound bindings on every page (the pro
 // and node pages stay loaded) and repainted the node wires: 65-80 ms of interface
@@ -6916,7 +7289,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
         const engine::EffectInfo* info = nullptr;
         for (const auto& item : engine::effectCatalog())
             if ((fg && item.type == engine::EffectType::FrameGeneration) || utf8Of(item.id) == type) info = &item;
-        if (!info || info->type == engine::EffectType::Protection) {
+        if (!info || info->hidden || info->type == engine::EffectType::Protection) {
             emit notice(tr("节点模式不支持该效果类型"), true); return -1;
         }
         auto& c = impl_->chain;
@@ -6934,7 +7307,8 @@ int QmlPlayerBridge::addEffect(const QString& type) {
                 emit notice(tr("该类型节点已达上限（含禁用和未连接节点）"), true); return -1;
             }
             index = int(c.nodeCount++);
-            auto& node = c.nodes[index]; node = engine::ChainNode{}; node.type = info->type; node.enabled = true;
+            auto& node = c.nodes[index]; node = engine::ChainNode{}; node.type = info->type;
+            node.enabled = info->type != engine::EffectType::Beauty;   // beauty starts switched off
             node.viewX = float(index % 4) * 260; node.viewY = float(index / 4) * 300;
             if (info->type == engine::EffectType::NrEnhance) {
                 node.nr.runtime = previous.nrRuntime; node.nr.lowLatencyPairing = previous.lowLatency;
@@ -6992,7 +7366,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
     engine::EffectType wanted = engine::EffectType::NrEnhance;
     bool found = false;
     for (const auto& info : engine::effectCatalog()) {
-        if (utf8Of(info.id) == type) {
+        if (!info.hidden && utf8Of(info.id) == type) {
             wanted = info.type;
             found = true;
             break;
@@ -7018,7 +7392,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
     if (wanted != engine::EffectType::FrameGeneration) {
         for (uint32_t i = 0; i < c.nodeCount; ++i) {
             const auto& nodeInfo = engine::effectInfo(c.nodes[i].type);
-            if (nodeInfo.mustBeLast||(wanted==engine::EffectType::Color&&c.nodes[i].type==engine::EffectType::VideoHdr)||
+            if (nodeInfo.mustBeLast||((wanted==engine::EffectType::Color||wanted==engine::EffectType::Beauty)&&c.nodes[i].type==engine::EffectType::VideoHdr)||
                 (wanted==engine::EffectType::NrEnhance&&
                 (c.nodes[i].type==engine::EffectType::Protection||c.nodes[i].type==engine::EffectType::VideoHdr))) { insertAt = i; break; }
         }
@@ -7031,6 +7405,9 @@ int QmlPlayerBridge::addEffect(const QString& type) {
     // A new list-mode NR layer arrives switched off: adding a layer must not
     // change the picture until the user turns it on.
     c.nodes[insertAt].enabled = !(wanted == engine::EffectType::NrEnhance && c.mode == engine::ChainMode::List);
+    // A beauty layer arrives with its switch and both sub-functions off: adding one
+    // never changes the picture (its presets turn it on).
+    if (wanted == engine::EffectType::Beauty) c.nodes[insertAt].enabled = false;
     if(wanted==engine::EffectType::Color)impl_->selectedColour=int(insertAt);
     if(wanted==engine::EffectType::NrEnhance){
         c.nodes[insertAt].nr.runtime=settings().nrRuntime;

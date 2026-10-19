@@ -78,6 +78,11 @@ struct PlayerSnapshot {
     std::wstring sourceNotice;
     std::wstring colorStatus;
     std::wstring videoHdrStatus;
+    // Beauty nodes: whether the graph runs any, the faces the shared tracker saw a
+    // few frames ago, and a problem that keeps them from finding faces.
+    bool beautyActive=false;
+    uint32_t beautyFaces=0;
+    std::wstring beautyNotice;
     sink::CaptureAudioState captureAudio;
     unsigned audioInputChannels=0,audioOutputChannels=0;
     std::vector<media::AudioTrack> audioTracks;

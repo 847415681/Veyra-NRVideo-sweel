@@ -1,5 +1,57 @@
 # Third-party dependencies
 
+## Beauty node: face restore and skin smoothing (2026-10-18)
+
+| Source | License | Veyra use |
+|---|---|---|
+| YuNet face detector, OpenCV Zoo `models/face_detection_yunet` at `47534e27`: `face_detection_yunet_2023mar.onnx` (232,589 bytes, SHA256 `8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4`) and `face_detection_yunet_2026may.onnx` (229,738 bytes, SHA256 `ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0`); hashes match the Git LFS pointer oids | MIT, Copyright (c) 2020 Shiqi Yu | Weights only, loaded at run time from `runtime/models`, `runtime_local/models` or `models` next to the program; never in source Git. The network runs as Veyra's own D3D12 compute shaders (`shaders/BeautyYuNet*.hlsl`, `src/beauty/YuNetGpu.cpp`); `src/beauty/OnnxLite.cpp` reads the ONNX file. |
+| MediaPipe face landmark model, google-ai-edge/mediapipe tag `v0.8.9`, `mediapipe/modules/face_landmark/face_landmark.tflite` (1,241,896 bytes, SHA256 `c603fa6149219a3e9487dc9abd7a0c24474c77263273d24868378cdf40aa26d1`, committed in the repository at that tag), and the outline index lists of `mediapipe/python/solutions/face_mesh_connections.py` | Apache-2.0 (the repository's license, LICENSE SHA256 `c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4`) | 468 face points per tracked face: weights only, loaded at run time from the same model folders as YuNet, never in source Git; read by `src/beauty/TfliteLite.cpp` and run as Veyra's own D3D12 compute shaders (`shaders/BeautyMesh*.hlsl`, `src/beauty/FaceMeshGpu.cpp`). The contour, eye, brow and lip index lists are copied into `shaders/BeautyMeshDecode.hlsl` and the tests |
+| SkinSoft, yasunari01/obs-filters `fd5690f`, `skinsoft-filter/data/effects/skinsoft.effect` | GPL-2.0-or-later | Skin selection (HSV hue distance, saturation / luma windows, shared softness), detail protection and texture restore, ported to `shaders/Beauty.hlsli` and `shaders/BeautyApply.hlsl` |
+| GPUPixel, pixpark/gpupixel `ef552bf`, `BeautyFaceUnitFilter` | Apache-2.0 | The variance-adaptive skin blend, re-implemented as a fast guided filter (He & Sun 2015) in `shaders/BeautyStats.hlsl` / `BeautyBlur.hlsl`; no GPUPixel source or binary is included |
+| OpenCV 5.0.0 `FaceDetectorYN`, `dnn.readNetFromTFLite` | Apache-2.0 | Test references only (`scripts/beauty/yunet-reference.py` and `facemesh-reference.py` write the expected detector and face mesh outputs); `shaders/BeautyTrack.hlsl` follows its non-maximum suppression rules (whole-pixel boxes, score order, IoU). OpenCV is neither linked nor shipped |
+
+Veyra changes: the detector, the face mesh crop / network / outlines, the GPU face
+tracking (stable ids, One Euro smoothing, grace and fade), the same-frame original restore, the region pass with
+indirect dispatch and every UI / preset / export connection are Veyra's own.
+Smoothing works on a perceptual copy relative to the SDR or 203-nit HDR white
+and blends back in linear light; SkinSoft's sparse 9-tap blur is replaced by the
+guided filter, and its saturation / luma floors are lowered for dim skin. The
+test pictures (OpenCV samples, the OpenCV Zoo example, scikit-image's astronaut)
+are used by local tests only and are not part of the source tree. No inference
+runtime (ONNX Runtime, DirectML, WinML) is added.
+
+## Spatial anti-aliasing: FXAA / SMAA / MLAA (#53, 2026-10-18)
+
+Ported from SAOG0721/Magpie (experimental branch), commit
+`d687997780ac8d6e54d8b21a0c6b2be70f5eb401`, GPL-3.0. Every Veyra shader file
+names its sources and changes in its header and keeps the upstream notice.
+
+| Magpie source | Upstream origin and license | Veyra file |
+|---|---|---|
+| `src/Effects/FXAA/FXAA.hlsli`, `FXAA_{Medium,High,Ultra}.hlsl` (presets 3/4/5) | libretro/slang-shaders `anti-aliasing/shaders/fxaa.slang`, Copyright (c) 2011 NVIDIA Corporation notice | `shaders/AaFxaa.hlsl` (built as `AaFxaa3/4/5.dxil`) |
+| `src/Effects/SMAA/SMAA.hlsli`, `SMAA_{Low,Medium,High,Ultra}.hlsl` | iryoku/smaa, MIT, Copyright (C) 2013 Jorge Jimenez, Jose I. Echevarria, Belen Masia, Fernando Navarro, Diego Gutierrez | `shaders/Smaa.hlsli`, `AaSmaaEdges.hlsl`, `AaSmaaWeights.hlsl` (built as `AaSmaaWeights{Low,Medium,High,Ultra}.dxil`), `AaSmaaBlend.hlsl` |
+| `src/Effects/SMAA/SMAA_T2x_NoJitter_Experimental.hlsl`, `SMAA_4x_NoJitter_Experimental.hlsl` | Magpie fork addition on top of SMAA (same MIT notice) | `shaders/AaTemporalResolve.hlsl`; subsample-index sets in `src/pipeline/AntiAliasPass.cpp` |
+| `src/Effects/MLAA/MLAA.hlsl` | adapted there from GPUOpen-LibrariesAndSDKs/MLAA11, MIT, Copyright (c) 2016 Advanced Micro Devices, Inc. | `shaders/AaMlaa.hlsli`, `AaMlaaEdges.hlsl`, `AaMlaaCounts.hlsl`, `AaMlaaBlend.hlsl` |
+| `src/Effects/SMAA/AreaTex.dds` (SHA256 `16e6cd520c2d885cb142b98334b2516804cbb1f44dcda2922be1d68f0766208c`), `SearchTex.dds` (SHA256 `891e444b6dde7dd98f6902c805cd04e3469892aa1667c92f764d94789477ef3a`) | SMAA precomputed textures, iryoku/smaa, MIT | `src/pipeline/SmaaLookupTables.cpp`, generated by `scripts/generate-smaa-lookup-tables.py` (AreaTex R/G payload SHA256 `35065cef2a02cabcad711d6bf430239ae64e27d71c4e4fa06f29cce2c992f0d2`, SearchTex payload SHA256 `3694eae5e9d44b8ebb4415a13f8c7b94dc08a2fc86658434d771c4610fe5744d`) |
+
+Magpie's copy of the FXAA code had dropped the NVIDIA notice carried by the
+libretro source; `shaders/AaFxaa.hlsl` restores it verbatim.
+
+Veyra changes: the passes are compute shaders on the graph's linear FP16
+working textures (one pixel per thread); edges are detected on a perceptual
+luma pass (`shaders/AntiAlias.hlsli`, `AaLuma.hlsl`: sRGB transfer relative to
+the SDR white or the 203-nit HDR reference white, continued logarithmically
+above it) and every blend is done in linear light, which keeps HDR highlights
+and out-of-709 colours; SMAA neighbourhood blending passes pixels without
+weights through exactly; MLAA's `sqrt(lerp(c*c, a*a, w))` became a linear lerp;
+the temporal resolve measures its rejection distance on the perceptual
+transfer and takes history validity from the pass (reset on seek, scene cut,
+timeline discontinuity and rebuild) instead of the history alpha. The
+`AntiAliasPass` executor, the graph slots and every UI / preset / export
+connection are Veyra's own. Not ported: jittered SMAA T2x / 4x (captured
+frames cannot be jittered), Anime4K 3D AA upscale, SGSR, and the MagpieFX
+effect runtime. No Magpie binary or runtime is used.
+
 ## User-provided ShortFuse NR 310.9.16 (2026-10-17, local testing)
 
 The user supplied `nvngx_dlssnr.dll` and authorized replacement of the SF-v2
