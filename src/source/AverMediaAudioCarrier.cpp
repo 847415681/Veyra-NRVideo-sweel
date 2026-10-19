@@ -54,8 +54,8 @@ bool AverMediaAudioCarrier::emitBurst(std::span<const uint8_t> words,size_t payl
     for(size_t i=0;i+1<words.size();i+=2){packet_[i]=words[i+1];packet_[i+1]=words[i];}
     packet_.resize(payloadBytes); // Odd byte payloads include a padded carrier word.
     pcm_.clear();
-    // One IEC payload is one codec frame. push() would keep an AC-3 frame
-    // until the next header, which is another 32 ms on every block.
+    // IEC supplies a complete payload boundary (EAC3 can aggregate frames).
+    // push() would retain AC3 until the next header: 32ms at 48kHz.
     if(!decoder_->pushFramed(packet_.data(),packet_.size(),pcm_)){state_.error=decoder_->lastError();return false;}
     if(pcm_.empty()){
         if(++undecodedBursts_>=64){state_.error="no decoded audio after 64 carrier bursts";return false;}

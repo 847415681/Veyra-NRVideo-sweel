@@ -18,6 +18,7 @@
 #include "veyra/source/CaptureCompressedDecoder.h"
 #include "veyra/source/AverMediaAudioSwitch.h"
 #include "veyra/source/AverMediaVendorAudio.h"
+#include "veyra/source/CaptureAudioDeliveryPolicy.h"
 #include "veyra/source/ElgatoHdrControl.h"
 #include "veyra/pipeline/ColorMetadata.h"
 #include "veyra/Log.h"
@@ -1489,7 +1490,7 @@ bool CaptureCardSource::connectVendorAudio(const std::wstring& deviceName,const 
     auto session=std::make_unique<sink::CaptureAudioSession>();
     auto vendor=std::make_unique<AverMediaVendorAudio>();
     auto* target=session.get();
-    struct FormatState {unsigned channels=0;uint32_t rate=0,mask=0;CaptureAudioClock clock;};
+    struct FormatState {unsigned channels=0;uint32_t rate=0,mask=0;CaptureAudioClock clock;CaptureAudioDeliveryPolicy delivery;};
     auto format=std::make_shared<FormatState>();
     auto delivering=std::make_shared<std::atomic<bool>>(false);
     const bool started=vendor->start([target,format,delivering](const VendorPcmBlock& block){
@@ -1512,14 +1513,15 @@ bool CaptureCardSource::connectVendorAudio(const std::wstring& deviceName,const 
             log::info("capture-audio-vendor",std::format("session format channels={} mask=0x{:X} rate={} float=1",block.channels,block.mask,block.rate));
         }
         target->setInputBitstream(std::wstring(block.codec.begin(),block.codec.end()));
-        const bool discontinuity=changed||block.discontinuity;
+        const bool discontinuity=format->delivery.discontinuity(changed||block.discontinuity);
         const double arrival=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
         const double pts=format->clock.observe(std::nullopt,arrival,1000.0*double(block.frames)/block.rate,discontinuity);
         const size_t bytes=block.frames*block.channels*sizeof(float);
-        if(!target->push(block.samples,bytes,pts,discontinuity)){
-            log::warn("capture-audio-vendor",std::format("audio session rejected one block bytes={} channels={} rate={}; keeping the stream",bytes,block.channels,block.rate));
-        }
-        return true;
+        const bool accepted=target->push(block.samples,bytes,pts,discontinuity);
+        const bool keep=format->delivery.delivered(accepted);
+        if(!accepted&&format->delivery.logRejection())
+            log::warn("capture-audio-vendor",std::format("audio session rejected block bytes={} channels={} rate={} consecutive={} keepingStream={}",bytes,block.channels,block.rate,format->delivery.rejected(),keep));
+        return keep;
     },preferName,preferPath);
     const auto state=vendor->state();
     if(!started){

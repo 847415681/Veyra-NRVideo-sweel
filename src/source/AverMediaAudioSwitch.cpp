@@ -97,8 +97,8 @@ constexpr const char* kExportSdkInitialize = "?initialize@VendorSdk@AVerMedia@@Q
 constexpr const char* kExportSdkUninitialize = "?uninitialize@VendorSdk@AVerMedia@@QEAAHXZ";
 constexpr const char* kExportSdkClosePort = "?closePort@VendorSdk@AVerMedia@@QEAAHXZ";
 constexpr const char* kExportSdkGetAudioFormat = "?getAudioFormat@VendorSdk@AVerMedia@@QEAAHPEAH@Z";
-// Passthrough control. Present in 1.0.15 (verified against the installed
-// avt_device_opener.dll); resolved as optional so older components still load.
+// Public SDK signatures; PR64's author reports verification on 1.0.15.
+// Optional so older components still load. No real component on our test host.
 constexpr const char* kExportSdkGetNonPcmOnOff = "?getNonPcmOnOff@VendorSdk@AVerMedia@@QEAAHPEAI@Z";
 constexpr const char* kExportSdkSetNonPcmOnOff = "?setNonPcmOnOff@VendorSdk@AVerMedia@@QEAAHH@Z";
 constexpr const char* kExportOpenerCtor = "??0DeviceOpener@AVerMedia@@QEAA@XZ";
@@ -637,6 +637,7 @@ void AverMediaAudioSwitch::stop() noexcept {
             RawCall uninitialize{impl.exports.uninitialize, impl.sdk()};
             callVendor(uninitialize, error);
             impl.sdkInitialized = false;
+            impl.status.sdkReady = false;
         }
         if (impl.openerConstructed) {
             RawCall dtor{impl.exports.openerDtor, impl.opener()};
@@ -654,6 +655,9 @@ void AverMediaAudioSwitch::stop() noexcept {
         // Teardown must never throw; the vendors' worker threads are already
         // stopped by the calls above.
     }
+    impl.lastAppliedPath.clear();
+    impl.status.passthroughKnown=false;impl.status.passthroughEnabled=false;
+    impl.status.chipAudioFormat=-1;impl.status.nonPcmActive=false;
     // The modules stay loaded on purpose: their monitor thread and the Qt
     // runtime are not safe to unload while other threads may still touch them.
 }
@@ -661,6 +665,9 @@ void AverMediaAudioSwitch::stop() noexcept {
 bool AverMediaAudioSwitch::refreshChipState() {
     if (!p_) return false;
     auto& impl = *p_;
+    impl.status.passthroughKnown=false;
+    impl.status.passthroughEnabled=false;
+    impl.status.chipAudioFormat=-1;
     if (!impl.sdkInitialized || impl.exports.getAudioFormat == nullptr) return false;
     std::string error;
     int chipFormat = -1;
@@ -672,6 +679,7 @@ bool AverMediaAudioSwitch::refreshChipState() {
         RawCall onOffCall{impl.exports.getNonPcmOnOff, impl.sdk(), &onOff};
         if (callVendor(onOffCall, error) && onOffCall.result == 0) {
             impl.status.passthroughEnabled = onOff != 0;
+            impl.status.passthroughKnown=true;
         }
     }
     return formatOk;
@@ -686,9 +694,13 @@ bool AverMediaAudioSwitch::passthroughEnabled() const {
 }
 
 bool AverMediaAudioSwitch::setPassthrough(bool enable) {
-    if (!p_) return false;
+    if (!p_ || !enable) return false;
     auto& impl = *p_;
-    if (!impl.sdkInitialized || impl.exports.setNonPcmOnOff == nullptr) return false;
+    if (!refreshChipState() || !impl.status.passthroughKnown) {
+        log::warn("capture-audio-vendor","passthrough query unavailable/failed; refusing a blind forced enable");return false;
+    }
+    if(impl.status.passthroughEnabled)return true;
+    if(impl.exports.setNonPcmOnOff == nullptr){log::warn("capture-audio-vendor","setNonPcmOnOff export unavailable; leaving current mode unchanged");return false;}
     // The raw invoker passes void* arguments; an int parameter travels in the
     // low 32 bits of the register on x64, which is how the component reads it.
     RawCall call{impl.exports.setNonPcmOnOff, impl.sdk(),
@@ -697,8 +709,10 @@ bool AverMediaAudioSwitch::setPassthrough(bool enable) {
     const bool ok = callVendor(call, error) && call.result == 0;
     log::info("capture-audio-vendor", std::format("setNonPcmOnOff({}) result={}{}",
         enable ? 1 : 0, call.result, ok ? "" : (error.empty() ? " failed" : " failed: " + error)));
-    if (ok) impl.status.passthroughEnabled = enable;
-    return ok;
+    // A successful write is not proof that the chip actually armed.
+    const bool readback=ok&&refreshChipState()&&impl.status.passthroughKnown&&impl.status.passthroughEnabled;
+    if(ok&&!readback)log::warn("capture-audio-vendor","passthrough enable did not read back as armed");
+    return readback;
 }
 
 void AverMediaAudioSwitch::alignPassthroughOnce() {
@@ -706,12 +720,13 @@ void AverMediaAudioSwitch::alignPassthroughOnce() {
     const bool bitstream = sourceIsBitstream();
     const bool armed = passthroughEnabled();
     log::info("capture-audio-vendor", std::format(
-        "HDMI source audio format: chipFormat={} ({}); passthrough reports armed={}",
-        p_->status.chipAudioFormat, bitstream ? "bitstream" : "PCM", armed ? 1 : 0));
+        "HDMI source audio format: chipFormat={} ({}); passthrough known={} armed={}",
+        p_->status.chipAudioFormat, bitstream ? "bitstream" : "PCM/unknown",p_->status.passthroughKnown, armed ? 1 : 0));
     // Forcing this call when the component already reports armed left the KS
     // pin silent (2026-10-01). Only top it up when it is actually off, and
     // never disarm: the monitor thread treats a disarm as something to undo.
-    if (!armed) setPassthrough(true);
+    if (p_->status.passthroughKnown&&!armed) setPassthrough(true);
+    else if(!p_->status.passthroughKnown)log::warn("capture-audio-vendor","passthrough flag unknown; preserving existing mode");
 }
 
 void AverMediaAudioSwitch::startMonitoring() {

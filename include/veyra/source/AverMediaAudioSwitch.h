@@ -56,6 +56,7 @@ struct AverMediaSwitchStatus {
     bool sdkReady = false;
     bool nonPcmActive = false;   // what the chip reports *now* (source format)
     bool passthroughEnabled = false;  // VendorSdk::getNonPcmOnOff (the armed mode)
+    bool passthroughKnown = false;    // missing/failed query is not "off"
     int chipAudioFormat = -1;    // raw AT_Audio_Get_HdmiRX_AudioFormat value
     std::wstring componentRoot;  // folder that owns obs-plugins\64bit
     std::string detail;          // last result/error, for the log
@@ -104,7 +105,7 @@ public:
     bool passthroughEnabled() const;
     // VendorSdk::setNonPcmOnOff. Callers arm only when the flag is off:
     // forcing the call while the chip already reports armed left the pin
-    // silent (2026-10-01). This never disarms.
+    // silent (2026-10-01). False is rejected; this API never disarms.
     bool setPassthrough(bool enable);
     // One alignment after apply(), before the vendor graph starts. Arms
     // passthrough when the flag is off. The OBS plugin makes the same call

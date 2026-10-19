@@ -382,8 +382,9 @@ bool BitstreamDecoder::push(const uint8_t* data, size_t bytes, std::vector<float
 
 bool BitstreamDecoder::pushFramed(const uint8_t* data, size_t bytes, std::vector<float>& out) {
     auto& p = *p_;
-    if (p.context == nullptr) return false;
-    if (data == nullptr || bytes == 0) return true;
+    if (p.context == nullptr) {p.lastError="decoder not opened";return false;}
+    if (bytes == 0) return true;
+    if (data == nullptr) {p.lastError="null framed packet";return false;}
     if (bytes > size_t(INT_MAX)) {
         p.lastError = "framed packet is too large";
         return false;

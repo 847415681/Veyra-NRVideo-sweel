@@ -1,8 +1,10 @@
 #include "veyra/source/AverMediaAudioCarrier.h"
+#include "veyra/source/CaptureAudioDeliveryPolicy.h"
 #include <algorithm>
 #include <bit>
 #include <cmath>
 #include <iostream>
+#include <climits>
 #include <stdexcept>
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -56,6 +58,36 @@ CodecFormat referenceFormat(AVCodecID id,const std::vector<std::vector<uint8_t>>
 }
 }
 int main(){try{
+    source::CaptureAudioDeliveryPolicy delivery;
+    require(delivery.delivered(false)&&delivery.discontinuity(false),"one rejected block keeps stream and marks next discontinuity");
+    require(delivery.delivered(true)&&!delivery.discontinuity(false),"accepted block clears rejection gap");
+    for(unsigned n=1;n<delivery.kRecoveryThreshold;++n)require(delivery.delivered(false),"temporary rejected blocks do not rebuild graph");
+    require(!delivery.delivered(false),"persistent rejected blocks request bounded recovery");
+    require(delivery.delivered(true)&&delivery.rejected()==0,"successful delivery restores budget");
+    for(auto codec:{AV_CODEC_ID_AC3,AV_CODEC_ID_EAC3}){
+        const auto packets=encode(codec,0x60f,48000);
+        const auto kind=codec==AV_CODEC_ID_AC3?sink::BitstreamKind::Ac3:sink::BitstreamKind::Eac3;
+        sink::BitstreamDecoder direct,parsed;std::vector<float> a,b;
+        require(direct.open(kind)&&parsed.open(kind),"latency comparison decoders");
+        require(direct.pushFramed(packets[0].data(),packets[0].size(),a),"complete codec frame directly accepted");
+        require(direct.decodedFrames()==1536&&a.size()==1536*6,"complete frame emits immediately without next header");
+        require(parsed.push(packets[0].data(),packets[0].size(),b)&&parsed.decodedFrames()==0,"byte-stream parser keeps one frame");
+        require(parsed.push(packets[1].data(),packets[1].size(),b)&&parsed.decodedFrames()==1536,"byte-stream parser emits after next header");
+        std::cout<<"FRAMED "<<avcodec_get_name(codec)<<" immediateFrames="<<direct.decodedFrames()<<" parserFirst=0 parserSecond="<<parsed.decodedFrames()<<" samplesPerFrame=1536 rate=48000\n";
+        std::vector<uint8_t> joined;for(size_t n=0;n<6;++n)joined.insert(joined.end(),packets[n].begin(),packets[n].end());
+        sink::BitstreamDecoder aggregate;require(aggregate.open(kind),"aggregate decoder");a.clear();
+        require(aggregate.pushFramed(joined.data(),joined.size(),a),"complete multi-frame packet accepted");
+        std::cout<<"AGGREGATE "<<avcodec_get_name(codec)<<" frames="<<aggregate.decodedFrames()<<" expected="<<1536*6<<'\n';
+        require(aggregate.decodedFrames()==1536*6&&a.size()==1536*6*6,"every frame in complete aggregate decoded");
+        if(codec==AV_CODEC_ID_EAC3){
+            uint64_t frames=0;source::AverMediaAudioCarrier grouped([&](const source::VendorPcmBlock& block){frames+=block.frames;return true;});
+            const auto wire=burst(joined,0x15);
+            require(grouped.feed(wire,{2,16,48000},0)&&grouped.feed(wire,{2,16,48000},.2),"EAC3 multi-frame IEC bursts");
+            require(frames==1536*6,"EAC3 carrier does not discard aggregate tail");
+        }
+        uint8_t byte=0;require(!direct.pushFramed(&byte,size_t(INT_MAX)+1,a),"oversized framed packet rejected before allocation");
+        require(!direct.pushFramed(nullptr,1,a),"null non-empty framed packet rejected");
+    }
     using source::avermedia::DeviceInfo;
     const std::wstring video=L"\\\\?\\usb#vid_07ca&pid_2553&mi_00#5&abc&0&0000#{guid}";
     const std::wstring audio=L"\\\\?\\usb#vid_07ca&pid_2553&mi_02#5&abc&0&0002#{guid}";
