@@ -1,5 +1,7 @@
 # Veyra 项目 Agent 执行规则
 
+> **2026-10-19 2.1.0 整合与测试包（Claude）**：用户要求“之前的所有修复，包括 Codex 那边的都一起合并到 Main，然后打包 2.1.0 测试包”，并审查 Codex 的修复。在 `claude/release-2.1.0-20261019`（main 1dc8c18）合并 fullscreen-input（含 AMD NR 0.44）、#48、美颜（含 E0/AA）与赞助页，版本 2.1.0；先存档 `checkpoint/pre-release-2.1.0-20261019` 与 `archives/claude-release-2.1.0-20261019`。允许本地 main 快进、以 2.0.9-test 两包为底打 NVIDIA/AMD 2.1.0-test 包（美颜两模型按名称+哈希放行、AMD 换 0.44 运行库）。记录见 docs/BUILD_2.1.0_TEST.md 与 docs/RELEASE_2.1.0_TEST_2026-10-19.md。不改运行库/模型字节、驱动或用户配置；无 push/Release/上传/子 Agent。
+
 > **2026-10-19 首页文案与赞助作者页（Claude）**：用户要求首页“今天看点什么？”改为“Veyra NR Video”、小字改为“本软件开源免费，如果对你有帮助，你可以 → 请作者喝杯咖啡”并跳到设置新增的“赞助作者”页；页内放作者各平台主页（图标 + 前往主页按钮，不显示链接）、用户提供的微信/支付宝收款码与 Ko-fi 咖啡按钮。分支 `claude/sponsor-20261019`（main 1dc8c18），产物 `{用途}/claude-sponsor-20261019`，记录 docs/SPONSOR_PAGE_2026-10-19.md。品牌图形取自 Simple Icons（CC0，标志仍属各自所有者），咖啡/外链图标取自 Lucide（ISC）。只改界面、桥接链接、翻译与测试；不改引擎、运行库、模型、驱动或用户配置；无 merge/push/Release/子 Agent。
 
 > **2026-10-19 PR64授权**：用户要求继续合并适配PR64的PR63音频修正，按docs/PR64_AVERMEDIA_PLAN_2026-10-19.md在独立codex/pr64-avermedia-20261019实施；允许圆刚开关/载波/位流解码/会话交付及必要测试/CMake/文档适配，覆盖这些接点旧冻结。存档91旧树104分支/509脏路径（桌面466），无Agent、全E盘、构建-j2≤900秒/测试≤300秒，保留UI33ms/250ms及其他链路/运行库/真实配置。通过定向验收后允许本PR及适配合本地/远端main正常push；不夹带Claude及其他工作、不发布/代发/关机，无圆刚实卡不宣称硬件通过。

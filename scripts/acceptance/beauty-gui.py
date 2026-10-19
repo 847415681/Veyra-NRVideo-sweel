@@ -1,6 +1,6 @@
 """Beauty GUI acceptance: real QML group, bridge, engine and live player on a face clip.
 
-usage: py -3.11 -I scripts/acceptance/beauty-gui.py <staged-app-name>
+usage: py -3.11 -I scripts/acceptance/beauty-gui.py <staged-app-name> [task]
 
 Runs a private copy of the staged app (tests/claude-beauty-20261017/<name>, with the
 face model in its models/ folder) with an isolated profile, injects beauty-gui.qml
@@ -13,7 +13,7 @@ from pathlib import Path
 import json, os, re, subprocess, sys, time
 
 ROOT = Path(__file__).resolve().parents[2]
-BASE = Path('E:/项目/Veyra'); TASK = 'claude-beauty-20261017'
+BASE = Path('E:/项目/Veyra'); TASK = sys.argv[2] if len(sys.argv) > 2 else 'claude-beauty-20261017'
 APP = BASE / 'tests' / TASK / sys.argv[1]
 MEDIA = BASE / 'tests' / TASK / 'media' / 'beauty-player-720p.mp4'
 LOG = BASE / 'logs' / TASK / ('gui-' + time.strftime('%Y%m%d-%H%M%S')); LOG.mkdir(parents=True)
