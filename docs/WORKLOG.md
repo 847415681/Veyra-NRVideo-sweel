@@ -9828,3 +9828,12 @@ Branch claude/aa-53-20261017 from main 26c0d61. Archive E:/项目/Veyra/archives
 用户测试后提供正确 B 站主页：`https://space.bilibili.com/19500532?spm_id_from=333.1007.0.0`。修正桥接常量、既有赞助页验收预期与说明；HTTP 200 不能证明账号 ID 正确。沿用 Claude 已整合的 main 与 2.1.0-test 配方，只重新构建应用并重打 NVIDIA/AMD 本地包，不修改增强链路或运行库。产物与命令记录统一在 `E:/项目/Veyra/{build,tmp,logs,reports,test-packages}/bilibili-2.1.0-20261019`；原 2.1.0 包保留。不推送或发布；应用构建 234.8 秒通过，编译 URL 校验通过；命令、封包和冷启动回执路径见 `docs/BILIBILI_2.1.0_FIX_2026-10-19.md`。
 
 封包后：`tools/package210.py stage|seal|cold`、`verify.py` 全通过；两个 ZIP 的 GPU/软件界面共四组冷启动及 GTA 4K 播放均通过，399–404 帧。对照 Claude 原包，QML/着色器/运行库/模型全部 SHA256 不变，仅 EXE 和文档变化。最终回执 `reports/bilibili-2.1.0-20261019/final.json`，ZIP/源码绑定提交 `66b3210`，随后仅补本文档。清理本轮冷启动解压副本的命令被自动审批策略拒绝（blocked by policy），该批副本保留，不另行绕过。最终 ZIP、可用目录、构建和日志保留。
+
+
+## 2026-10-19 2.1.0 正式发布准备（Codex）
+
+用户已验收bilibili-2.1.0-20261019两包，明确原样发布、不再封包；暂停保留Lecram实验。从main d91ec9f在codex/release-2.1.0-20261019施工，存档checkpoint/pre-codex-publish-2.1.0-20261019（原Claude存档标签保留）。全部产物E:/项目/Veyra/{archives,releases,reports}/release-2.1.0-20261019。
+
+人工核对Claude/Codex产品报告并生成v2.0.9..d91ec9f的86提交（74非merge）/223路径索引；完成AMD0.44、AA、美颜/468点、PR57格式/窗口、PR63/64音频、#48网络、全屏与发行资料说明，区分实测、夹具、未验硬件和旧问题。原图复制新6群码SHA c41c67f0732462ded8a9d1956d0e2f1c4621b986d9e70f166f6c0039a8e1825f，赞助码220宽/Discord/Ko-fi/知识库保留；README仅更新相关区块/过时AMD模型说明/下载/构建链接。
+
+命令：python -X utf8 -B scripts/acceptance/release-2.1.0.py prepare；逐原ZIP及晋升硬链接SHA/CRC/EXE检查通过，原包未改字节，内部2.1.0-test保留，未构建/重压缩。reports/.../local.json记录两GPU包/应用源/AMD源大小与SHA；原DELIVERY与旧Release元数据存archives。三个不变依赖源的远端digest逐项核对通过（dependency-digests.json）；README/更新说明本地链接、编码、双图尺寸及群码日期检查通过；git diff --check通过。相对精确应用源66b3210没有产品文件变化，无SDK/运行库/模型新增Git。群公告只拟稿，不代发/关机。后续按计划上传草稿、核验远端资产后发布并追加回执。
