@@ -133,6 +133,7 @@ struct AverMediaVendorAudio::Impl {
         // exact card. Keep its potentially slow SDK initialization on our STA.
         if(!nonPcmSwitch.apply(chosen.friendlyName,chosen.devicePath))
             log::warn("capture-audio-vendor",std::string("non-PCM switch unavailable; PCM capture remains possible: ")+nonPcmSwitch.status().detail);
+        else nonPcmSwitch.alignPassthroughOnce();
         if(stopRequested)return false;
         if(!call(Reset)){recordError("vendor ResetGraph failed");return false;}
         if(!call(Update,const_cast<std::wstring*>(&chosen.friendlyName),const_cast<std::wstring*>(&chosen.devicePath))

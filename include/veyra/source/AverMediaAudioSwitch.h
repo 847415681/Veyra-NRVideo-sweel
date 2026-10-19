@@ -55,6 +55,7 @@ struct AverMediaSwitchStatus {
     bool dllsLoaded = false;
     bool sdkReady = false;
     bool nonPcmActive = false;   // what the chip reports *now* (source format)
+    bool passthroughEnabled = false;  // VendorSdk::getNonPcmOnOff (the armed mode)
     int chipAudioFormat = -1;    // raw AT_Audio_Get_HdmiRX_AudioFormat value
     std::wstring componentRoot;  // folder that owns obs-plugins\64bit
     std::string detail;          // last result/error, for the log
@@ -95,6 +96,20 @@ public:
     // underneath a still-running thread.
     void stop() noexcept;
     bool active() const;
+    // Re-reads the HDMI format and the passthrough flag. The format lives in
+    // the low byte (measured -236 = 0xFFFFFF14 for a bitstream).
+    bool refreshChipState();
+    // True when that low byte is 20, the non-PCM/Dolby source format.
+    bool sourceIsBitstream();
+    bool passthroughEnabled() const;
+    // VendorSdk::setNonPcmOnOff. Callers arm only when the flag is off:
+    // forcing the call while the chip already reports armed left the pin
+    // silent (2026-10-01). This never disarms.
+    bool setPassthrough(bool enable);
+    // One alignment after apply(), before the vendor graph starts. Arms
+    // passthrough when the flag is off. The OBS plugin makes the same call
+    // on every start; without it a Dolby source stays digital silence.
+    void alignPassthroughOnce();
     const AverMediaSwitchStatus& status() const;
 
 private:

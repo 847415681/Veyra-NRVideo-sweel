@@ -8,6 +8,7 @@ extern "C" {
 #include <libswresample/swresample.h>
 }
 
+#include <climits>
 #include <cstring>
 #include <format>
 
@@ -377,6 +378,24 @@ bool BitstreamDecoder::push(const uint8_t* data, size_t bytes, std::vector<float
         if (!p.decodePacket(out)) return false;
     }
     return true;
+}
+
+bool BitstreamDecoder::pushFramed(const uint8_t* data, size_t bytes, std::vector<float>& out) {
+    auto& p = *p_;
+    if (p.context == nullptr) return false;
+    if (data == nullptr || bytes == 0) return true;
+    if (bytes > size_t(INT_MAX)) {
+        p.lastError = "framed packet is too large";
+        return false;
+    }
+    p.bytesIn += bytes;
+    av_packet_unref(p.packet);
+    if (av_new_packet(p.packet, int(bytes)) < 0) {
+        p.lastError = "packet allocation failed";
+        return false;
+    }
+    std::memcpy(p.packet->data, data, bytes);
+    return p.decodePacket(out);
 }
 
 void BitstreamDecoder::reset() {
