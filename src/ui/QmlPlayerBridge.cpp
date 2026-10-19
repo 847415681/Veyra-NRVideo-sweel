@@ -7102,7 +7102,7 @@ bool QmlPlayerBridge::openSponsorLink(const QString& id) {
     // The author's pages as the author gave them (2026-10-19); the page shows buttons,
     // never these addresses.
     static constexpr std::pair<const char*, const char*> links[] = {
-        {"bilibili", "https://space.bilibili.com/1950053"},
+        {"bilibili", "https://space.bilibili.com/19500532?spm_id_from=333.1007.0.0"},
         {"douyin", "https://v.douyin.com/9s06Bf2Inqc/"},
         {"x", "https://x.com/likely2002"},
         {"github", "https://github.com/Likely7"},

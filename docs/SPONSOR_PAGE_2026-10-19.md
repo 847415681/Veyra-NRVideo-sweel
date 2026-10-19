@@ -19,9 +19,9 @@
 | `IconData.js` / `icons.js` | 新增 Lucide `coffee`、`external` |
 | `i18n/catalog.json` | 新增 20 条，繁中/英/日全部补齐；删除不再使用的旧文案 |
 
-链接（用户提供）：B站 `space.bilibili.com/1950053`；抖音 `v.douyin.com/9s06Bf2Inqc/`（用户粘贴的分享文案里只取链接，桌面浏览器跳到
+链接（2026-10-19 用户纠正 B 站 ID）：B站 `https://space.bilibili.com/19500532?spm_id_from=333.1007.0.0`；抖音 `v.douyin.com/9s06Bf2Inqc/`（用户粘贴的分享文案里只取链接，桌面浏览器跳到
 “Likely7玩Ai的抖音”主页）；X `x.com/likely2002`；GitHub `github.com/Likely7`；YouTube `youtube.com/@Likely7Ai`；Ko-fi `ko-fi.com/likely7`。
-2026-10-19 逐个请求均 HTTP 200。
+2026-10-19 原验收记录为逐个请求均 HTTP 200；HTTP 状态不证明主页 ID 正确，本次按用户提供的正确地址更正。
 
 ## 第二轮（用户试看后）
 
