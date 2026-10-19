@@ -9811,3 +9811,10 @@ Branch claude/aa-53-20261017 from main 26c0d61. Archive E:/项目/Veyra/archives
 - 没有验证：AMD / Intel、真实采集卡与游戏画面的肉眼评价、长时间运行、CPU 渲染线程增量；打包尚未把模型放进 `runtime/models`。没有合并 main、推送、发布或打包。
 - 用户试用 r1 反馈跟踪落后、回弹：改为每帧识别 + One Euro 平滑（无预测、无过冲）、漏检外推 120 ms、新脸淡入、分数滞回；`tracking` 误差 9.8 → 3.4 px，新增 `tracking-motion`（每帧 16 px）落后 1.5% 脸宽、过冲 0.25%。详见实施文档第 7 节。
 - 10-19 用户反馈遮罩只是椭圆：按同意接入 MediaPipe 468 点人脸网格（v0.8.9，Apache-2.0，自写 TFLite 读取 + 45 个 GPU 层），原画保护按真实轮廓、磨皮排除双眼双眉嘴唇；网络与参考 62 张脸一致（最大差 0.00014 裁剪像素），新增 `mesh-landmarks` / `mesh-contour` / `mesh-features`；1080p 一张脸约 0.93 ms、4K 约 1.42 ms。详见实施文档第 8 节。
+
+## 2026-10-19 首页文案与赞助作者页（Claude）
+
+- 用户要求首页“今天看点什么？”改为“Veyra NR Video”，小字改为“本软件开源免费，如果对你有帮助，你可以 → 请作者喝杯咖啡”并可点到设置新增的赞助页；页内放作者 B站/抖音/X/GitHub/YouTube（图标 + 前往主页，不显示链接）、微信/支付宝收款码和 Ko-fi 咖啡按钮。分支 `claude/sponsor-20261019`（main 1dc8c18），工作树 `E:/项目/Veyra/worktrees/sponsor-20261019`。
+- 新增 `SponsorPanel.qml`、`qml/Veyra/sponsor/`（Simple Icons 16.34.0 CC0 品牌图形，`tools/qt_probe/make-sponsor-icons.py` 生成；两张收款码统一 572 px 宽、圆角做进像素，处理后与缩到 216 px 时解码内容均与原图一致）、桥接 `openSponsorLink`（链接只在 C++）。“关于”里从未接通的“交流群与赞助”拆为“赞助作者 → 前往”和“交流群 → 查看”（打开项目 README）。翻译新增 19 条全部补齐。
+- 构建 `E:/项目/Veyra/build/claude-sponsor-20261019`（118 秒）；Qt Quick 组件测试 87/87（新增 3 项）；真实程序 `scripts/acceptance/sponsor-gui.py` 6 组（四种语言、150%、软件渲染界面）真实点击全部通过，日志 `E:/项目/Veyra/logs/claude-sponsor-20261019/gui-20261019-105518`。六个网址 2026-10-19 均 HTTP 200。详见 docs/SPONSOR_PAGE_2026-10-19.md。没有合并 main、推送或发布。
+- 第二轮：用户要求咖啡在前、两个二维码标给中国大陆用户。Ko-fi 移到“请作者喝杯咖啡”下第一位，码卡归到“中国大陆用户 · 可以用微信或支付宝扫码”；组件测试 88/88，真实程序 6 组通过（`gui-20261019-111537`）。软件渲染组曾偶发一次卡片查找为空，未复现（8 次通过），原因未查明，见 docs/SPONSOR_PAGE_2026-10-19.md。

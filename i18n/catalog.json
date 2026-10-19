@@ -1317,6 +1317,13 @@
    "ja": "K は従来モデル、M・L は DLSS 4.5 です。L は低い入力解像度向けです。画質と処理時間は映像により異なります。"
   },
   {
+   "zh": "Ko-fi、微信与支付宝",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "Ko-fi、微信與支付寶",
+   "en": "Ko-fi, WeChat and Alipay",
+   "ja": "Ko-fi・WeChat・Alipay"
+  },
+  {
    "zh": "LUT 不可用：%1",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "LUT 不可用：%1",
@@ -2073,6 +2080,13 @@
    "ja": "VFG には NVIDIA Ada / Blackwell GPU（RTX 40 / 50）が必要です。"
   },
   {
+   "zh": "Veyra 开源免费，也需要你的支持",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "Veyra 開源免費，也需要你的支持",
+   "en": "Veyra is free and open source, and it runs on your support",
+   "ja": "Veyra は無料のオープンソース。皆さんの支援が支えです"
+  },
+  {
    "zh": "Veyra 本地诊断（复制前脱敏预览；不会上传）\n",
    "src": "src/base/Log.cpp",
    "zh-TW": "Veyra 本地診斷（複製前脫敏預覽；不會上傳）\n",
@@ -2787,6 +2801,13 @@
    "ja": "中+低"
   },
   {
+   "zh": "中国大陆用户",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "中國大陸用戶",
+   "en": "Users in mainland China",
+   "ja": "中国本土の方"
+  },
+  {
    "zh": "中延迟",
    "src": "include/veyra/source/CaptureFormatRank.h",
    "zh-TW": "中延遲",
@@ -3179,11 +3200,11 @@
    "ja": "ホストが長時間ストリーミングの準備ができていません。電源とネットワークを確認してください。"
   },
   {
-   "zh": "交流群与赞助",
+   "zh": "交流群",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "交流群與贊助",
-   "en": "Community and sponsorship",
-   "ja": "コミュニティと支援"
+   "zh-TW": "交流群",
+   "en": "Community groups",
+   "ja": "コミュニティ"
   },
   {
    "zh": "亮",
@@ -3331,13 +3352,6 @@
    "zh-TW": "僅擷取影片；介面以軟體繪製，部分陰影與模糊簡化",
    "en": "Captures video only; software UI with simpler shadows and blur",
    "ja": "映像のみキャプチャ。UI はソフトウェア描画になり、一部の影・ぼかしを簡略化"
-  },
-  {
-   "zh": "今天看点什么？",
-   "src": "qml/HomePage.qml",
-   "zh-TW": "今天看點什麼？",
-   "en": "What are we watching today?",
-   "ja": "今日は何を観ますか？"
   },
   {
    "zh": "从列表移除，不删除文件",
@@ -3891,6 +3905,13 @@
    "zh-TW": "關機",
    "en": "Off",
    "ja": "電源オフ"
+  },
+  {
+   "zh": "关注作者",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "追蹤作者",
+   "en": "Follow the author",
+   "ja": "作者をフォロー"
   },
   {
    "zh": "关闭",
@@ -4503,6 +4524,20 @@
    "ja": "デバイスを更新"
   },
   {
+   "zh": "前往",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "前往",
+   "en": "Go",
+   "ja": "開く"
+  },
+  {
+   "zh": "前往主页",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "前往主頁",
+   "en": "Visit page",
+   "ja": "ページを開く"
+  },
+  {
    "zh": "剪贴板不是有效的 Sony 授权回调地址。请复制登录完成后的完整 URL。",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "剪貼簿不是有效的 Sony 授權回調地址。請複製登入完成後的完整 URL。",
@@ -5091,6 +5126,13 @@
    "ja": "保存可能"
   },
   {
+   "zh": "可以用微信或支付宝扫码",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "可以用微信或支付寶掃碼",
+   "en": "Scan with WeChat or Alipay",
+   "ja": "WeChat または Alipay でスキャンできます"
+  },
+  {
    "zh": "可变刷新",
    "src": "qml/NodePage.qml",
    "zh-TW": "可變更新",
@@ -5341,6 +5383,13 @@
    "zh-TW": "和「PS5 串流」共用配對",
    "en": "Shares pairings with PS5 streaming",
    "ja": "「PS5 ストリーミング」とペアリングを共有"
+  },
+  {
+   "zh": "哔哩哔哩",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "嗶哩嗶哩",
+   "en": "Bilibili",
+   "ja": "bilibili"
   },
   {
    "zh": "唤醒",
@@ -7688,6 +7737,13 @@
    "ja": "スイッチ、進行状況、選択状態"
   },
   {
+   "zh": "开发和测试设备的开销一直由作者自己承担。如果 Veyra 对你有帮助，欢迎请作者喝杯咖啡，你的支持就是持续更新的动力。",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "開發和測試設備的開銷一直由作者自己承擔。如果 Veyra 對你有幫助，歡迎請作者喝杯咖啡，你的支持就是持續更新的動力。",
+   "en": "The author has always paid for development and test hardware out of pocket. If Veyra helps you, consider buying the author a coffee: your support is what keeps the updates coming.",
+   "ja": "開発とテスト機材の費用は、これまで作者が自分で負担してきました。Veyra が役に立ったら、作者にコーヒーを一杯おごってください。皆さんの支援が更新を続ける力になります。"
+  },
+  {
    "zh": "开启使用 Small 模型；关闭使用原模型。每层独立选择，切换会重建 NR，画面可能有所不同。",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "開啟使用 Small 模型；關閉使用原模型。每層獨立選擇，切換會重建 NR，畫面可能有所不同。",
@@ -8192,6 +8248,13 @@
    "ja": "待機"
   },
   {
+   "zh": "微信扫码",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "微信掃碼",
+   "en": "WeChat Pay",
+   "ja": "WeChat Pay"
+  },
+  {
    "zh": "快捷键",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "快速鍵",
@@ -8549,13 +8612,6 @@
    "ja": "開くのがタイムアウトしました"
   },
   {
-   "zh": "打开项目页面尚未接入",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "開啟專案頁面尚未接入",
-   "en": "Opening the project page is not wired up yet",
-   "ja": "プロジェクトページを開く機能はまだありません"
-  },
-  {
    "zh": "执行失败；请查看日志",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "執行失敗；請查看日誌",
@@ -8638,6 +8694,13 @@
    "zh-TW": "抑制白牆、雲和灰色區域的額外染色",
    "en": "Suppress added tint on white walls, clouds and gray areas",
    "ja": "白い壁、雲、灰色領域への余計な着色を抑えます"
+  },
+  {
+   "zh": "抖音",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "抖音",
+   "en": "Douyin",
+   "ja": "Douyin"
   },
   {
    "zh": "抗锯齿",
@@ -9031,6 +9094,13 @@
    "zh-TW": "操作失敗；請檢查網路、輸入和可用磁盤空間。",
    "en": "The operation failed; check the network, input and free disk space.",
    "ja": "操作に失敗しました。ネットワーク、入力、ディスクの空き容量を確認してください。"
+  },
+  {
+   "zh": "支付宝扫码",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "支付寶掃碼",
+   "en": "Alipay",
+   "ja": "Alipay"
   },
   {
    "zh": "收 ",
@@ -9500,6 +9570,13 @@
    "zh-TW": "無法開啟資料目錄",
    "en": "Could not open the data folder",
    "ja": "データフォルダーを開けません"
+  },
+  {
+   "zh": "无法打开浏览器",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "無法開啟瀏覽器",
+   "en": "Could not open the browser",
+   "ja": "ブラウザーを開けませんでした"
   },
   {
    "zh": "无法打开浏览器，请检查默认浏览器设置。",
@@ -10578,6 +10655,13 @@
    "zh-TW": "本次播放偵測到全螢幕顯示記憶體持續增加，請使用視窗播放；重新開啟來源後可再次測試全螢幕。",
    "en": "VRAM kept growing in fullscreen during this session. Use windowed playback; reopen the source to test fullscreen again.",
    "ja": "この再生では全画面中に VRAM が増え続けました。ウィンドウ表示を使用してください。ソースを開き直すと全画面を再テストできます。"
+  },
+  {
+   "zh": "本软件开源免费，如果对你有帮助，你可以 →",
+   "src": "qml/HomePage.qml",
+   "zh-TW": "本軟體開源免費，如果對你有幫助，你可以 →",
+   "en": "This software is free and open source. If it helps you, you can →",
+   "ja": "本ソフトは無料のオープンソースです。役に立ったら →"
   },
   {
    "zh": "松开以追加到播放列表",
@@ -13135,6 +13219,13 @@
    "ja": "美顔：顔検出を開始できなかったため、顔のオリジナル保護と顔の範囲の美顔は適用されません"
   },
   {
+   "zh": "群二维码在项目主页 README 里",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "群組 QR 碼在專案主頁 README 裡",
+   "en": "The group QR codes are in the project README",
+   "ja": "グループの QR コードはプロジェクトの README にあります"
+  },
+  {
    "zh": "羽化像素",
    "src": "qml/ProPage.qml",
    "zh-TW": "羽化像素",
@@ -14465,6 +14556,13 @@
    "ja": "この種類のノードは上限に達しています（無効・未接続のノードを含む）"
   },
   {
+   "zh": "请作者喝杯咖啡",
+   "src": "qml/HomePage.qml",
+   "zh-TW": "請作者喝杯咖啡",
+   "en": "Buy the author a coffee",
+   "ja": "作者にコーヒーをおごる"
+  },
+  {
    "zh": "请先切换到要保存的编辑模式",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "請先切換到要儲存的編輯模式",
@@ -14932,6 +15030,20 @@
    "zh-TW": "資源不可用",
    "en": "Resource unavailable",
    "ja": "リソースを使用できません"
+  },
+  {
+   "zh": "赞助作者",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "贊助作者",
+   "en": "Support the author",
+   "ja": "作者を支援"
+  },
+  {
+   "zh": "赞助完全自愿，不影响任何功能。谢谢你的支持！",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "贊助完全自願，不影響任何功能。謝謝你的支持！",
+   "en": "Sponsoring is entirely voluntary and doesn't affect any feature. Thank you for your support!",
+   "ja": "支援は任意で、機能には一切影響しません。ご支援ありがとうございます！"
   },
   {
    "zh": "起播预缓冲",
@@ -15949,13 +16061,6 @@
    "ja": "ウィンドウに合わせる"
   },
   {
-   "zh": "选一个片源开始，画质预设和补帧随时在播放栏切换",
-   "src": "qml/HomePage.qml",
-   "zh-TW": "選一個片源開始，畫質預設和補幀隨時在播放欄切換",
-   "en": "Choose a source to start; picture presets and frame generation can be switched in the playback bar at any time",
-   "ja": "ソースを選んで開始します。画質プリセットとフレーム生成は再生バーでいつでも切り替えられます"
-  },
-  {
    "zh": "选择…",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "選擇…",
@@ -16523,6 +16628,13 @@
    "ja": "再接続中"
   },
   {
+   "zh": "金额随意，每一份支持都是很大的鼓励",
+   "src": "qml/SponsorPanel.qml",
+   "zh-TW": "金額隨意，每一份支持都是很大的鼓勵",
+   "en": "Any amount is welcome, and every bit of support means a lot",
+   "ja": "金額は自由です。どんな支援も大きな励みになります"
+  },
+  {
    "zh": "链路中固定为最后一步；画布上可移动",
    "src": "qml/NodePage.qml",
    "zh-TW": "鏈路中固定為最後一步；畫布上可移動",
@@ -17011,13 +17123,6 @@
    "zh-TW": "頁面切換欄",
    "en": "Page switcher",
    "ja": "ページ切り替えバー"
-  },
-  {
-   "zh": "项目主页 README 里的二维码",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "專案主頁 README 裡的二維碼",
-   "en": "The QR code in the project README",
-   "ja": "プロジェクトの README にある QR コード"
   },
   {
    "zh": "须低于上限",
