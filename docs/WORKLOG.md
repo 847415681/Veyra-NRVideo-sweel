@@ -9825,4 +9825,6 @@ Branch claude/aa-53-20261017 from main 26c0d61. Archive E:/项目/Veyra/archives
 
 ## 2026-10-19 2.1.0 B 站主页纠正（Codex）
 
-用户测试后提供正确 B 站主页：`https://space.bilibili.com/19500532?spm_id_from=333.1007.0.0`。修正桥接常量、既有赞助页验收预期与说明；HTTP 200 不能证明账号 ID 正确。沿用 Claude 已整合的 main 与 2.1.0-test 配方，只重构应用并重打 NVIDIA/AMD 本地包，不修改增强链路或运行库。产物与命令记录统一在 `E:/项目/Veyra/{build,tmp,logs,reports,test-packages}/bilibili-2.1.0-20261019`；原 2.1.0 包保留。不推送或发布；应用构建 234.8 秒通过，编译 URL 校验通过；命令、封包和冷启动回执路径见 `docs/BILIBILI_2.1.0_FIX_2026-10-19.md`。
+用户测试后提供正确 B 站主页：`https://space.bilibili.com/19500532?spm_id_from=333.1007.0.0`。修正桥接常量、既有赞助页验收预期与说明；HTTP 200 不能证明账号 ID 正确。沿用 Claude 已整合的 main 与 2.1.0-test 配方，只重新构建应用并重打 NVIDIA/AMD 本地包，不修改增强链路或运行库。产物与命令记录统一在 `E:/项目/Veyra/{build,tmp,logs,reports,test-packages}/bilibili-2.1.0-20261019`；原 2.1.0 包保留。不推送或发布；应用构建 234.8 秒通过，编译 URL 校验通过；命令、封包和冷启动回执路径见 `docs/BILIBILI_2.1.0_FIX_2026-10-19.md`。
+
+封包后：`tools/package210.py stage|seal|cold`、`verify.py` 全通过；两个 ZIP 的 GPU/软件界面共四组冷启动及 GTA 4K 播放均通过，399–404 帧。对照 Claude 原包，QML/着色器/运行库/模型全部 SHA256 不变，仅 EXE 和文档变化。最终回执 `reports/bilibili-2.1.0-20261019/final.json`，ZIP/源码绑定提交 `66b3210`，随后仅补本文档。清理本轮冷启动解压副本的命令被自动审批策略拒绝（blocked by policy），该批副本保留，不另行绕过。最终 ZIP、可用目录、构建和日志保留。

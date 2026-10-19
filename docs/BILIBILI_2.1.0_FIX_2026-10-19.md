@@ -15,3 +15,12 @@
 输出：`E:/项目/Veyra/test-packages/bilibili-2.1.0-20261019`。原包保留。
 打包审计、ZIP 哈希、冷启动及播放结果以输出目录的 `DELIVERY.json`、`cold-start.json` 为准；
 这些运行结果在封包后产生，不预先宣称通过。没有 GitHub 推送或发布。
+
+## 封包后结果
+
+`package210.py stage`、`seal`、`cold` 全部通过；两个包各以 D3D12 与软件界面冷启动，
+GTA 4K 视频各播放 14 秒，实际提交 399–404 帧，无检查到的 QML/GPU 错误。
+AMD 包是在本机 NVIDIA 显卡上检查启动和播放，没有重新验证 AMD NR 推理。
+`tmp/bilibili-2.1.0-20261019/verify.py` 对照 Claude 原两包：仅 EXE 和文档有差异，
+QML、着色器、运行库、模型逐文件 SHA256 相同；报告 `reports/bilibili-2.1.0-20261019/final.json`。
+ZIP 与源码绑定到封包提交 `66b3210`；本条验收结果为封包后补记，不改变包内代码。
