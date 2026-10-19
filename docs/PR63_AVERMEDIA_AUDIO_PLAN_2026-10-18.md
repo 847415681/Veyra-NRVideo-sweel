@@ -1,6 +1,6 @@
 # PR63 圆刚厂商音频图接入与适配
 
-用户要求合并适配PR63。开工main26c0d61，远端main f0cbbbf（仅星图更新）；PR head4db24dada13748364d7e613bc4160224b330a7d2。90工作树/103分支状态哈希、旧桌面509脏文件ZIP及Claude美颜21在改文件哈希、已验证source-before.bundle和原PR归档在E:/项目/Veyra/archives/pr63-avermedia-audio-20261018。独立codex/pr63-avermedia-audio-20261018完成三方合并8147496，保留PR57格式枚举/精确连接代码。AMD0.44、全屏输入和Claude未合分支保持独立。
+用户要求合并适配PR63。开工main26c0d61，远端main f0cbbbf（仅星图更新）；PR head4db24dada13748364d7e613bc4160224b330a7d2。90工作树/103分支状态哈希、旧桌面466脏路径ZIP（另四旧树43，合计509；按原始快照更正统计口径）及Claude美颜21在改文件哈希、已验证source-before.bundle和原PR归档在E:/项目/Veyra/archives/pr63-avermedia-audio-20261018。独立codex/pr63-avermedia-audio-20261018完成三方合并8147496，保留PR57格式枚举/精确连接代码。AMD0.44、全屏输入和Claude未合分支保持独立。
 
 ## 发现的真实缺口
 

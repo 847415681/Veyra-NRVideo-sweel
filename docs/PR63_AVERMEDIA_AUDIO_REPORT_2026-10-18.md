@@ -35,6 +35,6 @@ PR63 head `4db24dada13748364d7e613bc4160224b330a7d2` 已保留原提交三方整
 
 ## 隔离与存档
 
-开工存档 90 工作树、103 分支与全部状态/哈希；旧桌面 509 个脏文件有既有 ZIP 对照，另记录 Claude 美颜分支 21 个在改文件（总计 530 个）。施工期间 Claude 美颜分支继续产生改动，快照据实记录，未写入该目录；原桌面 509 个脏文件与其他旧分支保持。AMD 0.44／全屏修复分支保留独立，未夹带本 PR。
+开工存档 90 工作树、103 分支与全部状态/哈希；按 start.json 统计：桌面466个脏路径、其他四个旧工作树43个、Claude美颜21个，合计530个；有既有ZIP对照及逐路径哈希。更正上一版“桌面509”的误标：509是桌面与另外四个旧树的合计，不是桌面单独数量。施工期间 Claude 美颜分支继续产生改动，快照据实记录，未写入该目录；原桌面466个脏路径与其他旧分支保持。AMD 0.44／全屏修复分支保留独立，未夹带本 PR。
 
 档案：`E:/项目/Veyra/archives/pr63-avermedia-audio-20261018`；固定厂商公开参考：`E:/项目/Veyra/deps/pr63-avermedia-audio-20261018/reference`；本机测试程序：`E:/项目/Veyra/tests/pr63-avermedia-audio-20261018/app/veyra_qml_ui.exe`。源码不含厂商 DLL/SDK/模型，未修改本机厂商文件、驱动或用户配置；不自动下载/分发组件。第三方来源及改动在 THIRD_PARTY_NOTICES.md。最后审查收据：`E:/项目/Veyra/reports/pr63-avermedia-audio-20261018/verification.json`。

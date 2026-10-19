@@ -674,12 +674,20 @@ bool AverMediaAudioSwitch::refreshChipState() {
     RawCall formatCall{impl.exports.getAudioFormat, impl.sdk(), &chipFormat};
     const bool formatOk = callVendor(formatCall, error) && formatCall.result == 0;
     if (formatOk) impl.status.chipAudioFormat = chipFormat;
+    else {
+        impl.status.detail=std::format("getAudioFormat failed result={} {}",int32_t(uint32_t(formatCall.result)),error);
+        log::warn("capture-audio-vendor",impl.status.detail);
+    }
     if (impl.exports.getNonPcmOnOff != nullptr) {
         unsigned onOff = 0;
+        error.clear();
         RawCall onOffCall{impl.exports.getNonPcmOnOff, impl.sdk(), &onOff};
         if (callVendor(onOffCall, error) && onOffCall.result == 0) {
             impl.status.passthroughEnabled = onOff != 0;
             impl.status.passthroughKnown=true;
+        }else{
+            impl.status.detail=std::format("getNonPcmOnOff failed result={} {}",int32_t(uint32_t(onOffCall.result)),error);
+            log::warn("capture-audio-vendor",impl.status.detail);
         }
     }
     return formatOk;
@@ -708,7 +716,7 @@ bool AverMediaAudioSwitch::setPassthrough(bool enable) {
     std::string error;
     const bool ok = callVendor(call, error) && call.result == 0;
     log::info("capture-audio-vendor", std::format("setNonPcmOnOff({}) result={}{}",
-        enable ? 1 : 0, call.result, ok ? "" : (error.empty() ? " failed" : " failed: " + error)));
+        enable ? 1 : 0, int32_t(uint32_t(call.result)), ok ? "" : (error.empty() ? " failed" : " failed: " + error)));
     // A successful write is not proof that the chip actually armed.
     const bool readback=ok&&refreshChipState()&&impl.status.passthroughKnown&&impl.status.passthroughEnabled;
     if(ok&&!readback)log::warn("capture-audio-vendor","passthrough enable did not read back as armed");
