@@ -9822,7 +9822,7 @@ Branch claude/aa-53-20261017 from main 26c0d61. Archive E:/项目/Veyra/archives
 - 新增 `SponsorPanel.qml`、`qml/Veyra/sponsor/`（Simple Icons 16.34.0 CC0 品牌图形，`tools/qt_probe/make-sponsor-icons.py` 生成；两张收款码统一 572 px 宽、圆角做进像素，处理后与缩到 216 px 时解码内容均与原图一致）、桥接 `openSponsorLink`（链接只在 C++）。“关于”里从未接通的“交流群与赞助”拆为“赞助作者 → 前往”和“交流群 → 查看”（打开项目 README）。翻译新增 19 条全部补齐。
 - 构建 `E:/项目/Veyra/build/claude-sponsor-20261019`（118 秒）；Qt Quick 组件测试 87/87（新增 3 项）；真实程序 `scripts/acceptance/sponsor-gui.py` 6 组（四种语言、150%、软件渲染界面）真实点击全部通过，日志 `E:/项目/Veyra/logs/claude-sponsor-20261019/gui-20261019-105518`。六个网址 2026-10-19 均 HTTP 200。详见 docs/SPONSOR_PAGE_2026-10-19.md。没有合并 main、推送或发布。
 - 第二轮：用户要求咖啡在前、两个二维码标给中国大陆用户。Ko-fi 移到“请作者喝杯咖啡”下第一位，码卡归到“中国大陆用户 · 可以用微信或支付宝扫码”；组件测试 88/88，真实程序 6 组通过（`gui-20261019-111537`）。软件渲染组曾偶发一次卡片查找为空，未复现（8 次通过），原因未查明，见 docs/SPONSOR_PAGE_2026-10-19.md。
+
 ## 2026-10-19 2.1.0 B 站主页纠正（Codex）
 
-用户测试后提供正确 B 站主页：`https://space.bilibili.com/19500532?spm_id_from=333.1007.0.0`。修正桥接常量、既有赞助页验收预期与说明；HTTP 200 不能证明账号 ID 正确。沿用 Claude 已整合的 main 与 2.1.0-test 配方，只重构应用并重打 NVIDIA/AMD 本地包，不修改增强链路或运行库。产物与命令记录统一在 `E:/项目/Veyra/{build,tmp,logs,reports,test-packages}/bilibili-2.1.0-20261019`；原 2.1.0 包保留。不推送或发布；完成结果见本条后续记录。
-
+用户测试后提供正确 B 站主页：`https://space.bilibili.com/19500532?spm_id_from=333.1007.0.0`。修正桥接常量、既有赞助页验收预期与说明；HTTP 200 不能证明账号 ID 正确。沿用 Claude 已整合的 main 与 2.1.0-test 配方，只重构应用并重打 NVIDIA/AMD 本地包，不修改增强链路或运行库。产物与命令记录统一在 `E:/项目/Veyra/{build,tmp,logs,reports,test-packages}/bilibili-2.1.0-20261019`；原 2.1.0 包保留。不推送或发布；应用构建 234.8 秒通过，编译 URL 校验通过；命令、封包和冷启动回执路径见 `docs/BILIBILI_2.1.0_FIX_2026-10-19.md`。
