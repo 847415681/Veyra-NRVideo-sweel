@@ -88,7 +88,9 @@ public:
 
     // Loads the component (once) and arms non-PCM passthrough for the card
     // behind `devicePath`. Never throws; failures are reported in status().
-    bool apply(const std::wstring& deviceName, const std::wstring& devicePath);
+    // Vendor audio graph setup defers monitoring until after Start so its
+    // conditional enable cannot race the component's own monitor thread.
+    bool apply(const std::wstring& deviceName, const std::wstring& devicePath,bool monitor=true);
     // Starts the vendor monitor thread that re-applies the switch when the
     // console changes audio format. Called by apply(); idempotent.
     void startMonitoring();

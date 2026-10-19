@@ -18,7 +18,8 @@ int wmain(int argc,wchar_t** argv){try{
     auto count=reinterpret_cast<unsigned(*)(unsigned)>(GetProcAddress(module,"FakeCount"));require(config&&count,"fixture control exports");
     using veyra::source::AverMediaAudioSwitch;AverMediaAudioSwitch audio;
     const std::wstring name=L"Live Gamer Ultra 2.1-Audio",path=L"\\\\?\\usb#vid_07ca&pid_2553&mi_02#5&card&0&0002#{guid}";
-    config(-236,0,0,0,1);require(audio.apply(name,path),"optional exports do not prevent old component load");
+    config(-236,0,0,0,1);require(audio.apply(name,path,false),"optional exports do not prevent old component load");
+    require(!audio.active()&&count(4)==0,"graph setup defers the monitor while reading and arming");
     require(audio.sourceIsBitstream(),"negative sign-extended format low byte is non-PCM");
     audio.alignPassthroughOnce();
     if(variant==L"no-get"){
@@ -30,6 +31,10 @@ int wmain(int argc,wchar_t** argv){try{
     }else{
         require(variant==L"complete","known variant");
         require(count(0)==1&&audio.status().passthroughKnown&&audio.passthroughEnabled(),"off is armed once and read back");
+        audio.startMonitoring();require(audio.active()&&count(4)==1,"monitor starts only after explicit graph setup completion");
+        require(audio.apply(name,path,false)&&!audio.active(),"graph rebuild pauses the previous monitor on the same card");
+        audio.alignPassthroughOnce();require(count(0)==1,"rebuild of armed card does not force enable");
+        audio.startMonitoring();require(audio.active()&&count(4)==2,"monitor resumes after rebuild");
         audio.alignPassthroughOnce();require(count(0)==1,"already armed is never forced again");
         require(!audio.setPassthrough(false)&&count(1)==0,"never disarm an active source");
         config(20,1,0,0,1);audio.alignPassthroughOnce();require(count(0)==0,"positive format and armed state preserved");

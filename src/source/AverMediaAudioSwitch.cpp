@@ -523,8 +523,16 @@ const AverMediaUsbFunction* AverMediaAudioSwitch::pickAudioFunction(const std::v
     return functions.size() == 1 ? &functions.front() : nullptr;
 }
 
-bool AverMediaAudioSwitch::apply(const std::wstring& deviceName, const std::wstring& devicePath) {
+bool AverMediaAudioSwitch::apply(const std::wstring& deviceName, const std::wstring& devicePath,bool monitor) {
     auto& impl = *p_;
+    // A graph rebuild reuses this SDK object. Quiesce its old monitor before
+    // reading the flag and conditionally enabling; never contend with our own
+    // monitoring thread between the read and the write.
+    if(!monitor&&impl.checking){
+        RawCall stop{impl.exports.stopChecking,impl.opener()};std::string error;
+        if(!callVendor(stop,error)){impl.status.detail="StopChecking before graph setup failed: "+error;log::warn("capture-audio-vendor",impl.status.detail);return false;}
+        impl.checking=false;
+    }
     if (impl.sdkInitialized && !devicePath.empty() && devicePath == impl.lastAppliedPath) {
         // Already armed (for example after an audio reconnect); the vendor
         // monitor thread keeps the mode applied, so refreshing the status is
@@ -615,7 +623,7 @@ bool AverMediaAudioSwitch::apply(const std::wstring& deviceName, const std::wstr
         formatByte == kChipFormatNonPcm ? " (non-PCM/Dolby)" : " (PCM)");
     impl.status.state = AverMediaSwitchState::Switched;
     impl.lastAppliedPath = devicePath;
-    startMonitoring();
+    if(monitor)startMonitoring();
     return true;
 }
 

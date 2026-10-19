@@ -131,7 +131,7 @@ struct AverMediaVendorAudio::Impl {
         // AudioDevice only drives the capture graph. As in the public OBS
         // Activate path, DeviceOpener must also arm/monitor non-PCM on this
         // exact card. Keep its potentially slow SDK initialization on our STA.
-        if(!nonPcmSwitch.apply(chosen.friendlyName,chosen.devicePath))
+        if(!nonPcmSwitch.apply(chosen.friendlyName,chosen.devicePath,false))
             log::warn("capture-audio-vendor",std::string("non-PCM switch unavailable; PCM capture remains possible: ")+nonPcmSwitch.status().detail);
         else nonPcmSwitch.alignPassthroughOnce();
         if(stopRequested)return false;
@@ -140,6 +140,7 @@ struct AverMediaVendorAudio::Impl {
             ||!call(Connect)||!call(SetCallback,&dealer)||!call(Start)){
             recordError("vendor audio graph setup/start failed");return false;
         }
+        nonPcmSwitch.startMonitoring();
         // The watchdog begins after Start, not during its 5-13 second preroll.
         lastCallbackAt=nowSeconds();
         {std::lock_guard lock(mutex);state.device=chosen.friendlyName;state.starting=false;state.started=state.running=true;}
