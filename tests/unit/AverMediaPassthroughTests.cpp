@@ -35,6 +35,8 @@ int wmain(int argc,wchar_t** argv){try{
         require(audio.apply(name,path,false)&&!audio.active(),"graph rebuild pauses the previous monitor on the same card");
         audio.alignPassthroughOnce();require(count(0)==1,"rebuild of armed card does not force enable");
         audio.startMonitoring();require(audio.active()&&count(4)==2,"monitor resumes after rebuild");
+        require(audio.apply(name,path,false)&&!audio.active(),"same-card setup can defer monitoring again");
+        require(audio.apply(name,path)&&audio.active()&&count(4)==3,"legacy/default same-card apply resumes the monitor");
         audio.alignPassthroughOnce();require(count(0)==1,"already armed is never forced again");
         require(!audio.setPassthrough(false)&&count(1)==0,"never disarm an active source");
         config(20,1,0,0,1);audio.alignPassthroughOnce();require(count(0)==0,"positive format and armed state preserved");

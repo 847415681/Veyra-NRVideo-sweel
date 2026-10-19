@@ -540,6 +540,7 @@ bool AverMediaAudioSwitch::apply(const std::wstring& deviceName, const std::wstr
         RawCall refresh{impl.exports.isNonPcm, impl.opener()};
         std::string refreshError;
         impl.status.nonPcmActive = callVendor(refresh, refreshError) && (refresh.result & 0xFF) != 0;
+        if(monitor)startMonitoring();
         return true;
     }
     if (!impl.loadComponent()) {
