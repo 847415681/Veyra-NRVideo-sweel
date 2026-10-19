@@ -52,4 +52,19 @@
 
 - AMD / Intel 显卡（AMD NR 0.44 实际推理）、RTX 20/30/40、真实采集卡画面与圆刚实卡、长时间播放与显存。
 - 美颜只在本机素材上测过；用户尚未用真实画面看过人脸网格版。
-- 打包与冷启动结果见包旁的 `DELIVERY.json`、`cold-start.json`。
+
+## 打包与冷启动
+
+本地 main 已快进到 `f3ab441`（未推送）。以该提交打包，输出 `E:/项目/Veyra/test-packages/claude-release-2.1.0-20261019`：
+
+| 文件 | 大小 | SHA256 前 16 位 |
+|---|---|---|
+| `Veyra-2.1.0-test-NVIDIA-win64-portable.zip` | 679,281,636 | `945334619e9c3718` |
+| `Veyra-2.1.0-test-AMD-win64-portable.zip` | 465,924,476 | `bab4684712270aec` |
+| `Veyra-2.1.0-test-source.zip`（2186 个源码文件） | 72,521,685 | `d7826411d3bb3c40` |
+
+另附原依赖源、字幕 FFmpeg 源、去隔行模块源与 AMD lmxxf 0.44 对应源码，完整 SHA 在各 `.sha256` 与 `DELIVERY.json`。
+打包审计全部通过：两包与 2.0.9-test 底包逐文件核对后只替换应用、QML、着色器与文档；PE 版本 2.1.0.0；全部 DLL/EXE 的导入
+可在包内或系统中解析；美颜模型按哈希核对；NVIDIA SF 310.9.16 槽不变；AMD `runtime/amd-nr` 为 0.44 Small/原模型两个模块
+（行数 654）。冷启动：两个 ZIP 各自重新解压，GPU 界面与软件界面各播放 GTA 4K 片段 14 秒，实际送显 398–404 帧、无错误，
+`cold-start.json` 全部通过（只验证启动与播放，不是性能测试；AMD 包在本机 NVIDIA 显卡上运行，未执行 AMD NR）。
