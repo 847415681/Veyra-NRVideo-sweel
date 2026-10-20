@@ -9840,3 +9840,9 @@ Branch claude/aa-53-20261017 from main 26c0d61. Archive E:/项目/Veyra/archives
 
 
 2.1.0发布完成：https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.0，published_at 2026-10-19T07:43:22Z，主版ID417022047、源码ID417022025，latest经API确认。全部远端digest/size/state及两个标签、支持图片区块核对通过；无重建/重封包。完整资产SHA、命令及回执见docs/RELEASE_2.1.0_REPORT_2026-10-19.md与reports/release-2.1.0-20261019/final.json。追加本回执后仅普通push main，不移动发布标签或改包。
+
+## 2026-10-20 GitHub 7 群二维码更新（Codex）
+
+用户提供“群聊：Veyra Dlss5 交流 7.png”并要求替换 GitHub 已满群二维码。从最新 nrvideo/main 7ec143c 在 codex/community-qr7-20261020 修改；原图原样复制 docs/images/community/group-7-20261020.png，SHA256 1cf67beb48815bd53999bf17252e74de4bb617c6c47846252ff89a0e417ade84。中英 README、RELEASE_SUPPORT 和 2.1.0 更新说明同步新图、7群标记及图片注明的 2026-10-27 前有效期。微信赞助图、width220、Discord、Ko-fi、知识库和其他内容保留。
+
+工具命令：git fetch nrvideo main；bundled Python -X utf8 -B E:/项目/Veyra/tmp/community-qr7-20261020/update.py；git diff --check。Release v2.1.0 / v2.1.0-sources 修改前完整 JSON 与精确替换后的正文保存在 E:/项目/Veyra/reports/community-qr7-20261020；提交后普通 push HEAD:main，再 gh release edit --notes-file 更新两页正文。只改群信息，不重建/打包、不移动发布标签、不修改资产；远端正文、图片实际字节、赞助链接及资产身份的核验结果记该目录 final.json。
