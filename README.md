@@ -15,11 +15,12 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 [![GitHub Stars](https://img.shields.io/github/stars/Likely7/Veyra-NRVideo?style=for-the-badge&logo=github&label=Stars)](https://github.com/Likely7/Veyra-NRVideo/stargazers)
 [![GitHub Forks](https://img.shields.io/github/forks/Likely7/Veyra-NRVideo?style=for-the-badge&logo=github&label=Forks)](https://github.com/Likely7/Veyra-NRVideo/network/members)
 [![Latest Release](https://img.shields.io/github/v/release/Likely7/Veyra-NRVideo?style=for-the-badge&logo=github&label=Release)](https://github.com/Likely7/Veyra-NRVideo/releases/latest)
+[![Release Asset Downloads](https://img.shields.io/github/downloads/Likely7/Veyra-NRVideo/total?style=for-the-badge&logo=github&label=Release%20Downloads)](https://github.com/Likely7/Veyra-NRVideo/releases)
 [![License](https://img.shields.io/github/license/Likely7/Veyra-NRVideo?style=for-the-badge&label=License)](LICENSE)
 
 <br>
 
-**13K+ application downloads in the first month**
+**38K+ cumulative GitHub Release downloads** ([2026-10-20 snapshot](https://git.hiwiki.org/zh-CN/repo/likely7/veyra-nrvideo); download counts are not unique users)
 
 <br>
 
