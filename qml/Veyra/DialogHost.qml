@@ -269,7 +269,7 @@ Item {
         }
         Text {
             Layout.fillWidth: true
-            text: qsTr("支持 Bilibili 视频、番剧和直播链接；其他网站需直接媒体地址。直播通常无法拖动进度。")
+            text: qsTr("支持 Bilibili 视频、番剧和直播链接；支持回看的直播可拖动进度条。其他网站需直接媒体地址。")
             wrapMode: Text.Wrap
             color: Theme.t3
             font.family: Theme.fontUi

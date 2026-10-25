@@ -9862,3 +9862,19 @@ Branch claude/aa-53-20261017 from main 26c0d61. Archive E:/项目/Veyra/archives
 用户提供“群聊：Veyra Dlss5 交流 7.png”并要求替换 GitHub 已满群二维码。从最新 nrvideo/main 7ec143c 在 codex/community-qr7-20261020 修改；原图原样复制 docs/images/community/group-7-20261020.png，SHA256 1cf67beb48815bd53999bf17252e74de4bb617c6c47846252ff89a0e417ade84。中英 README、RELEASE_SUPPORT 和 2.1.0 更新说明同步新图、7群标记及图片注明的 2026-10-27 前有效期。微信赞助图、width220、Discord、Ko-fi、知识库和其他内容保留。
 
 工具命令：git fetch nrvideo main；bundled Python -X utf8 -B E:/项目/Veyra/tmp/community-qr7-20261020/update.py；git diff --check。Release v2.1.0 / v2.1.0-sources 修改前完整 JSON 与精确替换后的正文保存在 E:/项目/Veyra/reports/community-qr7-20261020；提交后普通 push HEAD:main，再 gh release edit --notes-file 更新两页正文。只改群信息，不重建/打包、不移动发布标签、不修改资产；远端正文、图片实际字节、赞助链接及资产身份的核验结果记该目录 final.json。
+
+
+## 2026-10-25 Bilibili 播放栏与直播时移
+
+上一版 8c9ef439 已推送 origin/codex/bilibili-playback；新分支 codex/bilibili-controls-timeshift。按 docs/BILIBILI_CONTROLS_PLAN_2026-10-25.md 开发，产物 E:/Veyra-bilibili-20261025/{build,tests,reports,logs,test-packages}。当前调查阶段，后续验收结果在该计划中更新。
+
+
+### 2026-10-25 Bilibili 播放栏和服务器时移完成
+
+- 上一版 8c9ef4393f022015d3f1e7abe36ce9a44e6ed06b 已推送到用户仓库 codex/bilibili-playback；本次在 codex/bilibili-controls-timeshift 本地完成。
+- 新增播放中选集/清晰度/音轨，保留暂停/进度/倍速；修复播放前下拉列表颜色。实现官方 fMP4 tmshift 及回到直播，按能力开放时间轴；404 分片预检保留旧播放。修正启动零 PTS 锚定，失败过程与协议依据见 docs/BILIBILI_CONTROLS_PLAN_2026-10-25.md。
+- build_controls.py configure/build/tests：MSVC 完整 Release 编译成功，模块 15/0、QML 3/0。controls_smoke.py --case video/pgc/live 的最终 EXE 都通过；源码中保留 ControlsSmoke.qml 用于可复验的整机行为检查。
+- 最终 EXE SHA256 25c12d90248ef431fff00eeedf4da84e13a8e98a0a0656b7e470455ea981484b。真实暂停切换位置分别 16.934 秒/20.812 秒，倍速 1.25；24 集番剧切第二集。直播 120/90 秒回看及 300 秒缺片保留、回实时通过。
+- computer-use 实际检查播放前两列表、极简/专业模式三菜单、全屏菜单与点击 360P；直播鼠标拖动和回到直播成功。真实账号会员内容、硬件串流/采集和增强 Create/Evaluate 本轮未重验。
+- package_controls.py stage 已核验供体 1439 项文件、50 项运行组件无差异；controls_finalize.py 汇总最终哈希及完整特性宏，package_controls.py seal 按清单封包校验。证据/复现命令见本次文档，产物 E:/Veyra-bilibili-20261025/{logs,reports,test-packages}/bilibili-controls-20261025。
+- 不改原版/上一版包、运行库/模型/驱动/真实用户配置；未合并 main、未推送本次新增功能、未创建 Release、未派子 Agent。

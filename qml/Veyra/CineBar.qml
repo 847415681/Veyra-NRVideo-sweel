@@ -26,7 +26,7 @@ Rectangle {
     // Set by FullscreenBar so upward menus stop above the playback pill.
     property real menuBottomLimit: -1
     // Any popover needs the owner window's full mask, not just the preset menu.
-    readonly property bool menuOpen: presetMenu.visible || ccMenu.visible || audioMenu.visible || loadMenu.visible || playbackRate.menuOpen
+    readonly property bool menuOpen: presetMenu.visible || ccMenu.visible || audioMenu.visible || loadMenu.visible || playbackRate.menuOpen || bilibiliControls.menuOpen
     // The pointer is over the pill.
     readonly property bool hovered: barHover.hovered
     readonly property bool seekPreviewOpen: seekMouse.containsMouse && seekMouse.enabled
@@ -57,7 +57,7 @@ Rectangle {
 
         // --- left: artwork + title (230px) ---------------------------
         RowLayout {
-            Layout.preferredWidth: 230; Layout.minimumWidth: 230; Layout.maximumWidth: 230
+            Layout.preferredWidth: veyra.bilibili.active ? 160 : 230; Layout.minimumWidth: 100; Layout.maximumWidth: 230
             Layout.fillHeight: true
             spacing: 10
             // The file's own cover art when it carries one (MP4 covr, MKV image
@@ -131,7 +131,7 @@ Rectangle {
 
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
-                spacing: 10
+                spacing: veyra.bilibili.active ? 4 : 10
 
                 // .cbtn: 32px round, muted, brightens on hover.
                 component CBtn: Item {
@@ -165,6 +165,7 @@ Rectangle {
                 // 载入 (field request 2026-10-02): the home page's sources without leaving 极简.
                 CBtn { objectName: "cine-load"; glyph: "folder"; tip: qsTr("载入片源"); onTapped: loadMenu.openAt(this, "up") }
                 CBtn { glyph: "cc"; onTapped: ccMenu.openAt(this, "up") }
+                BilibiliPlaybackControls { id: bilibiliControls; model: veyra.bilibili; menuBottomLimit: bar.menuBottomLimit }
                 CBtn { glyph: "back10"; onTapped: veyra.seekBy(-10) }
 
                 // .play: 40px white circle with the play/pause glyph.
@@ -232,7 +233,7 @@ Rectangle {
                     Timer {
                         id: scrubSeek
                         interval: 120
-                        onTriggered: if (seekArea.scrubbing) veyra.seekTo(seekArea.scrubFrac * veyra.duration)
+                        onTriggered: if (seekArea.scrubbing && !veyra.bilibili.live) veyra.seekTo(seekArea.scrubFrac * veyra.duration)
                     }
                     Timer {
                         id: thumbnailDelay
@@ -268,7 +269,7 @@ Rectangle {
                     Rectangle {
                         visible: opacity > 0.01
                         width: 144
-                        height: 104
+                        height: veyra.bilibili.live ? 28 : 104
                         radius: 8
                         color: "#000000"
                         border.width: 1
@@ -283,6 +284,7 @@ Rectangle {
                         Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
                         Image {
                             id: previewFrame
+                            visible: !veyra.bilibili.live
                             anchors.left: parent.left
                             anchors.right: parent.right
                             anchors.top: parent.top
@@ -290,13 +292,13 @@ Rectangle {
                             asynchronous: true
                             cache: true
                             fillMode: Image.PreserveAspectFit
-                            source: (seekMouse.containsMouse || seekArea.scrubbing) && seekArea.thumbnailBucket >= 0
+                            source: !veyra.bilibili.live && (seekMouse.containsMouse || seekArea.scrubbing) && seekArea.thumbnailBucket >= 0
                                     ? "image://veyra-thumb/" + veyra.thumbnailGeneration + "/" + (seekArea.thumbnailBucket * 2000)
                                     : ""
                         }
                         Text {
                             anchors.centerIn: previewFrame
-                            visible: previewFrame.status === Image.Loading || previewFrame.status === Image.Error
+                            visible: !veyra.bilibili.live && (previewFrame.status === Image.Loading || previewFrame.status === Image.Error)
                             text: previewFrame.status === Image.Loading ? qsTr("加载中") : qsTr("预览不可用")
                             color: Theme.t3
                             font.family: Theme.fontUi
@@ -309,7 +311,7 @@ Rectangle {
                             height: 23
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
-                            text: veyra.formatTime(seekArea.hoverFrac * veyra.duration)
+                            text: veyra.bilibili.timeshiftAvailable ? "−" + veyra.formatTime((1 - seekArea.hoverFrac) * veyra.duration) : veyra.formatTime(seekArea.hoverFrac * veyra.duration)
                             color: Theme.t1
                             font.family: Theme.fontMono
                             font.pixelSize: 11
@@ -326,7 +328,7 @@ Rectangle {
                         anchors.fill: parent
                         hoverEnabled: true
                         preventStealing: true
-                        enabled: veyra.duration > 0 && !veyra.isCapture
+                        enabled: veyra.duration > 0 && !veyra.isCapture && !(veyra.bilibili.live && veyra.bilibili.busy)
                         cursorShape: Qt.PointingHandCursor
                         onEntered: thumbnailDelay.restart()
                         onExited: {
@@ -501,13 +503,18 @@ Rectangle {
         readonly property var mk: t => ({ label: t.label, index: t.index,
                                           note: t.channels > 0 ? (t.channels + qsTr(" 声道")) : "",
                                           checked: t.index === veyra.selectedAudioTrack })
-        items: veyra.audioTracks.length > 0
+        items: veyra.bilibili.active && veyra.bilibili.playbackAudioTracks.length > 0
+               ? veyra.bilibili.playbackAudioTracks.map(t => ({ label: t.label, biliAudio: t.id,
+                     checked: t.id === veyra.bilibili.playingAudio, disabled: veyra.bilibili.busy })).concat([{ sep: true },
+                     { label: qsTr("音频设置…"), icon: "music", act: "dlg" }])
+               : veyra.audioTracks.length > 0
                ? veyra.audioTracks.map(mk).concat([{ sep: true },
                      { label: qsTr("音频设置…"), note: qsTr("输出设备、音画同步、偏移"), icon: "music", act: "dlg" }])
                : [{ label: qsTr("片源没有音轨或尚未打开"), disabled: true }]
         onPicked: (i, o) => {
             if (o.act === "dlg") return bar.requestDialog("audio")
-            if (o.index !== undefined) veyra.selectedAudioTrack = o.index
+            if (o.biliAudio !== undefined) veyra.bilibili.changeAudio(o.biliAudio)
+            else if (o.index !== undefined) veyra.selectedAudioTrack = o.index
         }
     }
 }

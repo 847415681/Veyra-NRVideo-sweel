@@ -11,6 +11,7 @@
 #include <QTcpSocket>
 #include <QTimer>
 #include <QUuid>
+#include <functional>
 
 namespace veyra::bilibili {
 namespace {
@@ -38,6 +39,8 @@ private:
         request.setRawHeader("User-Agent", userAgent());
         request.setRawHeader("Referer", "https://www.bilibili.com/");
         request.setRawHeader("Accept-Encoding", "identity");
+        request.setAttribute(QNetworkRequest::CookieLoadControlAttribute, QNetworkRequest::Manual);
+        request.setAttribute(QNetworkRequest::CookieSaveControlAttribute, QNetworkRequest::Manual);
         if (!range_.isEmpty()) request.setRawHeader("Range", range_);
         request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
         request.setTransferTimeout(20000);
@@ -83,6 +86,52 @@ private:
     bool head_ = false, headers_ = false;
     int redirects_ = 0;
 };
+class PlaylistTransfer final : public QObject {
+public:
+    using Rewrite = std::function<QByteArray(const QByteArray&, const QUrl&)>;
+    PlaylistTransfer(QTcpSocket* socket, QNetworkAccessManager* manager, QList<QUrl> urls, bool head, Rewrite rewrite)
+        : QObject(socket), socket_(socket), manager_(manager), urls_(std::move(urls)), head_(head), rewrite_(std::move(rewrite)) { start(); }
+    ~PlaylistTransfer() override { if (reply_) { reply_->disconnect(this); reply_->abort(); reply_->deleteLater(); } }
+private:
+    void start() {
+        if (urls_.isEmpty()) { response(socket_, 502); return; }
+        const QUrl url = urls_.takeFirst();
+        if (!mediaUrlAllowed(url)) { response(socket_, 502); return; }
+        body_.clear();
+        QNetworkRequest request(url);
+        request.setRawHeader("User-Agent", userAgent()); request.setRawHeader("Referer", "https://live.bilibili.com/");
+        request.setRawHeader("Accept-Encoding", "identity");
+        request.setAttribute(QNetworkRequest::CookieLoadControlAttribute, QNetworkRequest::Manual);
+        request.setAttribute(QNetworkRequest::CookieSaveControlAttribute, QNetworkRequest::Manual);
+        request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
+        request.setTransferTimeout(15000);
+        reply_ = manager_->get(request); reply_->setReadBufferSize(limit + 1);
+        connect(reply_, &QIODevice::readyRead, this, [this] {
+            body_ += reply_->read(limit + 1 - body_.size()); if (body_.size() > limit) reply_->abort();
+        });
+        QTimer::singleShot(20000, reply_, [reply = QPointer<QNetworkReply>(reply_)] { if (reply && !reply->isFinished()) reply->abort(); });
+        connect(reply_, &QNetworkReply::finished, this, [this] {
+            const int code = reply_->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            const QUrl redirect = reply_->url().resolved(reply_->attribute(QNetworkRequest::RedirectionTargetAttribute).toUrl());
+            if (code >= 300 && code < 400 && ++redirects_ <= 3 && mediaUrlAllowed(redirect)) { urls_.prepend(redirect); retry(); return; }
+            if (reply_->isOpen()) body_ += reply_->read(limit + 1 - body_.size());
+            QByteArray result;
+            if (code == 200 && reply_->error() == QNetworkReply::NoError && body_.size() <= limit) result = rewrite_(body_, reply_->url());
+            if (result.isEmpty() && !urls_.isEmpty()) { retry(); return; }
+            response(socket_, result.isEmpty() ? 502 : 200, result, "application/vnd.apple.mpegurl", head_);
+        });
+    }
+    void retry() { reply_->disconnect(this); reply_->deleteLater(); reply_ = nullptr; start(); }
+    static constexpr qint64 limit = 2 * 1024 * 1024;
+    QTcpSocket* socket_;
+    QNetworkAccessManager* manager_;
+    QList<QUrl> urls_;
+    bool head_;
+    Rewrite rewrite_;
+    QPointer<QNetworkReply> reply_;
+    QByteArray body_;
+    int redirects_ = 0;
+};
 class Gateway final : public QObject {
 public:
     QTcpServer* server = nullptr;
@@ -91,6 +140,8 @@ public:
     QMap<QString, QList<QUrl>> resources;
     QList<QPointer<QTcpSocket>> clients;
     QString prefix;
+    QStringList hlsKeys;
+    bool remoteHls = false;
     void initialize() {
         server = new QTcpServer(this);
         server->setProxy(QNetworkProxy::NoProxy);
@@ -112,7 +163,7 @@ public:
     void clear() {
         const auto old = clients;
         for (const auto& socket : old) if (socket) { socket->abort(); socket->deleteLater(); }
-        clients.clear(); documents.clear(); resources.clear(); prefix.clear();
+        clients.clear(); documents.clear(); resources.clear(); prefix.clear(); hlsKeys.clear(); remoteHls = false;
     }
     void accept(QTcpSocket* socket) {
         if (socket->property("accepted").toBool()) return;
@@ -141,6 +192,21 @@ public:
         // the original allowlisted URL and the requested byte range unchanged.
         const auto resourceKey = key.section(QLatin1Char('?'), 0, 0);
         if (!resources.contains(resourceKey)) { response(socket, 404); return; }
+        if (remoteHls && resourceKey.endsWith(".m3u8")) {
+            new PlaylistTransfer(socket, network, resources[resourceKey], head, [this, generation = prefix](const QByteArray& body, const QUrl& upstream) {
+                if (prefix != generation) return QByteArray();
+                const auto list = proxyPlaylist(body, upstream, prefix);
+                if (!list.error.isEmpty()) return QByteArray();
+                for (auto it = list.resources.cbegin(); it != list.resources.cend(); ++it) {
+                    hlsKeys.removeAll(it.key()); hlsKeys.append(it.key()); resources[it.key()] = {it.value()};
+                }
+                // At one-second segments this holds over two hours, but remains
+                // bounded for arbitrarily long live sessions.
+                while (hlsKeys.size() > 8192) resources.remove(hlsKeys.takeFirst());
+                return list.body;
+            });
+            return;
+        }
         if (!range.isEmpty() && !QRegularExpression("^bytes=[0-9]+-[0-9]*$").match(QString::fromLatin1(range)).hasMatch()) { response(socket, 416); return; }
         new Transfer(socket, network, resources[resourceKey], range, head);
     }
@@ -173,5 +239,10 @@ QUrl StreamServer::install(const QMap<QString, QByteArray>& documents, const QMa
 void StreamServer::clear() {
     if (!worker_) return;
     QMetaObject::invokeMethod(worker_, [this] { static_cast<Gateway*>(worker_)->clear(); }, Qt::BlockingQueuedConnection);
+}
+QUrl StreamServer::installHls(const QList<QUrl>& urls) {
+    const auto result = install({}, {{"live.m3u8", urls}}, "live.m3u8");
+    QMetaObject::invokeMethod(worker_, [this] { static_cast<Gateway*>(worker_)->remoteHls = true; }, Qt::BlockingQueuedConnection);
+    return result;
 }
 }

@@ -43,6 +43,7 @@ Rectangle {
 
     VMenu {
         id: menu
+        objectName: sel.objectName.length ? sel.objectName + "-menu" : ""
         // Default to the enclosing VRow's label, as the design's sel(label, ...) does.
         title: {
             if (sel.title.length > 0) return sel.title

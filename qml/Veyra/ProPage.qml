@@ -782,13 +782,13 @@ VPage {
                     Timer {
                         id: proScrubSeek
                         interval: 120
-                        onTriggered: if (proSeekArea.scrubbing) veyra.seekTo(proSeekArea.scrubFrac * veyra.duration)
+                        onTriggered: if (proSeekArea.scrubbing && !veyra.bilibili.live) veyra.seekTo(proSeekArea.scrubFrac * veyra.duration)
                     }
                     MouseArea {
                         id: proSeekMouse
                         anchors.fill: parent
                         hoverEnabled: true
-                        enabled: veyra.duration > 0 && !veyra.isCapture
+                        enabled: veyra.duration > 0 && !veyra.isCapture && !(veyra.bilibili.live && veyra.bilibili.busy)
                         cursorShape: Qt.PointingHandCursor
                         preventStealing: true
                         function fracAt(x) { return Math.max(0, Math.min(1, x / Math.max(1, proSeekArea.width))) }
@@ -821,6 +821,7 @@ VPage {
                 y: transport.compact ? 34 : 0
                 height: 34
                 spacing: 10
+                BilibiliPlaybackControls { model: veyra.bilibili }
                 PlaybackRateButton { objectName: "pro-playback-rate" }
                 VTag {
                     objectName: "pro-fg-tag"
@@ -2863,13 +2864,18 @@ VPage {
         readonly property var mk: t => ({ label: t.label, index: t.index,
                                           note: t.channels > 0 ? (t.channels + qsTr(" 声道")) : "",
                                           checked: t.index === veyra.selectedAudioTrack })
-        items: veyra.audioTracks.length > 0
+        items: veyra.bilibili.active && veyra.bilibili.playbackAudioTracks.length > 0
+               ? veyra.bilibili.playbackAudioTracks.map(t => ({ label: t.label, biliAudio: t.id,
+                     checked: t.id === veyra.bilibili.playingAudio, disabled: veyra.bilibili.busy })).concat([{ sep: true },
+                     { label: qsTr("音频设置…"), icon: "music", act: "dlg" }])
+               : veyra.audioTracks.length > 0
                ? veyra.audioTracks.map(mk).concat([{ sep: true },
                      { label: qsTr("音频设置…"), note: qsTr("输出设备、音画同步、偏移"), icon: "music", act: "dlg" }])
                : [{ label: qsTr("片源没有音轨或尚未打开"), disabled: true }]
         onPicked: (i, o) => {
             if (o.act === "dlg") return root.requestDialog("audio")
-            if (o.index !== undefined) veyra.selectedAudioTrack = o.index
+            if (o.biliAudio !== undefined) veyra.bilibili.changeAudio(o.biliAudio)
+            else if (o.index !== undefined) veyra.selectedAudioTrack = o.index
         }
     }
     // pages-pro.js data-srcbtn: the open source first (checked), then the ways in.
