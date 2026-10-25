@@ -2,6 +2,15 @@
 # Machine-specific DXC discovery stays here; CMakePresets stay path-free.
 
 function(veyra_find_dxc out_var)
+  # A standalone Windows SDK may live outside Program Files. Accept an explicit
+  # compiler path while retaining the installed-SDK discovery used by releases.
+  if(VEYRA_DXC_EXECUTABLE)
+    if(NOT EXISTS "${VEYRA_DXC_EXECUTABLE}")
+      message(FATAL_ERROR "VEYRA_DXC_EXECUTABLE does not exist: ${VEYRA_DXC_EXECUTABLE}")
+    endif()
+    set(${out_var} "${VEYRA_DXC_EXECUTABLE}" PARENT_SCOPE)
+    return()
+  endif()
   set(candidates "")
   file(GLOB kit_roots "$ENV{ProgramFiles\(x86\)}/Windows Kits/10/bin/*")
   if(kit_roots)

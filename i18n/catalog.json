@@ -18250,6 +18250,384 @@
    "zh-TW": "；預設“即時”，同時執行遊戲或其他重負載程式變慢時可改為“高”或“普通”",
    "en": "; Realtime by default. If a game or other heavy program running alongside slows down, choose High or Normal",
    "ja": "；既定は「リアルタイム」。同時に動かすゲームや重い処理が遅くなる場合は「高」か「通常」に変更してください"
+  },
+  {
+   "zh": "Bilibili 请求失败，请检查网络或稍后重试",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "Bilibili 請求失敗，請檢查網路或稍後重試",
+   "en": "Bilibili request failed. Check your connection or try again later.",
+   "ja": "Bilibili への接続に失敗しました。ネットワークを確認するか、後でもう一度お試しください。"
+  },
+  {
+   "zh": "不支持此视频的分段索引",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "不支援此影片的分段索引",
+   "en": "This video's segment index is not supported.",
+   "ja": "この動画のセグメント索引には対応していません。"
+  },
+  {
+   "zh": "二维码已失效，请刷新",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "QR Code 已失效，請重新整理",
+   "en": "The QR code has expired. Refresh it to continue.",
+   "ja": "QR コードの有効期限が切れました。更新してください。"
+  },
+  {
+   "zh": "使用哔哩哔哩 App 扫码，并在手机上确认登录",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "使用嗶哩嗶哩 App 掃碼，並在手機上確認登入",
+   "en": "Scan with the Bilibili app and confirm sign-in on your phone.",
+   "ja": "Bilibili アプリで読み取り、スマートフォンでログインを承認してください。"
+  },
+  {
+   "zh": "已交给播放器，正在打开…",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "已交給播放器，正在開啟…",
+   "en": "Opening in the player…",
+   "ja": "プレーヤーで開いています…"
+  },
+  {
+   "zh": "已取消解析",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "已取消解析",
+   "en": "Link resolution cancelled",
+   "ja": "リンクの解析をキャンセルしました"
+  },
+  {
+   "zh": "已就绪，选择画质后播放",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "已就緒，選擇畫質後播放",
+   "en": "Ready. Choose a quality and play.",
+   "ja": "準備完了。画質を選んで再生してください。"
+  },
+  {
+   "zh": "已扫码，请在手机上确认",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "已掃碼，請在手機上確認",
+   "en": "Code scanned. Confirm on your phone.",
+   "ja": "読み取り済み。スマートフォンで承認してください。"
+  },
+  {
+   "zh": "已登录：%1",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "已登入：%1",
+   "en": "Signed in as %1",
+   "ja": "ログイン中：%1"
+  },
+  {
+   "zh": "已退出登录",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "已登出",
+   "en": "Signed out",
+   "ja": "ログアウトしました"
+  },
+  {
+   "zh": "当前为试看，仅播放账号有权观看的片段",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "目前為試看，僅播放帳號有權觀看的片段",
+   "en": "Preview only: playback is limited to the portion available to this account.",
+   "ja": "プレビュー：このアカウントで視聴可能な部分のみ再生します。"
+  },
+  {
+   "zh": "当前账号无法播放所选画质，请选择可用画质",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "目前帳號無法播放所選畫質，請選擇可用畫質",
+   "en": "This quality is unavailable to your account. Choose an available quality.",
+   "ja": "このアカウントでは選択した画質を再生できません。利用可能な画質を選んでください。"
+  },
+  {
+   "zh": "无法删除本地登录文件，请检查数据目录权限",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "無法刪除本機登入檔案，請檢查資料目錄權限",
+   "en": "Cannot delete the saved session. Check data directory permissions.",
+   "ja": "保存済みのログイン情報を削除できません。データフォルダーの権限を確認してください。"
+  },
+  {
+   "zh": "无法启动本地播放连接",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "無法啟動本機播放連線",
+   "en": "Cannot start the local playback connection.",
+   "ja": "ローカル再生接続を開始できません。"
+  },
+  {
+   "zh": "无法播放：请确认登录状态、会员权限或地区限制（%1）",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "無法播放：請確認登入狀態、會員權限或地區限制（%1）",
+   "en": "Cannot play. Check sign-in, membership, or region restrictions (%1).",
+   "ja": "再生できません。ログイン状態、会員権限、地域制限を確認してください（%1）。"
+  },
+  {
+   "zh": "无法获取 Bilibili 播放签名，请稍后重试",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "無法取得 Bilibili 播放簽章，請稍後重試",
+   "en": "Cannot obtain the Bilibili playback signature. Try again later.",
+   "ja": "Bilibili の再生署名を取得できません。後でもう一度お試しください。"
+  },
+  {
+   "zh": "无法解析此 B 站短链接",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "無法解析此 B 站短連結",
+   "en": "Cannot resolve this Bilibili short link.",
+   "ja": "この Bilibili 短縮リンクを解析できません。"
+  },
+  {
+   "zh": "未登录，可播放公开内容",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "未登入，可播放公開內容",
+   "en": "Not signed in. Public content is available.",
+   "ja": "未ログイン。公開コンテンツを再生できます。"
+  },
+  {
+   "zh": "未获得可播放的音视频流，可能需要登录或购买此内容",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "未取得可播放的影音串流，可能需要登入或購買此內容",
+   "en": "No playable streams found. Sign-in or purchase may be required.",
+   "ja": "再生可能なストリームがありません。ログインや購入が必要な場合があります。"
+  },
+  {
+   "zh": "未获得可用的直播流",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "未取得可用的直播串流",
+   "en": "No available live stream found.",
+   "ja": "利用可能なライブストリームがありません。"
+  },
+  {
+   "zh": "正在准备 %1 音视频…",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "正在準備 %1 影音…",
+   "en": "Preparing %1 playback…",
+   "ja": "%1 の再生を準備しています…"
+  },
+  {
+   "zh": "正在获取可用画质…",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "正在取得可用畫質…",
+   "en": "Loading available qualities…",
+   "ja": "利用可能な画質を取得しています…"
+  },
+  {
+   "zh": "正在获取登录二维码…",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "正在取得登入 QR Code…",
+   "en": "Loading sign-in QR code…",
+   "ja": "ログイン用 QR コードを取得しています…"
+  },
+  {
+   "zh": "正在获取视频信息…",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "正在取得影片資訊…",
+   "en": "Loading video information…",
+   "ja": "動画情報を取得しています…"
+  },
+  {
+   "zh": "正在解析播放地址…",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "正在解析播放位址…",
+   "en": "Resolving playback address…",
+   "ja": "再生アドレスを解析しています…"
+  },
+  {
+   "zh": "此内容受 DRM 保护，无法在此播放器中播放",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "此內容受 DRM 保護，無法在此播放器中播放",
+   "en": "This content is protected by DRM and cannot be played here.",
+   "ja": "このコンテンツは DRM で保護されているため、このプレーヤーでは再生できません。"
+  },
+  {
+   "zh": "此番剧没有可播放的剧集",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "此番劇沒有可播放的集數",
+   "en": "This series has no playable episodes.",
+   "ja": "このシリーズには再生可能なエピソードがありません。"
+  },
+  {
+   "zh": "此视频没有可播放的分 P",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "此影片沒有可播放的分 P",
+   "en": "This video has no playable parts.",
+   "ja": "この動画には再生可能なパートがありません。"
+  },
+  {
+   "zh": "番剧不可用，可能需要登录或受地区限制",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "番劇無法觀看，可能需要登入或受地區限制",
+   "en": "Series unavailable. Sign-in or region restrictions may apply.",
+   "ja": "シリーズを視聴できません。ログインが必要か、地域制限がある可能性があります。"
+  },
+  {
+   "zh": "登录已生效，但无法安全保存，下次启动需要重新登录",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "登入已生效，但無法安全儲存，下次啟動需要重新登入",
+   "en": "Signed in, but the session could not be saved securely. Sign in again after restarting.",
+   "ja": "ログインしましたが、安全に保存できませんでした。次回起動時に再ログインしてください。"
+  },
+  {
+   "zh": "登录请求失败，请刷新二维码",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "登入請求失敗，請重新整理 QR Code",
+   "en": "Sign-in request failed. Refresh the QR code.",
+   "ja": "ログイン要求に失敗しました。QR コードを更新してください。"
+  },
+  {
+   "zh": "直播未开播或当前账号无权观看",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "直播未開播或目前帳號無權觀看",
+   "en": "The stream is offline or unavailable to your account.",
+   "ja": "配信中でないか、このアカウントでは視聴できません。"
+  },
+  {
+   "zh": "直播间不存在或尚未开播",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "直播間不存在或尚未開播",
+   "en": "The live room does not exist or is offline.",
+   "ja": "ライブ配信ルームが存在しないか、配信中ではありません。"
+  },
+  {
+   "zh": "短链接跳转过多",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "短連結重新導向過多",
+   "en": "Too many short-link redirects.",
+   "ja": "短縮リンクの転送回数が多すぎます。"
+  },
+  {
+   "zh": "等待扫码…",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "等待掃碼…",
+   "en": "Waiting for scan…",
+   "ja": "読み取りを待っています…"
+  },
+  {
+   "zh": "自动 · 最高可用画质",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "自動 · 最高可用畫質",
+   "en": "Auto · Best available quality",
+   "ja": "自動 · 利用可能な最高画質"
+  },
+  {
+   "zh": "获取二维码失败，请重试",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "取得 QR Code 失敗，請重試",
+   "en": "Could not load the QR code. Try again.",
+   "ja": "QR コードを取得できませんでした。もう一度お試しください。"
+  },
+  {
+   "zh": "视频不可用、已删除或需要登录",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "影片無法觀看、已刪除或需要登入",
+   "en": "Video unavailable, deleted, or requires sign-in.",
+   "ja": "動画を視聴できません。削除済みか、ログインが必要な可能性があります。"
+  },
+  {
+   "zh": "视频分段索引无效",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "影片分段索引無效",
+   "en": "Invalid video segment index.",
+   "ja": "動画のセグメント索引が無効です。"
+  },
+  {
+   "zh": "请输入 BV/AV 号、B 站视频、番剧、直播或 b23.tv 链接",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "請輸入 BV/AV 號、B 站影片、番劇、直播或 b23.tv 連結",
+   "en": "Enter a BV/AV ID or a Bilibili video, series, live, or b23.tv link.",
+   "ja": "BV/AV 番号、または Bilibili の動画・シリーズ・ライブ・b23.tv リンクを入力してください。"
+  },
+  {
+   "zh": "链接指定的分 P 不存在",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "連結指定的分 P 不存在",
+   "en": "The part specified in the link does not exist.",
+   "ja": "リンクで指定されたパートは存在しません。"
+  },
+  {
+   "zh": "链接指定的剧集不在此番剧列表中",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "連結指定的集數不在此番劇清單中",
+   "en": "The linked episode is not in this series list.",
+   "ja": "リンクで指定されたエピソードはこのシリーズ一覧にありません。"
+  },
+  {
+   "zh": "音视频分段下载失败，请检查网络后重试",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "影音分段下載失敗，請檢查網路後重試",
+   "en": "Media segment download failed. Check your connection and try again.",
+   "ja": "メディアセグメントのダウンロードに失敗しました。接続を確認して再試行してください。"
+  },
+  {
+   "zh": "音轨信息无效，无法准备播放",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "音軌資訊無效，無法準備播放",
+   "en": "Invalid audio track information. Cannot prepare playback.",
+   "ja": "音声トラック情報が無効なため、再生を準備できません。"
+  },
+  {
+   "zh": "（试看）",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "（試看）",
+   "en": " (Preview)",
+   "ja": "（プレビュー）"
+  },
+  {
+   "zh": "刷新二维码",
+   "src": "qml/Veyra/BilibiliPanel.qml",
+   "zh-TW": "重新整理 QR Code",
+   "en": "Refresh QR code",
+   "ja": "QR コードを更新"
+  },
+  {
+   "zh": "取消解析",
+   "src": "qml/Veyra/BilibiliPanel.qml",
+   "zh-TW": "取消解析",
+   "en": "Cancel",
+   "ja": "解析をキャンセル"
+  },
+  {
+   "zh": "扫码登录",
+   "src": "qml/Veyra/BilibiliPanel.qml",
+   "zh-TW": "掃碼登入",
+   "en": "Sign in with QR",
+   "ja": "QR コードでログイン"
+  },
+  {
+   "zh": "支持普通视频、多 P、番剧和直播。会员及地区限制以当前账号权限为准。",
+   "src": "qml/Veyra/BilibiliPanel.qml",
+   "zh-TW": "支援一般影片、多 P、番劇和直播。會員及地區限制以目前帳號權限為準。",
+   "en": "Supports videos, multiple parts, series, and live streams. Membership and region access depend on your account.",
+   "ja": "動画、複数パート、シリーズ、ライブに対応。会員・地域による視聴権限はアカウントに従います。"
+  },
+  {
+   "zh": "粘贴 B 站链接或 BV / AV 号",
+   "src": "qml/Veyra/BilibiliPanel.qml",
+   "zh-TW": "貼上 B 站連結或 BV / AV 號",
+   "en": "Paste a Bilibili link or BV / AV ID",
+   "ja": "Bilibili リンクまたは BV / AV 番号を貼り付け"
+  },
+  {
+   "zh": "解析",
+   "src": "qml/Veyra/BilibiliPanel.qml",
+   "zh-TW": "解析",
+   "en": "Resolve",
+   "ja": "解析"
+  },
+  {
+   "zh": "Bilibili · 视频 / 番剧 / 直播",
+   "src": "qml/Veyra/HomePage.qml",
+   "zh-TW": "Bilibili · 影片 / 番劇 / 直播",
+   "en": "Bilibili · Videos / Series / Live",
+   "ja": "Bilibili · 動画 / シリーズ / ライブ"
+  },
+  {
+   "zh": "支持 Bilibili 视频、番剧和直播链接；其他网站需直接媒体地址。直播通常无法拖动进度。",
+   "src": "qml/Veyra/DialogHost.qml",
+   "zh-TW": "支援 Bilibili 影片、番劇和直播連結；其他網站需直接媒體位址。直播通常無法拖曳進度。",
+   "en": "Supports Bilibili video, series, and live links. Other sites require direct media URLs. Live streams usually cannot seek.",
+   "ja": "Bilibili の動画・シリーズ・ライブリンクに対応。他のサイトではメディアの直接 URL が必要です。ライブは通常シークできません。"
+  },
+  {
+   "zh": "链接播放 · 扫码登录",
+   "src": "qml/Veyra/DialogHost.qml",
+   "zh-TW": "連結播放 · 掃碼登入",
+   "en": "Play from link · QR sign-in",
+   "ja": "リンク再生 · QR ログイン"
   }
  ]
 }

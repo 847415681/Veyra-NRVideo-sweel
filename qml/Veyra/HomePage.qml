@@ -248,12 +248,21 @@ VPage {
             }
         }
 
-        VButton {
-            objectName: "home-network"
+        RowLayout {
             Layout.alignment: Qt.AlignHCenter
-            text: qsTr("播放地址…")
-            iconName: "cast"
-            onClicked: veyra.openNetworkDialog()
+            spacing: 12
+            VButton {
+                objectName: "home-bilibili"
+                text: qsTr("Bilibili · 视频 / 番剧 / 直播")
+                iconName: "play"
+                onClicked: veyra.openBilibiliDialog()
+            }
+            VButton {
+                objectName: "home-network"
+                text: qsTr("播放地址…")
+                iconName: "cast"
+                onClicked: veyra.openNetworkDialog()
+            }
         }
 
         // .resume: 692 wide, an accent-tinted gradient plate, shown only when a

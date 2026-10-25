@@ -1,5 +1,21 @@
 # WORKLOG
 
+## 2026-10-25 Bilibili 完整功能版 EXE 与便携包
+
+本轮用户要求基于 `frostnotfall/BilibiliPotPlayer` 的行为增加 Bilibili 播放，选择扫码登录，并明确补齐全部依赖生成完整功能版。源码 `D:/Ai_Projects/Veyra-NRVideo-sweel`，分支 `codex/bilibili-playback`，基线 `c5253796`。完成原生 Qt BV/AV/短链/多 P/PGC/直播解析、WBI、扫码/DPAPI、SIDX→HLS/loopback 网关、首页/地址/拖放/分集/画质 UI 与 54 条翻译。独立实现参考项目行为；MIT qrcodegen 原文件和许可保留。
+
+MSVC 14.44 / Windows SDK 26100 / Qt 6.8.3，补齐全部串流、GPU、专业采集和字幕依赖，完整 Release 构建通过，实际编译定义确认所有请求后端开启。没有用关闭功能方式绕过依赖。原版供体 1,439 个复用文件、50 项运行组件哈希一致；保留原 PS5 slices256 FFmpeg 和运行库字节。最终 EXE SHA256 `936b7f04721ff3872e75bc81b08b6e49f7dd25a8ff8a779a76e2c53cf1ea417f`。
+
+最终验证：MSVC 模块测试 12/0、QML 3/0；完整 EXE 真实普通视频 512×384/15 fps、番剧 852×480/24 fps 均连续超过 20 秒，seek 30 秒后继续至 42 秒；直播 854×480/30 fps 连续 20.467 秒。实际 RTX 5070 Ti / driver 621.01 的 D3D12VA、原生呈现与音频 endpoint；呈现计数分别 493/794/638。目视检查实际番剧和最终首页/Bilibili 解析界面。官方 QR 生成轮询真实通过，手机账号确认仅模拟回归，未使用用户账号。
+
+失败与修复：补齐构建依赖时修复 CRT /MD 与 /MT 不匹配、Meson patch.exe 路径、FidelityFX Ninja shader 输出变量和 PIX 平台路径、CMake RC 路径转义。实际播放器暴露原 FFmpeg 同 URI 连续 BYTERANGE 首段约 5 秒 EOF；独立 donor DLL 对照复现，分段本地 URI 区分后跨段/seek 回归通过。没有修改 FFmpeg 二进制或 GPU 引擎。测试修正恒为未知的 displayFps 判据与直播非零初始 PTS。保留原始失败证据。
+
+实际命令：`build_exe.py build`、`build_exe.py tests`、`full_player_smoke.py --link ... --case video|pgc|live`、`final_checks.py validation`、`package_exe.py seal`，参数和路径详见 `docs/BUILD_BILIBILI_FULL_2026-10-25.md`。模块逐项日志位于 `E:/项目/Veyra/logs/bilibili-20261025/*-msvc-result.txt`；最终哈希绑定证据 `reports/bilibili-20261025/validation.json`；依赖 pins/patch、导入依赖、供体审计、ZIP 逐文件哈希和源码快照均保留。
+
+产物：`E:/Veyra-bilibili-20261025/test-packages/bilibili-2.1.0-20261025`；开发依赖/构建/日志全 E 盘、-j2、每次构建≤900秒/测试≤300秒。占用见 `reports/bilibili-20261025/storage-full.json`，逻辑大小可能含硬链接；依赖保留供二次开发，清理量 0。未在本轮执行增强运行库 Create/Evaluate、真实主机/采集卡、AMD/Intel、会员高清/4K/HDR/杜比或长时间/网络故障验收，不以编译通过代替实卡验证。
+
+源码未提交、未合并/推送/发布。原供体目录、驱动和用户真实配置未改。下一项用户实测：在新包扫码登录后播放账号有权限的高清内容；签名 CDN 地址过期时重新解析。
+
 ## 2026-10-19 2.1.0 整合与测试包（Claude）
 
 按用户要求在 `claude/release-2.1.0-20261019` 合并 Codex 全屏输入（含 AMD NR 0.44）、Claude #48、美颜（含 E0/AA）与赞助页，版本 2.1.0。冲突只在 AGENTS/WORKLOG/翻译目录；补上 #48 40 秒超时提示的三语翻译。只读审查 Codex 三项修复，无阻塞问题（AMD 默认改用 Small 需写进发布说明）。43 目标构建 153 秒通过；58 组回归除 image-dimension 既有 NR 分块环境问题外全部通过（两组脚本问题修正后重跑通过）。详见 docs/RELEASE_2.1.0_TEST_2026-10-19.md、docs/BUILD_2.1.0_TEST.md。

@@ -223,6 +223,32 @@ Item {
     }
 
     DLayer {
+        id: bilibiliDialog
+        objectName: "bilibili-dialog"
+        key: "bilibili"
+        glyph: "play"
+        title: "Bilibili"
+        sub: qsTr("链接播放 · 扫码登录")
+        dialogWidth: Math.min(640, host.width - 24)
+        actions: [{label: qsTr("关闭")}]
+        onActionTriggered: host.close()
+        BilibiliPanel { Layout.fillWidth: true; model: veyra.bilibili }
+    }
+    Connections {
+        target: veyra.bilibili
+        function onPlaybackReady(url, title) { if (host.dialog === "bilibili") host.close() }
+    }
+    Connections {
+        target: host
+        function onDialogChanged() {
+            if (host.dialog !== "bilibili") {
+                veyra.bilibili.cancelLogin()
+                veyra.bilibili.cancel()
+            }
+        }
+    }
+
+    DLayer {
         id: networkDialog
         objectName: "network-dialog"
         key: "network"
@@ -243,7 +269,7 @@ Item {
         }
         Text {
             Layout.fillWidth: true
-            text: qsTr("需要直接媒体地址，普通网页或需要网页登录的页面不能直接播放。直播流通常无法拖动进度。")
+            text: qsTr("支持 Bilibili 视频、番剧和直播链接；其他网站需直接媒体地址。直播通常无法拖动进度。")
             wrapMode: Text.Wrap
             color: Theme.t3
             font.family: Theme.fontUi

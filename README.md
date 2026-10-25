@@ -68,6 +68,12 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 **[Veyra knowledge base](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home)** — community guidance compiled from four group chats, covering software setup, common problems and capture cards.
 
+## Bilibili playback in this development branch
+
+The `codex/bilibili-playback` source adds videos, multiple parts, series, and live streams, including BV/AV IDs, ep/ss IDs, Bilibili URLs, and b23.tv short links. In the new `2.1.0-bilibili-20261025` portable build, open **Home → Bilibili**, paste a link, resolve it, choose the part and quality, and play. The existing network-address dialog and single-link drop also recognize Bilibili links.
+
+QR sign-in uses the Bilibili app, with the saved session encrypted for the current Windows user. Available qualities follow account permissions; automatic selection prefers the highest available SDR quality. A full MSVC x64 Release NVIDIA portable build is now available locally, with the original streaming, capture, subtitles and enhancement backends enabled. Module tests (12/0), QML tests (3/0), native hardware playback of public video/series/live streams, and VOD seek passed. Real account premium playback and physical streaming/capture devices remain unverified. The original portable directory is unchanged. See the [implementation record](docs/BILIBILI_PLAYBACK_2026-10-25.md) and [full build and delivery record](docs/BUILD_BILIBILI_FULL_2026-10-25.md).
+
 ## Highlights
 
 **2.0.4 NR controls:** each NR layer's **Enhancement delta → Total strength** now reaches 5. **Picture control** defaults off; enable it and select Automatic or Manual. Automatic values now adapt separately to styles 0/1/2, with an amount slider (0 retains raw strength, 1 applies full correction). The nine manual controls cover hue, chroma, neutral tint, source color retention, lightness retention, shadows, highlights, local compression and temporal stability. **Use this style’s automatic values** provides a manual starting point. Switching modes keeps manual values; turning control off preserves the original residual algorithm. Five extrapolates one inference's residual, and protection reduces the corresponding changes; it cannot promise full gain five with no artifacts on every video. Presets, List/Node sessions, PNGs and video exports share the settings. [Local validation and known limits](docs/NR_STRENGTH_PROTECTION_EXECUTION_2026-10-05.md).

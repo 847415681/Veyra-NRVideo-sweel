@@ -827,7 +827,7 @@ Window {
         function onOverlayRestartSuggested(kind) { overlayRestart.kind = kind; overlayRestart.open() }
         function onNavigate(p) {
             // A dialog key opens the dialog; anything else is a page.
-            if (p === "network" || p === "capture" || p === "ps5" || p === "moonlight" || p === "xbox" || p === "screen"
+            if (p === "bilibili" || p === "network" || p === "capture" || p === "ps5" || p === "moonlight" || p === "xbox" || p === "screen"
                 || p === "subtitle" || p === "audio" || p === "save" || p === "manage") {
                 dialogs.open(p)
                 return
