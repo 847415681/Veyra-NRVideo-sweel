@@ -364,6 +364,9 @@ struct QmlPlayerBridge::Impl {
     // A reopened file resumes here once its session is running.
     uint64_t resumeSession = 0;
     double resumeAt = 0;
+    uint64_t bilibiliSession = 0, bilibiliRestoreSession = 0;
+    double bilibiliRestoreAt = 0, bilibiliRestoreRate = 1;
+    bool bilibiliRestorePaused = false;
     std::vector<sink::RenderEndpoint> audioEndpoints;
     // --- capture connection (P4-e) ---
     struct CaptureQuery { int kind = 0; std::wstring device,requestedResolution; std::vector<source::CaptureDevice> video, audio; std::vector<source::CaptureFormat> formats;source::CaptureFormatQueryInfo info; };
@@ -1193,7 +1196,19 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     bilibili_ = new BilibiliModel(QString::fromStdWString(impl_->dataDir.wstring()), this);
     connect(bilibili_, &BilibiliModel::notice, this, &QmlPlayerBridge::notice);
     connect(bilibili_, &BilibiliModel::playbackReady, this, [this](const QUrl& url, const QString& title) {
+        const auto previous = impl_->engine.snapshot();
+        const bool restore = bilibili_->restoresTransport() && previous.running;
+        const double resumeAt = bilibili_->restoresPosition() && !bilibili_->live() ? previous.position : 0;
+        const bool resumePaused = restore && previous.transport == engine::TransportState::Paused && !bilibili_->startsPlaying();
         openPath(url.toString(QUrl::FullyEncoded));
+        impl_->bilibiliSession = impl_->openingSessionId;
+        impl_->resumeSession = 0;
+        if (restore) {
+            impl_->bilibiliRestoreSession = impl_->openingSessionId;
+            impl_->bilibiliRestoreAt = resumeAt;
+            impl_->bilibiliRestoreRate = previous.playbackRate;
+            impl_->bilibiliRestorePaused = resumePaused;
+        }
         impl_->liveLabel = QStringLiteral("Bilibili · ") + title;
         emit snapshotChanged();
     });
@@ -1487,6 +1502,19 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         }
         {
             const auto& s = impl_->snapshot;
+            if (bilibili_->active() && s.sessionId == impl_->bilibiliSession && s.running && s.frames > 0) {
+                bilibili_->updatePlaybackClock(s.position, s.transport == engine::TransportState::Paused);
+            }
+            if (impl_->bilibiliRestoreSession && s.sessionId == impl_->bilibiliRestoreSession && s.running &&
+                s.transport != engine::TransportState::Opening && !s.failed) {
+                impl_->bilibiliRestoreSession = 0;
+                if (s.duration > 0 && impl_->bilibiliRestoreAt > 0)
+                    impl_->engine.seek(std::clamp(impl_->bilibiliRestoreAt, 0.0, std::max(0.0, s.duration - 0.1)));
+                impl_->engine.setPlaybackRate(impl_->bilibiliRestoreRate);
+                impl_->engine.pause(impl_->bilibiliRestorePaused);
+                veyra::log::info("bilibili-switch", std::format("restored position={:.3f} paused={} rate={:.2f}",
+                    impl_->bilibiliRestoreAt, impl_->bilibiliRestorePaused, impl_->bilibiliRestoreRate));
+            }
             if (impl_->resumeSession && s.sessionId == impl_->resumeSession && s.running && s.duration > 0) {
                 const double at = impl_->resumeAt;
                 impl_->resumeSession = 0;
@@ -4710,14 +4738,17 @@ bool QmlPlayerBridge::isImage() const { return impl_->snapshot.image; }
 bool QmlPlayerBridge::isCapture() const { return impl_->snapshot.capture; }
 bool QmlPlayerBridge::hasSource() const { return impl_->snapshot.running || impl_->snapshot.image; }
 bool QmlPlayerBridge::openingSource() const { return impl_->openingSource; }
-double QmlPlayerBridge::position() const { return impl_->snapshot.position; }
-double QmlPlayerBridge::duration() const { return impl_->snapshot.duration; }
+double QmlPlayerBridge::position() const { return bilibili_->timeshiftAvailable() ? bilibili_->timeshiftPosition() : impl_->snapshot.position; }
+double QmlPlayerBridge::duration() const { return bilibili_->timeshiftAvailable() ? bilibili_->timeshiftDuration() : impl_->snapshot.duration; }
 double QmlPlayerBridge::progress() const {
-    const double d = impl_->snapshot.duration;
-    return d > 0.01 ? std::clamp(impl_->snapshot.position / d, 0.0, 1.0) : 0.0;
+    const double d = duration();
+    return d > 0.01 ? std::clamp(position() / d, 0.0, 1.0) : 0.0;
 }
-QString QmlPlayerBridge::positionText() const { return mmss(impl_->snapshot.position); }
-QString QmlPlayerBridge::durationText() const { return mmss(impl_->snapshot.duration); }
+QString QmlPlayerBridge::positionText() const {
+    if (bilibili_->timeshiftAvailable()) return bilibili_->liveLag() < 3 ? tr("直播") : QStringLiteral("−") + mmss(bilibili_->liveLag());
+    return mmss(impl_->snapshot.position);
+}
+QString QmlPlayerBridge::durationText() const { return bilibili_->timeshiftAvailable() ? tr("直播") : mmss(impl_->snapshot.duration); }
 
 // --- source -----------------------------------------------------------------
 QString QmlPlayerBridge::sourceName() const {
@@ -6552,6 +6583,7 @@ void QmlPlayerBridge::tickPlaylist() {
 
 void QmlPlayerBridge::openPath(const QString& path) {
     if (path.isEmpty()) return;
+    impl_->bilibiliRestoreSession = 0; impl_->bilibiliSession = 0;
     flushHdrMemory();impl_->hdrTitleApplied.clear();
     const bool network=media::networkMediaInput(wideOf(path));
     if (QFileInfo(path).isDir()) {
@@ -6634,6 +6666,9 @@ void QmlPlayerBridge::togglePlayPause() {
     const auto& s = impl_->snapshot;
     using T = engine::TransportState;
     if (s.image || s.transport == T::Opening || s.transport == T::Stopping) return;
+    if (bilibili_->live() && (s.transport == T::Ended || s.transport == T::Paused)) {
+        bilibili_->resumeLive(); return;
+    }
     if(impl_->liveKind==QLatin1String("url")&&(s.transport==T::Ended||(s.transport==T::Paused&&s.duration<=0))){
         openNetworkAddress(QString::fromStdWString(impl_->sourceLabel));return;
     }
@@ -6669,10 +6704,11 @@ void QmlPlayerBridge::stopPlayback() {
     impl_->engine.stop();
     stopPs5Control();
 }
-void QmlPlayerBridge::seekTo(double seconds) { impl_->engine.seek(seconds); }
-void QmlPlayerBridge::seekBy(double seconds) {
-    impl_->engine.seek(std::max(0.0, impl_->snapshot.position + seconds));
+void QmlPlayerBridge::seekTo(double seconds) {
+    if (bilibili_->timeshiftAvailable()) { bilibili_->seekTimeshift(seconds); return; }
+    impl_->engine.seek(seconds);
 }
+void QmlPlayerBridge::seekBy(double seconds) { seekTo(std::max(0.0, position() + seconds)); }
 void QmlPlayerBridge::openUrl(const QUrl& url) {
     if(!url.isLocalFile()){openNetworkAddress(url.toString(QUrl::FullyEncoded));return;}
     if (!url.isLocalFile()) {

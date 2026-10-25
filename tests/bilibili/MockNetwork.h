@@ -4,6 +4,7 @@
 #include <QNetworkCookie>
 #include <QNetworkReply>
 #include <QJsonDocument>
+#include <QDateTime>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QTimer>
@@ -38,6 +39,8 @@ class MockNetwork final : public QNetworkAccessManager {
 public:
     int delay = 0, playCode = 0, pollCount = 0;
     bool loggedIn = false, malformed = false, silent = false, drm = false, preview = false;
+    bool timeshift = true;
+    bool missingReplayFragment = false;
     QList<QNetworkRequest> requests;
     static QJsonObject track(int quality, bool audio = false) {
         return {{"id", quality}, {"baseUrl", audio ? "https://cdn.bilivideo.com/audio.m4s" : "https://cdn.bilivideo.com/video.m4s"},
@@ -58,12 +61,13 @@ protected:
             {"wbi_img", QJsonObject{{"img_url", "https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png"}, {"sub_url", "https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png"}}}};
         else if (path.endsWith("playurl")) {
             root["code"] = playCode;
-            root["data"] = QJsonObject{{"is_drm", drm}, {"is_preview", preview}, {"dash", QJsonObject{{"video", QJsonArray{track(80), track(64)}}, {"audio", silent ? QJsonArray{} : QJsonArray{track(30280, true)}}}}};
+            root["data"] = QJsonObject{{"is_drm", drm}, {"is_preview", preview}, {"dash", QJsonObject{{"video", QJsonArray{track(80), track(64)}}, {"audio", silent ? QJsonArray{} : QJsonArray{track(30280, true), track(30216, true)}}}}};
         } else if (path.endsWith("/generate")) root["data"] = QJsonObject{{"qrcode_key", "test-key"}, {"url", "https://account.bilibili.com/h5-app/passport/login/scan?qrcode_key=test-key"}};
         else if (path.endsWith("/poll")) {
             loggedIn = ++pollCount >= 2; root["data"] = QJsonObject{{"code", loggedIn ? 0 : 86090}};
             if (loggedIn) { QNetworkCookie cookie("SESSDATA", "mock-session-value"); cookie.setDomain(".bilibili.com"); cookie.setPath("/"); cookie.setSecure(true); cookieJar()->setCookiesFromUrl({cookie}, QUrl("https://passport.bilibili.com/")); }
         } else if (path.endsWith(".m4s")) {
+            if (missingReplayFragment && path.endsWith("segment.m4s")) return new MockReply(request, {}, 404, delay, this);
             QByteArray index; auto u32 = [&](quint32 v) { char b[4]; qToBigEndian(v, b); index.append(b, 4); };
             u32(44); index += "sidx"; u32(0); u32(1); u32(1000); u32(0); u32(0); u32(1); u32(512); u32(5000); u32(0x90000000);
             return new MockReply(request, index, 206, delay, this);
@@ -73,12 +77,20 @@ protected:
         else if (path.endsWith("get_info")) root["data"] = QJsonObject{{"room_id", 123}, {"live_status", 1}, {"title", "测试直播"}};
         else if (path.endsWith("getRoomPlayInfo")) root["data"] = QJsonDocument::fromJson(R"json({
             "live_status":1,"playurl_info":{"playurl":{
-                "g_qn_desc":[{"qn":10000,"desc":"原画"}],
-                "stream":[{"format":[{"codec":[{"accept_qn":[10000],"base_url":"/live.flv",
+                "g_qn_desc":[{"qn":10000,"desc":"原画"},{"qn":150,"desc":"高清"}],
+                "stream":[{"format":[{"format_name":"flv","codec":[{"codec_name":"avc","current_qn":150,"accept_qn":[10000,150],"base_url":"/live.flv",
+                    "url_info":[{"host":"https://live.bilivideo.com","extra":"?test=1"}]}]},
+                    {"format_name":"fmp4","codec":[{"codec_name":"avc","current_qn":150,"accept_qn":[10000,150],"base_url":"/live.m3u8",
                     "url_info":[{"host":"https://live.bilivideo.com","extra":"?test=1"}]}]}]}]
             }}
         })json").object();
+        else if (path.endsWith("getProgressBarInfo")) root["data"] = QJsonObject{{"bar_status", timeshift ? "ENABLE" : "DISABLE"}, {"bar_special_time", 3600}, {"bar_start_time", 0}};
+        else if (path.endsWith(".m3u8")) return new MockReply(request, "#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXT-X-MEDIA-SEQUENCE:100\n#EXT-X-MAP:URI=\"init.mp4\"\n#EXTINF:1.0,\nsegment.m4s\n", 200, delay, this);
         else root["code"] = -404;
+        if (path.endsWith("getRoomPlayInfo")) {
+            auto data = root["data"].toObject(); data["all_special_types"] = QJsonArray{19};
+            data["live_time"] = double(QDateTime::currentSecsSinceEpoch() - 7200); root["data"] = data;
+        }
         return new MockReply(request, QJsonDocument(root).toJson(QJsonDocument::Compact), 200, delay, this);
     }
 };

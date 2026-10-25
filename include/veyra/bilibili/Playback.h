@@ -43,4 +43,13 @@ struct Track {
 };
 Track parseTrack(const QJsonObject& object);
 QString qualityLabel(int id);
+
+// Rewrites only allowlisted, server-provided HLS references. Local request paths
+// never contain CDN signatures and can never choose an arbitrary upstream URL.
+struct HlsPlaylist {
+    QByteArray body;
+    QMap<QString, QUrl> resources;
+    QString error;
+};
+HlsPlaylist proxyPlaylist(const QByteArray& bytes, const QUrl& upstream, const QString& localPrefix);
 }

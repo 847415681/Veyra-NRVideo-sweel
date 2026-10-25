@@ -15,6 +15,7 @@
 #include <QSet>
 #include <QUrlQuery>
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -79,7 +80,7 @@ BilibiliModel::BilibiliModel(QString dataDirectory, QObject* parent, QNetworkAcc
     loginStatus_ = tr("未登录，可播放公开内容");
 }
 BilibiliModel::~BilibiliModel() { cancel(); cancelLogin(); }
-void BilibiliModel::json(const QUrl& url, int epoch, bool login, JsonCallback callback) {
+void BilibiliModel::json(const QUrl& url, int epoch, bool login, JsonCallback callback, bool optional) {
     QNetworkRequest request(url);
     request.setRawHeader("User-Agent", userAgent()); request.setRawHeader("Referer", "https://www.bilibili.com/");
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
@@ -91,13 +92,14 @@ void BilibiliModel::json(const QUrl& url, int epoch, bool login, JsonCallback ca
         body->append(reply->read(maxJson + 1 - body->size())); if (body->size() > maxJson) reply->abort();
     });
     QTimer::singleShot(20000, reply, [reply] { if (!reply->isFinished()) reply->abort(); });
-    connect(reply, &QNetworkReply::finished, this, [this, reply, body, epoch, login, callback = std::move(callback)] {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, body, epoch, login, optional, callback = std::move(callback)] {
         auto& requests = login ? loginReplies_ : playbackReplies_; requests.removeAll(reply);
         reply->deleteLater();
         if (epoch != (login ? loginEpoch_ : epoch_)) return;
         if (reply->isOpen()) body->append(reply->read(maxJson + 1 - body->size()));
         QJsonParseError error; const auto doc = QJsonDocument::fromJson(*body, &error);
         if (body->size() > maxJson || reply->error() != QNetworkReply::NoError || reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 200 || error.error != QJsonParseError::NoError || !doc.isObject()) {
+            if (optional) { callback({}); return; }
             const QString text = tr("Bilibili 请求失败，请检查网络或稍后重试");
             if (login) { loginStatus_ = text; loginTimer_.stop(); emit loginChanged(); } else fail(text);
             return;
@@ -112,7 +114,10 @@ void BilibiliModel::cancel() {
     if (busy_) status_ = tr("已取消解析");
     busy_ = false; emit changed();
 }
-void BilibiliModel::releasePlayback() { cancel(); server_.clear(); playbackUrl_.clear(); }
+void BilibiliModel::releasePlayback() {
+    cancel(); server_.clear(); playbackUrl_.clear(); activeLink_ = {}; activeParts_.clear(); activeQualities_.clear(); activeAudioTracks_.clear();
+    replaying_ = false; activeWindow_ = 0; pausedLiveTime_ = 0; emit changed();
+}
 void BilibiliModel::inspect(const QString& input) {
     cancel(); describeOnly_ = true; parts_.clear(); qualities_.clear(); selectedPart_ = 0; title_.clear(); address_ = input.trimmed(); link_ = parseLink(input);
     if (link_.kind == Link::Invalid) { fail(tr("请输入 BV/AV 号、B 站视频、番剧、直播或 b23.tv 链接")); return; }
@@ -184,7 +189,69 @@ void BilibiliModel::selectPart(int index) {
 void BilibiliModel::play(int quality) {
     if (busy_ || parts_.isEmpty()) return;
     cancel(); describeOnly_ = false; busy_ = true; status_ = tr("正在解析播放地址…"); emit changed();
+    operation_ = NewPlayback; requestedAudio_ = 0; requestedQuality_ = quality; pendingLiveTarget_ = 0; startPlaying_ = false;
     requestPlay(quality, epoch_);
+}
+void BilibiliModel::switchPlayback(int part, int quality, int audio, int operation, double target) {
+    if (!active() || part < 0 || part >= activeParts_.size()) return;
+    cancel();
+    // Playback controls use the committed session, even if the user has inspected
+    // another URL in the source dialog. Never let that metadata replace the movie.
+    link_ = activeLink_; title_ = activeTitle_; address_ = activeAddress_; parts_ = activeParts_;
+    selectedPart_ = part; qualities_ = activeQualities_; audioTracks_ = activeAudioTracks_;
+    operation_ = operation; requestedAudio_ = audio; requestedQuality_ = quality; pendingLiveTarget_ = target; startPlaying_ = false;
+    describeOnly_ = false; busy_ = true; status_ = tr("正在切换播放…"); emit changed();
+    requestPlay(quality, epoch_);
+}
+void BilibiliModel::changePart(int index) {
+    if (index == activePart_ || live()) return;
+    switchPlayback(index, 0, 0, Part);
+}
+void BilibiliModel::changeQuality(int quality) {
+    switchPlayback(activePart_, quality, activeAudio_, Quality, live() && liveLag() > 3 ? QDateTime::currentMSecsSinceEpoch() / 1000.0 - liveLag() : 0);
+}
+void BilibiliModel::changeAudio(int id) {
+    if (live() || id == activeAudio_) return;
+    switchPlayback(activePart_, activeRequestedQuality_, id, Audio);
+}
+double BilibiliModel::timeshiftDuration() const {
+    return timeshiftAvailable() ? std::clamp(QDateTime::currentMSecsSinceEpoch() / 1000.0 - activeLiveStart_, 0.0, activeWindow_) : 0;
+}
+double BilibiliModel::liveLag() const {
+    if (!live()) return 0;
+    const double now = QDateTime::currentMSecsSinceEpoch() / 1000.0;
+    if (replaying_) return std::max(0.0, now - playbackStart_ - clockPosition_);
+    return pausedLiveTime_ > 0 ? std::max(0.0, now - pausedLiveTime_) : 0;
+}
+double BilibiliModel::timeshiftPosition() const { return std::max(0.0, timeshiftDuration() - liveLag()); }
+void BilibiliModel::updatePlaybackClock(double seconds, bool paused) {
+    if (!live()) return;
+    // The engine can report decoded frames before its first presented PTS; the
+    // position is still zero during that short startup interval.
+    if (seconds <= 0 || !std::isfinite(seconds)) return;
+    // Live container PTS can start days into a broadcast. Anchor to the first
+    // presented timestamp, never treat it as elapsed time since this open.
+    if (nativeClockStart_ < 0) nativeClockStart_ = seconds;
+    clockPosition_ = std::max(0.0, seconds - nativeClockStart_);
+    if (!replaying_) {
+        if (paused && pausedLiveTime_ == 0) pausedLiveTime_ = QDateTime::currentMSecsSinceEpoch() / 1000.0;
+        if (!paused) pausedLiveTime_ = 0;
+    }
+}
+void BilibiliModel::seekTimeshift(double seconds) {
+    if (!timeshiftAvailable() || !std::isfinite(seconds)) return;
+    const double lag = std::clamp(timeshiftDuration() - seconds, 0.0, timeshiftDuration());
+    if (lag <= 3) { returnToLive(); return; }
+    switchPlayback(activePart_, activeRequestedQuality_, 0, Timeshift, QDateTime::currentMSecsSinceEpoch() / 1000.0 - lag);
+}
+void BilibiliModel::returnToLive() {
+    if (live()) { switchPlayback(activePart_, activeRequestedQuality_, 0, Timeshift); startPlaying_ = true; }
+}
+void BilibiliModel::resumeLive() {
+    const double lag = liveLag();
+    if (timeshiftAvailable() && lag > 3) seekTimeshift(timeshiftDuration() - lag);
+    else returnToLive();
+    startPlaying_ = true;
 }
 void BilibiliModel::requestPlay(int quality, int epoch) {
     if (link_.kind == Link::Live) { loadLive(quality, epoch); return; }
@@ -214,7 +281,25 @@ void BilibiliModel::resolvePlay(int quality, int epoch) {
 void BilibiliModel::loadPlay(const QJsonObject& data, int quality, int epoch) {
     if (data.value("is_drm").toBool() || data.value("is_drm").toInt() != 0) { fail(tr("此内容受 DRM 保护，无法在此播放器中播放")); return; }
     preview_ = data.value("is_preview").toBool() || data.value("is_preview").toInt() != 0;
+    audioTracks_.clear(); resolvedAudio_ = 0; liveWindow_ = 0;
     const auto dash = data.value("dash").toObject();
+    QList<Track> audios;
+    QJsonArray audioObjects = dash.value("audio").toArray();
+    for (const auto& item : dash.value("dolby").toObject().value("audio").toArray()) audioObjects.append(item);
+    const auto flac = dash.value("flac").toObject().value("audio").toObject();
+    if (!flac.isEmpty()) audioObjects.append(flac);
+    QSet<int> audioIds;
+    for (const auto& item : audioObjects) {
+        const auto object = item.toObject(); const auto track = parseTrack(object);
+        if (track.url.isEmpty() || !track.initialization.valid() || !track.index.valid() || audioIds.contains(track.quality)) continue;
+        audioIds.insert(track.quality); audios.append(track);
+        QString label = track.quality == 30251 ? tr("Hi-Res 无损") : track.quality == 30250 ? tr("杜比全景声") : QStringLiteral("AAC · %1 kbps").arg(track.bandwidth / 1000);
+        const auto language = object.value("lang").toString(object.value("language").toString());
+        const auto title = object.value("title").toString();
+        if (!language.isEmpty()) label = language + " · " + label;
+        if (!title.isEmpty()) label = title + " · " + label;
+        audioTracks_.append(QVariantMap{{"id", track.quality}, {"label", label}});
+    }
     QList<Track> videos; QSet<int> available;
     for (const auto& item : dash.value("video").toArray()) {
         const auto track = parseTrack(item.toObject());
@@ -225,10 +310,12 @@ void BilibiliModel::loadPlay(const QJsonObject& data, int quality, int epoch) {
         if (durl.size() == 1) {
             const QUrl url(durl.first().toObject().value("url").toString());
             if (mediaUrlAllowed(url)) {
+                resolvedQuality_ = data.value("quality").toInt(); resolvedQualityLabel_ = qualityLabel(resolvedQuality_);
+                qualities_ = {QVariantMap{{"id", resolvedQuality_}, {"label", resolvedQualityLabel_}}};
                 if (describeOnly_) {
-                    qualities_ = {QVariantMap{{"id", 0}, {"label", qualityLabel(data.value("quality").toInt())}}};
                     busy_ = false; status_ = preview_ ? tr("当前为试看，仅播放账号有权观看的片段") : tr("已就绪，选择画质后播放"); emit changed(); return;
                 }
+                if (quality > 0 && quality != resolvedQuality_) { fail(tr("当前账号无法播放所选画质，请选择可用画质")); return; }
                 ready(server_.install({}, {{"video.mp4", {url}}}, "video.mp4"), epoch); return;
             }
         }
@@ -252,11 +339,13 @@ void BilibiliModel::loadPlay(const QJsonObject& data, int quality, int epoch) {
     });
     Track video, audio;
     for (const auto& track : videos) if (track.quality == chosen) { video = track; break; }
-    for (const auto& item : dash.value("audio").toArray()) {
-        const auto track = parseTrack(item.toObject());
-        if (!track.url.isEmpty() && track.initialization.valid() && track.index.valid() && track.bandwidth > audio.bandwidth) audio = track;
+    for (const auto& track : audios) {
+        if (requestedAudio_ > 0) { if (track.quality == requestedAudio_) { audio = track; break; } }
+        else if ((track.codecs.startsWith("mp4a") || audios.size() == 1) && track.bandwidth > audio.bandwidth) audio = track;
     }
-    if (!dash.value("audio").toArray().isEmpty() && audio.url.isEmpty()) { fail(tr("音轨信息无效，无法准备播放")); return; }
+    if (requestedAudio_ <= 0 && audio.url.isEmpty() && !audios.isEmpty()) audio = audios.first();
+    if ((!audioObjects.isEmpty() || requestedAudio_ > 0) && audio.url.isEmpty()) { fail(tr("所选音轨不可用，请重新选择")); return; }
+    resolvedQuality_ = chosen; resolvedQualityLabel_ = qualityLabel(chosen); resolvedAudio_ = audio.quality;
     status_ = tr("正在准备 %1 音视频…").arg(qualityLabel(chosen)); emit changed();
     prepareDash(video, audio, epoch);
 }
@@ -304,32 +393,131 @@ void BilibiliModel::prepareDash(Track video, Track audio, int epoch) {
     });
 }
 void BilibiliModel::loadLive(int quality, int epoch) {
-    preview_ = false;
-    json(endpoint("/xlive/web-room/v2/index/getRoomPlayInfo", {{"room_id", link_.id}, {"protocol", "0"}, {"format", "0"}, {"codec", "0,1"}, {"qn", QString::number(quality > 0 ? quality : 10000)}, {"platform", "web"}, {"ptype", "8"}}, "api.live.bilibili.com"), epoch, false, [this, epoch](const QJsonObject& root) {
+    preview_ = false; audioTracks_.clear(); resolvedAudio_ = 0;
+    json(endpoint("/xlive/web-room/v2/index/getRoomPlayInfo", {{"room_id", link_.id}, {"protocol", "0,1"}, {"format", "0,2"}, {"codec", "0,1"}, {"qn", QString::number(quality > 0 ? quality : 10000)}, {"platform", "web"}, {"ptype", "8"}}, "api.live.bilibili.com"), epoch, false, [this, epoch, quality](const QJsonObject& root) {
         const auto data = root.value("data").toObject();
         if (root.value("code").toInt(-1) != 0 || data.value("live_status").toInt() != 1) { fail(tr("直播未开播或当前账号无权观看")); return; }
         const auto play = data.value("playurl_info").toObject().value("playurl").toObject();
         QMap<int, QString> names;
         for (const auto& q : play.value("g_qn_desc").toArray()) names[q.toObject().value("qn").toInt()] = q.toObject().value("desc").toString();
+        QJsonObject flvCodec, hlsCodec; QList<QUrl> flvUrls, hlsUrls;
         for (const auto& stream : play.value("stream").toArray()) for (const auto& format : stream.toObject().value("format").toArray()) for (const auto& value : format.toObject().value("codec").toArray()) {
             const auto codec = value.toObject(); QList<QUrl> urls;
+            if (codec.value("is_drm").toBool() || codec.value("is_drm").toInt() != 0 || codec.value("drm_type").toInt() != 0) continue;
             for (const auto& info : codec.value("url_info").toArray()) {
                 const auto object = info.toObject(); const QUrl url(object.value("host").toString() + codec.value("base_url").toString() + object.value("extra").toString());
                 if (mediaUrlAllowed(url)) urls.append(url);
             }
             if (urls.isEmpty()) continue;
-            qualities_ = {QVariantMap{{"id", 0}, {"label", tr("自动 · 最高可用画质")}}};
-            for (const auto& id : codec.value("accept_qn").toArray()) qualities_.append(QVariantMap{{"id", id.toInt()}, {"label", names.value(id.toInt(), QString::number(id.toInt()))}});
-            if (describeOnly_) { busy_ = false; status_ = tr("已就绪，选择画质后播放"); emit changed(); return; }
-            ready(server_.install({}, {{"live.flv", urls}}, "live.flv"), epoch); return;
+            const bool hls = format.toObject().value("format_name").toString() == "fmp4";
+            const bool flv = format.toObject().value("format_name").toString() == "flv";
+            // The TS CDN currently ignores tmshift. Only fMP4 is a verified
+            // server timeshift transport; never claim a seek succeeded on TS.
+            if (!hls && !flv) continue;
+            auto& saved = hls ? hlsCodec : flvCodec;
+            auto& targets = hls ? hlsUrls : flvUrls;
+            if (saved.isEmpty() || (saved.value("codec_name").toString() != "avc" && codec.value("codec_name").toString() == "avc")) { saved = codec; targets = urls; }
         }
-        fail(tr("未获得可用的直播流"));
+        const bool shifted = pendingLiveTarget_ > 0 && !describeOnly_;
+        const bool useHls = shifted || flvUrls.isEmpty();
+        const auto codec = useHls ? hlsCodec : flvCodec;
+        if (codec.isEmpty()) { fail(tr("未获得可用的直播流")); return; }
+        resolvedQuality_ = codec.value("current_qn").toInt();
+        resolvedQualityLabel_ = names.value(resolvedQuality_, QString::number(resolvedQuality_));
+        qualities_ = {QVariantMap{{"id", 0}, {"label", tr("自动 · 最高可用画质")}}};
+        for (const auto& id : codec.value("accept_qn").toArray()) qualities_.append(QVariantMap{{"id", id.toInt()}, {"label", names.value(id.toInt(), QString::number(id.toInt()))}});
+        liveStart_ = data.value("live_time").toDouble(); liveWindow_ = 0;
+        const bool supportsReplay = data.value("all_special_types").toArray().contains(19) && !hlsUrls.isEmpty();
+        auto finish = [this, epoch, quality, useHls, hlsUrls, flvUrls, shifted](const QJsonObject& capability) {
+            const auto info = capability.value("data").toObject();
+            if (capability.value("code").toInt(-1) == 0 && info.value("bar_status").toString() == "ENABLE") {
+                liveWindow_ = std::clamp(info.value("bar_special_time").toDouble(3600), 3600.0, 7.0 * 86400);
+                if (info.value("bar_start_time").toDouble() > 0) liveStart_ = info.value("bar_start_time").toDouble();
+            }
+            if (describeOnly_) { busy_ = false; status_ = liveWindow_ > 0 ? tr("已就绪，此直播支持拖动进度条回看") : tr("已就绪，选择画质后播放"); emit changed(); return; }
+            if (quality > 0 && resolvedQuality_ != quality) emit notice(tr("B 站实际返回 %1，所选画质可能需要登录或相应权限").arg(resolvedQualityLabel_), false);
+            const double now = QDateTime::currentMSecsSinceEpoch() / 1000.0;
+            preparedLiveStart_ = now;
+            if (!useHls) { ready(server_.install({}, {{"live.flv", flvUrls}}, "live.flv"), epoch); return; }
+            auto urls = hlsUrls;
+            if (shifted) {
+                const double window = std::min(liveWindow_, now - liveStart_);
+                if (window <= 3) { fail(tr("此直播当前不支持回看，或回看窗口已结束")); return; }
+                const int lag = int(std::clamp(std::round(now - pendingLiveTarget_), 1.0, window - 1));
+                preparedLiveStart_ = now - lag;
+                for (auto& url : urls) { QUrlQuery query(url); query.removeAllQueryItems("tmshift"); query.addQueryItem("tmshift", QString::number(lag)); url.setQuery(query); }
+            }
+            prepareLiveHls(urls, epoch);
+        };
+        if (supportsReplay) json(endpoint("/xlive/web-room/v1/index/getProgressBarInfo", {{"roomid", link_.id}, {"platform", "web"}}, "api.live.bilibili.com"), epoch, false, finish, true);
+        else finish({});
+    });
+}
+void BilibiliModel::prepareLiveHls(QList<QUrl> urls, int epoch) {
+    if (urls.isEmpty()) { fail(tr("这段直播回看暂不可用，已保留当前播放；请换一个时间点或回到直播")); return; }
+    validateLivePlaylist(urls.first(), epoch, 0, [this, urls, epoch](bool ok) {
+        if (epoch != epoch_) return;
+        if (!ok) { auto remaining = urls; remaining.removeFirst(); prepareLiveHls(remaining, epoch); return; }
+        ready(server_.installHls(urls), epoch);
+    });
+}
+void BilibiliModel::validateLivePlaylist(const QUrl& url, int epoch, int depth, std::function<void(bool)> callback) {
+    if (depth > 3 || !mediaUrlAllowed(url)) { callback(false); return; }
+    QNetworkRequest request(url);
+    request.setRawHeader("User-Agent", userAgent()); request.setRawHeader("Referer", "https://live.bilibili.com/");
+    request.setAttribute(QNetworkRequest::CookieLoadControlAttribute, QNetworkRequest::Manual);
+    request.setAttribute(QNetworkRequest::CookieSaveControlAttribute, QNetworkRequest::Manual);
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
+    request.setTransferTimeout(15000);
+    auto* reply = network_->get(request); playbackReplies_.append(reply); reply->setReadBufferSize(2 * 1024 * 1024 + 1);
+    auto body = std::make_shared<QByteArray>();
+    connect(reply, &QIODevice::readyRead, this, [reply, body] { body->append(reply->read(2 * 1024 * 1024 + 1 - body->size())); if (body->size() > 2 * 1024 * 1024) reply->abort(); });
+    QTimer::singleShot(20000, reply, [reply] { if (!reply->isFinished()) reply->abort(); });
+    connect(reply, &QNetworkReply::finished, this, [this, reply, body, epoch, depth, callback] {
+        playbackReplies_.removeAll(reply); reply->deleteLater(); if (epoch != epoch_) return;
+        if (reply->isOpen()) body->append(reply->read(2 * 1024 * 1024 + 1 - body->size()));
+        if (reply->error() != QNetworkReply::NoError || reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 200 || !proxyPlaylist(*body, reply->url(), "/probe/").error.isEmpty()) {
+            callback(false); return;
+        }
+        // ENABLE describes the advertised window, but its CDN can still return
+        // 404 for individual older fragments. Check an actual fragment before
+        // replacing the working session, so a missing replay never blanks it.
+        QUrl target;
+        for (const auto& raw : body->split('\n')) {
+            const auto line = raw.trimmed();
+            if (!line.isEmpty() && !line.startsWith('#')) { target = reply->url().resolved(QUrl(QString::fromUtf8(line))); break; }
+        }
+        if (!mediaUrlAllowed(target)) { callback(false); return; }
+        if (target.path().endsWith(".m3u8")) {
+            QUrlQuery query(target), parent(reply->url());
+            if (!query.hasQueryItem("tmshift") && parent.hasQueryItem("tmshift")) { query.addQueryItem("tmshift", parent.queryItemValue("tmshift")); target.setQuery(query); }
+            validateLivePlaylist(target, epoch, depth + 1, callback); return;
+        }
+        QNetworkRequest check(target);
+        check.setRawHeader("User-Agent", userAgent()); check.setRawHeader("Referer", "https://live.bilibili.com/");
+        check.setAttribute(QNetworkRequest::CookieLoadControlAttribute, QNetworkRequest::Manual);
+        check.setAttribute(QNetworkRequest::CookieSaveControlAttribute, QNetworkRequest::Manual);
+        check.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
+        check.setTransferTimeout(10000);
+        auto* fragment = network_->head(check); playbackReplies_.append(fragment);
+        QTimer::singleShot(12000, fragment, [fragment] { if (!fragment->isFinished()) fragment->abort(); });
+        connect(fragment, &QNetworkReply::finished, this, [this, fragment, epoch, callback] {
+            playbackReplies_.removeAll(fragment); fragment->deleteLater(); if (epoch != epoch_) return;
+            const int code = fragment->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            callback(fragment->error() == QNetworkReply::NoError && (code == 200 || code == 206));
+        });
     });
 }
 void BilibiliModel::ready(const QUrl& url, int epoch) {
     if (epoch != epoch_) return;
     if (url.isEmpty()) { fail(tr("无法启动本地播放连接")); return; }
-    playbackUrl_ = url.toString(QUrl::FullyEncoded); busy_ = false; status_ = tr("已交给播放器，正在打开…"); emit changed();
+    playbackUrl_ = url.toString(QUrl::FullyEncoded); busy_ = false; status_ = tr("已交给播放器，正在打开…");
+    activeLink_ = link_; activeTitle_ = title_; activeAddress_ = address_; activeParts_ = parts_; activePart_ = selectedPart_;
+    activeQualities_ = qualities_; activeAudioTracks_ = audioTracks_; activeQuality_ = resolvedQuality_; activeAudio_ = resolvedAudio_;
+    activeQualityLabel_ = resolvedQualityLabel_; activeRequestedQuality_ = requestedQuality_;
+    activeWindow_ = liveWindow_; activeLiveStart_ = liveStart_; playbackStart_ = preparedLiveStart_; clockPosition_ = 0; pausedLiveTime_ = 0; nativeClockStart_ = -1;
+    replaying_ = link_.kind == Link::Live && pendingLiveTarget_ > 0;
+    emit changed();
     const auto label = parts_.value(selectedPart_).toMap().value("label").toString();
     emit playbackReady(url, title_ + (parts_.size() > 1 ? " · " + label : QString()) + (preview_ ? tr("（试看）") : QString()));
 }

@@ -20,6 +20,17 @@ class BilibiliModel final : public QObject {
     Q_PROPERTY(QVariantList parts READ parts NOTIFY changed)
     Q_PROPERTY(QVariantList qualities READ qualities NOTIFY changed)
     Q_PROPERTY(int selectedPart READ selectedPart NOTIFY changed)
+    Q_PROPERTY(bool active READ active NOTIFY changed)
+    Q_PROPERTY(bool live READ live NOTIFY changed)
+    Q_PROPERTY(QVariantList playbackParts READ playbackParts NOTIFY changed)
+    Q_PROPERTY(QVariantList playbackQualities READ playbackQualities NOTIFY changed)
+    Q_PROPERTY(QVariantList playbackAudioTracks READ playbackAudioTracks NOTIFY changed)
+    Q_PROPERTY(int playingPart READ playingPart NOTIFY changed)
+    Q_PROPERTY(int playingQuality READ playingQuality NOTIFY changed)
+    Q_PROPERTY(int playingAudio READ playingAudio NOTIFY changed)
+    Q_PROPERTY(QString playingQualityLabel READ playingQualityLabel NOTIFY changed)
+    Q_PROPERTY(bool timeshiftAvailable READ timeshiftAvailable NOTIFY changed)
+    Q_PROPERTY(bool replaying READ replaying NOTIFY changed)
     Q_PROPERTY(QString account READ account NOTIFY loginChanged)
     Q_PROPERTY(QString loginStatus READ loginStatus NOTIFY loginChanged)
     Q_PROPERTY(QString qrImage READ qrImage NOTIFY loginChanged)
@@ -34,12 +45,36 @@ public:
     QVariantList parts() const { return parts_; }
     QVariantList qualities() const { return qualities_; }
     int selectedPart() const { return selectedPart_; }
+    bool active() const { return !playbackUrl_.isEmpty(); }
+    bool live() const { return active() && activeLink_.kind == bilibili::Link::Live; }
+    QVariantList playbackParts() const { return activeParts_; }
+    QVariantList playbackQualities() const { return activeQualities_; }
+    QVariantList playbackAudioTracks() const { return activeAudioTracks_; }
+    int playingPart() const { return activePart_; }
+    int playingQuality() const { return activeQuality_; }
+    int playingAudio() const { return activeAudio_; }
+    QString playingQualityLabel() const { return activeQualityLabel_; }
+    bool timeshiftAvailable() const { return live() && activeWindow_ > 0; }
+    bool replaying() const { return live() && replaying_; }
+    bool restoresPosition() const { return operation_ == Quality || operation_ == Audio; }
+    bool restoresTransport() const { return operation_ != NewPlayback; }
+    bool startsPlaying() const { return startPlaying_; }
+    double timeshiftDuration() const;
+    double timeshiftPosition() const;
+    double liveLag() const;
+    void updatePlaybackClock(double seconds, bool paused);
     QString account() const { return account_; }
     QString loginStatus() const { return loginStatus_; }
     QString qrImage() const { return qrImage_; }
     Q_INVOKABLE void inspect(const QString& input);
     Q_INVOKABLE void selectPart(int index);
     Q_INVOKABLE void play(int quality = 0);
+    Q_INVOKABLE void changePart(int index);
+    Q_INVOKABLE void changeQuality(int quality);
+    Q_INVOKABLE void changeAudio(int id);
+    Q_INVOKABLE void returnToLive();
+    void seekTimeshift(double seconds);
+    void resumeLive();
     Q_INVOKABLE void cancel();
     Q_INVOKABLE void beginLogin();
     Q_INVOKABLE void cancelLogin();
@@ -55,7 +90,7 @@ signals:
     void notice(const QString& message, bool error);
 private:
     using JsonCallback = std::function<void(const QJsonObject&)>;
-    void json(const QUrl& url, int epoch, bool login, JsonCallback callback);
+    void json(const QUrl& url, int epoch, bool login, JsonCallback callback, bool optional = false);
     void followShort(const QUrl& url, int redirects, int epoch);
     void inspectLink(const bilibili::Link& link, int epoch);
     void loadVideo(const QJsonObject& data, const bilibili::Link& link);
@@ -63,6 +98,9 @@ private:
     void resolvePlay(int quality, int epoch);
     void loadPlay(const QJsonObject& data, int quality, int epoch);
     void loadLive(int quality, int epoch);
+    void prepareLiveHls(QList<QUrl> urls, int epoch);
+    void validateLivePlaylist(const QUrl& url, int epoch, int depth, std::function<void(bool)> callback);
+    void switchPlayback(int part, int quality, int audio, int operation, double target = 0);
     void prepareDash(bilibili::Track video, bilibili::Track audio, int epoch);
     void fetchIndex(const bilibili::Track& track, int epoch, std::function<void(const bilibili::Index&)> callback);
     void ready(const QUrl& url, int epoch);
@@ -79,6 +117,19 @@ private:
     QString account_, loginStatus_, qrImage_, qrKey_, imageKey_, subKey_;
     bilibili::Link link_;
     QVariantList parts_, qualities_;
+    enum Operation { NewPlayback, Part, Quality, Audio, Timeshift };
+    int operation_ = NewPlayback, requestedAudio_ = 0, resolvedAudio_ = 0, resolvedQuality_ = 0, requestedQuality_ = 0;
+    QString resolvedQualityLabel_;
+    QVariantList audioTracks_;
+    bilibili::Link activeLink_;
+    QVariantList activeParts_, activeQualities_, activeAudioTracks_;
+    QString activeTitle_, activeAddress_, activeQualityLabel_;
+    int activePart_ = 0, activeQuality_ = 0, activeAudio_ = 0, activeRequestedQuality_ = 0;
+    double liveStart_ = 0, liveWindow_ = 0, pendingLiveTarget_ = 0, preparedLiveStart_ = 0;
+    double activeLiveStart_ = 0, activeWindow_ = 0, playbackStart_ = 0, clockPosition_ = 0, pausedLiveTime_ = 0;
+    double nativeClockStart_ = -1;
+    bool replaying_ = false;
+    bool startPlaying_ = false;
     int selectedPart_ = 0, epoch_ = 0, loginEpoch_ = 0;
     bool busy_ = false, describeOnly_ = false, preview_ = false;
 };

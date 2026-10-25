@@ -41,37 +41,33 @@ ColumnLayout {
         text: root.model.title
         color: Theme.t1; font.pixelSize: 15; font.bold: true; wrapMode: Text.Wrap
     }
-    Basic.ComboBox {
+    VSelect {
         id: parts
         objectName: "bilibili-parts"
         Layout.fillWidth: true
         visible: root.model.parts.length > 0
         enabled: !root.model.busy
-        model: root.model.parts
-        textRole: "label"
-        palette.button: Theme.card
-        palette.buttonText: Theme.t1
-        palette.text: Theme.t1
-        palette.base: Theme.card
-        font.family: Theme.fontUi
-        currentIndex: root.model.selectedPart
-        onActivated: index => root.model.selectPart(index)
+        title: qsTr("选集")
+        options: root.model.parts.map((p, i) => ({ id: String(i), label: p.label }))
+        value: options.length > root.model.selectedPart ? options[root.model.selectedPart].label : ""
+        onPicked: id => root.model.selectPart(Number(id))
     }
     RowLayout {
         visible: root.model.parts.length > 0
         Layout.fillWidth: true
-        Basic.ComboBox {
+        VSelect {
             id: quality
             objectName: "bilibili-quality"
             Layout.fillWidth: true
-            model: root.model.qualities
-            textRole: "label"
-            valueRole: "id"
-            palette.button: Theme.card
-            palette.buttonText: Theme.t1
-            palette.text: Theme.t1
-            palette.base: Theme.card
-            font.family: Theme.fontUi
+            title: qsTr("清晰度")
+            property int selectedQuality: 0
+            options: root.model.qualities.map(q => ({ id: String(q.id), label: q.label }))
+            value: {
+                const choice = options.find(q => Number(q.id) === selectedQuality)
+                return choice ? choice.label : options.length ? options[0].label : ""
+            }
+            onOptionsChanged: if (!options.some(q => Number(q.id) === selectedQuality)) selectedQuality = options.length ? Number(options[0].id) : 0
+            onPicked: id => selectedQuality = Number(id)
             enabled: !root.model.busy
         }
         VButton {
@@ -80,7 +76,7 @@ ColumnLayout {
             iconName: "play"
             primary: true
             enabled: !root.model.busy && root.model.parts.length > 0
-            onClicked: { root.model.play(quality.currentValue || 0); root.playRequested() }
+            onClicked: { root.model.play(quality.selectedQuality); root.playRequested() }
         }
     }
     Text {

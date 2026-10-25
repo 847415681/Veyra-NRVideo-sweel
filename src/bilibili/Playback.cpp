@@ -145,6 +145,50 @@ Track parseTrack(const QJsonObject& object) {
     track.width = object.value("width").toInt(); track.height = object.value("height").toInt();
     return track;
 }
+HlsPlaylist proxyPlaylist(const QByteArray& bytes, const QUrl& upstream, const QString& localPrefix) {
+    HlsPlaylist out;
+    if (bytes.size() > 2 * 1024 * 1024 || !bytes.startsWith("#EXTM3U") || !mediaUrlAllowed(upstream)) {
+        out.error = QStringLiteral("Invalid HLS playlist"); return out;
+    }
+    const auto reference = [&](const QString& value) -> QString {
+        QUrl target = upstream.resolved(QUrl(value, QUrl::StrictMode));
+        // A master may point to a relative child without its timeshift parameter.
+        // Apply tmshift only to child playlists, never to signed media fragments.
+        if (target.path().endsWith(".m3u8", Qt::CaseInsensitive)) {
+            QUrlQuery query(target), parent(upstream);
+            if (!query.hasQueryItem("tmshift") && parent.hasQueryItem("tmshift")) {
+                query.addQueryItem("tmshift", parent.queryItemValue("tmshift")); target.setQuery(query);
+            }
+        }
+        if (!mediaUrlAllowed(target) || target.toEncoded().size() > 8192 || out.resources.size() >= 4096) {
+            out.error = QStringLiteral("Unsupported HLS reference"); return {};
+        }
+        const QString suffix = target.path().endsWith(".m3u8", Qt::CaseInsensitive) ? ".m3u8"
+                             : target.path().endsWith(".ts", Qt::CaseInsensitive) ? ".ts" : ".m4s";
+        const QString key = "hls/" + QString::fromLatin1(QCryptographicHash::hash(target.toEncoded(), QCryptographicHash::Sha256).toHex()) + suffix;
+        out.resources.insert(key, target);
+        return localPrefix + key;
+    };
+    static const QRegularExpression uri("URI=\"([^\"]*)\"");
+    for (const auto& raw : bytes.split('\n')) {
+        QString line = QString::fromUtf8(raw).trimmed();
+        if (line.isEmpty()) continue;
+        if ((line.startsWith("#EXT-X-KEY:") || line.startsWith("#EXT-X-SESSION-KEY:")) && !line.contains("METHOD=NONE")) {
+            out.error = QStringLiteral("Encrypted HLS is not supported"); break;
+        }
+        if (!line.startsWith('#')) line = reference(line);
+        else {
+            auto matches = uri.globalMatch(line);
+            QList<QRegularExpressionMatch> replacements;
+            while (matches.hasNext()) replacements.prepend(matches.next());
+            for (const auto& match : replacements) line.replace(match.capturedStart(1), match.capturedLength(1), reference(match.captured(1)));
+        }
+        if (!out.error.isEmpty()) break;
+        out.body += line.toUtf8() + '\n';
+    }
+    if (!out.error.isEmpty()) { out.body.clear(); out.resources.clear(); }
+    return out;
+}
 QString qualityLabel(int id) {
     switch (id) {
     case 6: return "240P"; case 16: return "360P"; case 32: return "480P"; case 64: return "720P";

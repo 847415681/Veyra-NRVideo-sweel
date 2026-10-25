@@ -12,6 +12,7 @@
 #include <QtEndian>
 #include <QTemporaryDir>
 #include <QFile>
+#include <QUrlQuery>
 
 using namespace veyra::bilibili;
 class PlaybackTests : public QObject {
@@ -94,8 +95,75 @@ private slots:
         QTemporaryDir dir; MockNetwork network; veyra::ui::BilibiliModel model(dir.path(), nullptr, &network);
         QSignalSpy ready(&model, &veyra::ui::BilibiliModel::playbackReady);
         model.inspect("https://live.bilibili.com/123"); QTRY_VERIFY_WITH_TIMEOUT(!model.busy(), 2000);
-        QCOMPARE(model.qualities().size(), 2); model.play(); QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 1, 2000);
+        QCOMPARE(model.qualities().size(), 3); model.play(); QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 1, 2000);
         QVERIFY(ready.first()[0].toUrl().path().endsWith("live.flv"));
+        QCOMPARE(model.playingQuality(), 150); // Actual server quality, not requested 10000.
+    }
+    void playbackControlsAndCancellation() {
+        QTemporaryDir dir; MockNetwork network; veyra::ui::BilibiliModel model(dir.path(), nullptr, &network);
+        QSignalSpy ready(&model, &veyra::ui::BilibiliModel::playbackReady);
+        model.inspect("BV1xx411c7mD"); QTRY_VERIFY_WITH_TIMEOUT(!model.busy(), 2000);
+        model.play(80); QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 1, 2000);
+        QCOMPARE(model.playbackAudioTracks().size(), 2);
+        model.inspect("ep123"); QTRY_VERIFY_WITH_TIMEOUT(!model.busy(), 2000);
+        QCOMPARE(model.parts().size(), 1); QCOMPARE(model.playbackParts().size(), 2);
+        model.changeQuality(64); QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 2, 2000);
+        QCOMPARE(model.playingQuality(), 64); QVERIFY(model.restoresPosition()); QCOMPARE(model.playbackParts().size(), 2);
+        network.playCode = -10403;
+        const auto oldUrl = ready.last()[0].toUrl().toString(QUrl::FullyEncoded);
+        model.changeQuality(80); QTRY_VERIFY_WITH_TIMEOUT(!model.busy(), 2000);
+        QCOMPARE(ready.size(), 2); QVERIFY(model.ownsPlayback(oldUrl)); QCOMPARE(model.playingQuality(), 64);
+        network.playCode = 0; network.delay = 25;
+        model.changeQuality(80); model.changeQuality(64);
+        QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 3, 2000); QCOMPARE(model.playingQuality(), 64);
+        model.changeAudio(30216); QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 4, 2000);
+        QCOMPARE(model.playingAudio(), 30216); QVERIFY(model.restoresPosition());
+        model.changePart(1); QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 5, 2000);
+        QCOMPARE(model.playingPart(), 1); QVERIFY(!model.restoresPosition());
+        model.changeQuality(64); model.releasePlayback(); QTest::qWait(200);
+        QCOMPARE(ready.size(), 5); QVERIFY(!model.active());
+    }
+    void serverTimeshift() {
+        QTemporaryDir dir; MockNetwork network; veyra::ui::BilibiliModel model(dir.path(), nullptr, &network);
+        QSignalSpy ready(&model, &veyra::ui::BilibiliModel::playbackReady);
+        model.inspect("https://live.bilibili.com/6"); QTRY_VERIFY_WITH_TIMEOUT(!model.busy(), 2000);
+        model.play(); QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 1, 2000);
+        QVERIFY(model.timeshiftAvailable()); QCOMPARE(model.timeshiftDuration(), 3600.0);
+        model.seekTimeshift(3480); QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 2, 2000);
+        QVERIFY(model.replaying()); QVERIFY(ready.last()[0].toUrl().path().endsWith("live.m3u8"));
+        QVERIFY(model.liveLag() >= 119 && model.liveLag() <= 122);
+        model.updatePlaybackClock(0, false); model.updatePlaybackClock(861000, false); model.updatePlaybackClock(861010, false);
+        QVERIFY(model.liveLag() >= 109 && model.liveLag() <= 112);
+        bool tmshift = false;
+        for (const auto& request : network.requests) if (request.url().path().endsWith(".m3u8")) {
+            const int seconds = QUrlQuery(request.url()).queryItemValue("tmshift").toInt();
+            QVERIFY(seconds >= 119 && seconds <= 122); tmshift = true;
+            QCOMPARE(request.attribute(QNetworkRequest::CookieLoadControlAttribute).toInt(), int(QNetworkRequest::Manual));
+        }
+        QVERIFY(tmshift);
+        network.missingReplayFragment = true;
+        model.seekTimeshift(3300); QTRY_VERIFY_WITH_TIMEOUT(!model.busy(), 2000);
+        QCOMPARE(ready.size(), 2); QVERIFY(model.replaying());
+        QVERIFY(model.ownsPlayback(ready.last()[0].toUrl().toString(QUrl::FullyEncoded)));
+        network.missingReplayFragment = false;
+        model.returnToLive(); QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 3, 2000);
+        QVERIFY(!model.replaying()); QVERIFY(model.startsPlaying()); QCOMPARE(model.liveLag(), 0.0);
+        network.timeshift = false; model.returnToLive(); QTRY_COMPARE_WITH_TIMEOUT(ready.size(), 4, 2000);
+        QVERIFY(!model.timeshiftAvailable()); model.seekTimeshift(10); QTest::qWait(50); QCOMPARE(ready.size(), 4);
+    }
+    void hlsProxy() {
+        const QUrl upstream("https://live.bilivideo.com/live/index.m3u8?secret=opaque&tmshift=120");
+        const auto master = proxyPlaylist("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=2000\nchild.m3u8\n", upstream, "/session/");
+        QVERIFY(master.error.isEmpty()); QCOMPARE(master.resources.size(), 1);
+        QCOMPARE(QUrlQuery(master.resources.first()).queryItemValue("tmshift"), QString("120"));
+        QVERIFY(!master.body.contains("bilivideo")); QVERIFY(!master.body.contains("secret"));
+        const auto media = proxyPlaylist("#EXTM3U\n#EXT-X-MAP:URI=\"init.mp4\"\n#EXTINF:1.0,\nsegment.m4s?sign=x\n", upstream, "/session/");
+        QVERIFY(media.error.isEmpty()); QCOMPARE(media.resources.size(), 2);
+        QVERIFY(media.body.contains("#EXT-X-MAP:URI=\"/session/hls/"));
+        for (const auto& target : media.resources) QVERIFY(!QUrlQuery(target).hasQueryItem("tmshift"));
+        QVERIFY(!proxyPlaylist("#EXTM3U\nhttp://127.0.0.1/private\n", upstream, "/s/").error.isEmpty());
+        QVERIFY(!proxyPlaylist("#EXTM3U\n#EXT-X-MAP:URI=\"https://evil.example/init.mp4\"\n", upstream, "/s/").error.isEmpty());
+        QVERIFY(!proxyPlaylist("#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"key\"\n", upstream, "/s/").error.isEmpty());
     }
     void links() {
         QCOMPARE(parseLink("BV1xx411c7mD").kind, Link::Video);

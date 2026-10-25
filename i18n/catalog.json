@@ -18628,6 +18628,97 @@
    "zh-TW": "連結播放 · 掃碼登入",
    "en": "Play from link · QR sign-in",
    "ja": "リンク再生 · QR ログイン"
+  },
+  {
+   "zh": "正在切换播放…",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "正在切換播放…",
+   "en": "Switching playback…",
+   "ja": "再生を切り替えています…"
+  },
+  {
+   "zh": "Hi-Res 无损",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "Hi-Res 無損",
+   "en": "Hi-Res lossless",
+   "ja": "Hi-Res ロスレス"
+  },
+  {
+   "zh": "杜比全景声",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "杜比全景聲",
+   "en": "Dolby Atmos",
+   "ja": "Dolby Atmos"
+  },
+  {
+   "zh": "所选音轨不可用，请重新选择",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "所選音軌無法使用，請重新選擇",
+   "en": "This audio track is unavailable. Choose another track.",
+   "ja": "この音声トラックは利用できません。別のトラックを選んでください。"
+  },
+  {
+   "zh": "已就绪，此直播支持拖动进度条回看",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "已就緒，此直播支援拖曳進度條回看",
+   "en": "Ready. You can drag the timeline to rewind this live stream.",
+   "ja": "準備完了。タイムラインをドラッグしてライブを巻き戻せます。"
+  },
+  {
+   "zh": "B 站实际返回 %1，所选画质可能需要登录或相应权限",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "B 站實際傳回 %1，所選畫質可能需要登入或相應權限",
+   "en": "Bilibili returned %1. The requested quality may require sign-in or additional access.",
+   "ja": "Bilibili から %1 が返されました。選択した画質にはログインや視聴権限が必要な場合があります。"
+  },
+  {
+   "zh": "此直播当前不支持回看，或回看窗口已结束",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "此直播目前不支援回看，或回看範圍已結束",
+   "en": "Rewind is unavailable for this stream or its replay window has ended.",
+   "ja": "このライブは巻き戻しに対応していないか、視聴可能な期間が終了しています。"
+  },
+  {
+   "zh": "这段直播回看暂不可用，已保留当前播放；请换一个时间点或回到直播",
+   "src": "src/ui/BilibiliModel.cpp",
+   "zh-TW": "這段直播回看暫時無法使用，已保留目前播放；請換一個時間點或回到直播",
+   "en": "This replay segment is unavailable. Current playback is preserved; choose another time or return to live.",
+   "ja": "この時点の映像は利用できません。現在の再生を維持しました。別の時点を選ぶかライブに戻ってください。"
+  },
+  {
+   "zh": "选集",
+   "src": "qml/Veyra/BilibiliPlaybackControls.qml",
+   "zh-TW": "選集",
+   "en": "Episodes",
+   "ja": "エピソード"
+  },
+  {
+   "zh": "切换分 P 或剧集",
+   "src": "qml/Veyra/BilibiliPlaybackControls.qml",
+   "zh-TW": "切換分 P 或集數",
+   "en": "Switch part or episode",
+   "ja": "パートまたはエピソードを切り替え"
+  },
+  {
+   "zh": "清晰度 · %1",
+   "src": "qml/Veyra/BilibiliPlaybackControls.qml",
+   "zh-TW": "畫質 · %1",
+   "en": "Quality · %1",
+   "ja": "画質 · %1"
+  },
+  {
+   "zh": "回到直播",
+   "src": "qml/Veyra/BilibiliPlaybackControls.qml",
+   "zh-TW": "回到直播",
+   "en": "Go live",
+   "ja": "ライブに戻る"
+  },
+  {
+   "zh": "支持 Bilibili 视频、番剧和直播链接；支持回看的直播可拖动进度条。其他网站需直接媒体地址。",
+   "src": "qml/Veyra/DialogHost.qml",
+   "zh-TW": "支援 Bilibili 影片、番劇和直播連結；支援回看的直播可拖曳進度條。其他網站需直接媒體位址。",
+   "en": "Supports Bilibili videos, series, and live links. Rewind is available on supported streams. Other sites require direct media URLs.",
+   "ja": "Bilibili の動画・シリーズ・ライブリンクに対応。対応するライブは巻き戻せます。他のサイトにはメディアの直接 URL が必要です。"
   }
  ]
 }

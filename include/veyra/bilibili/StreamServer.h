@@ -12,6 +12,7 @@ public:
     ~StreamServer();
     QUrl install(const QMap<QString, QByteArray>& documents,
                  const QMap<QString, QList<QUrl>>& resources, const QString& entry);
+    QUrl installHls(const QList<QUrl>& urls);
     void clear();
 private:
     void ensureWorker();
