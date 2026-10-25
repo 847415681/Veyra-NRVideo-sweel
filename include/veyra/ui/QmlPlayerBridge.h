@@ -40,6 +40,7 @@ namespace veyra::ui {
 
 class MoonlightModel;
 class XboxModel;
+class BilibiliModel;
 
 class QmlPlayerBridge : public QObject {
     Q_OBJECT
@@ -106,6 +107,7 @@ class QmlPlayerBridge : public QObject {
     // list here could drift from what the package actually contains.
     Q_PROPERTY(QVariantList componentList READ componentList NOTIFY componentListChanged)
     Q_PROPERTY(QObject* updates READ updates CONSTANT)
+    Q_PROPERTY(QObject* bilibili READ bilibili CONSTANT)
 
     // --- capture dialog ----------------------------------------------------
     // Device and format lists come from the source's own enumeration, so the UI
@@ -813,6 +815,8 @@ public:
     // youtube, kofi) in the browser. The addresses live here; any other id does nothing.
     Q_INVOKABLE bool openSponsorLink(const QString& id);
     QObject* updates() const;
+    QObject* bilibili() const;
+    Q_INVOKABLE void openBilibiliDialog();
     QVariantList audioDevices() const;
     QVariantList gpuMonitorChoices() const;
     QString computeGpuHint() const;
@@ -1434,6 +1438,7 @@ private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
     QObject* updates_ = nullptr;
+    BilibiliModel* bilibili_ = nullptr;
 };
 
 } // namespace veyra::ui

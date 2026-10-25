@@ -17,6 +17,7 @@
 #include "veyra/ui/QmlExportQueueModel.h"
 #include "veyra/ui/PlaylistModel.h"
 #include "veyra/ui/UpdateChecker.h"
+#include "veyra/ui/BilibiliModel.h"
 #include "veyra/ui/UiLanguage.h"
 #include <QQmlEngine>
 #include <QMetaMethod>
@@ -1189,6 +1190,13 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     : QObject(parent), impl_(std::make_unique<Impl>(engine, std::move(dataDirectory))) {
     auto* checker = new UpdateChecker(version(), this);
     updates_ = checker;
+    bilibili_ = new BilibiliModel(QString::fromStdWString(impl_->dataDir.wstring()), this);
+    connect(bilibili_, &BilibiliModel::notice, this, &QmlPlayerBridge::notice);
+    connect(bilibili_, &BilibiliModel::playbackReady, this, [this](const QUrl& url, const QString& title) {
+        openPath(url.toString(QUrl::FullyEncoded));
+        impl_->liveLabel = QStringLiteral("Bilibili · ") + title;
+        emit snapshotChanged();
+    });
     connect(checker, &UpdateChecker::notice, this, &QmlPlayerBridge::notice);
     impl_->playlist = new PlaylistModel(utf8Of((impl_->dataDir / L"playlist.v1.json").wstring()), this);
     connect(impl_->playlist, &PlaylistModel::playRequested, this, [this](const QString& path) {
@@ -2756,6 +2764,7 @@ bool QmlPlayerBridge::startCaptureSession() {
     return true;
 }
 void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring& label, bool screenFill) {
+    bilibili_->releasePlayback();
     rememberPosition(true);
     impl_->openingSource = true;
     impl_->openingSessionId = 0;
@@ -6548,6 +6557,7 @@ void QmlPlayerBridge::openPath(const QString& path) {
     if (QFileInfo(path).isDir()) {
         impl_->playlist->addPaths({path}); emit playlistRequested(); return;
     }
+    if (!bilibili_->ownsPlayback(path)) bilibili_->releasePlayback();
     if (!network&&PlaylistModel::supported(path) && !impl_->playlist->containsPath(path)) impl_->playlist->addPaths({path});
     impl_->playlistPath = path;
     impl_->playlist->setPlayback(path, QStringLiteral("opening"));
@@ -6603,6 +6613,14 @@ void QmlPlayerBridge::openPath(const QString& path) {
 bool QmlPlayerBridge::deinterlaceAvailable() const { return media::FFmpegDeinterlacer::available(); }
 void QmlPlayerBridge::openNetworkDialog(){emit navigate(QStringLiteral("network"));}
 bool QmlPlayerBridge::openNetworkAddress(const QString& address){
+    if (veyra::bilibili::parseLink(address).kind != veyra::bilibili::Link::Invalid) {
+        // Queue navigation so the old network dialog can close first.
+        QTimer::singleShot(0, this, [this, address] {
+            openBilibiliDialog();
+            bilibili_->inspect(address);
+        });
+        return true;
+    }
     const QUrl url(address.trimmed(),QUrl::StrictMode);
     if(!url.isValid()||url.host().isEmpty()||!media::networkMediaInput(wideOf(url.scheme()+QStringLiteral(":")))){
         emit notice(tr("请输入有效的 HTTP、HTTPS 或 RTSP 视频地址"),true);return false;
@@ -6640,6 +6658,7 @@ void QmlPlayerBridge::togglePlayPause() {
     veyra::log::info("ui-transport", pause ? "pause" : "resume");
 }
 void QmlPlayerBridge::stopPlayback() {
+    bilibili_->releasePlayback();
     flushHdrMemory();
     impl_->playlistSession = 0;
     impl_->playlist->setPlayback(impl_->playlistPath, QStringLiteral("stopped"));
@@ -7125,6 +7144,11 @@ bool QmlPlayerBridge::openSponsorLink(const QString& id) {
     return false;
 }
 QObject* QmlPlayerBridge::updates() const { return updates_; }
+QObject* QmlPlayerBridge::bilibili() const { return bilibili_; }
+void QmlPlayerBridge::openBilibiliDialog() {
+    emit navigate(QStringLiteral("bilibili"));
+    bilibili_->refreshAccount();
+}
 bool QmlPlayerBridge::eventFilter(QObject* watched, QEvent* event) {
     const auto type = event->type();
     if (watched == impl_->gameWindow && (type == QEvent::WinIdChange ||
